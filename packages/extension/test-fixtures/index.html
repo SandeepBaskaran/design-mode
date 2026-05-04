@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Design Mode — Test Fixture</title>
+<style>
+  :root {
+    --brand: #3b82f6;
+    --bg: #ffffff;
+    --text: #111827;
+    --muted: #6b7280;
+    --surface: #f9fafb;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0; padding: 32px;
+    background: var(--bg); color: var(--text);
+    line-height: 1.5;
+  }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  h2 { font-size: 18px; margin: 32px 0 12px; color: var(--muted); font-weight: 500; }
+  p { margin: 0 0 12px; color: var(--muted); }
+
+  .btn-primary {
+    background: var(--brand); color: white; border: none;
+    padding: 10px 18px; border-radius: 6px; font-size: 14px;
+    cursor: pointer;
+  }
+  .btn-secondary {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border);
+    padding: 10px 18px; border-radius: 6px; font-size: 14px;
+    cursor: pointer;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  }
+  .flex-row {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 12px 0;
+  }
+  .grid-2 {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .heading-mark {
+    color: var(--brand); font-weight: 600;
+  }
+
+  @keyframes site-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .pulser {
+    width: 64px; height: 64px;
+    background: var(--brand);
+    border-radius: 50%;
+    animation: site-pulse 1.6s ease-in-out infinite;
+  }
+  .placeholder-img {
+    width: 100%; height: 180px;
+    background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+  <h1>Design Mode — Test Fixture</h1>
+  <p>Inspect this page with the extension to verify each capability. After every reload, your edits should persist (Workstream A) and animations should run (Workstream B).</p>
+
+  <h2>Buttons</h2>
+  <div class="flex-row">
+    <button class="btn-primary" id="primary-btn">Primary</button>
+    <button class="btn-secondary" id="secondary-btn">Secondary</button>
+  </div>
+
+  <h2>Card</h2>
+  <div class="card" id="hero-card">
+    <h3>Card title</h3>
+    <p>Hover me to see the existing transition. Then add your own transition via the structured editor and reload — it should still apply.</p>
+  </div>
+
+  <h2>Pre-existing animation (site-defined keyframes)</h2>
+  <div class="flex-row">
+    <div class="pulser" id="pulser"></div>
+    <span class="heading-mark">site-pulse</span>
+  </div>
+
+  <h2>Layout grid</h2>
+  <div class="grid-2">
+    <div class="card">First column</div>
+    <div class="card">Second column</div>
+  </div>
+
+  <h2>Image-shaped placeholder</h2>
+  <div class="placeholder-img">placeholder</div>
+
+  <h2>Long form text</h2>
+  <p>The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump.</p>
+</body>
+</html>

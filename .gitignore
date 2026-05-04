@@ -1,0 +1,122 @@
+# =============================================================================
+# Design Mode — repo .gitignore
+# =============================================================================
+
+# ── Dependencies ──────────────────────────────────────────────────────────
+node_modules/
+jspm_packages/
+.pnp
+.pnp.*
+
+# ── Lockfiles for nested workspaces ──────────────────────────────────────
+# We use the root npm workspace lockfile; per-workspace lockfiles drift.
+packages/*/package-lock.json
+website/package-lock.json
+packages/*/yarn.lock
+website/yarn.lock
+
+# ── Build outputs (generic) ──────────────────────────────────────────────
+dist/
+build/
+out/
+*.js.map
+*.tsbuildinfo
+
+# ── Per-package build outputs ────────────────────────────────────────────
+packages/extension/dist/
+packages/server/dist/
+packages/shared/dist/
+
+# ── Next.js (website) ────────────────────────────────────────────────────
+website/.next/
+website/out/
+.next/
+
+# ── Caches ───────────────────────────────────────────────────────────────
+.cache/
+.parcel-cache/
+.turbo/
+.eslintcache
+.stylelintcache
+.npm/
+.yarn/
+.swc/
+.vite/
+vite.config.ts.timestamp-*
+vite.config.js.timestamp-*
+
+# ── Test / coverage ──────────────────────────────────────────────────────
+coverage/
+*.lcov
+.nyc_output/
+
+# ── npm pack / publish artefacts ─────────────────────────────────────────
+*.tgz
+*.zip
+.npm-pack/
+*.gem
+
+# ── Environment variables ────────────────────────────────────────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# ── IDE / editor ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.fleet/
+.cursor/
+.zed/
+*.swp
+*.swo
+*.swn
+*.bak
+.history/
+.ionide/
+
+# ── Claude / agent session state ─────────────────────────────────────────
+.claude/
+.claude
+.aider*
+
+# ── macOS ────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+Icon
+
+# ── Windows ──────────────────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ── Linux ────────────────────────────────────────────────────────────────
+*~
+.directory
+.Trash-*
+.fuse_hidden*
+
+# ── Logs ─────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ── Local-only reference / scratch (inspiration material) ────────────────
+reference/
+
+# ── Misc ─────────────────────────────────────────────────────────────────
+.tmp/
+tmp/
+*.pid
+*.seed
+*.pid.lock

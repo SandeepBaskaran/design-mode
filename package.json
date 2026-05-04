@@ -1,0 +1,28 @@
+{
+  "name": "design-mode",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Open-source visual design surface in the browser with MCP integration for coding agents",
+  "author": "Sandeep Baskaran",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "website"
+  ],
+  "scripts": {
+    "start": "cd packages/server && npx tsx src/bin/cli.ts",
+    "dev:extension": "cd packages/extension && node build.mjs",
+    "dev:server": "npm run start",
+    "dev:website": "cd website && npm run dev",
+    "build": "npm run build:extension && npm run build:website",
+    "build:extension": "cd packages/extension && node build.mjs",
+    "build:website": "cd website && npm run build",
+    "package:extension": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-extension.zip && zip -rq ../design-mode-extension.zip . -x '*.DS_Store' -x '*.map'",
+    "test:e2e": "echo '➜  Walk through docs/e2e-testcases.md against the freshly-built dist/. Every phase has to pass before publish.'",
+    "verify": "node scripts/prepublish-check.mjs",
+    "clean": "rm -rf packages/*/dist packages/*/build website/.next website/out"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

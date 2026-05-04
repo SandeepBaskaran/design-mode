@@ -1,0 +1,85 @@
+// ============================================================
+// Design Mode — Screenshots
+// Captures the visible viewport via chrome.tabs.captureVisibleTab and
+// crops to the selected element when needed. The previous SVG-foreignObject
+// approach was unreliable because it can't paint cross-origin images,
+// background-image URLs, or external fonts — most real pages came out blank.
+// ============================================================
+
+export async function captureViewportScreenshot(): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage({ type: 'CAPTURE_VIEWPORT' }, (response) => {
+        resolve(response?.dataUrl || null);
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function captureElementScreenshot(elementId: string): Promise<string | null> {
+  const el = document.querySelector(`[data-dm-id="${elementId}"]`) as HTMLElement | null;
+  if (!el) return null;
+
+  // Make sure the element is on screen before we capture the viewport.
+  // `instant` keeps us synchronous-ish; we still wait a frame for the
+  // browser to paint after the scroll.
+  el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
+  await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+  const viewportDataUrl = await captureViewportScreenshot();
+  if (!viewportDataUrl) return null;
+
+  // Get the rect after scroll has settled.
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+
+  return cropDataUrl(viewportDataUrl, rect);
+}
+
+// Crop the captured viewport (which is rendered at devicePixelRatio) to the
+// element's rect. Anything outside the visible viewport is clamped — taller
+// elements just produce the visible portion.
+async function cropDataUrl(dataUrl: string, rect: DOMRect): Promise<string | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        // Map page CSS pixels onto the captured image's pixels. Chrome's
+        // captureVisibleTab returns the picture at the actual rendered size,
+        // so the ratio is image-width / viewport-width.
+        const scaleX = img.naturalWidth / window.innerWidth;
+        const scaleY = img.naturalHeight / window.innerHeight;
+
+        const sx = Math.max(0, rect.left * scaleX);
+        const sy = Math.max(0, rect.top * scaleY);
+        const sw = Math.min(img.naturalWidth - sx, rect.width * scaleX);
+        const sh = Math.min(img.naturalHeight - sy, rect.height * scaleY);
+        if (sw <= 0 || sh <= 0) { resolve(null); return; }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(sw);
+        canvas.height = Math.round(sh);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(null); return; }
+
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+export function downloadDataUrl(dataUrl: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}

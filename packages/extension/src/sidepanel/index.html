@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design Mode</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── CSS Custom Properties (shadcn preset b1D0dv86 + dm-* mappings) ── */
+    :root[data-theme="dark"] {
+      /* shadcn tokens — dark */
+      --background: oklch(0.145 0 0);
+      --foreground: oklch(0.985 0 0);
+      --primary: oklch(0.922 0 0);
+      --primary-foreground: oklch(0.205 0 0);
+      --secondary: oklch(0.269 0 0);
+      --secondary-foreground: oklch(0.985 0 0);
+      --muted: oklch(0.269 0 0);
+      --muted-foreground: oklch(0.708 0 0);
+      --accent: oklch(0.269 0 0);
+      --accent-foreground: oklch(0.985 0 0);
+      --destructive: oklch(0.704 0.191 22.216);
+      --border: oklch(1 0 0 / 10%);
+      --input: oklch(1 0 0 / 15%);
+      --ring: oklch(0.556 0 0);
+      --radius: 0rem;
+
+      /* dm-* mapped to shadcn tokens */
+      --dm-bg: oklch(0.145 0 0);
+      --dm-bg-secondary: oklch(1 0 0 / 4%);
+      --dm-bg-tertiary: oklch(1 0 0 / 6%);
+      --dm-bg-active: oklch(1 0 0 / 8%);
+      --dm-text: oklch(0.985 0 0);
+      --dm-text-secondary: oklch(0.82 0 0);
+      --dm-text-muted: oklch(0.708 0 0);
+      --dm-text-dim: oklch(0.6 0 0);
+      --dm-text-dimmer: oklch(0.45 0 0);
+      --dm-input-bg: oklch(1 0 0 / 4%);
+      --dm-input-border: oklch(1 0 0 / 10%);
+      --dm-input-border-hover: oklch(1 0 0 / 18%);
+      --dm-separator: oklch(1 0 0 / 6%);
+      --dm-separator-strong: oklch(1 0 0 / 10%);
+      --dm-accent: #4F9EFF;
+      --dm-accent-bg: rgba(79,158,255,0.12);
+      --dm-accent-border: rgba(79,158,255,0.25);
+      --dm-danger: oklch(0.704 0.191 22.216);
+      --dm-danger-bg: oklch(0.704 0.191 22.216 / 10%);
+      --dm-danger-border: oklch(0.704 0.191 22.216 / 22%);
+      --dm-success: #22c55e;
+      --dm-success-bg: rgba(34,197,94,0.2);
+      --dm-purple: #8b5cf6;
+      --dm-purple-bg: rgba(139,92,246,0.06);
+      --dm-purple-border: rgba(139,92,246,0.25);
+      --dm-yellow: #FBBF24;
+      --dm-btn-bg: oklch(1 0 0 / 6%);
+      --dm-btn-border: oklch(1 0 0 / 10%);
+      --dm-btn-bg-disabled: oklch(1 0 0 / 3%);
+      --dm-btn-border-disabled: oklch(1 0 0 / 5%);
+      --dm-scrollbar-thumb: oklch(1 0 0 / 10%);
+      --dm-scrollbar-thumb-hover: oklch(1 0 0 / 20%);
+    }
+    :root[data-theme="light"] {
+      /* shadcn tokens — light */
+      --background: oklch(1 0 0);
+      --foreground: oklch(0.145 0 0);
+      --primary: oklch(0.205 0 0);
+      --primary-foreground: oklch(0.985 0 0);
+      --secondary: oklch(0.97 0 0);
+      --secondary-foreground: oklch(0.205 0 0);
+      --muted: oklch(0.97 0 0);
+      --muted-foreground: oklch(0.556 0 0);
+      --accent: oklch(0.97 0 0);
+      --accent-foreground: oklch(0.205 0 0);
+      --destructive: oklch(0.577 0.245 27.325);
+      --border: oklch(0.922 0 0);
+      --input: oklch(0.922 0 0);
+      --ring: oklch(0.708 0 0);
+      --radius: 0rem;
+
+      /* dm-* mapped to shadcn tokens */
+      --dm-bg: oklch(0.99 0 0);
+      --dm-bg-secondary: oklch(0 0 0 / 4%);
+      --dm-bg-tertiary: oklch(0 0 0 / 5%);
+      --dm-bg-active: oklch(0 0 0 / 8%);
+      --dm-text: oklch(0.145 0 0);
+      --dm-text-secondary: oklch(0.35 0 0);
+      --dm-text-muted: oklch(0.556 0 0);
+      --dm-text-dim: oklch(0.556 0 0);
+      --dm-text-dimmer: oklch(0.72 0 0);
+      --dm-input-bg: oklch(0 0 0 / 4%);
+      --dm-input-border: oklch(0.922 0 0);
+      --dm-input-border-hover: oklch(0 0 0 / 18%);
+      --dm-separator: oklch(0 0 0 / 8%);
+      --dm-separator-strong: oklch(0 0 0 / 10%);
+      --dm-accent: #4F9EFF;
+      --dm-accent-bg: rgba(79,158,255,0.12);
+      --dm-accent-border: rgba(79,158,255,0.25);
+      --dm-danger: oklch(0.577 0.245 27.325);
+      --dm-danger-bg: oklch(0.577 0.245 27.325 / 8%);
+      --dm-danger-border: oklch(0.577 0.245 27.325 / 18%);
+      --dm-success: #22c55e;
+      --dm-success-bg: rgba(34,197,94,0.15);
+      --dm-purple: #8b5cf6;
+      --dm-purple-bg: rgba(139,92,246,0.04);
+      --dm-purple-border: rgba(139,92,246,0.2);
+      --dm-yellow: #FBBF24;
+      --dm-btn-bg: oklch(0 0 0 / 5%);
+      --dm-btn-border: oklch(0.922 0 0);
+      --dm-btn-bg-disabled: oklch(0 0 0 / 2%);
+      --dm-btn-border-disabled: oklch(0 0 0 / 5%);
+      --dm-scrollbar-thumb: oklch(0 0 0 / 12%);
+      --dm-scrollbar-thumb-hover: oklch(0 0 0 / 20%);
+    }
+
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: var(--dm-bg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+      color: var(--dm-text);
+    }
+    body { display: flex; flex-direction: column; }
+    #dm-root { flex: 1; overflow-y: auto; overflow-x: hidden; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--dm-scrollbar-thumb); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--dm-scrollbar-thumb-hover); }
+    input, select, button { font-family: inherit; }
+    input[type="color"] { -webkit-appearance: none; border: none; }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+    /* ── Utility classes ── */
+    .dm-input {
+      background: var(--dm-input-bg);
+      border: 1px solid var(--dm-input-border);
+      border-radius: 5px;
+      color: var(--dm-text);
+      font-size: 11px;
+      padding: 6px;
+      outline: none;
+      font-family: 'SF Mono', Monaco, monospace;
+      transition: border-color 0.12s ease;
+    }
+    .dm-input:hover { border-color: var(--dm-input-border-hover); }
+    .dm-input:focus { border-color: var(--dm-accent); }
+    .dm-select {
+      background: var(--dm-input-bg);
+      border: 1px solid var(--dm-input-border);
+      border-radius: 5px;
+      color: var(--dm-text);
+      font-size: 11px;
+      padding: 6px;
+      outline: none;
+      cursor: pointer;
+      -webkit-appearance: none;
+      transition: border-color 0.12s ease;
+    }
+    .dm-select:hover { border-color: var(--dm-input-border-hover); }
+    .dm-select:focus { border-color: var(--dm-accent); }
+    .dm-btn {
+      background: var(--dm-btn-bg);
+      border: 1px solid var(--dm-btn-border);
+      border-radius: 5px;
+      color: var(--dm-text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 7px;
+      transition: background-color 0.12s ease, border-color 0.12s ease;
+    }
+    .dm-btn:hover { background: var(--dm-bg-tertiary); border-color: var(--dm-input-border-hover); }
+    .dm-btn:disabled, .dm-btn[data-disabled="true"] {
+      background: var(--dm-btn-bg-disabled);
+      border-color: var(--dm-btn-border-disabled);
+      color: var(--dm-text-dim);
+      cursor: default;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    /* ── Transitions (Phase 4B) ── */
+    .dm-layer-item {
+      transition: background-color 0.12s ease, opacity 0.2s ease;
+    }
+    .dm-layer-item:hover {
+      background-color: var(--dm-bg-secondary) !important;
+    }
+    .dm-section-body {
+      transition: max-height 0.2s ease, opacity 0.15s ease, padding-bottom 0.15s ease;
+      overflow: hidden;
+    }
+    .dm-section-body.dm-collapsed {
+      max-height: 0 !important;
+      opacity: 0;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+    }
+    .dm-section-body.dm-expanded {
+      opacity: 1;
+    }
+
+    /* ── Layer hover actions ── */
+    .dm-layer-item .dm-layer-drag,
+    .dm-layer-item .dm-layer-hover-actions {
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .dm-layer-item:hover .dm-layer-drag,
+    .dm-layer-item:hover .dm-layer-hover-actions {
+      opacity: 1;
+    }
+    .dm-layer-item.dm-drag-over {
+      border-top: 2px solid var(--dm-accent) !important;
+    }
+
+    /* ── Changes revert button ── */
+    .dm-change-item .dm-change-revert {
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .dm-change-item:hover .dm-change-revert {
+      opacity: 1;
+    }
+
+    /* ── Indentation guides ── */
+    .dm-indent-guide {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--dm-separator);
+    }
+
+    /* ── Layer search ── */
+    .dm-layer-search {
+      background: var(--dm-input-bg);
+      border: 1px solid var(--dm-input-border);
+      border-radius: 6px;
+      color: var(--dm-text);
+      font-size: 11px;
+      padding: 6px 8px 6px 28px;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.12s ease;
+    }
+    .dm-layer-search:hover { border-color: var(--dm-input-border-hover); }
+    .dm-layer-search:focus { border-color: var(--dm-accent); }
+    .dm-layer-search::placeholder { color: var(--dm-text-dim); }
+
+    /* ── Changes group card ── */
+    .dm-change-group {
+      border-bottom: 1px solid var(--dm-separator);
+    }
+    .dm-change-group-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.12s ease;
+    }
+    .dm-change-group-header:hover {
+      background: var(--dm-bg-secondary);
+    }
+
+    /* ── Animations ── */
+    @keyframes dm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ── Hover indicator ── */
+    .dm-hover-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 500;
+    }
+    .dm-hover-indicator.hovering {
+      background: rgba(251,191,36,0.12);
+      color: #FBBF24;
+    }
+    .dm-hover-indicator.selected {
+      background: rgba(79,158,255,0.12);
+      color: #4F9EFF;
+    }
+  </style>
+</head>
+<body>
+  <div id="dm-root"></div>
+  <script src="/sidepanel.js"></script>
+</body>
+</html>

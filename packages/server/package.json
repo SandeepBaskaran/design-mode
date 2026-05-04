@@ -1,0 +1,28 @@
+{
+  "name": "@design-mode/server",
+  "version": "1.0.0",
+  "description": "Design Mode MCP companion server — bridges browser extension to coding agents",
+  "license": "MIT",
+  "bin": {
+    "design-mode-server": "./dist/bin/cli.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/bin/cli.ts",
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' tsc",
+    "start": "npx tsx src/bin/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.0",
+    "ws": "^8.18.0",
+    "@design-mode/shared": "*"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
