@@ -8,6 +8,11 @@
 const tabStates = new Map<number, { enabled: boolean; connected: boolean }>();
 let pinnedTabId: number | null = null;
 let pinnedTabUrl: string | null = null;
+// Tracks whether a side-panel port is currently connected. Source of truth
+// for content-script heartbeats (`IS_PANEL_OPEN`). Cleared the moment the
+// panel disconnects, so a heartbeat racing the disconnect handler still
+// sees the right state.
+let sidepanelOpen = false;
 
 // Open side panel when extension icon is clicked
 if (chrome.sidePanel) {
@@ -17,6 +22,7 @@ if (chrome.sidePanel) {
 // When side panel connects, pin the current tab and auto-activate
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === 'sidepanel') {
+    sidepanelOpen = true;
     chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
       if (tab?.id) {
         pinnedTabId = tab.id;
@@ -41,6 +47,7 @@ chrome.runtime.onConnect.addListener((port) => {
     });
 
     port.onDisconnect.addListener(() => {
+      sidepanelOpen = false;
       if (pinnedTabId) {
         try {
           chrome.tabs.sendMessage(pinnedTabId, { type: 'DEACTIVATE_DESIGN_MODE' }).catch(() => {});
@@ -103,10 +110,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   // Side panel is closing — immediately deactivate design mode on the pinned tab
   if (msg.type === 'SP_PANEL_CLOSING') {
+    sidepanelOpen = false;
     if (pinnedTabId) {
       try { chrome.tabs.sendMessage(pinnedTabId, { type: 'DEACTIVATE_DESIGN_MODE' }).catch(() => {}); } catch {}
     }
     return false;
+  }
+
+  // Heartbeat from content scripts — answers "is the panel still open?"
+  // so the content side can self-disable if the panel-close → DEACTIVATE
+  // chain ever drops a message (e.g. SW spinning down). Keeps the page
+  // clean even on the rare race.
+  if (msg.type === 'IS_PANEL_OPEN') {
+    sendResponse({ open: sidepanelOpen });
+    return true;
   }
 
   // Side panel → content script forwards
@@ -117,10 +134,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     'SP_GET_STATE': { type: 'GET_STATE' },
     'SP_GET_CHANGES': { type: 'GET_CHANGES' },
     'SP_CLEAR_CHANGES': { type: 'CLEAR_CHANGES' },
-    'SP_GET_ANNOTATIONS': { type: 'GET_ANNOTATIONS' },
     'SP_GET_DOM_TREE': { type: 'GET_DOM_TREE' },
     'SP_GET_PAGE_URL': { type: 'GET_PAGE_URL' },
-    'SP_HIGHLIGHT_MATCHING': { type: 'HIGHLIGHT_MATCHING' },
   };
 
   if (forwardTypes[msg.type]) {
@@ -130,6 +145,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'SP_APPLY_STYLE') {
     forwardToPinnedTab({ type: 'APPLY_STYLE', property: msg.property, value: msg.value }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_SCROLL_TO_ELEMENT') {
+    forwardToPinnedTab({ type: 'SCROLL_TO_ELEMENT', elementId: msg.elementId }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_APPLY_PARENT_STYLE') {
+    forwardToPinnedTab({ type: 'APPLY_PARENT_STYLE', property: msg.property, value: msg.value }, sendResponse);
     return true;
   }
   if (msg.type === 'SP_DOM_ACTION') {
@@ -161,6 +184,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     forwardToPinnedTab({ type: 'ADD_COMMENT', text: msg.text }, sendResponse);
     return true;
   }
+  if (msg.type === 'SP_SET_COMMENT_RESOLVED') {
+    forwardToPinnedTab({ type: 'SET_COMMENT_RESOLVED', commentId: msg.commentId, resolved: msg.resolved }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_SET_COMMENT_PIN_OFFSET') {
+    forwardToPinnedTab({ type: 'SET_COMMENT_PIN_OFFSET', commentId: msg.commentId, offset: msg.offset }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_SET_PINS_HIDDEN') {
+    forwardToPinnedTab({ type: 'SET_PINS_HIDDEN', hidden: msg.hidden }, sendResponse);
+    return true;
+  }
   if (msg.type === 'SP_REMOVE_CHANGE') {
     forwardToPinnedTab({ type: 'REMOVE_CHANGE', changeId: msg.changeId }, sendResponse);
     return true;
@@ -177,16 +212,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     forwardToPinnedTab({ type: 'REORDER_CHANGE', from: msg.from, to: msg.to }, sendResponse);
     return true;
   }
-  if (msg.type === 'SP_SET_SENSITIVITY') {
-    forwardToPinnedTab({ type: 'SET_SENSITIVITY', value: msg.value }, sendResponse);
-    return true;
-  }
   if (msg.type === 'SP_APPLY_PRESET') {
     forwardToPinnedTab({ type: 'APPLY_PRESET', preset: msg.preset }, sendResponse);
     return true;
   }
   if (msg.type === 'SP_SAVE_PRESET') {
-    forwardToPinnedTab({ type: 'SAVE_PRESET', name: msg.name }, sendResponse);
+    forwardToPinnedTab({ type: 'SAVE_PRESET', name: msg.name, kind: msg.kind, props: msg.props }, sendResponse);
     return true;
   }
   if (msg.type === 'SP_DELETE_PRESET') {
@@ -225,25 +256,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  // Phase 1-9 forwards
-  if (msg.type === 'SP_ADD_ANNOTATION') { forwardToPinnedTab({ type: 'CREATE_ANNOTATION', payload: msg.payload }, sendResponse); return true; }
-  if (msg.type === 'SP_TOGGLE_PINS') { forwardToPinnedTab({ type: 'TOGGLE_PINS' }, sendResponse); return true; }
-  if (msg.type === 'SP_TOGGLE_DRAWING') { forwardToPinnedTab({ type: 'TOGGLE_DRAWING', enabled: msg.enabled }, sendResponse); return true; }
-  if (msg.type === 'SP_UNDO_DRAWING') { forwardToPinnedTab({ type: 'UNDO_DRAWING' }, sendResponse); return true; }
-  if (msg.type === 'SP_CLEAR_DRAWING') { forwardToPinnedTab({ type: 'CLEAR_DRAWING' }, sendResponse); return true; }
-  if (msg.type === 'SP_SET_DRAWING_COLOR') { forwardToPinnedTab({ type: 'SET_DRAWING_COLOR', color: msg.color }, sendResponse); return true; }
-  if (msg.type === 'SP_SET_DRAWING_WIDTH') { forwardToPinnedTab({ type: 'SET_DRAWING_WIDTH', width: msg.width }, sendResponse); return true; }
+  // Surviving feature relays
   if (msg.type === 'SP_TOGGLE_FREEZE') { forwardToPinnedTab({ type: 'TOGGLE_FREEZE' }, sendResponse); return true; }
-  if (msg.type === 'SP_TOGGLE_REARRANGE') { forwardToPinnedTab({ type: 'TOGGLE_REARRANGE' }, sendResponse); return true; }
-  if (msg.type === 'SP_ANALYZE_LAYOUT') { forwardToPinnedTab({ type: 'ANALYZE_LAYOUT' }, sendResponse); return true; }
-  if (msg.type === 'SP_SHOW_SPATIAL_CONTEXT') { forwardToPinnedTab({ type: 'GET_SPATIAL_CONTEXT' }, sendResponse); return true; }
   if (msg.type === 'SP_DETECT_FRAMEWORK') { forwardToPinnedTab({ type: 'GET_SOURCE_LOCATION' }, sendResponse); return true; }
-  if (msg.type === 'SP_OPEN_VSCODE') { forwardToPinnedTab({ type: 'OPEN_IN_VSCODE' }, sendResponse); return true; }
-  if (msg.type === 'SP_ANNO_ACTION') { forwardToPinnedTab({ type: 'UPDATE_ANNOTATION_STATUS', id: msg.annotationId, status: msg.action === 'resolve' ? 'resolved' : msg.action === 'acknowledge' ? 'acknowledged' : 'dismissed' }, sendResponse); return true; }
-  if (msg.type === 'SP_ANNO_REPLY') { forwardToPinnedTab({ type: 'ADD_THREAD_MESSAGE', annotationId: msg.annotationId, text: msg.text, authorType: 'user' }, sendResponse); return true; }
-  if (msg.type === 'SP_TOGGLE_MULTI_SELECT') { forwardToPinnedTab({ type: 'TOGGLE_MULTI_SELECT' }, sendResponse); return true; }
+  // SP_OPEN_VSCODE falls through the dynamic SP_-prefix fallback so the
+  // `source` field on the message is forwarded with the rest.
   if (msg.type === 'SP_TOGGLE_VISIBILITY') { forwardToPinnedTab({ type: 'TOGGLE_VISIBILITY', elementId: msg.elementId }, sendResponse); return true; }
-  if (msg.type === 'SP_REORDER_LAYER') { forwardToPinnedTab({ type: 'REORDER_LAYER', sourceId: msg.sourceId, targetId: msg.targetId }, sendResponse); return true; }
+  // SP_REORDER_LAYER falls through to the SP_ fallback below so all fields
+  // (sourceId, targetId, position) forward without hand-maintained mapping.
   if (msg.type === 'SP_SEND_TO_AGENT') { forwardToPinnedTab({ type: 'EXPORT', format: 'markdown', level: 'detailed' }, sendResponse); return true; }
   if (msg.type === 'SP_GET_MCP_STATUS') { forwardToPinnedTab({ type: 'GET_MCP_STATUS' }, sendResponse); return true; }
   if (msg.type === 'SP_GET_DESIGN_TOKENS') { forwardToPinnedTab({ type: 'GET_DESIGN_TOKENS' }, sendResponse); return true; }

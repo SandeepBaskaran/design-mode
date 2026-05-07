@@ -33,9 +33,12 @@ A free, open-source Chromium extension that turns any website into a live design
   searchable dropdowns; cross-site sync via `chrome.storage.sync`.
 - **Compact prompt format** — `Copy Prompt` produces an LLM-optimised, ~8× smaller markdown
   format with framework + styling-system detection, source-file hints, and grep-ready selectors.
-- **MCP server** — Real-time WebSocket bridge between extension and 12 MCP tools your agent
-  can call (`get_changes`, `apply_changes`, `batch_apply_changes`, Tailwind/SCSS/JSX exports,
-  spring/easing apply, …).
+- **MCP server** — Real-time WebSocket bridge between extension and 6 MCP tools your agent
+  can call: `get_changes`, `apply_changes`, `clear_changes`, `get_session_summary`,
+  `export_changes` (CSS / Tailwind / SCSS / JSX), and `get_screenshot` (PNG of the viewport
+  or a single element via a unique CSS path, returned as an MCP image block). Spring +
+  easing curves come through inside the underlying CSS values, so they ship in the regular
+  change stream.
 - **Keyboard-first** — Strict numeric inputs, arrow stepping (+1 / +10 with Shift), Ctrl+Z / Ctrl+Shift+Z.
 
 ## Repo layout
@@ -117,17 +120,22 @@ Opens at `http://localhost:3000`.
 
 ## MCP tools
 
-The server exposes 12 tools your agent can call:
+The server exposes 6 tools your agent can call:
 
-| Category | Tools |
+| Tool | What it does |
 |---|---|
-| Changes | `get_changes`, `apply_changes`, `batch_apply_changes`, `clear_changes` |
-| Exports | `get_tailwind`, `get_scss`, `get_jsx_styles` |
-| Comments | `get_comments` |
-| Sessions | `get_session_summary`, `list_sessions` |
-| Animation | `apply_spring_animation`, `apply_easing` |
+| `get_changes` | Read all style/text/DOM changes + comments + a ready-to-paste CSS block. Each change carries the element's unique CSS `selector` — feed that back into `get_screenshot` or `apply_changes` to address the exact element. |
+| `apply_changes` | Push CSS back to the browser for live preview (single change or batch — pass an array of `{ elementId, styles }`) |
+| `clear_changes` | Reset the session |
+| `get_session_summary` | Connection status, active sessions, counts (use as a health check before `apply_changes`) |
+| `export_changes` | Emit changes as `css`, `tailwind`, `scss`, or `jsx` (camelCase inline style objects) |
+| `get_screenshot` | Capture a PNG of the viewport, or pass a unique `selector` / `elementId` to crop to one element. Generic selectors that match >1 element fail with a list of candidate paths. Returned as an MCP image block. |
 
-Run `npm start` for the full ASCII banner that lists all tools and their descriptions.
+Spring physics and cubic-bezier easing curves come through inside the underlying CSS
+values (`transition: all 0.3s cubic-bezier(...)`) — there's no separate "apply spring"
+tool because animations are CSS, and CSS belongs in `apply_changes` like everything else.
+
+Run `npm start` for the full ASCII banner.
 
 ## Keyboard shortcuts
 

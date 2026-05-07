@@ -6,6 +6,7 @@
 import { getElementById, generateSelector, getComputedStyleSubset, reserveIdsAtLeast } from './helpers';
 import { DEFAULT_WS_PORT } from '../shared';
 import { BUILTIN_KEYFRAMES } from './keyframes-library';
+import { captureElementScreenshot, captureViewportScreenshot } from './screenshots';
 
 export interface StyleChange {
   id: string; elementId: string; selector: string;
@@ -16,12 +17,23 @@ export interface StyleChange {
 export interface TextChange {
   id: string; elementId: string; selector: string;
   oldText: string; newText: string; timestamp: number;
+  // When true, oldText/newText carry HTML (innerHTML); revert paths must
+  // use el.innerHTML, not el.textContent. Set by applyHtmlChange.
+  isHtml?: boolean;
 }
 
 export interface DomChange {
   id: string; elementId: string; selector: string;
   action: 'delete' | 'duplicate' | 'move' | 'insert';
   tagName: string; outerHTML?: string;
+  // For 'move' actions: where the element ended up. Lets us replay the move
+  // after a page reload AND tell the agent exactly which container the
+  // element belongs in now.
+  destination?: { parentSelector: string; index: number };
+  // Where the element was BEFORE the (first) move. Captured once and never
+  // updated on subsequent moves so Clear All can put it back regardless of
+  // how many times it was dragged.
+  origin?: { parentSelector: string; index: number };
   timestamp: number;
 }
 
@@ -182,16 +194,31 @@ export async function replaySession(): Promise<boolean> {
   for (const c of saved.textChanges) {
     try {
       const el = document.querySelector(c.selector) as HTMLElement | null;
-      if (el) el.textContent = c.newText;
+      if (!el) continue;
+      if (c.isHtml) el.innerHTML = c.newText;
+      else el.textContent = c.newText;
     } catch {}
   }
 
-  // Re-apply DOM changes — currently only delete is replayable safely
+  // Re-apply DOM changes. Delete + move are replay-safe; duplicate/insert
+  // need outerHTML to be reconstituted and we don't currently track that
+  // shape, so they only persist within a session, not across reloads.
   for (const c of saved.domChanges) {
     try {
       if (c.action === 'delete') {
         const el = document.querySelector(c.selector);
         if (el) el.remove();
+      } else if (c.action === 'move' && c.destination) {
+        const source = document.querySelector(c.selector) as HTMLElement | null;
+        const parent = document.querySelector(c.destination.parentSelector) as HTMLElement | null;
+        if (source && parent) {
+          const siblings = Array.from(parent.children);
+          // Place source at the saved index, clamped to the current child count.
+          const idx = Math.min(c.destination.index, siblings.length);
+          const before = siblings[idx] === source ? siblings[idx + 1] : siblings[idx];
+          if (before && before !== source) parent.insertBefore(source, before);
+          else if (!before) parent.appendChild(source);
+        }
       }
     } catch {}
   }
@@ -305,13 +332,55 @@ export function applyTextChange(
   return change;
 }
 
+// Same shape as applyTextChange, but writes innerHTML so rich-text edits
+// (bold / italic / lists / links from the side panel's contenteditable)
+// preserve formatting on the page AND through revert. Marks the record
+// with `isHtml: true` so CLEAR_CHANGES / REMOVE_CHANGE / UNDO / REDO know
+// to use el.innerHTML instead of el.textContent.
+export function applyHtmlChange(
+  elementId: string, html: string,
+  refreshPanel?: () => void,
+): TextChange | null {
+  const el = getElementById(elementId);
+  if (!el) return null;
+  const oldHtml = el.innerHTML || '';
+  el.innerHTML = html;
+  const change: TextChange = {
+    id: crypto.randomUUID(), elementId, selector: generateSelector(el),
+    oldText: oldHtml, newText: html, timestamp: Date.now(), isHtml: true,
+  };
+  textChanges.push(change);
+  syncTextChange(change);
+  persistSession();
+  if (refreshPanel) refreshPanel();
+  return change;
+}
+
 export function recordDomChange(
   elementId: string, selector: string, action: DomChange['action'],
-  tagName: string, outerHTML?: string
+  tagName: string, outerHTML?: string,
+  destination?: DomChange['destination'],
+  origin?: DomChange['origin']
 ): DomChange {
+  // Dedup 'move' actions per element — if the user drags the same layer
+  // around multiple times we only care about its final position, not the
+  // breadcrumb trail. Preserve the FIRST move's `origin` so Clear All can
+  // put the element back where it started, regardless of intermediate drags.
+  let inheritedOrigin = origin;
+  if (action === 'move') {
+    for (let i = domChanges.length - 1; i >= 0; i--) {
+      const prev = domChanges[i];
+      if (prev.action === 'move' && prev.elementId === elementId) {
+        if (!inheritedOrigin && prev.origin) inheritedOrigin = prev.origin;
+        domChanges.splice(i, 1);
+      }
+    }
+  }
   const change: DomChange = {
     id: crypto.randomUUID(), elementId, selector, action,
-    tagName, outerHTML, timestamp: Date.now(),
+    tagName, outerHTML, destination,
+    origin: inheritedOrigin,
+    timestamp: Date.now(),
   };
   domChanges.push(change);
   syncDomChange(change);
@@ -369,13 +438,18 @@ export function connectToServer(port = DEFAULT_WS_PORT) {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === 'APPLY_CHANGES' && msg.payload) {
+          // Push styles via the same managed-stylesheet path as user edits
+          // so they show up in the Changes tab and survive reloads.
           const { elementId, styles } = msg.payload;
-          const el = getElementById(elementId);
-          if (el && styles) {
-            Object.entries(styles).forEach(([prop, val]) => {
-              (el.style as any)[prop] = val;
-            });
+          if (elementId && styles) {
+            for (const [prop, val] of Object.entries(styles)) {
+              applyStyleChange(elementId, prop, val as string);
+            }
           }
+        } else if (msg.type === 'CAPTURE_SCREENSHOT' && msg.requestId) {
+          // Respond on the same WS using msg.requestId so the server can
+          // pair the response with its pending Promise.
+          handleScreenshotRequest(msg.requestId, msg.payload || {});
         }
       } catch {}
     };
@@ -383,6 +457,79 @@ export function connectToServer(port = DEFAULT_WS_PORT) {
 }
 
 export function isConnected() { return ws?.readyState === WebSocket.OPEN; }
+
+// Handle a screenshot request from the MCP server. Resolves to a base64 PNG
+// data URL captured from the visible viewport, optionally cropped to an
+// element matched by selector or by elementId. Failure paths return
+// { error } so the server can surface a clean error to the agent. When the
+// selector matches more than one element, return a helpful list of unique
+// candidate paths so the agent can re-query with a specific one.
+async function handleScreenshotRequest(
+  requestId: string,
+  payload: { selector?: string; elementId?: string }
+) {
+  let dataUrl: string | null = null;
+  let error: string | undefined;
+  let candidates: Array<{ path: string; label: string }> | undefined;
+  try {
+    if (payload.elementId) {
+      dataUrl = await captureElementScreenshot(payload.elementId);
+      if (!dataUrl) error = `Element with id "${payload.elementId}" not found`;
+    } else if (payload.selector) {
+      let matches: HTMLElement[] = [];
+      try {
+        matches = Array.from(document.querySelectorAll(payload.selector)) as HTMLElement[];
+      } catch (e: any) {
+        error = `Invalid selector "${payload.selector}": ${e?.message || e}`;
+      }
+      if (!error) {
+        if (matches.length === 0) {
+          error = `No element matched selector "${payload.selector}"`;
+        } else if (matches.length > 1) {
+          // Ambiguous — return up to 8 unique candidate paths so the agent
+          // can re-query with a specific one.
+          error = `Selector "${payload.selector}" matched ${matches.length} elements. Pass a more specific path (use list_layers to discover unique paths).`;
+          candidates = matches.slice(0, 8).map(el => ({
+            path: generateSelector(el),
+            label: shortLabel(el),
+          }));
+        } else {
+          const el = matches[0];
+          const id = el.getAttribute('data-dm-id') || `ad-hoc-${Date.now()}`;
+          if (!el.getAttribute('data-dm-id')) el.setAttribute('data-dm-id', id);
+          dataUrl = await captureElementScreenshot(id);
+          if (!dataUrl) error = 'Failed to crop element';
+        }
+      }
+    } else {
+      dataUrl = await captureViewportScreenshot();
+      if (!dataUrl) error = 'Failed to capture viewport';
+    }
+  } catch (e: any) {
+    error = e?.message || 'Capture failed';
+  }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    const responsePayload: any = dataUrl ? { dataUrl } : { error: error || 'Capture failed' };
+    if (candidates) responsePayload.candidates = candidates;
+    ws.send(JSON.stringify({
+      type: 'SCREENSHOT_RESULT',
+      responseTo: requestId,
+      payload: responsePayload,
+    }));
+  }
+}
+
+function shortLabel(el: HTMLElement): string {
+  const tag = el.tagName.toLowerCase();
+  const id = el.id ? `#${el.id}` : '';
+  const cls = (typeof el.className === 'string' && el.className.trim())
+    ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.')
+    : '';
+  const text = (el.textContent || '').trim().slice(0, 40);
+  const textSuffix = text ? ` "${text}${(el.textContent || '').length > 40 ? '…' : ''}"` : '';
+  return `${tag}${id}${cls}${textSuffix}`;
+}
+
 
 function syncChange(change: StyleChange) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;

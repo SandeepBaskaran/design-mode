@@ -9,10 +9,17 @@ export interface CommentData {
   id: string; elementId: string; selector: string;
   text: string; timestamp: number; updatedAt: number;
   pageUrl: string;
+  // Optional fields. Older saved comments don't have these and load fine.
+  resolved?: boolean;
+  // Override for the pin's auto-position (top-right of the element box).
+  // The values are absolute offsets in CSS pixels relative to the
+  // element's `getBoundingClientRect().top` / `.left + width`.
+  pinOffset?: { x: number; y: number };
 }
 
 const STORAGE_KEY = 'dm-comments';
 const pinElements = new Map<string, HTMLDivElement>();
+let pinsHidden = false; // gate from the side panel — when true, all pins skip rendering
 
 export async function loadComments(): Promise<CommentData[]> {
   try {
@@ -46,6 +53,40 @@ export async function updateComment(id: string, text: string): Promise<CommentDa
   return c;
 }
 
+// Toggle / set the resolved flag. Updates `updatedAt` so the side panel can
+// show an "edited" hint if the user wants that.
+export async function setCommentResolved(id: string, resolved: boolean): Promise<CommentData | null> {
+  const all = await loadComments();
+  const c = all.find(x => x.id === id);
+  if (!c) return null;
+  c.resolved = resolved;
+  c.updatedAt = Date.now();
+  await saveComments(all);
+  // Re-render the pin so its visual state matches.
+  showCommentPin(c, getPinOrdinal(c.id, all));
+  return c;
+}
+
+// Persist a manually-dragged pin offset.
+export async function setCommentPinOffset(id: string, offset: { x: number; y: number } | null): Promise<CommentData | null> {
+  const all = await loadComments();
+  const c = all.find(x => x.id === id);
+  if (!c) return null;
+  if (offset) c.pinOffset = offset; else delete (c as any).pinOffset;
+  await saveComments(all);
+  return c;
+}
+
+// Pin numbering — 1-based, matches the order comments were created in this
+// browser-tab session. Cheap to recompute on every render.
+function getPinOrdinal(commentId: string, all: CommentData[]): number {
+  const sameUrl = all
+    .filter(c => c.pageUrl === window.location.href)
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const idx = sameUrl.findIndex(c => c.id === commentId);
+  return idx >= 0 ? idx + 1 : 1;
+}
+
 export async function deleteComment(id: string) {
   const all = await loadComments();
   await saveComments(all.filter(x => x.id !== id));
@@ -53,47 +94,133 @@ export async function deleteComment(id: string) {
   if (pin) { pin.remove(); pinElements.delete(id); }
 }
 
-export function showCommentPin(comment: CommentData) {
+export function showCommentPin(comment: CommentData, ordinal?: number) {
+  if (pinsHidden) {
+    const existing = pinElements.get(comment.id);
+    if (existing) { existing.remove(); pinElements.delete(comment.id); }
+    return;
+  }
   const el = getElementById(comment.elementId);
   if (!el) return;
   const PIN_SIZE = 28;
   const MARGIN = 8;
   let pin = pinElements.get(comment.id);
+  // Pin colour by status — resolved pins fade to grey-green; open pins
+  // stay yellow. Both keep the tear-drop shape so they're recognisable
+  // as Design Mode comments at a glance.
+  const isResolved = !!comment.resolved;
+  const bg = isResolved ? '#A3A3A3' : '#FBBF24';
   if (!pin) {
     pin = document.createElement('div');
     pin.className = 'dm-comment-pin';
     Object.assign(pin.style, {
       position: 'fixed', zIndex: String(Z_INDEX.COMMENT_PIN),
       width: PIN_SIZE + 'px', height: PIN_SIZE + 'px', borderRadius: '50% 50% 50% 0',
-      background: '#FBBF24', color: '#000', fontSize: '12px',
+      color: '#000', fontSize: '11px',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       cursor: 'pointer', fontWeight: '700', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-      transform: 'rotate(-45deg)', transition: 'transform 0.15s ease',
+      transform: 'rotate(-45deg)', transition: 'transform 0.15s ease, opacity 0.15s ease',
       pointerEvents: 'auto',
-    });
-    pin.innerHTML = '<span style="transform:rotate(45deg);pointer-events:none">💬</span>';
-    pin.title = comment.text.slice(0, 60);
-    pin.addEventListener('click', (e) => {
-      e.stopPropagation();
-      window.dispatchEvent(new CustomEvent('dm-comment-clicked', { detail: comment }));
     });
     document.documentElement.appendChild(pin);
     pinElements.set(comment.id, pin);
+    pin.addEventListener('click', (e) => {
+      // Suppress the click that follows a drag — the dragend handler sets
+      // a brief "just dragged" flag so we don't open the side panel after
+      // repositioning.
+      if ((pin as any).__dmJustDragged) { (pin as any).__dmJustDragged = false; return; }
+      e.stopPropagation();
+      window.dispatchEvent(new CustomEvent('dm-comment-clicked', { detail: comment }));
+    });
+    // Drag-to-reposition. Holding the pin and dragging snaps it to the
+    // pointer; releasing persists the offset. Uses pointer events for
+    // smooth-tracking without HTML5 DnD's drag-image awkwardness.
+    pin.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const startX = e.clientX, startY = e.clientY;
+      let dragged = false;
+      (pin as HTMLElement).setPointerCapture(e.pointerId);
+      const onMove = (mv: PointerEvent) => {
+        const dx = mv.clientX - startX;
+        const dy = mv.clientY - startY;
+        if (!dragged && Math.abs(dx) + Math.abs(dy) < 4) return; // small-jitter threshold
+        dragged = true;
+        const rect = el.getBoundingClientRect();
+        const offX = (mv.clientX - (rect.left + rect.width)) + PIN_SIZE / 2;
+        const offY = (mv.clientY - rect.top) + PIN_SIZE / 2;
+        (pin as HTMLElement).style.top = Math.max(MARGIN, Math.min(mv.clientY - PIN_SIZE / 2, window.innerHeight - PIN_SIZE - MARGIN)) + 'px';
+        (pin as HTMLElement).style.left = Math.max(MARGIN, Math.min(mv.clientX - PIN_SIZE / 2, window.innerWidth - PIN_SIZE - MARGIN)) + 'px';
+        (pin as any).__dmPendingOffset = { x: offX, y: offY };
+      };
+      const onUp = () => {
+        (pin as HTMLElement).releasePointerCapture(e.pointerId);
+        pin!.removeEventListener('pointermove', onMove);
+        pin!.removeEventListener('pointerup', onUp);
+        if (dragged) {
+          (pin as any).__dmJustDragged = true;
+          const off = (pin as any).__dmPendingOffset;
+          if (off) {
+            window.dispatchEvent(new CustomEvent('dm-comment-pin-dragged', {
+              detail: { commentId: comment.id, offset: off },
+            }));
+          }
+        }
+      };
+      pin!.addEventListener('pointermove', onMove);
+      pin!.addEventListener('pointerup', onUp);
+    });
   }
+  // Update visual state every render — colour, ordinal label, opacity.
+  pin.style.background = bg;
+  pin.style.opacity = isResolved ? '0.6' : '1';
+  const label = ordinal ? String(ordinal) : '';
+  pin.innerHTML = '<span style="transform:rotate(45deg);pointer-events:none;font-family:SF Mono,Monaco,monospace;">' + (label || '💬') + '</span>';
+  pin.title = (label ? '#' + label + ' ' : '') + (isResolved ? '✓ ' : '') + (comment.text.slice(0, 60));
+  // Position. Honours pinOffset when present; otherwise auto-positions at
+  // the top-right corner of the element.
   const rect = el.getBoundingClientRect();
-  const rawTop = rect.top - PIN_SIZE / 2;
-  const rawLeft = rect.left + rect.width - PIN_SIZE / 2;
-  pin.style.top = Math.max(MARGIN, Math.min(rawTop, window.innerHeight - PIN_SIZE - MARGIN)) + 'px';
-  pin.style.left = Math.max(MARGIN, Math.min(rawLeft, window.innerWidth - PIN_SIZE - MARGIN)) + 'px';
+  let top: number, left: number;
+  if (comment.pinOffset) {
+    left = rect.left + rect.width - PIN_SIZE / 2 + comment.pinOffset.x;
+    top = rect.top - PIN_SIZE / 2 + comment.pinOffset.y;
+  } else {
+    top = rect.top - PIN_SIZE / 2;
+    left = rect.left + rect.width - PIN_SIZE / 2;
+  }
+  pin.style.top = Math.max(MARGIN, Math.min(top, window.innerHeight - PIN_SIZE - MARGIN)) + 'px';
+  pin.style.left = Math.max(MARGIN, Math.min(left, window.innerWidth - PIN_SIZE - MARGIN)) + 'px';
 }
 
+// Side-panel control: toggle every pin on / off.
+export function setPinsHidden(hidden: boolean) {
+  pinsHidden = hidden;
+  if (hidden) {
+    pinElements.forEach(p => p.remove());
+    pinElements.clear();
+  } else if (pinsActive) {
+    // Re-render every pin if pins were already active.
+    void showAllPins();
+  }
+}
+
+// Gates the scroll/resize repaint handlers below — without this flag the
+// pins would repaint themselves on every scroll AFTER hideAllPins() ran,
+// which leaks them through any panel-close cleanup.
+let pinsActive = false;
+
 export async function showAllPins() {
+  pinsActive = true;
+  if (pinsHidden) return;
   const all = await loadComments();
-  const pageComments = all.filter(c => c.pageUrl === window.location.href);
-  for (const c of pageComments) showCommentPin(c);
+  const pageComments = all
+    .filter(c => c.pageUrl === window.location.href)
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  pageComments.forEach((c, i) => showCommentPin(c, i + 1));
 }
 
 export function hideAllPins() {
+  pinsActive = false;
   pinElements.forEach(pin => pin.remove());
   pinElements.clear();
 }
@@ -103,12 +230,16 @@ export async function getPageComments(): Promise<CommentData[]> {
   return all.filter(c => c.pageUrl === window.location.href);
 }
 
-// Reposition pins on scroll/resize (pins use fixed positioning, recalculate on scroll)
-window.addEventListener('scroll', async () => {
-  const pageComments = await getPageComments();
-  for (const c of pageComments) showCommentPin(c);
-}, { passive: true, capture: true });
-window.addEventListener('resize', async () => {
-  const pageComments = await getPageComments();
-  for (const c of pageComments) showCommentPin(c);
-}, { passive: true });
+// Reposition pins on scroll/resize. The `pinsActive` gate prevents these
+// from re-creating pins after the panel closed; `pinsHidden` is the
+// user's explicit toggle.
+async function repositionAll() {
+  if (!pinsActive || pinsHidden) return;
+  const all = await loadComments();
+  const pageComments = all
+    .filter(c => c.pageUrl === window.location.href)
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  pageComments.forEach((c, i) => showCommentPin(c, i + 1));
+}
+window.addEventListener('scroll', () => { void repositionAll(); }, { passive: true, capture: true });
+window.addEventListener('resize', () => { void repositionAll(); }, { passive: true });

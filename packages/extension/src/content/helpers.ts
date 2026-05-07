@@ -95,18 +95,58 @@ export function getComputedStyleSubset(el: HTMLElement): Record<string, string> 
     'boxSizing','overflow','overflowX','overflowY',
     'fontFamily','fontSize','fontWeight','fontStyle','lineHeight','letterSpacing',
     'wordSpacing','textAlign','textDecoration','textTransform','whiteSpace','color',
+    // Typography Advanced — decoration cluster
+    'textDecorationLine','textDecorationStyle','textDecorationColor','textDecorationThickness',
+    'textUnderlineOffset','textUnderlinePosition','textDecorationSkipInk',
+    // Typography Advanced — wrapping / whitespace
+    'textWrap','wordBreak','overflowWrap','hyphens','textJustify','textIndent','textOverflow',
+    // Typography Advanced — alignment / tab / line clamp
+    'verticalAlign','tabSize','webkitLineClamp','webkitBoxOrient',
+    // Typography Advanced — direction / writing mode
+    'direction','writingMode','unicodeBidi',
+    // Typography Advanced — font features
+    'fontStretch','fontVariantCaps','fontVariantNumeric','fontVariantLigatures','fontVariantPosition',
+    'fontFeatureSettings','fontVariationSettings','textRendering',
+    'fontKerning','fontOpticalSizing','fontSynthesis','fontSizeAdjust',
+    // Typography Advanced — extra wrapping / list controls
+    'textAlignLast','lineBreak','listStyleType','listStylePosition','listStyleImage',
     'backgroundColor','backgroundImage','opacity','visibility','cursor','mixBlendMode',
     'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
     'borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle',
     'borderTopColor','borderRightColor','borderBottomColor','borderLeftColor',
+    'borderImageSource','borderImageSlice','borderImageWidth','borderImageOutset','borderImageRepeat',
     'borderTopLeftRadius','borderTopRightRadius','borderBottomRightRadius','borderBottomLeftRadius',
     'boxShadow','textShadow','outline','outlineOffset','filter','backdropFilter','transition',
     'transitionProperty','transitionDuration','transitionTimingFunction','transitionDelay',
     'animation','animationName','animationDuration','animationTimingFunction','animationDelay',
     'animationIterationCount','animationDirection','animationFillMode','animationPlayState',
-    'translate','rotate','scale','transformOrigin',
+    'translate','rotate','scale','transformOrigin','transformBox',
+    'perspective','perspectiveOrigin','transformStyle','backfaceVisibility',
+    'insetBlockStart','insetBlockEnd','insetInlineStart','insetInlineEnd',
+    'anchorName','positionAnchor','positionArea','viewTransitionName',
+    'positionTryFallbacks','positionTryOrder','positionVisibility',
     'pointerEvents','userSelect','outlineStyle','outlineWidth','outlineColor',
     'backgroundSize','backgroundPosition','backgroundRepeat','backgroundAttachment',
+    // Fill Advanced — clip / origin + the mask-* family
+    'backgroundClip','backgroundOrigin','webkitBackgroundClip','webkitTextFillColor',
+    'maskImage','maskMode','maskRepeat','maskPosition','maskSize','maskOrigin','maskClip','maskComposite',
+    // SVG paint properties (CSS-on-SVG; takes precedence over presentation attributes)
+    'fill','fillOpacity','fillRule','stroke','strokeWidth','strokeOpacity','strokeDasharray','strokeDashoffset','strokeLinecap','strokeLinejoin',
+    // Appearance — stacking-context, form controls, scrollbars, perf, clip
+    'isolation','accentColor','caretColor','colorScheme','clipPath','appearance',
+    'scrollbarWidth','scrollbarColor','scrollbarGutter','forcedColorAdjust',
+    'contain','contentVisibility','willChange',
+    // Effects — Motion Path
+    'offsetPath','offsetDistance','offsetRotate','offsetAnchor','offsetPosition',
+    // Effects — View Transitions
+    'viewTransitionClass',
+    // Effects — Scroll-driven animations
+    'animationTimeline','animationRange','animationRangeStart','animationRangeEnd',
+    'scrollTimeline','scrollTimelineName','scrollTimelineAxis',
+    'viewTimeline','viewTimelineName','viewTimelineAxis','viewTimelineInset',
+    'timelineScope',
+    // Layout — logical margin (i18n parity to physical margin)
+    'marginBlockStart','marginBlockEnd','marginInlineStart','marginInlineEnd',
   ];
   const result: Record<string, string> = {};
   for (const p of props) result[p] = (cs as any)[p] || '';

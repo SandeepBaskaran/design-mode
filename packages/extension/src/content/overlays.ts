@@ -8,6 +8,9 @@ import { getElementRect, type Rect } from './helpers';
 let hoverOverlay: HTMLDivElement | null = null;
 let selectOverlay: HTMLDivElement | null = null;
 let dimensionLabel: HTMLDivElement | null = null;
+// Set after destroyOverlays — prevents in-flight mouseover handlers from
+// re-creating overlay elements via ensureOverlays() after the panel closed.
+let teardown = false;
 
 const OVERLAY_BASE = {
   position: 'absolute', pointerEvents: 'none', borderRadius: '2px',
@@ -15,6 +18,7 @@ const OVERLAY_BASE = {
 } as const;
 
 export function ensureOverlays() {
+  if (teardown) return; // panel closed — refuse to re-paint
   if (!hoverOverlay) {
     hoverOverlay = document.createElement('div');
     hoverOverlay.id = 'dm-hover';
@@ -59,8 +63,10 @@ function positionOverlayFromRect(overlay: HTMLDivElement, rect: Rect) {
 }
 
 export function showHover(el: HTMLElement) {
+  if (teardown) return;
   ensureOverlays();
-  positionOverlayFromRect(hoverOverlay!, getElementRect(el));
+  if (!hoverOverlay) return;
+  positionOverlayFromRect(hoverOverlay, getElementRect(el));
 }
 
 export function hideHover() {
@@ -68,14 +74,15 @@ export function hideHover() {
 }
 
 export function showSelect(el: HTMLElement) {
+  if (teardown) return;
   ensureOverlays();
+  if (!selectOverlay || !dimensionLabel) return;
   const rect = getElementRect(el);
-  positionOverlayFromRect(selectOverlay!, rect);
-  // Show dimension label below selection
+  positionOverlayFromRect(selectOverlay, rect);
   const w = Math.round(rect.width);
   const h = Math.round(rect.height);
-  dimensionLabel!.textContent = `${w} × ${h}`;
-  Object.assign(dimensionLabel!.style, {
+  dimensionLabel.textContent = `${w} × ${h}`;
+  Object.assign(dimensionLabel.style, {
     display: 'block',
     top: (rect.top + rect.height + 4) + 'px',
     left: rect.left + 'px',
@@ -92,8 +99,14 @@ export function updateSelectPosition(el: HTMLElement) {
 }
 
 export function destroyOverlays() {
+  teardown = true;
   [hoverOverlay, selectOverlay, dimensionLabel].forEach(el => el?.remove());
   hoverOverlay = selectOverlay = dimensionLabel = null;
+}
+
+// Called from enable() so a re-opened panel can paint overlays again.
+export function resetOverlayTeardown() {
+  teardown = false;
 }
 
 export function isOverlayElement(el: HTMLElement): boolean {

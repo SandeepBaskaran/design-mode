@@ -4,6 +4,7 @@
 
 import { getOrAssignId, getElementById, getElementRect, generateSelector, getBreadcrumbs, getComputedStyleSubset } from './helpers';
 import { showHover, hideHover, showSelect, updateSelectPosition, isOverlayElement } from './overlays';
+import { isMultiSelectActive, toggleSelection, getSelectedIds } from './multi-select';
 
 export type IconInfo = { library: string; name: string; availableIcons?: string[] };
 
@@ -14,6 +15,11 @@ export type ElementInfo = {
   textContent: string | null; innerHTML: string;
   attributes: Record<string, string>; selector: string;
   iconInfo?: IconInfo;
+  parentDisplay?: string;
+  parentFlexDirection?: string;
+  parentJustifyContent?: string;
+  parentAlignItems?: string;
+  parentGap?: string;
 };
 
 export type SelectionCallback = (info: ElementInfo) => void;
@@ -62,6 +68,17 @@ export function buildElementInfo(el: HTMLElement): ElementInfo {
   for (const a of Array.from(el.attributes)) {
     if (!a.name.startsWith('data-dm')) attrs[a.name] = a.value;
   }
+  // innerHTML is the source of truth for the rich-text editor in the side
+  // panel. The previous 2000-char cap was silently truncating long
+  // paragraphs — saving would then write back the truncated HTML and
+  // destroy the tail. Cap is now 100 KB, which covers the longest
+  // realistic editable text without making chrome.runtime messages
+  // unreasonably big.
+  const innerHTML = el.innerHTML.length > 100_000
+    ? el.innerHTML.slice(0, 100_000)
+    : el.innerHTML;
+  const parent = el.parentElement;
+  const pcs = parent ? window.getComputedStyle(parent) : null;
   return {
     id, tagName: el.tagName.toLowerCase(),
     className: typeof el.className === 'string' ? el.className : '',
@@ -69,9 +86,14 @@ export function buildElementInfo(el: HTMLElement): ElementInfo {
     computedStyles: getComputedStyleSubset(el),
     rect: getElementRect(el),
     textContent: el.textContent?.slice(0, 500) || null,
-    innerHTML: el.innerHTML.slice(0, 2000),
+    innerHTML,
     attributes: attrs, selector: generateSelector(el),
     iconInfo: detectIconInfo(el),
+    parentDisplay: pcs?.display || '',
+    parentFlexDirection: pcs?.flexDirection || '',
+    parentJustifyContent: pcs?.justifyContent || '',
+    parentAlignItems: pcs?.alignItems || '',
+    parentGap: pcs?.gap || '',
   };
 }
 
@@ -125,7 +147,24 @@ function handleClick(e: MouseEvent) {
   if (hoverDebounceTimer) { clearTimeout(hoverDebounceTimer); hoverDebounceTimer = null; }
   lastHoveredId = null;
   try { chrome.runtime.sendMessage({ type: 'ELEMENT_HOVERED_INFO', payload: null }); } catch {}
-  selectedId = getOrAssignId(t);
+  const id = getOrAssignId(t);
+  if (isMultiSelectActive()) {
+    // Click toggles membership in the multi-select set; the single-select
+    // overlay still tracks the most-recently-touched element so the panel
+    // has someone to render styles for.
+    toggleSelection(id);
+    selectedId = id;
+    showSelect(t);
+    try {
+      chrome.runtime.sendMessage({
+        type: 'MULTI_SELECT_UPDATE',
+        payload: { ids: getSelectedIds() },
+      });
+    } catch {}
+    if (onSelect) onSelect(buildElementInfo(t));
+    return;
+  }
+  selectedId = id;
   showSelect(t);
   if (onSelect) onSelect(buildElementInfo(t));
 }

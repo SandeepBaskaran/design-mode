@@ -6,44 +6,59 @@
 // ============================================================
 
 import { getElementById, getOrAssignId, generateSelector } from './helpers';
-import { showHover, hideHover, showSelect, hideSelect, destroyOverlays } from './overlays';
+import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyTextChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, getChangeReport, reorderChange, getAllChanges, replaySession } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, downloadDataUrl } from './screenshots';
 import { getCustomPresets, saveCustomPreset, deleteCustomPreset, updateCustomPreset, importPresets, getPageTokens } from './presets';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
-import { highlightMatching, setSensitivity } from './multi-edit';
 import { buildDomTree } from './dom-tree';
-import { addComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins } from './comments';
-// Phase 1: Annotations
+import { addComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, setPinsHidden } from './comments';
+// Source detection — kept; surfaced in the prompt + Design tab
+import { getSourceLocation, getComponentHierarchy, openInVSCode } from './source-detection';
+// Animation controls — kept (freeze/preview helpers)
+import { isFrozen, toggleFreeze, unfreezeAnimations, getAnimationState } from './animation-controls';
+// Multi-select — toggle mode, fan-out style edits to N elements at once
 import {
-  loadAnnotations, createAnnotation, updateAnnotation, deleteAnnotation,
-  updateAnnotationStatus, addThreadMessage, updateThreadMessage,
-  getPageAnnotations, showAllAnnotationPins, hideAllAnnotationPins,
-  enableTextSelection, disableTextSelection,
-  enableMultiSelect, disableMultiSelect, getMultiSelectIds,
-  enableDrawing, disableDrawing, isDrawingMode, clearDrawing,
-  getDrawingStrokes, getDrawingDataUrl, setDrawingColor, setDrawingWidth, undoLastStroke,
-} from './annotations';
-// Phase 2: Spatial
-import { getSpatialContext, getAccessibilityInfo, getSmartName, getNearbyElementsContext, formatSpatialLines } from './spatial';
-// Phase 3: Source detection
-import { getSourceLocation, getComponentHierarchy, openInVSCode, formatSourceLocation } from './source-detection';
-// Phase 4: Animation controls
-import { freezeAnimations, unfreezeAnimations, isFrozen, toggleFreeze, getAnimationState, applySpring, applyEasing, previewTransition, springToCss, easingToCss } from './animation-controls';
-// Phase 5: Design/Layout mode
-import { COMPONENTS, getComponentsByCategory, startPlacement, placeComponent, showResizeHandles, hideResizeHandles, showSizeIndicator, hideSizeIndicator } from './design-mode';
-// Phase 6: Rearrange
-import { enableRearrange, disableRearrange, isRearrangeMode, detectSections, getDetectedSections, analyzeLayoutPatterns, addRearrangeNote, getRearrangeNotes } from './rearrange';
-// Phase 7: Enhanced export
-import { generateOutput, exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue, captureElementSnapshot } from './enhanced-export';
-// Phase 9: Keyboard shortcuts
-import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts, formatShortcut } from './keyboard-shortcuts';
+  isMultiSelectActive, enableMultiSelect, disableMultiSelect,
+  getSelectedIds as getMultiSelectIds, clearSelection as clearMultiSelect,
+  refreshOverlays as refreshMultiSelectOverlays,
+  toggleSelection as toggleMultiSelectMember,
+} from './multi-select';
+// Design/Layout mode — component palette + resize handles
+import { getComponentsByCategory, placeComponent, showResizeHandles, hideResizeHandles } from './design-mode';
+// Enhanced export — markdown for Copy Prompt
+import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } from './enhanced-export';
+// Keyboard shortcuts
+import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts } from './keyboard-shortcuts';
 
 let on = false;
-let mhc: (() => void) | null = null;
+// Heartbeat to background — fires every 4s while design-mode is active to
+// confirm the side panel is still around. If background reports the panel
+// closed (or the SW is asleep / context invalidated), we self-disable so
+// the page never shows orphan overlays/pins after the panel went away.
+let panelHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+function startPanelHeartbeat() {
+  if (panelHeartbeatTimer) return;
+  panelHeartbeatTimer = setInterval(async () => {
+    if (!on) return;
+    try {
+      const r: { open?: boolean } | undefined = await new Promise((resolve) => {
+        try { chrome.runtime.sendMessage({ type: 'IS_PANEL_OPEN' }, (resp) => resolve(resp)); }
+        catch { resolve(undefined); }
+      });
+      if (!r || r.open === false) disable();
+    } catch {
+      // Extension context invalidated or SW gone — definitely no panel.
+      disable();
+    }
+  }, 4000);
+}
+function stopPanelHeartbeat() {
+  if (panelHeartbeatTimer) { clearInterval(panelHeartbeatTimer); panelHeartbeatTimer = null; }
+}
 
 // Undo/Redo stacks
 interface StyleUndoEntry { kind: "style"; elementId: string; property: string; oldValue: string; newValue: string; changeId?: string; }
@@ -61,9 +76,9 @@ function getFullState() {
     enabled: on,
     connected: isConnected(),
     inspecting: isInspectActive(),
-    drawing: isDrawingMode(),
     frozen: isFrozen(),
-    rearranging: isRearrangeMode(),
+    multiSelect: isMultiSelectActive(),
+    multiSelectIds: getMultiSelectIds(),
     undoCount: undoStack.length,
     redoCount: redoStack.length,
   };
@@ -105,9 +120,6 @@ function onElementSelected(info: ElementInfo) {
   const el = getElementById(info.id);
   const extra: any = {};
   if (el) {
-    extra.smartName = getSmartName(el);
-    extra.spatialContext = getSpatialContext(el);
-    extra.accessibilityInfo = getAccessibilityInfo(el);
     const source = getSourceLocation(el);
     if (source) {
       extra.sourceLocation = source;
@@ -131,15 +143,14 @@ function onElementSelected(info: ElementInfo) {
 function enable() {
   if (on) return;
   on = true;
+  resetOverlayTeardown();
+  showCommentPins();         // surface saved comment pins on the page
+  startPanelHeartbeat();     // detect a panel-close that the message chain missed
   connectToServer();
   enableInspect((i: ElementInfo) => onElementSelected(i));
-  loadAnnotations().then(() => showAllAnnotationPins());
   loadShortcuts().then(() => {
     enableShortcuts();
     registerAllShortcuts();
-  });
-  enableTextSelection((text, elementId, rect) => {
-    notifyPanel('TEXT_SELECTED', { payload: { text, elementId, rect } });
   });
   // Replay any changes saved in this session for this URL — survives reloads
   // and back/forward navigation. Always notify so the side panel resets
@@ -157,18 +168,26 @@ function enable() {
 function disable() {
   if (!on) return;
   on = false;
+  stopPanelHeartbeat();
+  // Order matters: kill the input handlers BEFORE removing the overlays so
+  // an in-flight mouseover can't repaint the hover layer after we tear it
+  // down. disableInspect already removes the listeners and resets the
+  // crosshair cursor; disableMultiSelect tears down its own outline overlays.
   disableInspect();
-  destroyOverlays();
-  disconnectFromServer();
-  hideAllAnnotationPins();
-  disableTextSelection();
   disableMultiSelect();
-  disableDrawing();
-  disableShortcuts();
-  if (isRearrangeMode()) disableRearrange();
+  destroyOverlays();
+  hideCommentPins();
   if (isFrozen()) unfreezeAnimations();
-  if (mhc) { mhc(); mhc = null; }
+  disconnectFromServer();
+  disableShortcuts();
   setSelectedElementId(null);
+  // Final sweep — if any other module attached an overlay-like element, this
+  // catches the strays so the page goes back to a pristine state the moment
+  // the panel closes.
+  document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-toolbar, .dm-multi-overlay, .dm-comment-pin').forEach(el => el.remove());
+  if (document.documentElement.style.cursor === 'crosshair') {
+    document.documentElement.style.cursor = '';
+  }
 }
 
 function registerAllShortcuts() {
@@ -177,30 +196,13 @@ function registerAllShortcuts() {
     else enableInspect((i: ElementInfo) => onElementSelected(i));
     notifyPanel('STATE_UPDATE', getFullState());
   });
-  registerShortcut('add-annotation', () => {
-    const sid = getSelectedElementId();
-    if (sid) notifyPanel('PROMPT_ANNOTATION', { elementId: sid });
-  });
-  registerShortcut('toggle-drawing', () => {
-    if (isDrawingMode()) disableDrawing(); else enableDrawing();
-    notifyPanel('STATE_UPDATE', getFullState());
-  });
   registerShortcut('freeze-animations', () => {
     toggleFreeze();
     notifyPanel('STATE_UPDATE', getFullState());
     notifyPanel('ANIMATION_STATE', { payload: getAnimationState() });
   });
-  registerShortcut('toggle-rearrange', () => {
-    if (isRearrangeMode()) {
-      disableRearrange();
-    } else {
-      const sections = enableRearrange();
-      notifyPanel('SECTIONS_DETECTED', { payload: sections });
-    }
-    notifyPanel('STATE_UPDATE', getFullState());
-  });
   registerShortcut('deselect', () => {
-    if (isDrawingMode()) disableDrawing();
+    if (isMultiSelectActive()) disableMultiSelect();
     else if (isInspectActive()) disableInspect();
     else { hideSelect(); setSelectedElementId(null); }
     notifyPanel('STATE_UPDATE', getFullState());
@@ -247,6 +249,24 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
+    // Scroll the page so the named element comes into view (without selecting it).
+    case 'SCROLL_TO_ELEMENT': {
+      const eid = (msg as any).elementId;
+      if (eid) {
+        // The tracker stamps each element with `data-dm-{id}`; we look it up
+        // by attribute selector. Pseudo-element / shadow-root virtual nodes
+        // (e.g. `<id>::before`, `<id>::shadow`) don't have real DOM nodes,
+        // so we strip any `::*` suffix and target the host instead.
+        const realId = String(eid).replace(/::.*$/, '');
+        const el = document.querySelector('[data-dm-' + realId + ']') as HTMLElement | null;
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        }
+      }
+      sendResponse({ ok: true });
+      break;
+    }
+
     // New: Page URL for header
     case 'GET_PAGE_URL': {
       sendResponse({ url: window.location.href, hostname: window.location.hostname });
@@ -267,10 +287,27 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
+    // Implicit page-context selection. Side panel calls this when no element
+    // is selected so the design tab can show body's properties as defaults.
+    // Selects <body> WITHOUT painting the orange select overlay (the overlay
+    // would visually wrap the entire viewport and look broken).
+    case 'INSPECT_PAGE': {
+      const body = document.body;
+      if (body) {
+        const info = buildElementInfo(body);
+        setSelectedElementId(info.id);
+        // Deliberately DO NOT call showSelect here.
+        sendResponse({ payload: { ...info, element: undefined } });
+      } else sendResponse({ error: 'No body element' });
+      break;
+    }
+
     // New: Select specific element by ID (from Layers panel) — falls back to
     // the saved selector for changes from a previous session whose dm-id no
     // longer exists in the current DOM (the selector-based stylesheet still
-    // applies, but the element-id lookup misses).
+    // applies, but the element-id lookup misses). When multi-select is on,
+    // clicking a layer toggles its membership in the multi-select set
+    // (matches the inspector's click-to-add behavior on the page).
     case 'SELECT_ELEMENT': {
       let el = getElementById(msg.elementId) as HTMLElement | null;
       if (!el) {
@@ -283,6 +320,10 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         }
       }
       if (el) {
+        if (isMultiSelectActive()) {
+          toggleMultiSelectMember(msg.elementId);
+          notifyPanel('MULTI_SELECT_UPDATE', { payload: { ids: getMultiSelectIds() } });
+        }
         const info = selectAndNotify(el);
         const r = el.getBoundingClientRect();
         if (r.top < 0 || r.bottom > window.innerHeight) {
@@ -446,6 +487,45 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
+    // Toggle / set the resolved flag on a comment.
+    case 'SET_COMMENT_RESOLVED': {
+      const cid = (msg as any).commentId;
+      const resolved = !!(msg as any).resolved;
+      if (cid) {
+        setCommentResolved(cid, resolved).then(() => {
+          // After mutation, ensure pins re-render with the new ordinal /
+          // colour. showCommentPins is idempotent.
+          void showCommentPins();
+          sendResponse({ ok: true });
+        });
+        return true;
+      }
+      sendResponse({ ok: false });
+      break;
+    }
+
+    // Persist a manually-dragged pin offset.
+    case 'SET_COMMENT_PIN_OFFSET': {
+      const cid = (msg as any).commentId;
+      const offset = (msg as any).offset;
+      if (cid) {
+        setCommentPinOffset(cid, offset || null).then(() => {
+          void showCommentPins();
+          sendResponse({ ok: true });
+        });
+        return true;
+      }
+      sendResponse({ ok: false });
+      break;
+    }
+
+    // Side-panel toggle for the global "hide all pins" override.
+    case 'SET_PINS_HIDDEN': {
+      setPinsHidden(!!(msg as any).hidden);
+      sendResponse({ ok: true });
+      break;
+    }
+
     // New: Remove/revert a specific change
     case 'REMOVE_CHANGE': {
       if (msg.changeId?.startsWith('comment-')) {
@@ -462,7 +542,10 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const textChange = getTextChanges().find(c => c.id === msg.changeId);
         if (textChange) {
           const el = getElementById(textChange.elementId);
-          if (el) el.textContent = textChange.oldText;
+          if (el) {
+            if (textChange.isHtml) el.innerHTML = textChange.oldText;
+            else el.textContent = textChange.oldText;
+          }
           removeTextChange(msg.changeId);
         } else {
           // DOM change — actually reverse the action when possible
@@ -508,23 +591,65 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       return true;
     }
 
+    // Rich text save — sets innerHTML so bold/italic/lists/links survive.
+    // The undoStack entry records the OLD innerHTML; revert via el.innerHTML.
+    case 'SET_HTML': {
+      const sid = getSelectedElementId();
+      if (sid && typeof msg.html === 'string') {
+        const el = getElementById(sid);
+        if (el) {
+          const oldHtml = el.innerHTML || '';
+          if (oldHtml !== msg.html) {
+            applyHtmlChange(sid, msg.html);
+            undoStack.push({ kind: 'text', elementId: sid, oldText: oldHtml, newText: msg.html });
+            redoStack.length = 0;
+          }
+          const info = buildElementInfo(el);
+          onElementSelected(info);
+        }
+      }
+      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
+      return true;
+    }
+
     case 'APPLY_STYLE': {
       const sid = getSelectedElementId();
       if (sid && msg.property) {
-        const el = getElementById(sid);
-        if (el) {
-          const kebab = msg.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
+        // Targets: in multi-select mode, apply to every selected element
+        // (one change record each so the Changes tab shows the full impact
+        // and the agent gets a per-element diff in Copy Prompt). Otherwise
+        // just the focused element. Make sure the focused element is in
+        // the target list so the side-panel preview updates correctly.
+        const multiIds = isMultiSelectActive() ? getMultiSelectIds() : [];
+        const targetIds = multiIds.length > 0
+          ? Array.from(new Set([sid, ...multiIds]))
+          : [sid];
+        const kebab = msg.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
+        for (const id of targetIds) {
+          const el = getElementById(id);
+          if (!el) continue;
           const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
-          const change = applyStyleChange(sid, msg.property, msg.value, () => {
-            const el2 = getElementById(sid);
-            if (el2) onElementSelected(buildElementInfo(el2));
+          const change = applyStyleChange(id, msg.property, msg.value, () => {
+            const el2 = getElementById(id);
+            if (el2 && id === sid) onElementSelected(buildElementInfo(el2));
           });
           const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
           if (afterValue !== beforeValue) {
-            undoStack.push({ kind: 'style', elementId: sid, property: msg.property, oldValue: beforeValue, newValue: msg.value, changeId: change?.id });
-            redoStack.length = 0;
+            undoStack.push({ kind: 'style', elementId: id, property: msg.property, oldValue: beforeValue, newValue: msg.value, changeId: change?.id });
           }
         }
+        if (targetIds.length > 0) redoStack.length = 0;
+        // Re-position overlays after the browser repaints — the style we just
+        // wrote can change the element's bounding rect (width/height/left/top)
+        // and the select+hover overlays plus the W×H dimension label all need
+        // to track the new geometry. Without this, the boxes and the size
+        // label visually lag behind until the next mouse event triggers
+        // refreshSelection().
+        requestAnimationFrame(() => {
+          if (multiIds.length > 0) refreshMultiSelectOverlays();
+          const focusedEl = getElementById(sid);
+          if (focusedEl) showSelect(focusedEl);
+        });
         const updatedEl = getElementById(sid);
         const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
         getChangesPayload().then(p => sendResponse({
@@ -532,9 +657,35 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           ...p,
           undoCount: undoStack.length,
           redoCount: redoStack.length,
+          appliedTo: targetIds.length,
         }));
         return true;
       } else sendResponse({ error: 'No element selected' });
+      break;
+    }
+
+    case 'APPLY_PARENT_STYLE': {
+      const sid = getSelectedElementId();
+      const el = sid ? getElementById(sid) : null;
+      const parent = el?.parentElement as HTMLElement | null;
+      if (parent && msg.property) {
+        const parentId = getOrAssignId(parent);
+        applyStyleChange(parentId, msg.property, msg.value, () => {});
+        requestAnimationFrame(() => {
+          const focusedEl = sid ? getElementById(sid) : null;
+          if (focusedEl) showSelect(focusedEl);
+        });
+        const updatedEl = el;
+        const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
+        getChangesPayload().then(p => sendResponse({
+          info: updatedInfo ? { ...updatedInfo, element: undefined } : null,
+          ...p,
+          undoCount: undoStack.length,
+          redoCount: redoStack.length,
+        }));
+        return true;
+      }
+      sendResponse({ error: 'No parent' });
       break;
     }
 
@@ -580,23 +731,29 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
 
     case 'CLEAR_CHANGES': {
-      // Drop preview state if active
+      // Make sure the override stylesheet is enabled before we clear it,
+      // otherwise the page would still be showing `disabled` overrides.
+      setOverridesEnabled(true);
       if ((window as any).__dmPreviewSaved) delete (window as any).__dmPreviewSaved;
 
-      // Style changes are reverted by clearAllChanges() below — it drops the
-      // override stylesheet, and computed styles return to their natural values.
-
-      // Revert text changes — first oldText per element
-      const firstTextOld = new Map<string, { elementId: string; oldText: string }>();
+      // 1. Revert text changes (textContent isn't stylesheet-able). For
+      // HTML edits, restore innerHTML so bold/italic/lists are preserved.
+      const firstTextOld = new Map<string, { elementId: string; oldText: string; isHtml?: boolean }>();
       for (const ch of getTextChanges()) {
         if (!firstTextOld.has(ch.elementId)) firstTextOld.set(ch.elementId, ch);
       }
       for (const [, ch] of firstTextOld) {
         const el = getElementById(ch.elementId);
-        if (el) el.textContent = ch.oldText;
+        if (!el) continue;
+        if (ch.isHtml) el.innerHTML = ch.oldText;
+        else el.textContent = ch.oldText;
       }
 
-      // For each DOM change: remove duplicates/inserts, restore deletes
+      // 2. Revert DOM changes:
+      //    - duplicate / insert → remove the added node
+      //    - delete             → re-create from outerHTML if missing
+      //    - move               → put the element back at its origin parent + index
+      const moves = getDomChanges().filter(ch => ch.action === 'move' && ch.origin);
       for (const ch of getDomChanges()) {
         try {
           if (ch.action === 'duplicate' || ch.action === 'insert') {
@@ -611,15 +768,49 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           }
         } catch {}
       }
+      // Process moves AFTER duplicates are gone (so origin index lines up).
+      // Origin parent might also have been moved — try our best.
+      for (const ch of moves) {
+        try {
+          const source = getElementById(ch.elementId) ||
+            (ch.selector ? document.querySelector(ch.selector) : null) as HTMLElement | null;
+          const originParent = ch.origin && document.querySelector(ch.origin.parentSelector) as HTMLElement | null;
+          if (source && originParent && source !== originParent) {
+            const idx = Math.min(ch.origin!.index, originParent.children.length);
+            const before = originParent.children[idx];
+            if (before && before !== source) originParent.insertBefore(source, before);
+            else if (!before) originParent.appendChild(source);
+          }
+        } catch {}
+      }
 
-      // Clean leftover preview markers
+      // 3. Clean leftover preview markers from any in-flight View Original mode.
       document.querySelectorAll('[data-dm-preview-restored="1"]').forEach(el => el.remove());
-      document.querySelectorAll('[data-dm-preview-hidden="1"]').forEach(el => {
-        (el as HTMLElement).style.display = '';
+      document.querySelectorAll<HTMLElement>('[data-dm-preview-hidden="1"]').forEach(el => {
+        el.style.display = el.dataset.dmPreviewPrevDisplay || '';
+        delete el.dataset.dmPreviewPrevDisplay;
         el.removeAttribute('data-dm-preview-hidden');
       });
 
-      // Delete all comments for this page so the Changes tab is truly empty
+      // 4. Defensive sweep — strip stray inline styles on tracked elements
+      //    that older code paths might have written (visibility:none, etc.).
+      //    Only touches elements that participated in some change, so we
+      //    don't reset things the page itself set inline.
+      const touchedIds = new Set<string>();
+      for (const c of getStyleChanges()) touchedIds.add(c.elementId);
+      for (const c of getTextChanges()) touchedIds.add(c.elementId);
+      for (const c of getDomChanges()) touchedIds.add(c.elementId);
+      for (const id of touchedIds) {
+        const el = getElementById(id);
+        if (!el) continue;
+        // Only clear styles we know we may have leaked. Don't touch arbitrary
+        // page-author inline styles.
+        if (el.style.display === 'none' || el.style.display === '') el.style.removeProperty('display');
+        el.style.removeProperty('animation');
+        el.style.removeProperty('animation-name');
+      }
+
+      // 5. Comments + arrays + override stylesheet.
       getPageComments().then(async (pageComments) => {
         for (const c of pageComments) await deleteComment(c.id);
         clearAllChanges();
@@ -630,14 +821,6 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       return true;
     }
     case 'REORDER_CHANGE': if (typeof msg.from === 'number' && typeof msg.to === 'number') reorderChange(msg.from, msg.to); getChangesPayload().then(p => sendResponse(p)); return true; break;
-    case 'SET_SENSITIVITY': if (typeof msg.value === 'number') setSensitivity(msg.value); sendResponse({ ok: true }); break;
-
-    case 'HIGHLIGHT_MATCHING': {
-      const sid = getSelectedElementId();
-      if (mhc) { mhc(); mhc = null; }
-      else if (sid) { mhc = highlightMatching(sid); setTimeout(() => { if (mhc) { mhc(); mhc = null; } }, 3000); }
-      sendResponse({ ok: true }); break;
-    }
 
     case 'APPLY_PRESET': {
       const sid = getSelectedElementId();
@@ -661,9 +844,29 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       }
       sendResponse({ error: 'No element selected' }); break;
     }
-    case 'SAVE_PRESET': { const sid = getSelectedElementId(); if (sid && msg.name) { saveCustomPreset(msg.name, sid).then(() => sendResponse({ ok: true })); return true; } sendResponse({ error: 'No element selected' }); break; }
+    case 'SAVE_PRESET': {
+      const sid = getSelectedElementId();
+      const kindsAllowed = ['position', 'layout', 'appearance', 'typography', 'fill', 'stroke', 'effects'] as const;
+      const kind = (kindsAllowed as readonly string[]).includes(msg.kind) ? msg.kind : 'typography';
+      const props: string[] = Array.isArray(msg.props) ? msg.props : [];
+      if (sid && msg.name) {
+        saveCustomPreset(msg.name, sid, kind, props).then(res => {
+          sendResponse(res?.error ? { ok: false, error: res.error } : { ok: true, preset: res?.preset });
+        });
+        return true;
+      }
+      sendResponse({ ok: false, error: 'No element selected' });
+      break;
+    }
     case 'DELETE_PRESET': if (msg.presetId) { deleteCustomPreset(msg.presetId).then(() => sendResponse({ ok: true })); return true; } sendResponse({ ok: true }); break;
-    case 'UPDATE_PRESET': { if (msg.presetId && msg.name && msg.styles) { updateCustomPreset(msg.presetId, msg.name, msg.styles).then(() => sendResponse({ ok: true })); return true; } sendResponse({ ok: false }); break; }
+    case 'UPDATE_PRESET': {
+      if (msg.presetId && msg.name && msg.styles) {
+        updateCustomPreset(msg.presetId, msg.name, msg.styles).then(res => sendResponse(res));
+        return true;
+      }
+      sendResponse({ ok: false });
+      break;
+    }
     case 'GET_PRESETS': { getCustomPresets().then(presets => sendResponse({ presets })); return true; }
     case 'GET_PAGE_TOKENS': {
       const sid = getSelectedElementId();
@@ -693,7 +896,19 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       sendResponse({ error: 'No element selected' }); break;
     }
     case 'EXPORT_PRESETS': { getCustomPresets().then(presets => sendResponse({ json: JSON.stringify(presets, null, 2) })); return true; }
-    case 'IMPORT_PRESETS': { if (msg.json) { importPresets(msg.json).then(count => sendResponse({ ok: true, count })); return true; } sendResponse({ ok: false }); break; }
+    case 'IMPORT_PRESETS': {
+      if (msg.json) {
+        importPresets(msg.json).then(res => sendResponse({
+          ok: !res.error,
+          count: res.count,
+          total: res.total,
+          error: res.error,
+        }));
+        return true;
+      }
+      sendResponse({ ok: false, error: 'Empty file' });
+      break;
+    }
 
     case 'GET_MEDIA': {
       const sid = getSelectedElementId();
@@ -759,45 +974,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'SCREENSHOT_ELEMENT': { const sid = getSelectedElementId(); if (sid) { captureElementScreenshot(sid).then(dataUrl => sendResponse({ dataUrl })); return true; } sendResponse({ dataUrl: null }); break; }
     case 'UPLOAD_IMAGE': { const sid = getSelectedElementId(); if (sid && msg.dataUrl) { const el = getElementById(sid); if (el?.tagName === 'IMG') (el as HTMLImageElement).src = msg.dataUrl; else if (el) { el.style.backgroundImage = `url(${msg.dataUrl})`; el.style.backgroundSize = 'cover'; } if (el) sendResponse({ info: { ...buildElementInfo(el), element: undefined } }); } sendResponse({ ok: true }); break; }
 
-    // ── Phase 1: Annotations ──
-    case 'CREATE_ANNOTATION': {
-      createAnnotation(msg.payload).then(ann => {
-        sendResponse({ annotation: ann });
-        notifyPanel('ANNOTATION_CREATED', { payload: ann });
-      });
-      return true;
-    }
-    case 'UPDATE_ANNOTATION': { updateAnnotation(msg.id, msg.updates).then(ann => sendResponse({ annotation: ann })); return true; }
-    case 'DELETE_ANNOTATION': { deleteAnnotation(msg.id).then(ok => sendResponse({ ok })); return true; }
-    case 'UPDATE_ANNOTATION_STATUS': { updateAnnotationStatus(msg.id, msg.status).then(ann => sendResponse({ annotation: ann })); return true; }
-    case 'ADD_THREAD_MESSAGE': { addThreadMessage(msg.annotationId, msg.text, msg.authorType).then(m => sendResponse({ message: m })); return true; }
-    case 'UPDATE_THREAD_MESSAGE': { updateThreadMessage(msg.annotationId, msg.messageId, msg.text).then(ok => sendResponse({ ok })); return true; }
-    case 'GET_ANNOTATIONS': { sendResponse({ annotations: getPageAnnotations() }); break; }
-    case 'TOGGLE_MULTI_SELECT': {
-      if (getMultiSelectIds().length > 0) { disableMultiSelect(); sendResponse({ active: false, ids: [] }); }
-      else { enableMultiSelect(); sendResponse({ active: true, ids: [] }); }
-      break;
-    }
-    case 'GET_MULTI_SELECT': { sendResponse({ ids: getMultiSelectIds() }); break; }
-    case 'TOGGLE_DRAWING': {
-      if (isDrawingMode()) { disableDrawing(); } else { enableDrawing(); }
-      sendResponse({ drawing: isDrawingMode() }); break;
-    }
-    case 'SET_DRAWING_COLOR': { setDrawingColor(msg.color); sendResponse({ ok: true }); break; }
-    case 'SET_DRAWING_WIDTH': { setDrawingWidth(msg.width); sendResponse({ ok: true }); break; }
-    case 'UNDO_DRAWING': { undoLastStroke(); sendResponse({ ok: true }); break; }
-    case 'CLEAR_DRAWING': { clearDrawing(); sendResponse({ ok: true }); break; }
-    case 'GET_DRAWING': { sendResponse({ strokes: getDrawingStrokes(), dataUrl: getDrawingDataUrl() }); break; }
-
-    // ── Phase 2: Spatial ──
-    case 'GET_SPATIAL_CONTEXT': {
-      const el = getElementById(msg.elementId || getSelectedElementId() || '');
-      if (el) sendResponse({ context: getSpatialContext(el), accessibility: getAccessibilityInfo(el), smartName: getSmartName(el), nearby: getNearbyElementsContext(el) });
-      else sendResponse({ error: 'No element' });
-      break;
-    }
-
-    // ── Phase 3: Source detection ──
+    // ── Source detection ──
     case 'GET_SOURCE_LOCATION': {
       const el = getElementById(msg.elementId || getSelectedElementId() || '');
       if (el) { const s = getSourceLocation(el); const h = getComponentHierarchy(el); sendResponse({ source: s, hierarchy: h }); }
@@ -809,12 +986,26 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       sendResponse({ ok: true }); break;
     }
 
-    // ── Phase 4: Animation ──
+    // ── Animation freeze (Alt+F) ──
     case 'TOGGLE_FREEZE': { toggleFreeze(); sendResponse({ frozen: isFrozen(), state: getAnimationState() }); break; }
     case 'GET_ANIMATION_STATE': { sendResponse({ state: getAnimationState() }); break; }
-    case 'APPLY_SPRING': { if (msg.elementId && msg.config) applySpring(msg.elementId, msg.config, msg.property); sendResponse({ ok: true, css: msg.config ? springToCss(msg.config) : '' }); break; }
-    case 'APPLY_EASING': { if (msg.elementId && msg.config) applyEasing(msg.elementId, msg.config); sendResponse({ ok: true, css: msg.config ? easingToCss(msg.config) : '' }); break; }
-    case 'PREVIEW_TRANSITION': { if (msg.elementId) previewTransition(msg.elementId, msg.property, msg.from, msg.to, msg.duration, msg.easing); sendResponse({ ok: true }); break; }
+
+    // ── Multi-select ──
+    case 'TOGGLE_MULTI_SELECT': {
+      if (isMultiSelectActive()) disableMultiSelect();
+      else enableMultiSelect();
+      sendResponse({ active: isMultiSelectActive(), ids: getMultiSelectIds() });
+      break;
+    }
+    case 'CLEAR_MULTI_SELECT': {
+      clearMultiSelect();
+      sendResponse({ active: isMultiSelectActive(), ids: [] });
+      break;
+    }
+    case 'GET_MULTI_SELECT': {
+      sendResponse({ active: isMultiSelectActive(), ids: getMultiSelectIds() });
+      break;
+    }
 
     // Briefly flash a transitioned property to a contrast value so the user
     // can see the transition they just configured. Reads transition-property
@@ -890,20 +1081,12 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
-    case 'TOGGLE_REARRANGE': {
-      if (isRearrangeMode()) { disableRearrange(); sendResponse({ active: false, sections: [] }); }
-      else { const sections = enableRearrange(); sendResponse({ active: true, sections }); }
+    case 'GET_PAGE_FONTS': {
+      sendResponse({ fonts: detectPageFonts() });
       break;
     }
-    case 'GET_SECTIONS': { sendResponse({ sections: getDetectedSections() }); break; }
-    case 'ANALYZE_LAYOUT': { sendResponse({ analysis: analyzeLayoutPatterns() }); break; }
 
-    // ── Phase 7: Enhanced export ──
-    case 'GENERATE_OUTPUT': { sendResponse({ output: generateOutput(msg.level || 'standard') }); break; }
-    case 'EXPORT_MARKDOWN': { sendResponse({ markdown: exportMarkdown(msg.level || 'standard') }); break; }
-    case 'CAPTURE_SNAPSHOT': { const snap = captureElementSnapshot(msg.elementId || getSelectedElementId() || '', msg.level); sendResponse({ snapshot: snap }); break; }
-
-    // ── Phase 9: Shortcuts ──
+    // ── Keyboard shortcuts ──
     case 'GET_SHORTCUTS': { sendResponse({ shortcuts: getShortcuts() }); break; }
 
     case 'GET_COMPUTED_CSS': {
@@ -912,25 +1095,12 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
 
     case 'PREVIEW_ORIGINAL': {
-      const savedStyles: Record<string, string> = {};
+      // Style rollback is one DOM op — flip the override stylesheet's
+      // disabled bit. Everything else (text + DOM mutations) still needs
+      // hand-rolling because they aren't stylesheet-based.
+      setOverridesEnabled(false);
+
       const savedTexts: Array<{ elementId: string; currentText: string }> = [];
-      const hiddenAdditions: Array<{ elementId: string; selector: string; previousDisplay: string }> = [];
-
-      // Revert style changes — keep only the FIRST oldValue per (element, prop)
-      const firstOld = new Map<string, { elementId: string; property: string; oldValue: string }>();
-      for (const ch of getStyleChanges()) {
-        const key = ch.elementId + '|' + ch.property;
-        if (!firstOld.has(key)) firstOld.set(key, ch);
-      }
-      for (const [key, ch] of firstOld) {
-        const el = getElementById(ch.elementId);
-        if (el) {
-          savedStyles[key] = (el.style as any)[ch.property] || '';
-          (el.style as any)[ch.property] = ch.oldValue;
-        }
-      }
-
-      // Revert text changes — store current text, restore the FIRST oldText per element
       const firstOldText = new Map<string, { elementId: string; oldText: string }>();
       for (const ch of getTextChanges()) {
         if (!firstOldText.has(ch.elementId)) firstOldText.set(ch.elementId, ch);
@@ -943,14 +1113,15 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         }
       }
 
-      // For each DOM change, hide additions and re-insert deletions
+      // For each DOM change, hide additions and re-insert deletions. The
+      // `data-dm-preview-*` attributes are markers we strip during restore;
+      // Clear All also strips them.
       for (const ch of getDomChanges()) {
         try {
           if (ch.action === 'duplicate' || ch.action === 'insert') {
-            // Hide the duplicated/inserted element so the original page is shown
             const el = (getElementById(ch.elementId) || document.querySelector(ch.selector)) as HTMLElement | null;
             if (el && el.style.display !== 'none') {
-              hiddenAdditions.push({ elementId: ch.elementId, selector: ch.selector, previousDisplay: el.style.display || '' });
+              el.dataset.dmPreviewPrevDisplay = el.style.display || '';
               el.style.display = 'none';
               el.setAttribute('data-dm-preview-hidden', '1');
             }
@@ -967,44 +1138,30 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         } catch {}
       }
 
-      // Hide comment pins so the page looks pristine
       try { hideCommentPins(); } catch {}
-
-      (window as any).__dmPreviewSaved = { savedStyles, savedTexts, hiddenAdditions };
+      (window as any).__dmPreviewSaved = { savedTexts };
       sendResponse({ ok: true }); break;
     }
 
     case 'RESTORE_CHANGES': {
+      setOverridesEnabled(true);
       const saved = (window as any).__dmPreviewSaved as
-        | { savedStyles: Record<string, string>; savedTexts: Array<{ elementId: string; currentText: string }>; hiddenAdditions: Array<{ elementId: string; selector: string; previousDisplay: string }> }
+        | { savedTexts: Array<{ elementId: string; currentText: string }> }
         | undefined;
       if (saved) {
-        // Re-apply current styles
-        for (const key of Object.keys(saved.savedStyles || {})) {
-          const sep = key.indexOf('|');
-          const elementId = key.slice(0, sep);
-          const property = key.slice(sep + 1);
-          const el = getElementById(elementId);
-          if (el) (el.style as any)[property] = saved.savedStyles[key];
-        }
-        // Re-apply current text
         for (const t of saved.savedTexts || []) {
           const el = getElementById(t.elementId);
           if (el) el.textContent = t.currentText;
         }
-        // Restore display on hidden duplications/insertions
-        for (const h of saved.hiddenAdditions || []) {
-          const el = (getElementById(h.elementId) || document.querySelector(h.selector)) as HTMLElement | null;
-          if (el) {
-            el.style.display = h.previousDisplay;
-            el.removeAttribute('data-dm-preview-hidden');
-          }
-        }
-        // Remove any preview-restored deleted elements
-        document.querySelectorAll('[data-dm-preview-restored="1"]').forEach(el => el.remove());
         delete (window as any).__dmPreviewSaved;
       }
-      // Bring comment pins back
+      // Restore display on the duplicates/inserts we hid; remove preview-only deletes.
+      document.querySelectorAll<HTMLElement>('[data-dm-preview-hidden="1"]').forEach(el => {
+        el.style.display = el.dataset.dmPreviewPrevDisplay || '';
+        delete el.dataset.dmPreviewPrevDisplay;
+        el.removeAttribute('data-dm-preview-hidden');
+      });
+      document.querySelectorAll('[data-dm-preview-restored="1"]').forEach(el => el.remove());
       try { showCommentPins(); } catch {}
       sendResponse({ ok: true }); break;
     }
@@ -1030,17 +1187,17 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'TOGGLE_VISIBILITY': {
       const el = getElementById(msg.elementId);
       if (el) {
-        const computedDisplay = window.getComputedStyle(el).display;
-        const isHidden = el.style.display === 'none' || computedDisplay === 'none';
-        const oldDisplay = el.style.display;
-        undoStack.push({ kind: 'visibility', elementId: msg.elementId, wasHidden: isHidden, oldDisplay });
+        // Hidden state lives in the override stylesheet (display: none rule)
+        // — never inline. That way Clear All cleanly drops the rule and the
+        // element returns to its natural display.
+        const isHidden = window.getComputedStyle(el).display === 'none';
+        undoStack.push({ kind: 'visibility', elementId: msg.elementId, wasHidden: isHidden, oldDisplay: '' });
         redoStack.length = 0;
         if (isHidden) {
-          el.style.display = '';
-          el.style.visibility = '';
-          applyStyleChange(msg.elementId, 'display', el.style.display || '');
+          // Drop the rule by passing empty value — applyStyleChange treats
+          // it as "return to original" and removes the rule + change record.
+          applyStyleChange(msg.elementId, 'display', '');
         } else {
-          el.style.display = 'none';
           applyStyleChange(msg.elementId, 'display', 'none');
         }
       }
@@ -1053,9 +1210,27 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       const source = getElementById(msg.sourceId);
       const target = getElementById(msg.targetId);
       if (source && target && source !== target && target.parentElement) {
-        const sel = generateSelector(source);
-        target.parentElement.insertBefore(source, target);
-        recordDomChange(msg.sourceId, sel, 'move', source.tagName.toLowerCase());
+        // Capture origin BEFORE the move so Clear All can put the element back.
+        let origin: { parentSelector: string; index: number } | undefined;
+        if (source.parentElement) {
+          origin = {
+            parentSelector: generateSelector(source.parentElement),
+            index: Array.from(source.parentElement.children).indexOf(source),
+          };
+        }
+        const parent = target.parentElement;
+        const position: 'before' | 'after' = msg.position === 'after' ? 'after' : 'before';
+        if (position === 'after') parent.insertBefore(source, target.nextSibling);
+        else parent.insertBefore(source, target);
+        const sourceSelector = generateSelector(source);
+        const parentSelector = generateSelector(parent);
+        const index = Array.from(parent.children).indexOf(source);
+        recordDomChange(
+          msg.sourceId, sourceSelector, 'move', source.tagName.toLowerCase(),
+          undefined,
+          { parentSelector, index },
+          origin,
+        );
       }
       getChangesPayload().then(p => sendResponse({ ok: true, ...p }));
       return true;
@@ -1086,6 +1261,68 @@ function detectDesignTokens(): Array<{ name: string; value: string; category: 'c
   return Array.from(tokens.entries()).map(([name, value]) => ({ name, value, category: categoriseToken(name, value) }));
 }
 
+// Build the list of fonts to surface in the Typography → Font dropdown.
+// Two sources, deduped + sorted: every `font-family` declared in the page's
+// own stylesheets, plus a curated set of web-safe / system fallbacks. The
+// first family in each comma-separated stack is what the user picks; the
+// `value` field keeps the full stack so applying it preserves fallbacks.
+function detectPageFonts(): Array<{ value: string; label: string }> {
+  const seen = new Map<string, string>(); // primary-family-lowercase → full stack
+  const isSystemKeyword = (s: string) =>
+    /^(inherit|initial|unset|revert|revert-layer)$/i.test(s.trim());
+  const addStack = (raw: string) => {
+    const stack = (raw || '').trim();
+    if (!stack || isSystemKeyword(stack)) return;
+    // Skip stacks that contain unresolved CSS variables — `var(--font-primary)`
+    // shouldn't appear as a font choice in the dropdown.
+    if (/var\(/i.test(stack)) return;
+    const first = stack.split(',')[0].trim().replace(/^["']|["']$/g, '');
+    if (!first) return;
+    // Skip primary-family values that look like CSS keywords or expressions.
+    if (/^(var|calc|attr|env|--|inherit|initial|unset|revert)\b/i.test(first)) return;
+    const key = first.toLowerCase();
+    if (!seen.has(key)) seen.set(key, stack);
+  };
+  // Walk every accessible stylesheet rule for font-family declarations.
+  try {
+    for (const sheet of Array.from(document.styleSheets)) {
+      try {
+        const rules = Array.from(sheet.cssRules || []);
+        for (const rule of rules) {
+          if (rule instanceof CSSStyleRule) {
+            const ff = rule.style.getPropertyValue('font-family');
+            if (ff) addStack(ff);
+          }
+        }
+      } catch {} // cross-origin sheet — skip
+    }
+  } catch {}
+  // Curated fallbacks so the dropdown is always useful, even on a vanilla page.
+  const fallbacks = [
+    'system-ui, sans-serif',
+    'Arial, Helvetica, sans-serif',
+    'Helvetica, Arial, sans-serif',
+    'Georgia, serif',
+    'Times New Roman, Times, serif',
+    'Courier New, Courier, monospace',
+    'Verdana, Geneva, sans-serif',
+    'Trebuchet MS, sans-serif',
+    'Tahoma, Geneva, sans-serif',
+    'Impact, Charcoal, sans-serif',
+    'Comic Sans MS, cursive',
+    'monospace',
+    'serif',
+    'sans-serif',
+  ];
+  for (const f of fallbacks) addStack(f);
+  // Stable order: page-detected first (insertion order from the rules walk)
+  // then fallbacks. `seen` already preserves insertion order.
+  return Array.from(seen.entries()).map(([key, stack]) => {
+    const primary = stack.split(',')[0].trim().replace(/^["']|["']$/g, '');
+    return { value: stack, label: primary };
+  });
+}
+
 function categoriseToken(name: string, value: string): 'color' | 'spacing' | 'font' | 'shadow' | 'other' {
   const lname = name.toLowerCase();
   if (lname.includes('color') || lname.includes('bg') || lname.includes('text') || lname.includes('border') ||
@@ -1103,6 +1340,16 @@ window.addEventListener('dm-comment-clicked', (e: any) => {
   if (detail && (detail.id || detail.commentId)) {
     notifyPanel('COMMENT_BUBBLE_CLICKED', { commentId: detail.id || detail.commentId });
   }
+});
+
+// Pin drag → persist offset, then notify the side panel so the Changes
+// tab updates without a full re-fetch.
+window.addEventListener('dm-comment-pin-dragged', (e: any) => {
+  const detail = e.detail;
+  if (!detail?.commentId || !detail?.offset) return;
+  setCommentPinOffset(detail.commentId, detail.offset).then(() => {
+    notifyPanel('CHANGES_UPDATE', {});
+  });
 });
 
 // Debug surface for the test fixture and ad-hoc inspection from DevTools.

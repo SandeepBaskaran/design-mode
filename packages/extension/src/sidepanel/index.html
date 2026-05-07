@@ -145,6 +145,59 @@
     }
     .dm-input:hover { border-color: var(--dm-input-border-hover); }
     .dm-input:focus { border-color: var(--dm-accent); }
+
+    /* Lists inside the rich-text editor — show markers and don't push the
+       text away from the editor edge. Inside-positioned markers keep the
+       bullet/number visible on the dark sidepanel background. */
+    [data-dm-richtext] ul, [data-dm-richtext] ol {
+      margin: 4px 0;
+      padding-left: 22px;
+      list-style-position: outside;
+    }
+    [data-dm-richtext] ul { list-style-type: disc; }
+    [data-dm-richtext] ol { list-style-type: decimal; }
+    [data-dm-richtext] li { line-height: 1.5; padding-left: 2px; }
+    [data-dm-richtext] a { color: var(--dm-accent); text-decoration: underline; }
+
+    /* Filter sliders — uniform gray track from end to end with just the
+       accent-colored round thumb (no progressive blue fill, since these
+       sliders are bipolar / neutral-centered, not 0→x meters). */
+    .dm-fslider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      height: 14px;
+      cursor: ew-resize;
+      padding: 0;
+      margin: 0;
+    }
+    .dm-fslider::-webkit-slider-runnable-track {
+      height: 3px;
+      background: var(--dm-input-border);
+      border-radius: 2px;
+    }
+    .dm-fslider::-moz-range-track {
+      height: 3px;
+      background: var(--dm-input-border);
+      border-radius: 2px;
+    }
+    .dm-fslider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 13px; height: 13px; border-radius: 50%;
+      background: var(--dm-accent);
+      border: 2px solid var(--dm-bg);
+      margin-top: -5px;
+      cursor: ew-resize;
+      box-shadow: 0 0 0 1px var(--dm-input-border-hover);
+    }
+    .dm-fslider::-moz-range-thumb {
+      width: 13px; height: 13px; border-radius: 50%;
+      background: var(--dm-accent);
+      border: 2px solid var(--dm-bg);
+      cursor: ew-resize;
+      box-shadow: 0 0 0 1px var(--dm-input-border-hover);
+    }
+    .dm-fslider::-moz-range-progress { background: transparent; }
     .dm-select {
       background: var(--dm-input-bg);
       border: 1px solid var(--dm-input-border);
@@ -179,6 +232,156 @@
       cursor: default;
       opacity: 0.5;
       pointer-events: none;
+    }
+
+    /* ── Figma-style Design tab vocabulary ── */
+    /* Icon button rows (alignment, flip, layout-mode segmented). Each item
+       uses [data-active="true"] for the selected state — the same pattern
+       Figma uses for its segmented controls. */
+    .dm-icon-row {
+      display: flex;
+      gap: 2px;
+    }
+    .dm-icon-row-button {
+      flex: 1;
+      padding: 6px;
+      background: var(--dm-input-bg);
+      border: 1px solid var(--dm-input-border);
+      border-radius: 5px;
+      color: var(--dm-text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+    }
+    .dm-icon-row-button:hover {
+      background: var(--dm-bg-tertiary);
+      border-color: var(--dm-input-border-hover);
+    }
+    .dm-icon-row-button[data-active="true"] {
+      background: var(--dm-accent-bg);
+      border-color: var(--dm-accent-border);
+      color: var(--dm-accent);
+    }
+
+    /* Segmented control — same idea as icon-row but with shared background
+       and tighter visuals. Used for stroke position (Inside/Outside/Center)
+       and layout-mode (Free/HStack/VStack/Grid). */
+    .dm-segmented {
+      display: flex;
+      background: var(--dm-input-bg);
+      border: 1px solid var(--dm-input-border);
+      border-radius: 5px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .dm-segmented-item {
+      flex: 1;
+      padding: 5px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+      color: var(--dm-text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 11px;
+      transition: background-color 0.12s ease, color 0.12s ease;
+      border: none;
+      background: none;
+      font-family: inherit;
+    }
+    .dm-segmented-item:hover {
+      color: var(--dm-text-secondary);
+    }
+    .dm-segmented-item[data-active="true"] {
+      background: var(--dm-bg-active);
+      color: var(--dm-text);
+    }
+
+    /* Section header action cluster (eye / + / advanced / reset). Sits to
+       the right of the title and inherits the section header's pointer
+       events but stops propagation so clicking an action doesn't toggle
+       the section open/closed. */
+    .dm-section-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .dm-section-action {
+      background: none;
+      border: none;
+      color: var(--dm-text-dim);
+      cursor: pointer;
+      padding: 2px;
+      display: flex;
+      border-radius: 3px;
+      transition: color 0.12s ease, background-color 0.12s ease;
+    }
+    .dm-section-action:hover {
+      color: var(--dm-text);
+      background: var(--dm-bg-secondary);
+    }
+    .dm-section-action[data-active="true"] {
+      color: var(--dm-accent);
+    }
+
+    /* Popovers (sides-toggle, effects-add, blend-mode picker, stroke-style).
+       Anchored under the trigger button by the parent's positioning. */
+    .dm-popover {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      min-width: 180px;
+      background: var(--dm-bg);
+      border: 1px solid var(--dm-separator-strong);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+      z-index: 30;
+      padding: 6px;
+    }
+    .dm-popover-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--dm-text);
+      background: none;
+      border: none;
+      width: 100%;
+      text-align: left;
+      font-family: inherit;
+    }
+    .dm-popover-item:hover {
+      background: var(--dm-bg-secondary);
+    }
+    .dm-popover-item[data-active="true"] {
+      color: var(--dm-accent);
+    }
+    .dm-popover-divider {
+      height: 1px;
+      background: var(--dm-separator);
+      margin: 4px 0;
+    }
+
+    /* Corner radius grid — linked input on top, 2x2 individual corners
+       below. Each corner input is small and labelled with a corner glyph. */
+    .dm-corner-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    /* Advanced toggle — small icon button in section headers that switches
+       the active state of an advanced/disclosure region below. */
+    .dm-advanced-toggle[data-open="true"] {
+      color: var(--dm-accent);
+      background: var(--dm-accent-bg);
     }
 
     /* ── Transitions (Phase 4B) ── */
