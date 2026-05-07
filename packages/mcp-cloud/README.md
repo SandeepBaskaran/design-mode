@@ -32,10 +32,10 @@ Polling cadence: ~250 ms. Sub-second end-to-end tool-call latency.
 
 ## Required services
 
-1. **Vercel Marketplace → Redis (Upstash)** — added from the project's Storage
-   tab. The integration auto-injects `UPSTASH_REDIS_REST_URL` and
-   `UPSTASH_REDIS_REST_TOKEN`. The `@upstash/redis` SDK reads them via
-   `Redis.fromEnv()` — no explicit config in code.
+1. **Vercel Marketplace → Redis** — added from the project's Storage tab. The
+   integration auto-injects `REDIS_URL` (standard `rediss://` URI). The
+   `redis` (node-redis) SDK reads it via `process.env.REDIS_URL` — no
+   explicit config in code.
 
 Copy `.env.example` → `.env.local` and fill in the values for local dev.
 

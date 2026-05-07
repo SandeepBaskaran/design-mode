@@ -38,12 +38,13 @@ export interface QuotaResult {
 // day (when the counter just became 1) so we don't keep extending the
 // TTL — the day's bucket dies a few minutes after midnight either way.
 export async function consumeQuota(tenantId: string): Promise<QuotaResult> {
+  const c = await kv();
   const key = `quota:${tenantId}:${utcDayKey()}`;
-  const used = await kv().incr(key);
+  const used = await c.incr(key);
   if (used === 1) {
     // 24h + a small grace period so the bucket survives a clock skew at
     // midnight. The next day's INCR creates a fresh key anyway.
-    try { await kv().expire(key, 90_000); } catch { /* non-fatal */ }
+    try { await c.expire(key, 90_000); } catch { /* non-fatal */ }
   }
   const allowed = used <= DAILY_TOOL_CALL_LIMIT;
   return { allowed, used, limit: DAILY_TOOL_CALL_LIMIT, resetAt: nextUtcMidnightMs() };

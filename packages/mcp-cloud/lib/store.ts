@@ -3,8 +3,8 @@
 //
 // One Redis instance holds everything: tokens, per-tenant inbound
 // queue, per-requestId outbound responses, and the daily quota counter.
-// Provisioned via the Vercel Marketplace Redis (Upstash) integration,
-// which auto-injects UPSTASH_REDIS_REST_URL/TOKEN.
+// Provisioned via the Vercel Marketplace Redis integration, which
+// auto-injects REDIS_URL.
 //
 // Inbound (cloud → extension):
 //   RPUSH inbound:{tenantId}  the JSON message
@@ -31,36 +31,33 @@ export interface RelayMessage {
   payload?: any;
 }
 
-// Push a relay message into the tenant's inbound queue. Bumps the TTL
-// every push so an active tenant's queue doesn't expire mid-session.
 export async function publishInbound(tenantId: string, msg: RelayMessage): Promise<void> {
+  const c = await kv();
   const key = inboundKey(tenantId);
-  await kv().rpush(key, JSON.stringify(msg));
-  try { await kv().expire(key, STREAM_TTL_S); } catch { /* non-fatal */ }
+  await c.rPush(key, JSON.stringify(msg));
+  try { await c.expire(key, STREAM_TTL_S); } catch { /* non-fatal */ }
 }
 
-// Store a request/response payload keyed by the original requestId. The
-// awaiting MCP route polls until it sees the key.
 export async function publishResponse(requestId: string, msg: RelayMessage): Promise<void> {
-  await kv().set(responseKey(requestId), JSON.stringify(msg), { ex: STREAM_TTL_S });
+  const c = await kv();
+  await c.set(responseKey(requestId), JSON.stringify(msg), { EX: STREAM_TTL_S });
 }
 
-// Generator that yields inbound messages for a tenant, polling every
-// POLL_INTERVAL_MS until aborted. Caller (the SSE handler) controls the
-// loop — when the request signal aborts, the generator exits cleanly.
 export async function* readInbound(opts: {
   tenantId: string;
   signal?: AbortSignal;
   pollMs?: number;
 }): AsyncGenerator<RelayMessage, void, void> {
+  const c = await kv();
   const key = inboundKey(opts.tenantId);
   const pollMs = opts.pollMs ?? POLL_INTERVAL_MS;
   while (!opts.signal?.aborted) {
     let drained = false;
     try {
-      // LPOP-many in one call when supported; fall back to single-pop
-      // loop for clients that don't ship multi-pop.
-      const raw = await (kv() as any).lpop(key, 16);
+      // node-redis v4: typed lPop only takes a key. The Redis ≥6.2 LPOP
+      // count form is reachable via sendCommand and is much cheaper than
+      // looping single-pops at every poll tick.
+      const raw = (await c.sendCommand(['LPOP', key, '16'])) as string[] | string | null;
       const items: string[] = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
       for (const item of items) {
         if (typeof item !== 'string') continue;
@@ -69,22 +66,20 @@ export async function* readInbound(opts: {
       }
       drained = items.length === 0;
     } catch {
-      // Storage hiccup — back off a tick and retry.
       drained = true;
     }
     if (drained) await new Promise(r => setTimeout(r, pollMs));
   }
 }
 
-// Wait for a specific requestId's response to land in KV. Polls every
-// POLL_INTERVAL_MS, deletes the key on hit, throws on timeout.
 export async function awaitResponse(requestId: string, timeoutMs: number): Promise<RelayMessage> {
+  const c = await kv();
   const key = responseKey(requestId);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const raw = await kv().get<string>(key);
+    const raw = await c.get(key);
     if (typeof raw === 'string') {
-      try { await kv().del(key); } catch { /* non-fatal */ }
+      try { await c.del(key); } catch { /* non-fatal */ }
       try { return JSON.parse(raw) as RelayMessage; } catch { return { type: 'invalid' }; }
     }
     await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));

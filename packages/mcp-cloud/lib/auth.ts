@@ -37,7 +37,8 @@ export async function storeToken(token: string, tenantId: string): Promise<Token
     createdAt: Date.now(),
     lastSeenAt: Date.now(),
   };
-  await kv().set(rowKey(row.tokenHash), row);
+  const c = await kv();
+  await c.set(rowKey(row.tokenHash), JSON.stringify(row));
   return row;
 }
 
@@ -54,11 +55,15 @@ export function bearerFromHeaders(headers: Headers): string | null {
 export async function verifyToken(token: string | null | undefined): Promise<TokenRow | null> {
   if (!token || !token.startsWith(TOKEN_PREFIX)) return null;
   const tokenHash = hashToken(token);
-  const row = await kv().get<TokenRow>(rowKey(tokenHash));
-  if (!row) return null;
+  const c = await kv();
+  const raw = await c.get(rowKey(tokenHash));
+  if (!raw) return null;
+  let row: TokenRow;
+  try { row = JSON.parse(raw) as TokenRow; }
+  catch { return null; }
   // Best-effort lastSeenAt bump; ignore failures.
   row.lastSeenAt = Date.now();
-  try { await kv().set(rowKey(tokenHash), row); } catch {}
+  try { await c.set(rowKey(tokenHash), JSON.stringify(row)); } catch {}
   return row;
 }
 
@@ -79,5 +84,6 @@ export async function authenticate(req: Request): Promise<TokenRow> {
 export async function revokeToken(token: string | null | undefined): Promise<boolean> {
   if (!token || !token.startsWith(TOKEN_PREFIX)) return false;
   const tokenHash = hashToken(token);
-  return (await kv().del(rowKey(tokenHash))) > 0;
+  const c = await kv();
+  return (await c.del(rowKey(tokenHash))) > 0;
 }
