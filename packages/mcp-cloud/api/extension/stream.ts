@@ -8,7 +8,7 @@
 // ============================================================
 
 import { authenticate } from '../../lib/auth.js';
-import { inboundKey, readStream } from '../../lib/redis.js';
+import { readInbound } from '../../lib/store.js';
 import { logEvent } from '../../lib/log.js';
 
 export const config = { runtime: 'nodejs' };
@@ -20,7 +20,6 @@ export async function GET(req: Request): Promise<Response> {
 
   const started = Date.now();
   const tenantId = row.tenantId;
-  const stream = inboundKey(tenantId);
   const ctrl = new AbortController();
   // Tie our long read to the underlying request lifetime — when the
   // browser closes the SSE, AbortSignal fires and the loop exits.
@@ -43,7 +42,7 @@ export async function GET(req: Request): Promise<Response> {
       heartbeat.unref?.();
 
       try {
-        for await (const { msg } of readStream({ stream, signal: ctrl.signal })) {
+        for await (const msg of readInbound({ tenantId, signal: ctrl.signal })) {
           send('relay', JSON.stringify(msg));
           logEvent('stream.forward', {
             tenantId, type: msg.type,

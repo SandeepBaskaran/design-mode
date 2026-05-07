@@ -7,17 +7,7 @@
 // they hit the cap, with a precise reset time.
 // ============================================================
 
-import { Redis } from '@upstash/redis';
-
-let _redis: Redis | null = null;
-function redis(): Redis {
-  if (_redis) return _redis;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) throw new Error('UPSTASH_REDIS_REST_URL/TOKEN must be set');
-  _redis = new Redis({ url, token });
-  return _redis;
-}
+import { kv } from '@vercel/kv';
 
 // Default cap. Override per-deployment via env without changing code.
 export const DAILY_TOOL_CALL_LIMIT = (() => {
@@ -49,11 +39,11 @@ export interface QuotaResult {
 // TTL — the day's bucket dies a few minutes after midnight either way.
 export async function consumeQuota(tenantId: string): Promise<QuotaResult> {
   const key = `quota:${tenantId}:${utcDayKey()}`;
-  const used = await redis().incr(key);
+  const used = await kv.incr(key);
   if (used === 1) {
     // 24h + a small grace period so the bucket survives a clock skew at
     // midnight. The next day's INCR creates a fresh key anyway.
-    try { await redis().expire(key, 90_000); } catch { /* non-fatal */ }
+    try { await kv.expire(key, 90_000); } catch { /* non-fatal */ }
   }
   const allowed = used <= DAILY_TOOL_CALL_LIMIT;
   return { allowed, used, limit: DAILY_TOOL_CALL_LIMIT, resetAt: nextUtcMidnightMs() };

@@ -1,13 +1,16 @@
 // ============================================================
 // POST /api/extension/inbox
 // extension → cloud. Whenever the extension produces a reply
-// (responseTo for a screenshot, change events, status updates),
-// it POSTs the same JSON shape it would have sent over the local
-// WebSocket. We enqueue it onto outbound:{tenantId}.
+// (responseTo for a screenshot, status updates, etc.), it POSTs
+// the same JSON shape it would have sent over the local WS. If it
+// carries a `responseTo`, we stash the message under that key so
+// the awaiting MCP route can pick it up directly. Anything without
+// a `responseTo` is best-effort — there's no agent waiting on it,
+// so we just log and drop.
 // ============================================================
 
 import { authenticate } from '../../lib/auth.js';
-import { publishOutbound, type RelayMessage } from '../../lib/redis.js';
+import { publishResponse, type RelayMessage } from '../../lib/store.js';
 import { logEvent } from '../../lib/log.js';
 
 export const config = { runtime: 'nodejs' };
@@ -41,8 +44,13 @@ export async function POST(req: Request): Promise<Response> {
     responseTo: typeof parsed.responseTo === 'string' ? parsed.responseTo : undefined,
     payload: parsed.payload,
   };
-  await publishOutbound(row.tenantId, msg);
-  logEvent('inbox.publish', { tenantId: row.tenantId, type: msg.type, latencyMs: Date.now() - started, status: 200 });
+  if (msg.responseTo) {
+    await publishResponse(msg.responseTo, msg);
+  }
+  logEvent('inbox.publish', {
+    tenantId: row.tenantId, type: msg.type,
+    latencyMs: Date.now() - started, status: 200,
+  });
   return Response.json({ ok: true });
 }
 

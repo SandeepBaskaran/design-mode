@@ -12,7 +12,7 @@
 // ============================================================
 
 import { authenticate } from '../lib/auth.js';
-import { awaitFirst, inboundKey, outboundKey, publishInbound } from '../lib/redis.js';
+import { awaitResponse, publishInbound } from '../lib/store.js';
 import { logEvent } from '../lib/log.js';
 import { consumeQuota } from '../lib/quota.js';
 import { randomBytes } from 'node:crypto';
@@ -144,11 +144,7 @@ async function handleToolCall(tenantId: string, name: string, args: any): Promis
   const built = tool.buildRequest(args || {});
   await publishInbound(tenantId, { type: built.type, requestId, payload: built.payload });
   try {
-    const reply = await awaitFirst({
-      stream: outboundKey(tenantId),
-      predicate: m => m.responseTo === requestId,
-      timeoutMs: TOOL_TIMEOUT_MS,
-    });
+    const reply = await awaitResponse(requestId, TOOL_TIMEOUT_MS);
     return { content: tool.toContent(reply.payload, args || {}) };
   } catch {
     return {

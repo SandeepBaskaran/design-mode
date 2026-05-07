@@ -1,8 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "echo skip",
+  "outputDirectory": ".",
   "functions": {
     "api/extension/stream.ts": {
-      "maxDuration": 800,
+      "maxDuration": 300,
       "memory": 1024
     },
     "api/mcp.ts": {

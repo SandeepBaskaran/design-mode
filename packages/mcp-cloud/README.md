@@ -1,7 +1,7 @@
 # @design-mode/mcp-cloud
 
-Hosted multi-tenant MCP server for Design Mode. Deploys to Vercel, relays between
-coding agents and the browser extension over Upstash Redis Streams.
+Hosted multi-tenant MCP server for Design Mode. Deploys to Vercel and uses
+**Vercel KV only** for storage — no Upstash, no separate Redis to provision.
 
 ## Architecture
 
@@ -9,31 +9,32 @@ coding agents and the browser extension over Upstash Redis Streams.
 agent ── HTTPS ──▶ /mcp (Streamable HTTP)
                        │
                        ▼
-              Upstash Redis Streams
-              inbound:{tenantId}  ──▶ extension
-              outbound:{tenantId} ◀── extension
+                  Vercel KV
+                  inbound:{tenantId}    list   (cloud → extension)
+                  resp:{requestId}      key    (extension → cloud reply)
+                  tok:{tokenHash}       key    (anonymous device tokens)
+                  quota:{tenantId}:{ymd}  counter (per-day quota)
                        ▲
                        │
-extension ── SSE ── /extension/stream  (cloud → extension)
-extension ── POST ─ /extension/inbox   (extension → cloud)
+extension ── SSE ── /extension/stream  (cloud → extension push)
+extension ── POST ─ /extension/inbox   (extension → cloud reply)
 ```
 
 The extension keeps an SSE GET open to `/extension/stream`. When an agent calls
-a tool, `/mcp` enqueues onto `inbound:{tenantId}`; the SSE handler short-polls
-the stream and forwards new entries as SSE events. The extension responds via
-POST to `/extension/inbox`, which enqueues onto `outbound:{tenantId}`; the
-awaiting MCP route polls until it sees its `requestId`.
+a tool, `/mcp` writes the request to `inbound:{tenantId}` (Redis-style list);
+the SSE handler short-polls the list and forwards each entry as an SSE event.
+The extension replies via POST to `/extension/inbox`, which writes the JSON
+under `resp:{requestId}` with a 60 s TTL; the awaiting MCP route polls that
+key until it appears.
 
-Note on polling: Upstash REST doesn't support XREAD with `BLOCK`, so we
-short-poll at ~250ms. Sub-second tool-call latency, modest request count.
+Polling cadence: ~250 ms. Sub-second end-to-end tool-call latency.
 
 ## Required services
 
-1. **Upstash Redis** — REST API. Free tier is fine for development.
-2. **Vercel KV** — added to the project via the Vercel dashboard. Stores token
-   rows (`{ tenantId, token, createdAt, lastSeenAt }`).
+1. **Vercel KV** — added to the project via the Vercel dashboard's Storage tab.
+   Auto-injects all `KV_*` env vars into the project. That's it.
 
-Copy `.env.example` → `.env.local` and fill in the values.
+Copy `.env.example` → `.env.local` and fill in the values for local dev.
 
 ## Local development
 
