@@ -10,9 +10,10 @@
     "website"
   ],
   "scripts": {
-    "start": "cd packages/server && npx tsx src/bin/cli.ts",
+    "start": "cd packages/mcp-local && npx tsx src/bin/cli.ts",
     "dev:extension": "cd packages/extension && node build.mjs",
-    "dev:server": "npm run start",
+    "dev:mcp-local": "npm run start",
+    "dev:mcp-cloud": "cd packages/mcp-cloud && npx vercel dev",
     "dev:website": "cd website && npm run dev",
     "build": "npm run build:extension && npm run build:website",
     "build:extension": "cd packages/extension && node build.mjs",

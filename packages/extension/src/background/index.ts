@@ -192,10 +192,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     forwardToPinnedTab({ type: 'SET_COMMENT_PIN_OFFSET', commentId: msg.commentId, offset: msg.offset }, sendResponse);
     return true;
   }
-  if (msg.type === 'SP_SET_PINS_HIDDEN') {
-    forwardToPinnedTab({ type: 'SET_PINS_HIDDEN', hidden: msg.hidden }, sendResponse);
-    return true;
-  }
   if (msg.type === 'SP_REMOVE_CHANGE') {
     forwardToPinnedTab({ type: 'REMOVE_CHANGE', changeId: msg.changeId }, sendResponse);
     return true;
@@ -234,6 +230,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'SP_APPLY_TOKEN') { forwardToPinnedTab({ type: 'APPLY_TOKEN', cssVar: msg.cssVar, property: msg.property }, sendResponse); return true; }
   if (msg.type === 'SP_EXPORT_PRESETS') { forwardToPinnedTab({ type: 'EXPORT_PRESETS' }, sendResponse); return true; }
   if (msg.type === 'SP_IMPORT_PRESETS') { forwardToPinnedTab({ type: 'IMPORT_PRESETS', json: msg.json }, sendResponse); return true; }
+  if (msg.type === 'SP_IMPORT_CHANGES') { forwardToPinnedTab({ type: 'IMPORT_CHANGES', payload: msg.payload }, sendResponse); return true; }
+  // Cloud-mode auth + transport reload. Register/revoke fire from the
+  // background service worker (no content-script round-trip needed) so a
+  // page navigation won't kill an in-flight auth request. Reconfigure
+  // tells the content script to drop the old transport and open a new one
+  // based on the just-changed mode/token.
+  if (msg.type === 'SP_MCP_REGISTER_TOKEN') {
+    const url = (msg.cloudUrl || '').replace(/\/$/, '');
+    if (!url) { sendResponse({ ok: false, error: 'No cloud URL configured.' }); return true; }
+    fetch(url + '/api/auth/register', { method: 'POST' })
+      .then(async r => {
+        if (!r.ok) { sendResponse({ ok: false, error: `Register failed (${r.status})` }); return; }
+        const json = await r.json();
+        sendResponse({ ok: true, token: json.token, tenantId: json.tenantId });
+      })
+      .catch((err: any) => sendResponse({ ok: false, error: err?.message || 'Network error' }));
+    return true;
+  }
+  if (msg.type === 'SP_MCP_REVOKE_TOKEN') {
+    const url = (msg.cloudUrl || '').replace(/\/$/, '');
+    const token = msg.token;
+    if (!url || !token) { sendResponse({ ok: false, error: 'Missing url or token.' }); return true; }
+    fetch(url + '/api/auth/revoke', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+    })
+      .then(r => sendResponse({ ok: r.ok }))
+      .catch((err: any) => sendResponse({ ok: false, error: err?.message || 'Network error' }));
+    return true;
+  }
+  if (msg.type === 'SP_RECONFIGURE_TRANSPORT') {
+    forwardToPinnedTab({ type: 'RECONFIGURE_TRANSPORT' }, sendResponse);
+    return true;
+  }
   if (msg.type === 'SP_EXPORT') {
     forwardToPinnedTab({ type: 'EXPORT', format: msg.format, level: msg.level }, sendResponse);
     return true;

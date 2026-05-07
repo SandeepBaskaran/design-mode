@@ -91,7 +91,7 @@ Starts a WebSocket bridge on `ws://localhost:9960` and an MCP server on stdio.
 Add to Claude Code:
 
 ```bash
-claude mcp add design-mode -- npm start --prefix /path/to/design-mode/packages/server
+claude mcp add design-mode -- npm start --prefix /path/to/design-mode/packages/mcp-local
 ```
 
 Or add manually to `~/.claude.json`:
@@ -102,7 +102,7 @@ Or add manually to `~/.claude.json`:
     "design-mode": {
       "command": "npm",
       "args": ["start"],
-      "cwd": "/path/to/design-mode/packages/server"
+      "cwd": "/path/to/design-mode/packages/mcp-local"
     }
   }
 }

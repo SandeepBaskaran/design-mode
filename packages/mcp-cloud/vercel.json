@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/extension/stream.ts": {
+      "maxDuration": 800,
+      "memory": 1024
+    },
+    "api/mcp.ts": {
+      "maxDuration": 30,
+      "memory": 1024
+    },
+    "api/extension/inbox.ts": {
+      "maxDuration": 10
+    },
+    "api/auth/register.ts": {
+      "maxDuration": 10
+    },
+    "api/auth/revoke.ts": {
+      "maxDuration": 10
+    }
+  }
+}

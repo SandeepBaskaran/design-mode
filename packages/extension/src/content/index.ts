@@ -9,13 +9,13 @@ import { getElementById, getOrAssignId, generateSelector } from './helpers';
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, downloadDataUrl } from './screenshots';
 import { getCustomPresets, saveCustomPreset, deleteCustomPreset, updateCustomPreset, importPresets, getPageTokens } from './presets';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
 import { buildDomTree } from './dom-tree';
-import { addComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, setPinsHidden } from './comments';
+import { addComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments } from './comments';
 // Source detection — kept; surfaced in the prompt + Design tab
 import { getSourceLocation, getComponentHierarchy, openInVSCode } from './source-detection';
 // Animation controls — kept (freeze/preview helpers)
@@ -140,13 +140,106 @@ function onElementSelected(info: ElementInfo) {
 
 /* —— Enable / Disable —— */
 
+// Cloud-tools dispatcher. Mirrors the local server's MCP handlers but runs
+// here in the content script because cloud has no server-side state — we
+// answer queries straight from the live page.
+function dispatchCloudMessage(msg: any) {
+  if (!msg?.requestId) return;
+  switch (msg.type) {
+    case 'CLOUD_GET_CHANGES':
+      (async () => {
+        const report: any = getChangeReport();
+        try {
+          const pageComments = await getPageComments();
+          report.comments = pageComments.map(c => ({
+            selector: c.selector, text: c.text,
+            timestamp: new Date(c.timestamp).toISOString(),
+            pageUrl: (c as any).pageUrl, resolved: !!(c as any).resolved,
+          }));
+        } catch { report.comments = []; }
+        sendRelayResponse(msg.requestId, report);
+      })();
+      return;
+    case 'CLOUD_CLEAR_CHANGES':
+      clearAllChanges();
+      sendRelayResponse(msg.requestId, { ok: true });
+      return;
+    case 'CLOUD_GET_SESSION_SUMMARY':
+      sendRelayResponse(msg.requestId, {
+        pageUrl: location.href,
+        pageTitle: document.title,
+        totalStyleChanges: getStyleChanges().length,
+        totalTextChanges: getTextChanges().length,
+        totalDomChanges: getDomChanges().length,
+      });
+      return;
+    case 'CLOUD_EXPORT_CHANGES':
+      sendRelayResponse(msg.requestId, { text: renderExportText(msg.payload?.format || 'css') });
+      return;
+  }
+}
+
+// Lightweight format renderers — kept here so the content script doesn't
+// have to ship the local server's full export module. Only the four
+// formats the agent can request via export_changes.
+function renderExportText(format: 'css' | 'tailwind' | 'scss' | 'jsx'): string {
+  const styles = getStyleChanges();
+  if (styles.length === 0) return 'No changes to export.';
+  const bySelector = new Map<string, Map<string, string>>();
+  for (const c of styles) {
+    if (!bySelector.has(c.selector)) bySelector.set(c.selector, new Map());
+    bySelector.get(c.selector)!.set(c.property, c.newValue);
+  }
+  const kebab = (s: string) => s.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
+  if (format === 'css' || format === 'scss') {
+    const out: string[] = [];
+    for (const [sel, props] of bySelector) {
+      out.push(`${sel} {\n${Array.from(props).map(([k, v]) => `  ${kebab(k)}: ${v};`).join('\n')}\n}`);
+    }
+    return (format === 'scss' ? '// Design Mode SCSS export\n\n' : '') + out.join('\n\n');
+  }
+  if (format === 'tailwind') {
+    const out: string[] = [];
+    for (const [sel, props] of bySelector) {
+      const classes = Array.from(props).map(([prop, val]) => `[${kebab(prop)}:${val.replace(/\s+/g, '_')}]`);
+      out.push(`/* ${sel} */\nclass="${classes.join(' ')}"`);
+    }
+    return out.join('\n\n');
+  }
+  // jsx
+  const blocks: string[] = [];
+  for (const [sel, props] of bySelector) {
+    const entries = Array.from(props).map(([k, v]) => `  ${k}: '${v}'`).join(',\n');
+    blocks.push(`// ${sel}\nconst styles = {\n${entries}\n};`);
+  }
+  return blocks.join('\n\n');
+}
+
+setUnhandledMessageHandler(dispatchCloudMessage);
+
+// Reads the user's chosen MCP transport mode + cloud creds from storage,
+// then opens the appropriate transport. Falls back to local on any error.
+async function openConfiguredTransport() {
+  try {
+    const conf = await chrome.storage.local.get(['dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url']);
+    const mode = (conf['dm-mcp-mode'] as 'local' | 'cloud' | 'self-hosted' | undefined) || 'local';
+    if (mode === 'local') { connectToServer({ mode: 'local' }); return; }
+    const cloudToken = conf['dm-mcp-cloud-token'];
+    const cloudUrl = conf['dm-mcp-cloud-url'] || (mode === 'cloud' ? 'https://mcp.designmode.app' : '');
+    if (!cloudToken || !cloudUrl) { connectToServer({ mode: 'local' }); return; }
+    connectToServer({ mode, cloudToken, cloudUrl });
+  } catch {
+    connectToServer({ mode: 'local' });
+  }
+}
+
 function enable() {
   if (on) return;
   on = true;
   resetOverlayTeardown();
   showCommentPins();         // surface saved comment pins on the page
   startPanelHeartbeat();     // detect a panel-close that the message chain missed
-  connectToServer();
+  void openConfiguredTransport();
   enableInspect((i: ElementInfo) => onElementSelected(i));
   loadShortcuts().then(() => {
     enableShortcuts();
@@ -240,6 +333,14 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
 
     case 'GET_STATE': sendResponse(getFullState()); break;
+    // Side panel asked us to drop the active transport and open a fresh
+    // one — used when the user flips Mode in Settings or finishes the
+    // Connect-to-Cloud flow.
+    case 'RECONFIGURE_TRANSPORT': {
+      void openConfiguredTransport();
+      sendResponse({ ok: true });
+      break;
+    }
     case 'GET_CHANGES': { getChangesPayload().then(p => sendResponse(p)); return true; }
 
     // New: DOM tree for Layers panel
@@ -516,13 +617,6 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         return true;
       }
       sendResponse({ ok: false });
-      break;
-    }
-
-    // Side-panel toggle for the global "hide all pins" override.
-    case 'SET_PINS_HIDDEN': {
-      setPinsHidden(!!(msg as any).hidden);
-      sendResponse({ ok: true });
       break;
     }
 
@@ -894,6 +988,28 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         }
       }
       sendResponse({ error: 'No element selected' }); break;
+    }
+    case 'IMPORT_CHANGES': {
+      // Replace every change on the page with the imported payload. Clears
+      // first so we don't double-apply, then replays via the same path
+      // session-restore uses. Comments are scoped to the current pageUrl.
+      (async () => {
+        try {
+          const payload = msg.payload || {};
+          const styleChanges = Array.isArray(payload.styleChanges) ? payload.styleChanges : [];
+          const textChanges = Array.isArray(payload.textChanges) ? payload.textChanges : [];
+          const domChanges = Array.isArray(payload.domChanges) ? payload.domChanges : [];
+          const comments = Array.isArray(payload.comments) ? payload.comments : [];
+          clearAllChanges();
+          applyChangesPayload({ styleChanges, textChanges, domChanges });
+          await replacePageComments(comments);
+          const p = await getChangesPayload();
+          sendResponse({ ok: true, ...p });
+        } catch (err) {
+          sendResponse({ ok: false, error: String(err) });
+        }
+      })();
+      return true;
     }
     case 'EXPORT_PRESETS': { getCustomPresets().then(presets => sendResponse({ json: JSON.stringify(presets, null, 2) })); return true; }
     case 'IMPORT_PRESETS': {

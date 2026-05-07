@@ -18,7 +18,7 @@ preferred — please give a reasonable window for a fix before any public write-
 In scope:
 
 - The browser extension (`packages/extension`).
-- The MCP / WebSocket companion server (`packages/server`).
+- The MCP / WebSocket companion server (`packages/mcp-local`).
 - The website (`website/`).
 
 Out of scope:

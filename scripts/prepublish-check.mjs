@@ -98,23 +98,23 @@ step('Manifest sanity', () => {
 });
 
 // ── 4. MCP tool count check (catch accidental tool deletions) ─────────────
-step('MCP server has all 19 tools', () => {
-  const mcp = readFileSync(resolve(root, 'packages/server/src/mcp-server.ts'), 'utf8');
+step('Local MCP server has all 6 tools', () => {
+  const mcp = readFileSync(resolve(root, 'packages/mcp-local/src/mcp-server.ts'), 'utf8');
   const matches = mcp.match(/server\.tool\(/g) || [];
-  if (matches.length < 19) {
-    throw new Error(`Expected ≥19 tools registered in mcp-server.ts, found ${matches.length}`);
+  if (matches.length < 6) {
+    throw new Error(`Expected ≥6 tools registered in mcp-server.ts, found ${matches.length}`);
   }
 });
 
-// ── 5. Server build (uses extra heap; server's package.json sets NODE_OPTIONS) ─
-step('Build server', () => {
-  run('npm --workspace @design-mode/server run build', { stdio: 'pipe' });
+// ── 5. Local MCP build (uses extra heap; package.json sets NODE_OPTIONS) ──
+step('Build local MCP server', () => {
+  run('npm --workspace @design-mode/mcp-local run build', { stdio: 'pipe' });
 });
 
-step('Server bundle integrity', () => {
-  assertFile('packages/server/dist/bin/cli.js');
-  assertFile('packages/server/dist/index.js');
-  assertFile('packages/server/dist/mcp-server.js');
+step('Local MCP bundle integrity', () => {
+  assertFile('packages/mcp-local/dist/bin/cli.js');
+  assertFile('packages/mcp-local/dist/index.js');
+  assertFile('packages/mcp-local/dist/mcp-server.js');
 });
 
 // ── 6. Build the website ──────────────────────────────────────────────────

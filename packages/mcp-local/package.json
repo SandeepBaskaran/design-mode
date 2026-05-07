@@ -1,10 +1,10 @@
 {
-  "name": "@design-mode/server",
+  "name": "@design-mode/mcp-local",
   "version": "1.0.0",
-  "description": "Design Mode MCP companion server — bridges browser extension to coding agents",
+  "description": "Local MCP companion server — bridges the Design Mode extension to coding agents over a localhost WebSocket.",
   "license": "MIT",
   "bin": {
-    "design-mode-server": "./dist/bin/cli.js"
+    "design-mode-mcp": "./dist/bin/cli.js"
   },
   "main": "dist/index.js",
   "scripts": {

@@ -172,15 +172,10 @@ export function loadSession(): Promise<{ styleChanges: StyleChange[]; textChange
   });
 }
 
-// Replays saved changes onto the current DOM and restores the in-memory
-// change-tracker arrays so the side panel sees them. Idempotent: tries to
-// avoid double-recording by setting arrays directly.
-export async function replaySession(): Promise<boolean> {
-  const saved = await loadSession();
-  if (!saved) return false;
-
-  // Re-inject style changes as rules keyed by their saved selector.
-  // No DOM stamping needed — rules apply via natural selector matching.
+// Replays a payload of changes onto the current DOM and replaces the in-
+// memory arrays so the side panel reflects them. Used by both
+// replaySession (storage-backed) and the IMPORT_CHANGES message handler.
+export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }) {
   for (const c of saved.styleChanges) {
     if (!appliedRules.has(c.selector)) appliedRules.set(c.selector, new Map());
     appliedRules.get(c.selector)!.set(c.property, c.newValue);
@@ -190,7 +185,6 @@ export async function replaySession(): Promise<boolean> {
   }
   rebuildStyleSheet();
 
-  // Text changes are not stylesheet-able — apply directly via the saved selector.
   for (const c of saved.textChanges) {
     try {
       const el = document.querySelector(c.selector) as HTMLElement | null;
@@ -200,9 +194,8 @@ export async function replaySession(): Promise<boolean> {
     } catch {}
   }
 
-  // Re-apply DOM changes. Delete + move are replay-safe; duplicate/insert
-  // need outerHTML to be reconstituted and we don't currently track that
-  // shape, so they only persist within a session, not across reloads.
+  // Delete + move are replay-safe; duplicate/insert need outerHTML which
+  // isn't tracked across reloads, so those only persist within a session.
   for (const c of saved.domChanges) {
     try {
       if (c.action === 'delete') {
@@ -213,7 +206,6 @@ export async function replaySession(): Promise<boolean> {
         const parent = document.querySelector(c.destination.parentSelector) as HTMLElement | null;
         if (source && parent) {
           const siblings = Array.from(parent.children);
-          // Place source at the saved index, clamped to the current child count.
           const idx = Math.min(c.destination.index, siblings.length);
           const before = siblings[idx] === source ? siblings[idx + 1] : siblings[idx];
           if (before && before !== source) parent.insertBefore(source, before);
@@ -223,10 +215,6 @@ export async function replaySession(): Promise<boolean> {
     } catch {}
   }
 
-  // Restore in-memory arrays so the side panel reflects them. Element ids
-  // (dm-N) from the previous session are kept for the change records, but
-  // they're metadata only — rules apply via selector. Advance the id counter
-  // past any restored ids so new elements assigned later don't collide.
   styleChanges.length = 0; styleChanges.push(...saved.styleChanges);
   textChanges.length = 0; textChanges.push(...saved.textChanges);
   domChanges.length = 0; domChanges.push(...saved.domChanges);
@@ -235,6 +223,13 @@ export async function replaySession(): Promise<boolean> {
     ...saved.textChanges.map(c => c.elementId),
     ...saved.domChanges.map(c => c.elementId),
   ]);
+  persistSession();
+}
+
+export async function replaySession(): Promise<boolean> {
+  const saved = await loadSession();
+  if (!saved) return false;
+  applyChangesPayload(saved);
   return true;
 }
 
@@ -426,37 +421,176 @@ export function getChangeReport() {
   };
 }
 
-// --- WebSocket sync ---
+// --- Transport sync ---
+//
+// The extension talks to either the local companion server (ws://) or the
+// hosted relay on mcp.designmode.app (SSE for cloud→extension push, HTTP
+// POST for extension→cloud). Wire format is identical in both directions
+// — `{ type, requestId?, responseTo?, payload }` — so handlers don't care
+// which transport delivered the message.
 
-export function connectToServer(port = DEFAULT_WS_PORT) {
-  try {
-    ws = new WebSocket(`ws://localhost:${port}`);
-    ws.onopen = () => console.log('[Design Mode] Connected to companion server');
-    ws.onclose = () => { ws = null; };
-    ws.onerror = () => { ws = null; };
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'APPLY_CHANGES' && msg.payload) {
-          // Push styles via the same managed-stylesheet path as user edits
-          // so they show up in the Changes tab and survive reloads.
-          const { elementId, styles } = msg.payload;
-          if (elementId && styles) {
-            for (const [prop, val] of Object.entries(styles)) {
-              applyStyleChange(elementId, prop, val as string);
-            }
-          }
-        } else if (msg.type === 'CAPTURE_SCREENSHOT' && msg.requestId) {
-          // Respond on the same WS using msg.requestId so the server can
-          // pair the response with its pending Promise.
-          handleScreenshotRequest(msg.requestId, msg.payload || {});
-        }
-      } catch {}
-    };
-  } catch { ws = null; }
+type TransportMode = 'local' | 'cloud' | 'self-hosted';
+
+let transportMode: TransportMode = 'local';
+let cloudToken: string | null = null;
+let cloudBaseUrl: string | null = null;
+let sseAbort: AbortController | null = null;
+let unhandledMessageHandler: ((msg: any) => void) | null = null;
+
+// Lets content/index.ts plug in the cloud-tools dispatcher (CLOUD_GET_CHANGES
+// etc.) without change-tracker needing to know about comments, sessions,
+// or render formats. APPLY_CHANGES and CAPTURE_SCREENSHOT stay handled
+// directly here because they touch the same managed-stylesheet path the
+// rest of this file owns.
+export function setUnhandledMessageHandler(fn: (msg: any) => void) {
+  unhandledMessageHandler = fn;
 }
 
-export function isConnected() { return ws?.readyState === WebSocket.OPEN; }
+function dispatchIncoming(msg: any) {
+  try {
+    if (!msg || typeof msg.type !== 'string') return;
+    if (msg.type === 'APPLY_CHANGES' && msg.payload) {
+      // Cloud may send `{ changes: [...] }` (ack-expected) or a single
+      // `{ elementId, styles }` (legacy). Handle both shapes.
+      const items: Array<{ elementId: string; styles: Record<string, string> }> =
+        Array.isArray(msg.payload.changes) ? msg.payload.changes : [msg.payload];
+      let totalProps = 0, totalEls = 0;
+      for (const ch of items) {
+        if (!ch || !ch.elementId || !ch.styles) continue;
+        for (const [prop, val] of Object.entries(ch.styles)) {
+          applyStyleChange(ch.elementId, prop, val as string);
+          totalProps++;
+        }
+        totalEls++;
+      }
+      if (msg.requestId) sendRelayResponse(msg.requestId, { ok: true, totalProps, totalEls });
+      return;
+    }
+    if (msg.type === 'CAPTURE_SCREENSHOT' && msg.requestId) {
+      handleScreenshotRequest(msg.requestId, msg.payload || {});
+      return;
+    }
+    // Anything else — let content/index.ts handle it (cloud tools, comments).
+    unhandledMessageHandler?.(msg);
+  } catch {}
+}
+
+export interface ConnectOpts {
+  mode?: TransportMode;
+  port?: number;
+  cloudUrl?: string;
+  cloudToken?: string;
+}
+
+export function connectToServer(opts: ConnectOpts | number = {}) {
+  // Back-compat: callers passing a port number still work.
+  const o: ConnectOpts = typeof opts === 'number' ? { port: opts } : opts;
+  disconnectFromServer();
+  transportMode = o.mode || 'local';
+
+  if (transportMode === 'local') {
+    const port = o.port ?? DEFAULT_WS_PORT;
+    try {
+      ws = new WebSocket(`ws://localhost:${port}`);
+      ws.onopen = () => console.log('[Design Mode] Connected to companion server');
+      ws.onclose = () => { ws = null; };
+      ws.onerror = () => { ws = null; };
+      ws.onmessage = (event) => {
+        try { dispatchIncoming(JSON.parse(event.data)); } catch {}
+      };
+    } catch { ws = null; }
+    return;
+  }
+
+  // Cloud / self-hosted — open the SSE stream and run a forever loop that
+  // reconnects with backoff on disconnect.
+  cloudToken = o.cloudToken || null;
+  cloudBaseUrl = (o.cloudUrl || '').replace(/\/$/, '') || null;
+  if (!cloudToken || !cloudBaseUrl) return;
+  void runCloudStream();
+}
+
+async function runCloudStream() {
+  let backoff = 1000;
+  sseAbort = new AbortController();
+  while (sseAbort && !sseAbort.signal.aborted && cloudToken && cloudBaseUrl) {
+    try {
+      const resp = await fetch(`${cloudBaseUrl}/api/extension/stream`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${cloudToken}`, 'Accept': 'text/event-stream' },
+        signal: sseAbort.signal,
+      });
+      if (!resp.ok || !resp.body) {
+        // Auth-failed or other terminal — bail; user must re-register.
+        if (resp.status === 401) { console.warn('[Design Mode] cloud stream auth failed'); return; }
+        throw new Error(`stream status ${resp.status}`);
+      }
+      console.log('[Design Mode] cloud stream open');
+      backoff = 1000;
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          parseSseFrame(buf.slice(0, idx));
+          buf = buf.slice(idx + 2);
+        }
+      }
+    } catch (err) {
+      if (sseAbort?.signal.aborted) return;
+      console.warn('[Design Mode] cloud stream lost, retrying:', err);
+    }
+    await new Promise(r => setTimeout(r, backoff));
+    backoff = Math.min(backoff * 2, 15000);
+  }
+}
+
+function parseSseFrame(frame: string) {
+  let event = 'message';
+  let data = '';
+  for (const line of frame.split('\n')) {
+    if (line.startsWith(':')) continue; // comment / heartbeat
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) data += line.slice(5).trim();
+  }
+  if (event === 'relay' && data) {
+    try { dispatchIncoming(JSON.parse(data)); } catch {}
+  }
+}
+
+// Send a message to whichever transport is active. WS in local mode, POST
+// `/extension/inbox` in cloud / self-hosted mode. Fire-and-forget.
+function transportSend(msg: object) {
+  if (transportMode === 'local') {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+    return;
+  }
+  if (!cloudToken || !cloudBaseUrl) return;
+  void fetch(`${cloudBaseUrl}/api/extension/inbox`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cloudToken}` },
+    body: JSON.stringify(msg),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+// Reply to a request received via the relay. Used by handleScreenshotRequest
+// and by cloud tool dispatchers in content/index.ts (re-exported).
+export function sendRelayResponse(responseTo: string, payload: any) {
+  transportSend({ type: 'RELAY_RESPONSE', responseTo, payload });
+}
+
+export function isConnected() {
+  if (transportMode === 'local') return ws?.readyState === WebSocket.OPEN;
+  // Cloud: best-effort signal. We consider ourselves connected if we have
+  // a token + a non-aborted stream worker. Real liveness requires a ping
+  // round-trip — out of scope for v1.
+  return !!cloudToken && !!sseAbort && !sseAbort.signal.aborted;
+}
 
 // Handle a screenshot request from the MCP server. Resolves to a base64 PNG
 // data URL captured from the visible viewport, optionally cropped to an
@@ -508,15 +642,9 @@ async function handleScreenshotRequest(
   } catch (e: any) {
     error = e?.message || 'Capture failed';
   }
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    const responsePayload: any = dataUrl ? { dataUrl } : { error: error || 'Capture failed' };
-    if (candidates) responsePayload.candidates = candidates;
-    ws.send(JSON.stringify({
-      type: 'SCREENSHOT_RESULT',
-      responseTo: requestId,
-      payload: responsePayload,
-    }));
-  }
+  const responsePayload: any = dataUrl ? { dataUrl } : { error: error || 'Capture failed' };
+  if (candidates) responsePayload.candidates = candidates;
+  transportSend({ type: 'SCREENSHOT_RESULT', responseTo: requestId, payload: responsePayload });
 }
 
 function shortLabel(el: HTMLElement): string {
@@ -532,25 +660,22 @@ function shortLabel(el: HTMLElement): string {
 
 
 function syncChange(change: StyleChange) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ type: 'STYLE_CHANGED', payload: change }));
+  transportSend({ type: 'STYLE_CHANGED', payload: change });
 }
 
 function syncTextChange(change: TextChange) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ type: 'TEXT_CHANGED', payload: change }));
+  transportSend({ type: 'TEXT_CHANGED', payload: change });
 }
 
 function syncDomChange(change: DomChange) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ type: 'DOM_CHANGED', payload: change }));
+  transportSend({ type: 'DOM_CHANGED', payload: change });
 }
 
 export function syncAllChanges() {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ type: 'SESSION_UPDATE', payload: getChangeReport() }));
+  transportSend({ type: 'SESSION_UPDATE', payload: getChangeReport() });
 }
 
 export function disconnectFromServer() {
-  if (ws) { ws.close(); ws = null; }
+  if (ws) { try { ws.close(); } catch {} ws = null; }
+  if (sseAbort) { try { sseAbort.abort(); } catch {} sseAbort = null; }
 }

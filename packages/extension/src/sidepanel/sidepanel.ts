@@ -100,9 +100,6 @@ let editingCommentId: string | null = null;
 let viewingCommentId: string | null = null;
 // Inline-confirm overlay for deleting a comment (mirrors Clear All).
 let deletingCommentId: string | null = null;
-// Global "hide all comment pins" toggle. Persisted to chrome.storage.local
-// so the user's preference survives panel reloads.
-let pinsHidden = false;
 let commentDirty = false;
 
 // Phase 2: Tree state
@@ -139,6 +136,9 @@ type CommentsResolvedFilter = 'all' | 'open' | 'resolved';
 let commentsResolvedFilter: CommentsResolvedFilter = 'all';
 // Inline confirmation overlay state for the destructive Clear All button.
 let clearAllConfirming = false;
+// Anchored popover for the sort icon. Three options live inside it; clicking
+// one writes to changesSort and closes the popover.
+let changesSortMenuOpen = false;
 
 // Phase 5: Design tokens
 interface DesignToken { name: string; value: string; category: 'color' | 'spacing' | 'font' | 'shadow' | 'other'; }
@@ -228,27 +228,34 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 // Persisted settings — restored from chrome.storage.local on boot.
 let mcpPort = 9960;
 let mcpAutoConnect = true;
+// Cloud / self-hosted MCP. Mode picks where the extension dials; the
+// other three are only meaningful when mode !== 'local'.
+type McpMode = 'local' | 'cloud' | 'self-hosted';
+let mcpMode: McpMode = 'local';
+let mcpCloudToken = '';
+let mcpCloudUrl = 'https://mcp.designmode.app';
+let mcpCloudTenantId = '';
+let mcpCloudRegistering = false;
 let inspectorHoverColor = '#4F9EFF';
 let inspectorSelectColor = '#FF6B35';
 
 chrome.storage?.local?.get?.([
   'dm-theme', 'dm-color-format', 'dm-capture-mode',
   'dm-mcp-port', 'dm-mcp-auto-connect',
+  'dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url', 'dm-mcp-cloud-tenant',
   'dm-inspector-hover-color', 'dm-inspector-select-color',
-  'dm-pins-hidden',
 ], (result: any) => {
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
   if (result?.['dm-color-format']) { colorFormat = result['dm-color-format']; }
   if (result?.['dm-capture-mode']) { captureMode = result['dm-capture-mode']; }
   if (typeof result?.['dm-mcp-port'] === 'number') mcpPort = result['dm-mcp-port'];
   if (typeof result?.['dm-mcp-auto-connect'] === 'boolean') mcpAutoConnect = result['dm-mcp-auto-connect'];
+  if (typeof result?.['dm-mcp-mode'] === 'string') mcpMode = result['dm-mcp-mode'];
+  if (typeof result?.['dm-mcp-cloud-token'] === 'string') mcpCloudToken = result['dm-mcp-cloud-token'];
+  if (typeof result?.['dm-mcp-cloud-url'] === 'string') mcpCloudUrl = result['dm-mcp-cloud-url'];
+  if (typeof result?.['dm-mcp-cloud-tenant'] === 'string') mcpCloudTenantId = result['dm-mcp-cloud-tenant'];
   if (typeof result?.['dm-inspector-hover-color'] === 'string') inspectorHoverColor = result['dm-inspector-hover-color'];
   if (typeof result?.['dm-inspector-select-color'] === 'string') inspectorSelectColor = result['dm-inspector-select-color'];
-  if (typeof result?.['dm-pins-hidden'] === 'boolean') {
-    pinsHidden = result['dm-pins-hidden'];
-    // Push to content script so the page reflects the saved preference.
-    if (pinsHidden) send({ type: 'SP_SET_PINS_HIDDEN', hidden: true });
-  }
   render();
 });
 // Layers tab — restore lock state + custom names from session storage so
@@ -3346,7 +3353,7 @@ function renderMcpStatus(): string {
   let dotStyle = '', tooltipText = '', textColor = '';
   if (mcpState === 'offline') {
     dotStyle = 'width:7px;height:7px;border-radius:50%;background:var(--dm-text-muted);flex-shrink:0;';
-    tooltipText = 'MCP not running. Click to retry the connection.\n\nStart the server with `npm start --prefix packages/server`.';
+    tooltipText = 'MCP not running. Click to retry the connection.\n\nStart the server with `npm start --prefix packages/mcp-local`.';
     textColor = 'var(--dm-text-muted)';
   } else if (mcpState === 'running') {
     dotStyle = 'width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:dm-pulse 2s ease-in-out infinite;';
@@ -3390,9 +3397,6 @@ function renderActionRow(): string {
     '<button data-dm-action="duplicate" title="Duplicate" style="' + bs() + '">' + icon('copy', 14) + '</button>' +
     '<button data-dm-action="delete" title="Remove" style="' + bs('var(--dm-danger)') + '">' + icon('trash', 14) + '</button>' +
     '<button data-dm-action="comment" title="Comment" style="' + bs() + '">' + icon('messageSquare', 14) + '</button>' +
-    // Hide / show every comment pin on the page in one click. Always
-    // enabled regardless of selection.
-    '<button data-dm-action="toggle-pins-hidden" title="' + (pinsHidden ? 'Show all comment pins on the page' : 'Hide all comment pins (the panel still shows comments in Changes)') + '" style="' + bs(undefined, true) + ';' + (pinsHidden ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon(pinsHidden ? 'eyeOff' : 'eye', 14) + '</button>' +
     '<button data-dm-action="toggle-freeze" title="' + (animationsFrozen ? 'Resume animations' : 'Pause every animation, transition and video on the page') + '" style="' + bs(undefined, true) + ';' + (animationsFrozen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon(animationsFrozen ? 'circlePlay' : 'circlePause', 14) + '</button>' +
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
@@ -5096,29 +5100,50 @@ function renderChangesTab(): string {
     ? '<div style="padding:6px 12px;background:var(--dm-accent-bg);border-bottom:1px solid var(--dm-accent-border);font-size:10px;color:var(--dm-accent);text-align:center;">Viewing original — click View Changes to see your edits</div>'
     : '';
 
-  // Expand/collapse-all toggle. The state is derived: if any group is
-  // currently collapsed, the button means "expand all"; otherwise it
-  // means "collapse all".
-  const groupKeys = Array.from(groups.keys());
-  const anyCollapsed = groupKeys.some(k => changesGroupCollapsed.has(k));
-  const expandToggleBtn = '<button data-dm-action="' + (anyCollapsed ? 'expand-all-groups' : 'collapse-all-groups') + '" title="' + (anyCollapsed ? 'Expand all groups' : 'Collapse all groups') + '" style="' + inactiveStyle + '">' +
-    icon(anyCollapsed ? 'chevronDown' : 'chevronRight', 10) + ' ' + (anyCollapsed ? 'Expand all' : 'Collapse all') + '</button>';
-
-  // Sort dropdown — small select alongside the Expand toggle. Mono-font
-  // matches the rest of the action-row controls.
-  const sortLabel: Record<ChangesSort, string> = { oldest: 'Oldest first', newest: 'Newest first', element: 'By element' };
-  const sortOpts = (Object.keys(sortLabel) as ChangesSort[])
-    .map(k => '<option value="' + k + '"' + (changesSort === k ? ' selected' : '') + '>' + sortLabel[k] + '</option>').join('');
-  const sortSel = '<select class="dm-select" data-dm-changes-sort title="Sort order" style="font-size:9px;padding:3px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);">' + sortOpts + '</select>';
-
-  // Action row 1 — Original/Changes toggles + Expand/collapse + Sort + Clear All.
-  const topRow = '<div style="padding:6px 10px;border-bottom:1px solid var(--dm-separator);display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;">' +
-    '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">' + originalBtn + changesBtn + expandToggleBtn + sortSel + '</div>' +
-    '<button data-dm-action="clear-all-changes" style="padding:4px 10px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:4px;color:var(--dm-danger);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:4px;">' + icon('trash', 10) + ' Clear All</button>' +
+  // Action row 1 — buttons. View Original / View Changes / Clear / Export / Import.
+  // Import is a styled <label> wrapping a hidden file input, mirroring the
+  // presets export/import pattern in Settings.
+  const exportBtn = '<button data-dm-action="export-changes" title="Download every tracked change as a JSON file" style="' + inactiveStyle + '">' + icon('download', 10) + ' Export</button>';
+  const importBtn = '<label title="Replace every change with an imported JSON file" style="' + inactiveStyle + '">' + icon('upload', 10) + ' Import<input type="file" accept=".json,application/json" data-dm-import-changes style="display:none;"/></label>';
+  const clearBtn = '<button data-dm-action="clear-all-changes" style="padding:4px 10px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:4px;color:var(--dm-danger);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:4px;">' + icon('trash', 10) + ' Clear changes</button>';
+  const topRow = '<div style="padding:6px 10px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' +
+    originalBtn + changesBtn + clearBtn + exportBtn + importBtn +
     '</div>';
 
-  // Action row 2 — Search + Filter chips. Counts on each chip help the
-  // user spot which kinds have any entries.
+  // Action row 2 — Search + Expand-all toggle + Sort menu. Sort is an icon
+  // button that opens an anchored 3-option popover (Oldest / Newest / By
+  // element) so it stays compact and matches the action-row icon style.
+  const groupKeys = Array.from(groups.keys());
+  const anyCollapsed = groupKeys.some(k => changesGroupCollapsed.has(k));
+  const expandIconName = anyCollapsed ? 'listChevronsUpDown' : 'listChevronsDownUp';
+  const expandTitle = anyCollapsed ? 'Expand all groups' : 'Collapse all groups';
+  const expandIconBtn = '<button data-dm-action="' + (anyCollapsed ? 'expand-all-groups' : 'collapse-all-groups') + '" title="' + expandTitle + '" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;border-radius:4px;flex-shrink:0;">' + icon(expandIconName, 14) + '</button>';
+
+  const sortLabel: Record<ChangesSort, string> = { oldest: 'Oldest first', newest: 'Newest first', element: 'By element' };
+  const sortMenu = changesSortMenuOpen
+    ? '<div data-dm-changes-sort-menu style="position:absolute;top:calc(100% + 4px);right:0;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,0.3);padding:4px;z-index:20;min-width:120px;">' +
+      (Object.keys(sortLabel) as ChangesSort[]).map(k => {
+        const active = changesSort === k;
+        return '<button data-dm-changes-sort="' + k + '" style="display:block;width:100%;text-align:left;padding:5px 8px;background:' + (active ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;border-radius:4px;color:' + (active ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';cursor:pointer;font-size:10px;font-family:inherit;font-weight:' + (active ? '600' : '400') + ';">' + sortLabel[k] + '</button>';
+      }).join('') +
+      '</div>'
+    : '';
+  const sortIconBtn = '<div style="position:relative;flex-shrink:0;">' +
+    '<button data-dm-action="toggle-changes-sort" title="Sort order — ' + sortLabel[changesSort] + '" style="background:' + (changesSortMenuOpen ? 'var(--dm-accent-bg)' : 'none') + ';border:none;color:' + (changesSortMenuOpen ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';cursor:pointer;display:flex;padding:4px;border-radius:4px;">' + icon('arrowUpDown', 14) + '</button>' +
+    sortMenu +
+    '</div>';
+
+  const searchRow = '<div style="display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--dm-separator);">' +
+    '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:0 6px;flex:1;min-width:0;">' +
+    '<span style="color:var(--dm-text-dim);display:flex;flex-shrink:0;">' + icon('search', 10) + '</span>' +
+    '<input type="text" class="dm-input" data-dm-changes-search value="' + escapeAttr(changesSearch) + '" placeholder="Search changes…" style="background:none;border:none;padding:5px 6px;flex:1;min-width:0;font-size:10px;"/>' +
+    (changesSearch ? '<button data-dm-action="clear-changes-search" title="Clear search" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('x', 10) + '</button>' : '') +
+    '</div>' +
+    expandIconBtn + sortIconBtn +
+    '</div>';
+
+  // Action row 3 — kind filter chips. Counts on each chip help the user
+  // spot which kinds have any entries.
   const counts = {
     all: allItems.length,
     style: allItems.filter(i => i.type === 'style').length,
@@ -5135,6 +5160,10 @@ function renderChangesTab(): string {
       ';cursor:pointer;font-size:9px;font-family:inherit;font-weight:' + (active ? '600' : '400') + ';">' +
       label + ' <span style="opacity:0.6;">' + n + '</span></button>';
   };
+  const filterChipsRow = '<div style="display:flex;gap:4px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--dm-separator);flex-wrap:wrap;">' +
+    fchip('all', 'All') + fchip('style', 'Styles') + fchip('text', 'Text') + fchip('dom', 'DOM') + fchip('comment', 'Comments') +
+    '</div>';
+
   // Comments sub-filter — only renders when the kind filter is 'all' (and
   // there are any comments) or 'comment'. Three pills: All / Open /
   // Resolved with count badges, mirroring the kind chips.
@@ -5159,15 +5188,7 @@ function renderChangesTab(): string {
         cchip('all', 'All') + cchip('open', 'Open') + cchip('resolved', 'Resolved') +
       '</div>'
     : '';
-  const filterRow = '<div style="display:flex;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--dm-separator);flex-wrap:wrap;">' +
-    '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:0 6px;flex:1;min-width:150px;">' +
-    '<span style="color:var(--dm-text-dim);display:flex;flex-shrink:0;">' + icon('search', 10) + '</span>' +
-    '<input type="text" class="dm-input" data-dm-changes-search value="' + escapeAttr(changesSearch) + '" placeholder="Search changes…" style="background:none;border:none;padding:5px 6px;flex:1;min-width:0;font-size:10px;"/>' +
-    (changesSearch ? '<button data-dm-action="clear-changes-search" title="Clear search" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('x', 10) + '</button>' : '') +
-    '</div>' +
-    '<div style="display:flex;gap:4px;flex-wrap:wrap;">' +
-    fchip('all', 'All') + fchip('style', 'Styles') + fchip('text', 'Text') + fchip('dom', 'DOM') + fchip('comment', 'Comments') +
-    '</div></div>' + commentsSubRow;
+  const filterRow = searchRow + filterChipsRow + commentsSubRow;
 
   // Inline confirmation overlay for Clear All. Mirrors the per-comment
   // delete pattern so the destructive action is one extra click, not
@@ -5417,6 +5438,67 @@ function renderChangesTab(): string {
 }
 
 /* ── Settings View ── */
+// Renders the MCP Server settings card. Three modes: Local (today's
+// localhost server), Cloud (mcp.designmode.app), Self-hosted URL (user's
+// own Vercel deploy of @design-mode/mcp-cloud). The cloud mode card
+// shows a token chip + copy buttons for the agent's config snippet.
+function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: string, inactiveBtn: string): string {
+  const modeBtn = (m: McpMode, label: string) => '<button data-dm-mcp-mode="' + m + '" style="' + (mcpMode === m ? activeBtn : inactiveBtn) + '">' + label + '</button>';
+  const modeRow = '<div style="display:flex;gap:4px;margin-bottom:8px;">' +
+    modeBtn('local', 'Local') + modeBtn('cloud', 'Cloud') + modeBtn('self-hosted', 'Self-hosted') +
+    '</div>';
+
+  let body = '';
+  if (mcpMode === 'local') {
+    body = '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">WebSocket Port</span><input type="number" class="dm-input" data-dm-setting="wsPort" value="' + escapeAttr(String(mcpPort)) + '" style="width:80px;text-align:right;"/></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Auto-connect</span><input type="checkbox" data-dm-setting="autoConnect"' + (mcpAutoConnect ? ' checked' : '') + ' style="accent-color:var(--dm-accent);"/></div>' +
+      '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-top:4px;line-height:1.4;">Port and auto-connect are stored locally. Run <code style="font-family:SF Mono,monospace;">npm start</code> in <code style="font-family:SF Mono,monospace;">packages/mcp-local</code> to bring up the bridge.</div>';
+  } else {
+    // Cloud + self-hosted share the same UI; only the URL field is
+    // editable in self-hosted mode.
+    const isSelf = mcpMode === 'self-hosted';
+    const hasToken = !!mcpCloudToken;
+    const mcpEndpoint = (mcpCloudUrl || '').replace(/\/$/, '') + '/api/mcp';
+
+    const urlField = isSelf
+      ? '<div style="display:flex;flex-direction:column;gap:4px;"><span style="' + lS + '">Server URL</span><input type="text" class="dm-input" data-dm-setting="cloudUrl" value="' + escapeAttr(mcpCloudUrl) + '" placeholder="https://your-deploy.vercel.app" style="font-size:10px;"/></div>'
+      : '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Server</span><span style="font-size:10px;color:var(--dm-text-secondary);font-family:SF Mono,monospace;">' + escapeAttr(mcpCloudUrl) + '</span></div>';
+
+    if (!hasToken) {
+      body = urlField +
+        '<button data-dm-action="mcp-cloud-register" style="margin-top:8px;padding:8px 10px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px;"' + (mcpCloudRegistering ? ' disabled' : '') + '>' + icon('zap', 11) + (mcpCloudRegistering ? ' Connecting…' : ' Connect to Cloud') + '</button>' +
+        '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-top:6px;line-height:1.4;">A device token is generated on the server. Copy a config snippet, paste it into Claude Desktop or Cursor, restart the agent.</div>';
+    } else {
+      const claudeConfig = JSON.stringify({
+        mcpServers: { 'design-mode': { type: 'http', url: mcpEndpoint, headers: { Authorization: 'Bearer ' + mcpCloudToken } } },
+      }, null, 2);
+      const cursorConfig = JSON.stringify({
+        'design-mode': { url: mcpEndpoint, headers: { Authorization: 'Bearer ' + mcpCloudToken } },
+      }, null, 2);
+      const tenantBadge = mcpCloudTenantId
+        ? '<span style="font-size:9px;color:var(--dm-text-dimmer);font-family:SF Mono,monospace;">' + escapeAttr(mcpCloudTenantId) + '</span>'
+        : '';
+      body = urlField +
+        '<div style="display:flex;align-items:center;gap:6px;justify-content:space-between;"><span style="' + lS + '">Token</span>' + tenantBadge + '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:6px;padding:6px 8px;"><code style="font-size:10px;font-family:SF Mono,monospace;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + escapeAttr(maskToken(mcpCloudToken)) + '</code><button data-dm-action="mcp-cloud-copy-token" title="Copy token" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:2px;">' + icon('copy', 11) + '</button></div>' +
+        '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">' +
+        '<button data-dm-action="mcp-cloud-copy-claude" data-dm-payload="' + escapeAttr(claudeConfig) + '" style="flex:1;padding:6px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('copy', 10) + ' Claude Desktop config</button>' +
+        '<button data-dm-action="mcp-cloud-copy-cursor" data-dm-payload="' + escapeAttr(cursorConfig) + '" style="flex:1;padding:6px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('copy', 10) + ' Cursor config</button>' +
+        '</div>' +
+        '<button data-dm-action="mcp-cloud-revoke" style="margin-top:6px;padding:6px 8px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:5px;color:var(--dm-danger);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('trash', 10) + ' Revoke token</button>' +
+        '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-top:6px;line-height:1.4;">Side panel must stay open for the agent to reach this browser. Closing the panel pauses cloud calls until you reopen it.</div>';
+    }
+  }
+
+  return '<div style="' + sS + '"><div style="' + sT + '">MCP Server</div>' + modeRow +
+    '<div style="display:flex;flex-direction:column;gap:6px;">' + body + '</div></div>';
+}
+
+function maskToken(t: string): string {
+  if (t.length <= 12) return t;
+  return t.slice(0, 6) + '…' + t.slice(-4);
+}
+
 function renderSettingsView(): string {
   const cfHex = colorFormat === 'hex';
   const cfRgba = colorFormat === 'rgba';
@@ -5433,10 +5515,7 @@ function renderSettingsView(): string {
     '<button data-dm-action="back-from-settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Settings</span></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px;">' +
-    '<div style="' + sS + '"><div style="' + sT + '">MCP Server</div><div style="display:flex;flex-direction:column;gap:6px;">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">WebSocket Port</span><input type="number" class="dm-input" data-dm-setting="wsPort" value="' + escapeAttr(String(mcpPort)) + '" style="width:80px;text-align:right;"/></div>' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Auto-connect</span><input type="checkbox" data-dm-setting="autoConnect"' + (mcpAutoConnect ? ' checked' : '') + ' style="accent-color:var(--dm-accent);"/></div>' +
-    '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-top:4px;line-height:1.4;">Port and auto-connect are stored locally for the next session. The actual server runs out of <code style="font-family:SF Mono,monospace;">packages/server</code> — change its config to match.</div></div></div>' +
+    renderMcpServerCard(sS, sT, lS, activeBtn, inactiveBtn) +
     '<div style="' + sS + '"><div style="' + sT + '">Inspector overlay</div><div style="display:flex;flex-direction:column;gap:6px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Hover color</span><input type="color" data-dm-setting="hoverColor" value="' + escapeAttr(inspectorHoverColor) + '" style="width:28px;height:22px;border:1px solid var(--dm-input-border);border-radius:4px;cursor:pointer;background:none;padding:0;"/></div>' +
     '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Selection color</span><input type="color" data-dm-setting="selectColor" value="' + escapeAttr(inspectorSelectColor) + '" style="width:28px;height:22px;border:1px solid var(--dm-input-border);border-radius:4px;cursor:pointer;background:none;padding:0;"/></div></div></div>' +
@@ -5568,7 +5647,7 @@ function setupDelegation() {
               else if (mcpState === 'running') showCaptureToast('success', 'MCP running — waiting for agent');
               else showCaptureToast('error', 'MCP offline');
             } else if (mcpState === 'offline') {
-              showCaptureToast('error', 'MCP still offline. Run `npm start --prefix packages/server`.');
+              showCaptureToast('error', 'MCP still offline. Run `npm start --prefix packages/mcp-local`.');
             }
           });
           break;
@@ -5582,6 +5661,38 @@ function setupDelegation() {
         case 'clear-all-changes': clearAllConfirming = true; render(); break;
         case 'cancel-clear-all': clearAllConfirming = false; render(); break;
         case 'confirm-clear-all': clearAllConfirming = false; clearAllChanges(); break;
+        case 'toggle-changes-sort': {
+          changesSortMenuOpen = !changesSortMenuOpen;
+          render();
+          break;
+        }
+        case 'export-changes': {
+          // Build a portable JSON payload from the in-memory state. The
+          // shape mirrors content/change-tracker's session payload plus a
+          // comments array, with a version + url + timestamp envelope so
+          // future imports can detect format changes.
+          const payload = {
+            version: 1,
+            kind: 'design-mode-changes',
+            exportedAt: Date.now(),
+            url: pinnedDomain || '',
+            styleChanges,
+            textChanges,
+            domChanges,
+            comments,
+          };
+          const json = JSON.stringify(payload, null, 2);
+          const blob = new Blob([json], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `design-mode-changes-${stamp}.json`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          showCaptureToast('success', `Exported ${styleChanges.length + textChanges.length + domChanges.length + comments.length} change${(styleChanges.length + textChanges.length + domChanges.length + comments.length) === 1 ? '' : 's'}.`);
+          break;
+        }
         case 'revert-selected-changes': {
           // Drive each selected change-id through the existing per-change
           // revert path so undo state and overlay updates flow correctly.
@@ -5608,6 +5719,63 @@ function setupDelegation() {
         case 'back-from-settings': settingsOpen = false; render(); break;
         case 'settings': settingsOpen = !settingsOpen; render(); break;
         case 'show-shortcuts': showCaptureToast('success', 'Alt+D toggle · Ctrl/⌘+Z undo · Ctrl/⌘+⇧Z redo · Esc deselect / cancel'); break;
+        // Cloud-mode auth flow. Register mints a fresh device token via
+        // the cloud server's /auth/register endpoint and stores it locally.
+        case 'mcp-cloud-register': {
+          if (mcpCloudRegistering) break;
+          if (!mcpCloudUrl) { showCaptureToast('error', 'Set a server URL first.'); break; }
+          mcpCloudRegistering = true;
+          render();
+          send({ type: 'SP_MCP_REGISTER_TOKEN', cloudUrl: mcpCloudUrl }).then(r => {
+            mcpCloudRegistering = false;
+            if (!r?.ok || !r.token) {
+              showCaptureToast('error', r?.error || 'Failed to register.');
+              render();
+              return;
+            }
+            mcpCloudToken = r.token;
+            mcpCloudTenantId = r.tenantId || '';
+            chrome.storage?.local?.set?.({
+              'dm-mcp-cloud-token': mcpCloudToken,
+              'dm-mcp-cloud-tenant': mcpCloudTenantId,
+              'dm-mcp-cloud-url': mcpCloudUrl,
+              'dm-mcp-mode': mcpMode,
+            });
+            send({ type: 'SP_RECONFIGURE_TRANSPORT' });
+            showCaptureToast('success', 'Cloud token ready. Paste a config snippet into your agent.');
+            render();
+          });
+          break;
+        }
+        case 'mcp-cloud-copy-token':
+          navigator.clipboard.writeText(mcpCloudToken).then(() =>
+            showCaptureToast('success', 'Token copied.')
+          ).catch(() => showCaptureToast('error', 'Clipboard blocked.'));
+          break;
+        case 'mcp-cloud-copy-claude':
+        case 'mcp-cloud-copy-cursor': {
+          const payload = actionBtn.getAttribute('data-dm-payload') || '';
+          if (!payload) break;
+          // The `escapeAttr` helper produces `&quot;` / `&amp;` / `&lt;` /
+          // `&gt;`. Reverse those before pasting into the clipboard.
+          const decoded = payload.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+          navigator.clipboard.writeText(decoded).then(() =>
+            showCaptureToast('success', act === 'mcp-cloud-copy-claude' ? 'Claude Desktop config copied.' : 'Cursor config copied.')
+          ).catch(() => showCaptureToast('error', 'Clipboard blocked.'));
+          break;
+        }
+        case 'mcp-cloud-revoke': {
+          if (!mcpCloudToken) break;
+          send({ type: 'SP_MCP_REVOKE_TOKEN', cloudUrl: mcpCloudUrl, token: mcpCloudToken }).then(r => {
+            mcpCloudToken = '';
+            mcpCloudTenantId = '';
+            chrome.storage?.local?.remove?.(['dm-mcp-cloud-token', 'dm-mcp-cloud-tenant']);
+            send({ type: 'SP_RECONFIGURE_TRANSPORT' });
+            showCaptureToast(r?.ok ? 'success' : 'error', r?.ok ? 'Token revoked.' : 'Local token cleared (server may be unreachable).');
+            render();
+          });
+          break;
+        }
         // Comment delete-confirm flow.
         case 'cancel-delete-comment-confirm': deletingCommentId = null; render(); break;
         case 'confirm-delete-comment-confirm': {
@@ -5616,16 +5784,6 @@ function setupDelegation() {
             deletingCommentId = null;
             deleteCommentEntry(id);
           }
-          break;
-        }
-        // Toggle every comment pin on / off. Persisted, broadcast to the
-        // content script so the page reflects the choice immediately.
-        case 'toggle-pins-hidden': {
-          pinsHidden = !pinsHidden;
-          chrome.storage?.local?.set?.({ 'dm-pins-hidden': pinsHidden });
-          send({ type: 'SP_SET_PINS_HIDDEN', hidden: pinsHidden });
-          showCaptureToast('success', pinsHidden ? 'Comment pins hidden' : 'Comment pins shown');
-          render();
           break;
         }
         case 'reset-settings': {
@@ -5978,6 +6136,15 @@ function setupDelegation() {
       render();
       return;
     }
+    // Sort option button (inside the popover) — picks an option and closes.
+    const sortOptBtn = target.closest<HTMLElement>('[data-dm-changes-sort]');
+    if (sortOptBtn) {
+      e.stopPropagation();
+      changesSort = sortOptBtn.dataset.dmChangesSort as ChangesSort;
+      changesSortMenuOpen = false;
+      render();
+      return;
+    }
 
     // Per-group: Copy as prompt — emits a scoped Copy-Prompt payload for
     // just this element's changes.
@@ -6067,6 +6234,20 @@ function setupDelegation() {
       theme = themeBtn.dataset.dmTheme as Theme;
       resolveTheme();
       chrome.storage?.local?.set?.({ 'dm-theme': theme });
+      render();
+      return;
+    }
+
+    // MCP Mode segmented control — Local / Cloud / Self-hosted.
+    const mcpModeBtn = target.closest<HTMLElement>('[data-dm-mcp-mode]');
+    if (mcpModeBtn) {
+      const next = mcpModeBtn.dataset.dmMcpMode as McpMode;
+      if (next !== mcpMode) {
+        mcpMode = next;
+        chrome.storage?.local?.set?.({ 'dm-mcp-mode': mcpMode });
+        // Tell the content script to swap transports.
+        send({ type: 'SP_RECONFIGURE_TRANSPORT' });
+      }
       render();
       return;
     }
@@ -6201,6 +6382,11 @@ function setupDelegation() {
     if ((sidesPopoverOpen || effectsMenuOpen) && !target.closest('.dm-popover') && !target.closest('[data-dm-sides-popover]') && !target.closest('[data-dm-effects-menu]')) {
       sidesPopoverOpen = false;
       effectsMenuOpen = false;
+      render();
+    }
+    // Same outside-click behaviour for the Changes-tab sort popover.
+    if (changesSortMenuOpen && !target.closest('[data-dm-changes-sort-menu]') && !target.closest('[data-dm-action="toggle-changes-sort"]')) {
+      changesSortMenuOpen = false;
       render();
     }
 
@@ -7115,14 +7301,6 @@ function setupDelegation() {
   root.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
 
-    // Changes-tab sort dropdown
-    const changesSortSel = target.closest<HTMLSelectElement>('[data-dm-changes-sort]');
-    if (changesSortSel) {
-      changesSort = changesSortSel.value as ChangesSort;
-      render();
-      return;
-    }
-
     // (Preset kind / filter selectors are chip-style buttons now — wired
     // in the click handler below.)
 
@@ -7151,6 +7329,43 @@ function setupDelegation() {
               : `Imported ${count} of ${total} presets (${total - count} skipped as invalid).`);
           presetsTab = 'custom';
           refreshPresets();
+        });
+      };
+      reader.readAsText(file);
+      return;
+    }
+
+    // Import changes file input — replaces every tracked change on the page
+    // with the imported payload. Validates the envelope before sending so a
+    // malformed file is rejected client-side.
+    const importChangesInput = target.closest<HTMLInputElement>('[data-dm-import-changes]');
+    if (importChangesInput && importChangesInput.files?.[0]) {
+      const file = importChangesInput.files[0];
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        importChangesInput.value = '';
+        let parsed: any = null;
+        try { parsed = JSON.parse(ev.target?.result as string); }
+        catch { showCaptureToast('error', 'Invalid JSON.'); return; }
+        if (!parsed || typeof parsed !== 'object' || parsed.kind !== 'design-mode-changes') {
+          showCaptureToast('error', 'Not a Design Mode changes file.');
+          return;
+        }
+        const payload = {
+          styleChanges: Array.isArray(parsed.styleChanges) ? parsed.styleChanges : [],
+          textChanges: Array.isArray(parsed.textChanges) ? parsed.textChanges : [],
+          domChanges: Array.isArray(parsed.domChanges) ? parsed.domChanges : [],
+          comments: Array.isArray(parsed.comments) ? parsed.comments : [],
+        };
+        send({ type: 'SP_IMPORT_CHANGES', payload }).then(r => {
+          if (!r?.ok) { showCaptureToast('error', r?.error || 'Import failed.'); return; }
+          if (r.styleChanges) styleChanges = r.styleChanges;
+          if (r.textChanges) textChanges = r.textChanges;
+          if (r.domChanges) domChanges = r.domChanges;
+          if (r.comments) comments = r.comments;
+          render();
+          const total = payload.styleChanges.length + payload.textChanges.length + payload.domChanges.length + payload.comments.length;
+          showCaptureToast('success', `Imported ${total} change${total === 1 ? '' : 's'}.`);
         });
       };
       reader.readAsText(file);
@@ -7849,6 +8064,14 @@ function setupDelegation() {
         inspectorSelectColor = settingInput.value;
         chrome.storage?.local?.set?.({ 'dm-inspector-select-color': inspectorSelectColor });
         send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
+        return;
+      }
+      if (key === 'cloudUrl') {
+        // Strip trailing slash for stable comparison + storage. We don't
+        // reconnect on every keystroke — only when the user clicks
+        // Connect or flips a mode chip.
+        mcpCloudUrl = settingInput.value.replace(/\/$/, '');
+        chrome.storage?.local?.set?.({ 'dm-mcp-cloud-url': mcpCloudUrl });
         return;
       }
     }

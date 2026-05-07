@@ -192,7 +192,7 @@ export const STEPS: Step[] = [
       "Start it from the repo root with npm start. The panel header indicator turns green when an agent is connected.",
     ],
     tryIt:
-      "From the repo root: `npm start --prefix packages/server`. In the panel header, watch the MCP indicator flip from offline (grey) to running (yellow) to connected (green) once your agent attaches.",
+      "From the repo root: `npm start --prefix packages/mcp-local`. In the panel header, watch the MCP indicator flip from offline (grey) to running (yellow) to connected (green) once your agent attaches.",
   },
   {
     id: "copy-prompt",

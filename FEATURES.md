@@ -274,7 +274,7 @@ Every edit you've made grouped by element.
 
 ### 5.1 Header
 
-- App name + **MCP status chip** — three states: `offline` (grey), `running` (green pulse), `connected` (green glow). The whole chip is clickable; clicking it re-pings the server / agent. The hover tooltip explains the current state and includes the start command (`npm start --prefix packages/server`) when offline. State changes after the click surface as toasts (`MCP connected`, `MCP running — waiting for agent`, `MCP offline`); a click that doesn't change state still toasts the offline-with-hint message so the user gets feedback.
+- App name + **MCP status chip** — three states: `offline` (grey), `running` (green pulse), `connected` (green glow). The whole chip is clickable; clicking it re-pings the server / agent. The hover tooltip explains the current state and includes the start command (`npm start --prefix packages/mcp-local`) when offline. State changes after the click surface as toasts (`MCP connected`, `MCP running — waiting for agent`, `MCP offline`); a click that doesn't change state still toasts the offline-with-hint message so the user gets feedback.
 - **Theme toggle** (cycles system / dark / light) and **Settings** gear.
 
 ### 5.2 Action toolbar (between header and tabs)
@@ -424,7 +424,7 @@ Open via the gear icon in the header.
 
 | Setting | What it does | Default |
 |---|---|---|
-| **MCP WebSocket port** | Port the side panel and content script connect to. Persisted to `chrome.storage.local`. The actual server port lives in `packages/server` config — this UI captures the connect intent. | `9960` |
+| **MCP WebSocket port** | Port the side panel and content script connect to. Persisted to `chrome.storage.local`. The actual server port lives in `packages/mcp-local` config — this UI captures the connect intent. | `9960` |
 | **Auto-connect** | Reconnect to the MCP server automatically when it comes back online. | on |
 | **Inspector hover color** | Colour of the hover overlay. Edits are persisted **and** broadcast to the content script via `SP_SET_INSPECTOR_COLORS` so the live overlay updates immediately. | `#4F9EFF` |
 | **Inspector selection color** | Colour of the selection overlay. Same persistence + broadcast as above. | `#FF6B35` |

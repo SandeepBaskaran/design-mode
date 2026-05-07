@@ -19,7 +19,6 @@ export interface CommentData {
 
 const STORAGE_KEY = 'dm-comments';
 const pinElements = new Map<string, HTMLDivElement>();
-let pinsHidden = false; // gate from the side panel — when true, all pins skip rendering
 
 export async function loadComments(): Promise<CommentData[]> {
   try {
@@ -95,11 +94,6 @@ export async function deleteComment(id: string) {
 }
 
 export function showCommentPin(comment: CommentData, ordinal?: number) {
-  if (pinsHidden) {
-    const existing = pinElements.get(comment.id);
-    if (existing) { existing.remove(); pinElements.delete(comment.id); }
-    return;
-  }
   const el = getElementById(comment.elementId);
   if (!el) return;
   const PIN_SIZE = 28;
@@ -192,18 +186,6 @@ export function showCommentPin(comment: CommentData, ordinal?: number) {
   pin.style.left = Math.max(MARGIN, Math.min(left, window.innerWidth - PIN_SIZE - MARGIN)) + 'px';
 }
 
-// Side-panel control: toggle every pin on / off.
-export function setPinsHidden(hidden: boolean) {
-  pinsHidden = hidden;
-  if (hidden) {
-    pinElements.forEach(p => p.remove());
-    pinElements.clear();
-  } else if (pinsActive) {
-    // Re-render every pin if pins were already active.
-    void showAllPins();
-  }
-}
-
 // Gates the scroll/resize repaint handlers below — without this flag the
 // pins would repaint themselves on every scroll AFTER hideAllPins() ran,
 // which leaks them through any panel-close cleanup.
@@ -211,7 +193,6 @@ let pinsActive = false;
 
 export async function showAllPins() {
   pinsActive = true;
-  if (pinsHidden) return;
   const all = await loadComments();
   const pageComments = all
     .filter(c => c.pageUrl === window.location.href)
@@ -230,11 +211,23 @@ export async function getPageComments(): Promise<CommentData[]> {
   return all.filter(c => c.pageUrl === window.location.href);
 }
 
+// Replaces all comments for the current page. Off-page comments are left
+// alone so an import on one URL doesn't wipe another URL's data. Re-renders
+// pins if the panel had them active.
+export async function replacePageComments(incoming: CommentData[]): Promise<void> {
+  const all = await loadComments();
+  const others = all.filter(c => c.pageUrl !== window.location.href);
+  const stamped = incoming.map(c => ({ ...c, pageUrl: window.location.href }));
+  await saveComments([...others, ...stamped]);
+  pinElements.forEach(p => p.remove());
+  pinElements.clear();
+  if (pinsActive) await showAllPins();
+}
+
 // Reposition pins on scroll/resize. The `pinsActive` gate prevents these
-// from re-creating pins after the panel closed; `pinsHidden` is the
-// user's explicit toggle.
+// from re-creating pins after the panel closed.
 async function repositionAll() {
-  if (!pinsActive || pinsHidden) return;
+  if (!pinsActive) return;
   const all = await loadComments();
   const pageComments = all
     .filter(c => c.pageUrl === window.location.href)

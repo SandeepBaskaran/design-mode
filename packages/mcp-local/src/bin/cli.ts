@@ -63,7 +63,7 @@ async function boot() {
       "design-mode": {
         command: "npm",
         args: ["start"],
-        cwd: process.cwd().replace(/\/packages\/server$/, ''),
+        cwd: process.cwd().replace(/\/packages\/mcp-local$/, ''),
       }
     }, null, 2)));
     log('');
