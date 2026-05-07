@@ -52,13 +52,13 @@ Smoke test (with `vercel dev` running on `:3000`):
 # 1. Register an anonymous device token
 curl -X POST http://localhost:3000/api/auth/register | jq
 
-# Output: { "token": "dm_…", "tenantId": "…", "mcpUrl": "http://localhost:3000/api/mcp" }
+# Output: { "token": "dm_…", "tenantId": "…", "mcpUrl": "http://localhost:3000/mcp" }
 
 # 2. Open an SSE stream as the extension would
 curl -N -H "Authorization: Bearer dm_…" http://localhost:3000/api/extension/stream
 
 # 3. From another shell, list tools as the agent would
-curl -X POST http://localhost:3000/api/mcp \
+curl -X POST http://localhost:3000/mcp \
   -H "Authorization: Bearer dm_…" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq

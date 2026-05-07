@@ -18,7 +18,10 @@ export async function POST(req: Request): Promise<Response> {
     await storeToken(token, tenantId);
     const proto = (req.headers.get('x-forwarded-proto') || 'https').split(',')[0];
     const host = req.headers.get('host') || 'mcp.designmode.app';
-    const mcpUrl = `${proto}://${host}/api/mcp`;
+    // Agent-facing URL is the short form. /api/mcp still resolves (rewrite
+    // in vercel.json), but every config snippet we hand out should match
+    // what hosted MCPs like Notion / Figma publish.
+    const mcpUrl = `${proto}://${host}/mcp`;
     const streamUrl = `${proto}://${host}/api/extension/stream`;
     const inboxUrl = `${proto}://${host}/api/extension/inbox`;
     logEvent('auth.register', { tenantId, latencyMs: Date.now() - started, status: 200 });

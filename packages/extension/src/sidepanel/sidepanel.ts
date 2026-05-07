@@ -5458,7 +5458,7 @@ function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: stri
     // editable in self-hosted mode.
     const isSelf = mcpMode === 'self-hosted';
     const hasToken = !!mcpCloudToken;
-    const mcpEndpoint = (mcpCloudUrl || '').replace(/\/$/, '') + '/api/mcp';
+    const mcpEndpoint = (mcpCloudUrl || '').replace(/\/$/, '') + '/mcp';
 
     const urlField = isSelf
       ? '<div style="display:flex;flex-direction:column;gap:4px;"><span style="' + lS + '">Server URL</span><input type="text" class="dm-input" data-dm-setting="cloudUrl" value="' + escapeAttr(mcpCloudUrl) + '" placeholder="https://your-deploy.vercel.app" style="font-size:10px;"/></div>'

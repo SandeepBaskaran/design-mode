@@ -12,7 +12,7 @@ const claudeConfig = `{
   "mcpServers": {
     "design-mode": {
       "type": "http",
-      "url": "https://mcp.designmode.app/api/mcp",
+      "url": "https://mcp.designmode.app/mcp",
       "headers": { "Authorization": "Bearer dm_<your-token>" }
     }
   }
@@ -20,7 +20,7 @@ const claudeConfig = `{
 
 const cursorConfig = `{
   "design-mode": {
-    "url": "https://mcp.designmode.app/api/mcp",
+    "url": "https://mcp.designmode.app/mcp",
     "headers": { "Authorization": "Bearer dm_<your-token>" }
   }
 }`;
