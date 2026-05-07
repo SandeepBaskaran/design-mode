@@ -4,7 +4,7 @@
 // generate a new one. Revoking deletes the row.
 // ============================================================
 
-import { kv } from '@vercel/kv';
+import { kv } from './kv.js';
 import { randomBytes, createHash } from 'node:crypto';
 
 export interface TokenRow {
@@ -37,7 +37,7 @@ export async function storeToken(token: string, tenantId: string): Promise<Token
     createdAt: Date.now(),
     lastSeenAt: Date.now(),
   };
-  await kv.set(rowKey(row.tokenHash), row);
+  await kv().set(rowKey(row.tokenHash), row);
   return row;
 }
 
@@ -54,11 +54,11 @@ export function bearerFromHeaders(headers: Headers): string | null {
 export async function verifyToken(token: string | null | undefined): Promise<TokenRow | null> {
   if (!token || !token.startsWith(TOKEN_PREFIX)) return null;
   const tokenHash = hashToken(token);
-  const row = await kv.get<TokenRow>(rowKey(tokenHash));
+  const row = await kv().get<TokenRow>(rowKey(tokenHash));
   if (!row) return null;
   // Best-effort lastSeenAt bump; ignore failures.
   row.lastSeenAt = Date.now();
-  try { await kv.set(rowKey(tokenHash), row); } catch {}
+  try { await kv().set(rowKey(tokenHash), row); } catch {}
   return row;
 }
 
@@ -79,5 +79,5 @@ export async function authenticate(req: Request): Promise<TokenRow> {
 export async function revokeToken(token: string | null | undefined): Promise<boolean> {
   if (!token || !token.startsWith(TOKEN_PREFIX)) return false;
   const tokenHash = hashToken(token);
-  return (await kv.del(rowKey(tokenHash))) > 0;
+  return (await kv().del(rowKey(tokenHash))) > 0;
 }

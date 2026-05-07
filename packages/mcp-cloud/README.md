@@ -1,7 +1,8 @@
 # @design-mode/mcp-cloud
 
-Hosted multi-tenant MCP server for Design Mode. Deploys to Vercel and uses
-**Vercel KV only** for storage — no Upstash, no separate Redis to provision.
+Hosted multi-tenant MCP server for Design Mode. Deploys to Vercel; storage is
+provisioned through the **Vercel Marketplace Redis (Upstash) integration** —
+one click in the project's Storage tab, no separate signup, no separate bill.
 
 ## Architecture
 
@@ -31,8 +32,10 @@ Polling cadence: ~250 ms. Sub-second end-to-end tool-call latency.
 
 ## Required services
 
-1. **Vercel KV** — added to the project via the Vercel dashboard's Storage tab.
-   Auto-injects all `KV_*` env vars into the project. That's it.
+1. **Vercel Marketplace → Redis (Upstash)** — added from the project's Storage
+   tab. The integration auto-injects `UPSTASH_REDIS_REST_URL` and
+   `UPSTASH_REDIS_REST_TOKEN`. The `@upstash/redis` SDK reads them via
+   `Redis.fromEnv()` — no explicit config in code.
 
 Copy `.env.example` → `.env.local` and fill in the values for local dev.
 

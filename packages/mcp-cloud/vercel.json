@@ -4,12 +4,10 @@
   "outputDirectory": ".",
   "functions": {
     "api/extension/stream.ts": {
-      "maxDuration": 300,
-      "memory": 1024
+      "maxDuration": 300
     },
     "api/mcp.ts": {
-      "maxDuration": 30,
-      "memory": 1024
+      "maxDuration": 30
     },
     "api/extension/inbox.ts": {
       "maxDuration": 10

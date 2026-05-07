@@ -1,10 +1,10 @@
 // ============================================================
-// Design Mode Cloud — Vercel KV-backed relay store.
+// Design Mode Cloud — relay store.
 //
-// One Vercel KV instance holds everything: tokens, per-tenant inbound
+// One Redis instance holds everything: tokens, per-tenant inbound
 // queue, per-requestId outbound responses, and the daily quota counter.
-// No external Redis, no separate account — the KV integration is added
-// from the Vercel project's Storage tab and auto-injects KV_* env vars.
+// Provisioned via the Vercel Marketplace Redis (Upstash) integration,
+// which auto-injects UPSTASH_REDIS_REST_URL/TOKEN.
 //
 // Inbound (cloud → extension):
 //   RPUSH inbound:{tenantId}  the JSON message
@@ -16,7 +16,7 @@
 //   The MCP route GETs that key in a poll loop, deletes on hit
 // ============================================================
 
-import { kv } from '@vercel/kv';
+import { kv } from './kv.js';
 
 export const STREAM_TTL_S = 60;
 export const POLL_INTERVAL_MS = 250;
@@ -35,14 +35,14 @@ export interface RelayMessage {
 // every push so an active tenant's queue doesn't expire mid-session.
 export async function publishInbound(tenantId: string, msg: RelayMessage): Promise<void> {
   const key = inboundKey(tenantId);
-  await kv.rpush(key, JSON.stringify(msg));
-  try { await kv.expire(key, STREAM_TTL_S); } catch { /* non-fatal */ }
+  await kv().rpush(key, JSON.stringify(msg));
+  try { await kv().expire(key, STREAM_TTL_S); } catch { /* non-fatal */ }
 }
 
 // Store a request/response payload keyed by the original requestId. The
 // awaiting MCP route polls until it sees the key.
 export async function publishResponse(requestId: string, msg: RelayMessage): Promise<void> {
-  await kv.set(responseKey(requestId), JSON.stringify(msg), { ex: STREAM_TTL_S });
+  await kv().set(responseKey(requestId), JSON.stringify(msg), { ex: STREAM_TTL_S });
 }
 
 // Generator that yields inbound messages for a tenant, polling every
@@ -60,7 +60,7 @@ export async function* readInbound(opts: {
     try {
       // LPOP-many in one call when supported; fall back to single-pop
       // loop for clients that don't ship multi-pop.
-      const raw = await (kv as any).lpop(key, 16);
+      const raw = await (kv() as any).lpop(key, 16);
       const items: string[] = Array.isArray(raw) ? raw : raw == null ? [] : [raw];
       for (const item of items) {
         if (typeof item !== 'string') continue;
@@ -82,9 +82,9 @@ export async function awaitResponse(requestId: string, timeoutMs: number): Promi
   const key = responseKey(requestId);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const raw = await kv.get<string>(key);
+    const raw = await kv().get<string>(key);
     if (typeof raw === 'string') {
-      try { await kv.del(key); } catch { /* non-fatal */ }
+      try { await kv().del(key); } catch { /* non-fatal */ }
       try { return JSON.parse(raw) as RelayMessage; } catch { return { type: 'invalid' }; }
     }
     await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
