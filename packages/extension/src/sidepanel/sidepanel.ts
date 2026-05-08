@@ -3765,7 +3765,7 @@ function renderDesignTab(): string {
     ? '<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:10px;">' +
       '<label style="font-size:9px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Text Content</label>' +
       richToolbar +
-      '<div data-dm-richtext contenteditable="true" class="dm-input" style="width:100%;min-height:88px;font-family:inherit;font-size:13px;line-height:1.5;padding:8px;box-sizing:border-box;outline:none;overflow-y:auto;max-height:280px;" spellcheck="false">' + richHtml + '</div>' +
+      '<div data-dm-richtext data-dm-element-id="' + escapeAttr(displayInfo.id || '') + '" contenteditable="true" class="dm-input" style="width:100%;min-height:88px;font-family:inherit;font-size:13px;line-height:1.5;padding:8px;box-sizing:border-box;outline:none;overflow-y:auto;max-height:280px;" spellcheck="false">' + richHtml + '</div>' +
       textWarning +
       '</div>'
     : '';
@@ -5663,7 +5663,19 @@ function render() {
       // typing isn't interrupted (cursor position, selection, etc).
       if (fromEl === document.activeElement) {
         if (fromEl.tagName === 'INPUT' || fromEl.tagName === 'TEXTAREA' || fromEl.tagName === 'SELECT') return false;
-        if ((fromEl as HTMLElement).isContentEditable) return false;
+        if ((fromEl as HTMLElement).isContentEditable) {
+          // EXCEPTION: the typography richtext editor stamps the
+          // currently-selected element id. When the user hovers/selects
+          // a different layer, that id changes — we must let morphdom
+          // replace the contenteditable contents so the typography
+          // input shows the NEW layer's text instead of the previously
+          // edited text. Without this, the input stays stale until the
+          // panel is closed and reopened.
+          const fromId = (fromEl as HTMLElement).getAttribute('data-dm-element-id');
+          const toId = (toEl as HTMLElement).getAttribute('data-dm-element-id');
+          if (fromId && toId && fromId !== toId) return true;
+          return false;
+        }
       }
       return true;
     },

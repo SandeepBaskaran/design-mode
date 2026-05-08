@@ -30,7 +30,17 @@ export function reserveIdsAtLeast(ids: string[]) {
 }
 
 export function getElementById(id: string): HTMLElement | null {
-  return elementMap.get(id) || document.querySelector(`[${DATA_ATTR}="${id}"]`);
+  // Prefer the live DOM. The cached elementMap entry survives across
+  // Clear All / re-renders / detach, so trusting it blindly returns
+  // detached nodes that look "real" but render at 0,0 (which surfaces
+  // as comment pins migrating to body, etc.). Verify the cached node
+  // is still attached; if not, requery the DOM and refresh the cache.
+  const cached = elementMap.get(id);
+  if (cached && document.contains(cached)) return cached;
+  const fresh = document.querySelector(`[${DATA_ATTR}="${id}"]`) as HTMLElement | null;
+  if (fresh) elementMap.set(id, fresh);
+  else if (cached) elementMap.delete(id);
+  return fresh;
 }
 
 export interface Rect {

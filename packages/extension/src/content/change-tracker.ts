@@ -192,19 +192,11 @@ export function loadSession(): Promise<{ styleChanges: StyleChange[]; textChange
 // memory arrays so the side panel reflects them. Used by both
 // replaySession (storage-backed) and the IMPORT_CHANGES message handler.
 export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }) {
-  // DOM mutations replay BEFORE styles so re-created duplicates have
-  // their data-dm-id stamped before the rules below try to bind to it.
-  // (Style rules are now `[data-dm-id="<id>"] { ... }` — no element
-  // bearing that id, no rule effect.) This block is moved below.
-
-  for (const c of saved.textChanges) {
-    try {
-      const el = document.querySelector(c.selector) as HTMLElement | null;
-      if (!el) continue;
-      if (c.isHtml) el.innerHTML = c.newText;
-      else el.textContent = c.newText;
-    } catch {}
-  }
+  // Order matters here. DOM mutations run FIRST (so duplicates / inserts
+  // exist with their stamped data-dm-id before anything else binds to
+  // them). Then text changes (which can now find duplicates by id).
+  // Then style rules (which are id-scoped — `[data-dm-id="X"]` — so
+  // they need the element + its data-dm-id present).
 
   // Replay DOM mutations in chronological order. duplicate / insert
   // come first in any user's edit sequence (you can't move what you
@@ -261,6 +253,24 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
         const el = document.querySelector(c.selector);
         if (el) el.remove();
       }
+    } catch {}
+  }
+
+  // Text changes — prefer id-based lookup so edits to a re-created
+  // duplicate find the correct element. Falls back to the saved
+  // user-friendly selector for changes on elements that never carried
+  // a data-dm-id attribute on the saved page.
+  for (const c of saved.textChanges) {
+    try {
+      const el =
+        (document.querySelector(`[${DATA_ATTR}="${c.elementId}"]`) as HTMLElement | null) ||
+        (document.querySelector(c.selector) as HTMLElement | null);
+      if (!el) continue;
+      // Stamp the id so id-scoped rules below can bind, even if the
+      // element didn't have data-dm-id before.
+      if (!el.hasAttribute(DATA_ATTR)) el.setAttribute(DATA_ATTR, c.elementId);
+      if (c.isHtml) el.innerHTML = c.newText;
+      else el.textContent = c.newText;
     } catch {}
   }
 
