@@ -70,16 +70,30 @@ export function deleteElement(elementId: string): boolean {
 export function moveElement(elementId: string, direction: 'up' | 'down'): boolean {
   const el = getElementById(elementId);
   if (!el || isDmElement(el) || !el.parentElement) return false;
+  const parent = el.parentElement;
+  // Capture origin BEFORE the move so the Changes tab can show
+  // `from <selector> > position N` and Clear All can put the element back.
+  // Mirrors the REORDER_LAYER handler in content/index.ts.
+  const origin = {
+    parentSelector: generateSelector(parent),
+    index: Array.from(parent.children).indexOf(el),
+  };
   if (direction === 'up' && el.previousElementSibling) {
-    el.parentElement.insertBefore(el, el.previousElementSibling);
-    recordDomChange(elementId, generateSelector(el), 'move', el.tagName.toLowerCase());
-    return true;
+    parent.insertBefore(el, el.previousElementSibling);
   } else if (direction === 'down' && el.nextElementSibling) {
-    el.parentElement.insertBefore(el.nextElementSibling, el);
-    recordDomChange(elementId, generateSelector(el), 'move', el.tagName.toLowerCase());
-    return true;
+    parent.insertBefore(el.nextElementSibling, el);
+  } else {
+    return false;
   }
-  return false;
+  const destination = {
+    parentSelector: generateSelector(parent),
+    index: Array.from(parent.children).indexOf(el),
+  };
+  recordDomChange(
+    elementId, generateSelector(el), 'move', el.tagName.toLowerCase(),
+    undefined, destination, origin,
+  );
+  return true;
 }
 
 export function hasClipboard(): boolean {

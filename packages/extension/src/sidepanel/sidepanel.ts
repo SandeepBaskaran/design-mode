@@ -41,9 +41,24 @@ interface ElementInfo {
   parentAlignItems?: string;
   parentGap?: string;
 }
-interface StyleChange { id?: string; elementId: string; selector: string; property: string; oldValue: string; newValue: string; timestamp?: number; }
+interface StyleChange {
+  id?: string; elementId: string; selector: string;
+  property: string; oldValue: string; newValue: string; timestamp?: number;
+  // Optional grouping envelope. Multiple StyleChanges sharing a `groupId`
+  // collapse into a single row in the Changes tab. `groupKind` shapes the
+  // row label (`PRESET`, `APPLIED to N`, `HIDE`). When `groupKind` is set
+  // without a `groupId`, it's treated as a single-row label override.
+  groupId?: string;
+  groupKind?: 'preset' | 'multi-select' | 'visibility';
+  groupLabel?: string;
+}
 interface TextChange { id: string; elementId: string; selector: string; oldText: string; newText: string; timestamp?: number; }
-interface DomChange { id?: string; action: string; tagName: string; selector: string; elementId?: string; timestamp?: number; }
+interface DomChange {
+  id?: string; action: string; tagName: string; selector: string;
+  elementId?: string; timestamp?: number;
+  destination?: { parentSelector: string; index: number };
+  origin?: { parentSelector: string; index: number };
+}
 interface CommentEntry { id: string; elementId: string; text: string; selector: string; timestamp: number; updatedAt?: number; resolved?: boolean; pinOffset?: { x: number; y: number } }
 interface DomNode {
   id: string; tagName: string; displayName: string;
@@ -5019,7 +5034,17 @@ function renderChangesTab(): string {
   };
   const allItems = [...allItemsRaw].sort(sortItems);
 
-  if (allItems.length === 0) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;"><div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('sparkles', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">No changes yet</div><div style="font-size:11px;margin-top:6px;color:var(--dm-text-dim);">Changes will appear here as you edit.<br/>Copy as prompt or send directly to your coding agent.</div></div>';
+  if (allItems.length === 0) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;">' +
+      '<div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('sparkles', 32) + '</div>' +
+      '<div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">No changes yet</div>' +
+      '<div style="font-size:11px;margin-top:6px;color:var(--dm-text-dim);max-width:260px;line-height:1.5;">Edits you make on the page show up here, ready to copy as a prompt or send straight to your agent. Picking up where you left off? Import a previously exported JSON.</div>' +
+      // Import button mirrors the one in the populated-state action row,
+      // so first-time + empty-state users can pull a saved session in
+      // without any prior context.
+      '<label title="Replace every change with an imported JSON file" style="margin-top:14px;padding:6px 12px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:inline-flex;align-items:center;gap:6px;">' +
+      icon('upload', 11) + ' Import changes' +
+      '<input type="file" accept=".json,application/json" data-dm-import-changes style="display:none;"/></label>' +
+    '</div>';
 
   // Apply filter (kind chips) and search (selector / property / value / text).
   const q = changesSearch.trim().toLowerCase();
@@ -5290,9 +5315,10 @@ function renderChangesTab(): string {
       return '<input type="checkbox" data-dm-change-checkbox="' + escapeAttr(cid) + '"' + (checked ? ' checked' : '') + ' style="accent-color:var(--dm-accent);width:12px;height:12px;flex-shrink:0;cursor:pointer;" aria-label="Select change for bulk revert"/>';
     };
 
-    const body = group.items.map(item => {
+    const renderItem = (item: typeof group.items[number], opts?: { extraIndent?: boolean }): string => {
       const tsLabel = fmtAgo((item.data as any).timestamp);
       const rowTip = tsLabel ? ' title="' + escapeAttr(tsLabel) + '"' : '';
+      const indentLeft = opts?.extraIndent ? 44 : 28;
       if (item.type === 'style') {
         const c = item.data;
         const cid = c.id || 'style-' + item.idx;
@@ -5307,12 +5333,20 @@ function renderChangesTab(): string {
         const countBadge = matchCount > 1
           ? '<span style="font-size:9px;font-family:inherit;font-weight:600;">\u00d7' + matchCount + '</span>'
           : '';
-        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '" data-dm-change-prop="' + escapeAttr(c.property) + '"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;">' +
+        // Visibility-tagged rows render as `HIDE` / `SHOW` instead of
+        // `display: none` / `display: revert` \u2014 same change underneath, but
+        // the row reads as the gesture the user actually performed.
+        const isVisToggle = c.groupKind === 'visibility';
+        const innerLabel = isVisToggle
+          ? '<div style="font-size:10px;font-weight:600;color:' + (c.newValue === 'none' ? 'var(--dm-danger)' : 'var(--dm-success)') + ';">' + (c.groupLabel || (c.newValue === 'none' ? 'Hidden' : 'Shown')) + '</div>'
+          : '<div style="font-size:10px;"><span style="color:var(--dm-text-muted);">' + c.property + '</span>: <span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + escapeAttr((c.oldValue || '').slice(0, 20)) + '</span> \u2192 <span style="color:var(--dm-success);">' + escapeAttr((c.newValue || '').slice(0, 20)) + '</span></div>';
+        const rowIcon = isVisToggle
+          ? '<span style="color:' + (c.newValue === 'none' ? 'var(--dm-danger)' : 'var(--dm-success)') + ';display:flex;flex-shrink:0;">' + icon(c.newValue === 'none' ? 'eyeClosed' : 'eye', 10) + '</span>'
+          : '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;">' + icon('sliders', 10) + '</span>';
+        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '" data-dm-change-prop="' + escapeAttr(c.property) + '"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px ' + indentLeft + 'px;border-bottom:1px solid var(--dm-separator);cursor:pointer;">' +
           checkbox(cid) +
-          '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;">' + icon('sliders', 10) + '</span>' +
-          '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:10px;"><span style="color:var(--dm-text-muted);">' + c.property + '</span>: <span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + escapeAttr((c.oldValue || '').slice(0, 20)) + '</span> \u2192 <span style="color:var(--dm-success);">' + escapeAttr((c.newValue || '').slice(0, 20)) + '</span></div>' +
-          '</div>' +
+          rowIcon +
+          '<div style="flex:1;min-width:0;">' + innerLabel + '</div>' +
           '<button data-dm-batch-apply="' + cid + '" title="' + zapTitle + '" style="' + zapStyle + '" aria-label="Batch apply">' + icon('zap', 10) + countBadge + '</button>' +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else if (item.type === 'text') {
@@ -5334,11 +5368,25 @@ function renderChangesTab(): string {
         const colors: Record<string, string> = { delete: 'var(--dm-danger)', duplicate: 'var(--dm-purple)', move: '#f59e0b', insert: 'var(--dm-success)', text: 'var(--dm-accent)' };
         const ic: Record<string, keyof typeof icons> = { delete: 'trash', duplicate: 'layers', move: 'move', insert: 'plus', text: 'type' };
         const cid = c.id || 'dom-' + c.action;
-        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;">' +
+        // For move actions surface origin + destination as compact sub-lines:
+        //   from <selector> > position 2
+        //   to   <selector> > position 1
+        // Origin is captured first time only (recordDomChange dedup); the
+        // destination updates on every drag / arrow click.
+        const fmt = (loc: { parentSelector: string; index: number }) =>
+          escapeAttr(loc.parentSelector) + ' › position ' + (loc.index + 1);
+        const origLine = c.action === 'move' && c.origin
+          ? '<div style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;margin-top:2px;line-height:1.4;"><span style="color:var(--dm-text-muted);">from</span> ' + fmt(c.origin) + '</div>'
+          : '';
+        const destLine = c.action === 'move' && c.destination
+          ? '<div style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;margin-top:2px;line-height:1.4;"><span style="color:var(--dm-text-muted);">to</span> ' + fmt(c.destination) + '</div>'
+          : '';
+        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;">' +
           checkbox(cid) +
-          '<span style="color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';display:flex;flex-shrink:0;">' + icon(ic[c.action] || 'sparkles', 10) + '</span>' +
+          '<span style="color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';display:flex;flex-shrink:0;margin-top:2px;">' + icon(ic[c.action] || 'sparkles', 10) + '</span>' +
           '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:10px;color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';">' + c.action.toUpperCase() + ' &lt;' + c.tagName + '&gt;</div>' +
+          origLine + destLine +
           '</div><button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else {
         const c = item.data;
@@ -5392,6 +5440,61 @@ function renderChangesTab(): string {
           '<span style="margin-left:auto;font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;">' + escapeAttr(tsLabel + editedLabel) + '</span>' +
           '</div></div></div>';
       }
+      return '';
+    };
+
+    // Bucket consecutive style items that share a `groupId` into one
+    // collapsible sub-row. groupKind 'preset' / 'multi-select' get the
+    // grouped treatment; 'visibility' (no groupId) is rendered inline by
+    // renderItem above. Order is preserved — the subgroup appears at the
+    // position of its first member.
+    type Unit =
+      | { kind: 'item'; item: typeof group.items[number] }
+      | { kind: 'subgroup'; gid: string; gkind: 'preset' | 'multi-select'; gLabel: string; items: typeof group.items };
+    const units: Unit[] = [];
+    const unitIdx = new Map<string, number>();
+    for (const item of group.items) {
+      if (item.type === 'style' && (item.data as any).groupId &&
+          ((item.data as any).groupKind === 'preset' || (item.data as any).groupKind === 'multi-select')) {
+        const gid = (item.data as any).groupId as string;
+        const gkind = (item.data as any).groupKind as 'preset' | 'multi-select';
+        const existing = unitIdx.get(gid);
+        if (existing != null) {
+          (units[existing] as { kind: 'subgroup'; items: typeof group.items }).items.push(item);
+        } else {
+          unitIdx.set(gid, units.length);
+          units.push({
+            kind: 'subgroup', gid, gkind,
+            gLabel: ((item.data as any).groupLabel as string) || '',
+            items: [item],
+          });
+        }
+      } else {
+        units.push({ kind: 'item', item });
+      }
+    }
+
+    const body = units.map(u => {
+      if (u.kind === 'item') return renderItem(u.item);
+      const subKey = 'sub:' + u.gid;
+      const isSubCollapsed = changesGroupCollapsed.has(subKey);
+      const chev = isSubCollapsed ? 'chevronRight' : 'chevronDown';
+      const labelPrefix = u.gkind === 'preset' ? 'PRESET' : 'APPLIED TO';
+      const subColor = u.gkind === 'preset' ? 'var(--dm-purple)' : 'var(--dm-accent)';
+      const subIcon: keyof typeof icons = u.gkind === 'preset' ? 'bookmark' : 'layers';
+      const headerHtml = '<div class="dm-change-subgroup-header" data-dm-toggle-subgroup="' + escapeAttr(subKey) + '" style="display:flex;align-items:center;gap:6px;padding:5px 12px 5px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;background:rgba(0,0,0,0.025);">' +
+        '<span style="color:var(--dm-text-dim);display:flex;flex-shrink:0;">' + icon(chev as keyof typeof icons, 10) + '</span>' +
+        '<span style="color:' + subColor + ';display:flex;flex-shrink:0;">' + icon(subIcon, 10) + '</span>' +
+        '<div style="flex:1;min-width:0;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+        '<span style="color:var(--dm-text-muted);font-weight:600;letter-spacing:0.4px;">' + labelPrefix + '</span> ' +
+        '<span style="color:var(--dm-text);">' + escapeAttr(u.gLabel) + '</span></div>' +
+        '<span style="font-size:9px;background:var(--dm-bg-secondary);color:var(--dm-text-dim);border-radius:8px;padding:1px 6px;flex-shrink:0;">' + u.items.length + '</span>' +
+        '<button data-dm-revert-subgroup="' + escapeAttr(u.gid) + '" title="Revert all in this group" style="background:none;border:none;color:var(--dm-danger);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('trash', 10) + '</button>' +
+        '</div>';
+      const childrenHtml = isSubCollapsed
+        ? ''
+        : u.items.map(it => renderItem(it, { extraIndent: true })).join('');
+      return headerHtml + childrenHtml;
     }).join('');
 
     return '<div class="dm-change-group">' + header + body + '</div>';
@@ -6134,6 +6237,17 @@ function setupDelegation() {
       return;
     }
 
+    // Per-subgroup (preset / multi-select fan-out) revert. Loops every
+    // StyleChange that shares the groupId and removes each in turn.
+    const revertSubgroupBtn = target.closest<HTMLElement>('[data-dm-revert-subgroup]');
+    if (revertSubgroupBtn) {
+      e.stopPropagation();
+      const gid = revertSubgroupBtn.dataset.dmRevertSubgroup!;
+      const ids = styleChanges.filter(c => (c as any).groupId === gid).map(c => c.id).filter((x): x is string => !!x);
+      Promise.all(ids.map(id => removeChange(id))).then(() => render());
+      return;
+    }
+
     // Remove change
     const removeChangeBtn = target.closest<HTMLElement>('[data-dm-remove-change]');
     if (removeChangeBtn) {
@@ -6149,6 +6263,19 @@ function setupDelegation() {
       const key = changeGroupHeader.dataset.dmChangeGroup!;
       if (changesGroupCollapsed.has(key)) changesGroupCollapsed.delete(key);
       else changesGroupCollapsed.add(key);
+      render();
+      return;
+    }
+
+    // Subgroup chevron toggle — collapse / expand the preset / multi-
+    // select bundle. Reuses changesGroupCollapsed with a `sub:` prefix so
+    // it doesn't collide with element-level group keys.
+    const subgroupHeader = target.closest<HTMLElement>('[data-dm-toggle-subgroup]');
+    if (subgroupHeader && !target.closest('[data-dm-revert-subgroup]')) {
+      e.stopPropagation();
+      const subKey = subgroupHeader.dataset.dmToggleSubgroup!;
+      if (changesGroupCollapsed.has(subKey)) changesGroupCollapsed.delete(subKey);
+      else changesGroupCollapsed.add(subKey);
       render();
       return;
     }

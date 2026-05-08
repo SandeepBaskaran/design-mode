@@ -749,6 +749,18 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           ? Array.from(new Set([sid, ...multiIds]))
           : [sid];
         const kebab = msg.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
+        // Multi-select fan-out → one Changes-tab row that collapses every
+        // per-element entry. groupId scopes a single (call, property)
+        // tuple so two consecutive multi-select edits to different
+        // properties land as two separate grouped rows.
+        const isFanOut = targetIds.length > 1;
+        const groupMeta = isFanOut
+          ? {
+              groupId: `ms-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              groupKind: 'multi-select' as const,
+              groupLabel: `${targetIds.length} elements`,
+            }
+          : undefined;
         for (const id of targetIds) {
           const el = getElementById(id);
           if (!el) continue;
@@ -756,7 +768,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           const change = applyStyleChange(id, msg.property, msg.value, () => {
             const el2 = getElementById(id);
             if (el2 && id === sid) onElementSelected(buildElementInfo(el2));
-          });
+          }, groupMeta);
           const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
           if (afterValue !== beforeValue) {
             undoStack.push({ kind: 'style', elementId: id, property: msg.property, oldValue: beforeValue, newValue: msg.value, changeId: change?.id });
@@ -951,10 +963,17 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       if (sid && msg.preset) {
         const el = getElementById(sid);
         if (el) {
+          // One groupId per preset application — every property tagged
+          // with the same id collapses into a single Changes-tab row.
+          // groupLabel renders in the parent row.
+          const groupId = `pre-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const groupLabel = msg.preset.name || 'Preset';
           for (const [prop, val] of Object.entries(msg.preset.styles as Record<string, string>)) {
             const kebab = prop.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
             const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
-            const change = applyStyleChange(sid, prop, val);
+            const change = applyStyleChange(sid, prop, val, undefined, {
+              groupId, groupKind: 'preset', groupLabel,
+            });
             const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
             if (afterValue !== beforeValue) {
               undoStack.push({ kind: 'style', elementId: sid, property: prop, oldValue: beforeValue, newValue: val, changeId: change?.id });
@@ -1347,15 +1366,20 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         undoStack.push({ kind: 'visibility', elementId: msg.elementId, wasHidden: computedHidden, oldDisplay: '' });
         redoStack.length = 0;
         if (ours && ours.newValue === 'none') {
-          // Our own override is hiding it — pull our rule out cleanly.
+          // Our own override is hiding it — pull our rule out cleanly. The
+          // resulting StyleChange entry is dropped (no row), so no group
+          // tag needed.
           applyStyleChange(msg.elementId, 'display', '');
         } else if (computedHidden) {
-          // Hidden by author/user CSS — `revert` resets our cascade level
-          // back to the user-agent default (block / inline / etc.) which
-          // is reliably visible regardless of what the page author wrote.
-          applyStyleChange(msg.elementId, 'display', 'revert');
+          // Now showing the element by reverting cascade. Tag the row as
+          // a SHOW gesture so the Changes tab labels it sensibly.
+          applyStyleChange(msg.elementId, 'display', 'revert', undefined, {
+            groupKind: 'visibility', groupLabel: 'Shown',
+          });
         } else {
-          applyStyleChange(msg.elementId, 'display', 'none');
+          applyStyleChange(msg.elementId, 'display', 'none', undefined, {
+            groupKind: 'visibility', groupLabel: 'Hidden',
+          });
         }
       }
       getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));

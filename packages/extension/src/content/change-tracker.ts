@@ -12,6 +12,19 @@ export interface StyleChange {
   id: string; elementId: string; selector: string;
   property: string; oldValue: string; newValue: string;
   timestamp: number;
+  // Optional grouping envelope. Multiple StyleChanges sharing a `groupId`
+  // collapse into one row in the Changes tab. `groupKind` shapes the row
+  // label (`PRESET`, `APPLIED to N`, `HIDE`). When `groupKind` is set
+  // without a `groupId`, it's a single-row label override (visibility).
+  groupId?: string;
+  groupKind?: 'preset' | 'multi-select' | 'visibility';
+  groupLabel?: string;
+}
+
+export interface StyleChangeMeta {
+  groupId?: string;
+  groupKind?: 'preset' | 'multi-select' | 'visibility';
+  groupLabel?: string;
 }
 
 export interface TextChange {
@@ -263,14 +276,19 @@ export function removeTextChange(id: string): void {
 
 export function applyStyleChange(
   elementId: string, property: string, value: string,
-  refreshPanel?: () => void
+  refreshPanel?: () => void,
+  meta?: StyleChangeMeta,
 ): StyleChange | null {
   const el = getElementById(elementId);
   if (!el) return null;
   const k = kebab(property);
   const selector = generateSelector(el);
 
-  // Deduplication: keep original oldValue, update newValue + timestamp
+  // Deduplication: keep original oldValue, update newValue + timestamp.
+  // Meta semantics on dedupe: a fresh `meta` overwrites the existing
+  // entry's group fields (the new gesture re-classifies it). Calls
+  // without meta leave group fields untouched — a no-meta dedupe is
+  // assumed to be a follow-up edit in the same context.
   const existingIdx = styleChanges.findIndex(c => c.elementId === elementId && c.property === property);
   if (existingIdx !== -1) {
     const existing = styleChanges[existingIdx];
@@ -285,11 +303,17 @@ export function applyStyleChange(
     // Selector may have shifted between edits (e.g., classes changed); keep the
     // existing rule's selector to avoid orphaning the previous rule line.
     upsertRule(existing.selector, property, value);
-    styleChanges[existingIdx] = { ...existing, newValue: value, timestamp: Date.now() };
-    syncChange(styleChanges[existingIdx]);
+    const merged: StyleChange = { ...existing, newValue: value, timestamp: Date.now() };
+    if (meta) {
+      merged.groupId = meta.groupId;
+      merged.groupKind = meta.groupKind;
+      merged.groupLabel = meta.groupLabel;
+    }
+    styleChanges[existingIdx] = merged;
+    syncChange(merged);
     persistSession();
     if (refreshPanel) refreshPanel();
-    return styleChanges[existingIdx];
+    return merged;
   }
 
   const oldValue = window.getComputedStyle(el).getPropertyValue(k);
@@ -300,6 +324,9 @@ export function applyStyleChange(
   const change: StyleChange = {
     id: crypto.randomUUID(), elementId, selector,
     property, oldValue, newValue: value, timestamp: Date.now(),
+    groupId: meta?.groupId,
+    groupKind: meta?.groupKind,
+    groupLabel: meta?.groupLabel,
   };
   styleChanges.push(change);
   syncChange(change);
