@@ -1333,16 +1333,27 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'TOGGLE_VISIBILITY': {
       const el = getElementById(msg.elementId);
       if (el) {
-        // Hidden state lives in the override stylesheet (display: none rule)
-        // — never inline. That way Clear All cleanly drops the rule and the
-        // element returns to its natural display.
-        const isHidden = window.getComputedStyle(el).display === 'none';
-        undoStack.push({ kind: 'visibility', elementId: msg.elementId, wasHidden: isHidden, oldDisplay: '' });
+        // Three-way state on the element:
+        //   1. We've previously injected `display: none` via Design Mode.
+        //      → drop our rule; element returns to its author cascade.
+        //   2. The element is hidden by something else (author / user CSS).
+        //      → push our own `display: revert` so it falls back through the
+        //      cascade to the user-agent default. Just clearing our rule
+        //      wouldn't help — there isn't one yet.
+        //   3. The element is visible right now.
+        //      → inject `display: none` to hide it.
+        const ours = getStyleChanges().find(c => c.elementId === msg.elementId && c.property === 'display');
+        const computedHidden = window.getComputedStyle(el).display === 'none';
+        undoStack.push({ kind: 'visibility', elementId: msg.elementId, wasHidden: computedHidden, oldDisplay: '' });
         redoStack.length = 0;
-        if (isHidden) {
-          // Drop the rule by passing empty value — applyStyleChange treats
-          // it as "return to original" and removes the rule + change record.
+        if (ours && ours.newValue === 'none') {
+          // Our own override is hiding it — pull our rule out cleanly.
           applyStyleChange(msg.elementId, 'display', '');
+        } else if (computedHidden) {
+          // Hidden by author/user CSS — `revert` resets our cascade level
+          // back to the user-agent default (block / inline / etc.) which
+          // is reliably visible regardless of what the page author wrote.
+          applyStyleChange(msg.elementId, 'display', 'revert');
         } else {
           applyStyleChange(msg.elementId, 'display', 'none');
         }

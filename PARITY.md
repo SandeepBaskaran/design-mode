@@ -579,20 +579,17 @@ Per-row controls (hover-revealed):
 
 | Control | What |
 |---|---|
-| **Pencil** | Enter inline rename mode (also via double-click on the name). Custom name overrides the smart / fallback name. Empty input clears the override. |
-| **Target** | Scroll the page to bring this layer into view (without selecting). Sends `SP_SCROLL_TO_ELEMENT`. |
-| **Pin** | Toggle lock. Locked layers ignore selection / drag / clicks but stay visible. Lock badge persists outside hover. |
-| **Eye / Eye-off** | Toggle visibility (writes a `display: none` override). Non-destructive — entry shows in Changes. |
+| **Crosshair** | Scroll the page to bring this layer into view (without selecting). Sends `SP_SCROLL_TO_ELEMENT`. Same icon as the Changes-tab "go to element" button. |
+| **Eye / Eye-closed** | Toggle visibility. Three-state under the hood: drops our `display: none` rule if we set it; writes `display: revert` if author CSS was hiding it (cascade falls back to user-agent default); otherwise injects `display: none`. Non-destructive — entry shows in Changes. Uses Lucide `eye-closed` (not `eye-off`) when hidden so the row reads at a glance. |
 
 Per-row badges:
 
 | Badge | When |
 |---|---|
 | **Multi-select badge** (`checkSquare`) | This layer is in the multi-select set and isn't the focused row. |
-| **Lock badge** (`pin`) | Layer is locked. |
 | **Change-indicator dot** | This layer has at least one tracked change. |
 
-Bulk-action toolbar (multi-select with 2+ layers): Show / Hide / Lock / Unlock / Duplicate / Delete / Clear-selection.
+Bulk-action toolbar (multi-select with 2+ layers): Show / Hide / Duplicate / Delete / Clear-selection.
 
 Tree-extension badges (rendered next to / inline with the row):
 
@@ -603,14 +600,9 @@ Tree-extension badges (rendered next to / inline with the row):
 | **z-index chip** | `zIndex` (when not `auto` or `0`). | Mono-font `z:N` chip on the right of the name. |
 | **Container badge** (`shadow` / `iframe` / `pseudo`) | Walks open shadow roots, same-origin iframes, and `::before` / `::after` pseudo-elements with non-default `content`. | Coloured pill (purple / amber / teal) so the user sees these are virtual / cross-tree nodes. Pseudo-elements use a special `::before` / `::after` tag name; shadow roots show as `#shadow-root`. |
 
-Persistence (chrome.storage.session, debounced 200ms):
+Persistence: none. The Layers tab intentionally carries no panel-only state across reloads — it mirrors the live DOM. Filter chip, search query, and collapse state are all in-memory; a fresh page load starts clean.
 
-| State | Key | Notes |
-|---|---|---|
-| Custom names | `dm-layer-names` | Map of elementId → name. Restored on panel boot. |
-| Lock state | `dm-layer-locks` | Array of locked element ids. Restored on panel boot. |
-
-Scroll-into-view (already in the row's hover actions): wired through `SP_SCROLL_TO_ELEMENT` → `SCROLL_TO_ELEMENT` content message → `el.scrollIntoView({ behavior: 'smooth', block: 'center' })`. The handler strips any `::pseudo` / `::shadow` suffix from the elementId so virtual nodes target their host.
+Scroll-into-view: wired through `SP_SCROLL_TO_ELEMENT` → `SCROLL_TO_ELEMENT` content message → `el.scrollIntoView({ behavior: 'smooth', block: 'center' })`. The handler strips any `::pseudo` / `::shadow` suffix from the elementId so virtual nodes target their host.
 
 ### Planned
 
@@ -620,6 +612,8 @@ _Nothing planned for Layers._ All previously-planned items shipped above.
 
 | Feature | Reason |
 |---|---|
+| **Lock / pin layer** | The lock state lived only in the panel — the page didn't enforce it, so it was a UX-only filter on selection. The same outcome ("don't accidentally select this") is one click away on the canvas. Removed in favour of fewer parallel state graphs. |
+| **Rename layer** | The page already names every node via tag / id / class / component. A panel-only renaming map drifts the moment a class changes or a component is renamed in source. Names always reflect the live DOM now. |
 | **Boolean operations** (Union / Subtract / Intersect / Exclude) | Vector-only; doesn't apply to the DOM. Belongs in vector editors, not a CSS panel. |
 | **Group selected → wrap in `<div>`** | DOM-mutating ergonomic shortcut. The user can already write a wrapper via the agent flow; doing it visually opens up a class of layout-correctness footguns we'd rather not own. |
 | **Sort children alphabetically / by tag** | Re-orders the DOM, which means writing `MOVE` changes for every sibling. Niche enough to skip. |

@@ -4,7 +4,17 @@ User-facing reference for everything in the Layers tab. Each control + each visu
 
 For the implementation status of layer-related features, see PARITY.md (where applicable). This document is for **understanding what each thing in the Layers tab does**.
 
-Last updated: 2026-05-06.
+Last updated: 2026-05-08.
+
+## Design stance — what we deliberately don't do
+
+The Layers tab **mirrors the live DOM** rather than holding parallel state on top of it. That principle decides what's in and what's out:
+
+- **No rename / no custom label**. The page already names every node via tag, id, class, and component name. Layering a panel-only renaming map on top drifts the moment the user changes a class or swaps components — and Design Mode's job is to surface what the page actually is, not to maintain a second-order naming graph.
+- **No lock / pin-from-selection**. Lock state is a UX layer that prevents selecting an element from the canvas or the panel. We dropped it because it (a) lives only in the panel — the page itself doesn't know about it — and (b) the same outcome is reachable in milliseconds by hovering away or clicking elsewhere. The cost of teaching, persisting, and policing locks across reloads outweighed the benefit.
+- **No bookmarking / starring layers**. Same reason as renaming — it's panel-only state that disappears on reload. If a layer matters, it's already discoverable by class / id / tag.
+
+What we do keep is anything that's a **direct surface** for the underlying DOM: visibility toggle, drag-to-reorder, scroll-into-view, change indicator, comment count, multi-select.
 
 ---
 
@@ -81,15 +91,13 @@ The active chip is accent-tinted. The filter composes with the search input, so 
 When multi-select is active **and** at least two layers are in the set, a horizontal toolbar appears below the filter chips:
 
 ```
-[ N selected: ] [ 👁 Show ] [ 🚫 Hide ] [ 📌 Lock ] [ Unlock ] [ ⧉ Duplicate ] [ 🗑 Delete ] [ × Clear ]
+[ N selected: ] [ 👁 Show ] [ 🚫 Hide ] [ ⧉ Duplicate ] [ 🗑 Delete ] [ × Clear ]
 ```
 
 | Action | What it does |
 |---|---|
 | **Show** | Toggles every selected layer to visible (no-op for already-visible ones). |
 | **Hide** | Hides every selected layer (writes `display: none` overrides). |
-| **Lock** | Adds every selected layer to `lockedLayerIds`. Locked layers ignore selection / drag / clicks. |
-| **Unlock** | Removes the lock from every selected layer. |
 | **Duplicate** | Clones each selected layer in place. Each clone gets its own `DUPLICATE` entry in the Changes tab. |
 | **Delete** | Removes every selected layer. Each gets a `DELETE` entry in the Changes tab (revertable). |
 | **Clear** | Empties the multi-select set and exits multi-select mode. |
@@ -101,7 +109,7 @@ When multi-select is active **and** at least two layers are in the set, a horizo
 A layer row, left to right:
 
 ```
-[ guides ] [ drag-handle ] [ chevron ] [ tag-icon ] [ swatch? ] [ multi-badge? ] [ lock-badge? ] [ container-badge? ] [ change-dot? ] [ name ] [ <tag>? ] [ z-chip? ]    ........   [ pencil ] [ target ] [ pin ] [ eye ]
+[ guides ] [ drag-handle ] [ chevron ] [ tag-icon ] [ swatch? ] [ multi-badge? ] [ container-badge? ] [ change-dot? ] [ comments? ] [ name ] [ <tag>? ] [ z-chip? ]    ........   [ crosshair ] [ eye ]
 ```
 
 ### Indentation guides
@@ -176,12 +184,6 @@ Only renders when:
 - This layer is part of the selection set.
 - This layer is *not* the focused layer (the focused one already has its own selected styling).
 
-### Lock badge (`pin`)
-
-Renders when this layer is locked. Locked layers stay visible in the tree and on the page but **ignore selection / drag / clicks** (in both the panel list and the page). Useful when you have a fixed background pinned over content and need to click through it without grabbing the wrong target.
-
-Toggle via the `pin` icon in the hover-revealed action cluster (or the bulk-action toolbar when multiple layers are selected).
-
 ### Change-indicator dot
 
 A 6×6 accent-coloured dot just before the name, rendered when this layer has at least one tracked change of any kind (style / text / DOM / comment). Hover for an "This layer has tracked changes" tooltip. Pairs with the **Modified** filter chip — flip the chip to scope the tree to just these.
@@ -194,28 +196,21 @@ A small `💬 N` chip (yellow-tinted background) right after the change dot, ren
 
 The displayed identifier for the layer. Format priority:
 
-1. **Custom name** (when set via the rename action — italics in the row). Stored in an in-memory `Map<elementId, string>`; resets on extension reload.
-2. **Smart name** (when detected) — e.g. `Hero` if the layer's `data-component` matches `Hero`, or auto-derived from class names like `card-primary`.
-3. **`<tag>#id.class1.class2`** — fallback: tag + first few classes / id.
+1. **Component name** (when source detection finds one — e.g. `Hero` from a React fiber walk, or auto-derived from class names like `card-primary`).
+2. **`<tag>#id.class1.class2`** — fallback: tag + first few classes / id.
 
-**Renaming**: double-click the name (or click the pencil icon in the hover actions) to enter inline-edit mode. The name becomes a small text input — type a new name and press **Enter** to commit, **Escape** to cancel, or click outside to save. Submitting an empty value clears the override and reverts to the smart / fallback name.
+The Layers tab does **not** carry custom rename state — names always reflect the live DOM. The page already names every node; layering a parallel naming map on top would drift the moment the user edits class names or swaps components. If a user wants a different label, the right place is the underlying class / id, not a separate panel-only override.
 
-**Persistence**: custom names + lock state survive panel reloads within the browser session via `chrome.storage.session`. Writes are debounced 200ms so bulk lock / unlock operations don't hammer storage. Names + locks are keyed by element id (assigned via `data-dm-*`); a fresh page load starts clean.
-
-Long names truncate with ellipsis. Hover the row to see the full name in the tooltip; the tooltip also notes when the layer is locked.
+Long names truncate with ellipsis. Hover the row to see the full name in the tooltip.
 
 ### Hover action cluster (right edge, hidden until row hover)
 
-Four icon buttons, in order:
+Two icon buttons, in order:
 
 | Icon | Action |
 |---|---|
-| `pencil` | Enter inline rename mode (same as double-clicking the name). |
-| `target` | Scroll the page so this layer is in view, **without** selecting it. Sends `SP_SCROLL_TO_ELEMENT` to the content script. |
-| `pin` | Toggle the lock state for this layer. The icon stays accent-coloured while locked. |
-| `eye` / `eye-off` | Toggle visibility (writes / removes a `display: none` override). Non-destructive — entry shows up in the Changes tab and is revertable. |
-
-When the row is locked, the drag handle is shown at 40% opacity with a *Locked — unlock to drag* tooltip and the cursor turns into `not-allowed`.
+| `crosshair` | Scroll the page so this layer is in view, **without** selecting it. Same icon as the Changes-tab "select element" button so the affordance reads consistently. Sends `SP_SCROLL_TO_ELEMENT` to the content script. |
+| `eye` / `eye-closed` | Toggle visibility. The icon swaps to `eye-closed` (Lucide) when the layer is hidden so the row reads at a glance. Three-state under the hood: drops the Design Mode override if we hid it; pushes `display: revert` if author CSS was hiding it (so the cascade falls back to the user-agent default and the element actually reappears); otherwise injects `display: none`. The change is recorded in the Changes tab and is revertable. |
 
 ---
 

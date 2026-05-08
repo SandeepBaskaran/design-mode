@@ -109,12 +109,11 @@ let layerSearch = '';
 // Phase 3: Persistent section collapse state
 const sectionStates: Record<string, boolean | undefined> = {};
 
-// Layers tab UI state — lock, rename, visibility filter, inline edit.
-const lockedLayerIds = new Set<string>();
-const layerNameOverrides = new Map<string, string>();
+// Layers tab UI state. The Layers tab intentionally mirrors the live DOM
+// — we don't carry parallel naming/lock state. Filtering is the only
+// user-side transform.
 type LayersFilter = 'all' | 'visible' | 'hidden' | 'modified';
 let layersFilter: LayersFilter = 'all';
-let renamingLayerId: string | null = null;
 
 // Phase 4: Changes tab UI state.
 const changesGroupCollapsed = new Set<string>();
@@ -258,41 +257,14 @@ chrome.storage?.local?.get?.([
   if (typeof result?.['dm-inspector-select-color'] === 'string') inspectorSelectColor = result['dm-inspector-select-color'];
   render();
 });
-// Layers tab — restore lock state + custom names from session storage so
-// they survive panel reloads within the browser session. Element ids are
-// stable per page (assigned via `data-dm-*`) so the keys round-trip
-// faithfully even across SPA re-renders.
-chrome.storage?.session?.get?.(['dm-layer-locks', 'dm-layer-names', 'dm-section-states'], (result: any) => {
-  if (Array.isArray(result?.['dm-layer-locks'])) {
-    for (const id of result['dm-layer-locks']) lockedLayerIds.add(String(id));
-  }
-  if (result?.['dm-layer-names'] && typeof result['dm-layer-names'] === 'object') {
-    for (const [id, name] of Object.entries(result['dm-layer-names'])) {
-      if (typeof name === 'string') layerNameOverrides.set(id, name);
-    }
-  }
-  // Section expand/collapse — restore the user's per-section preference so
-  // the panel opens at the same shape they last left it.
+// Section expand/collapse state — restore the user's per-section
+// preference so the panel opens at the same shape they last left it.
+chrome.storage?.session?.get?.(['dm-section-states'], (result: any) => {
   if (result?.['dm-section-states'] && typeof result['dm-section-states'] === 'object') {
     Object.assign(sectionStates, result['dm-section-states']);
   }
   render();
 });
-
-let _saveLayerStateTimer: number | null = null;
-function saveLayerState() {
-  // Coalesce rapid edits — typing in the rename input fires once per
-  // commit, but bulk lock/unlock writes 1 entry per layer. 200ms debounce
-  // keeps the storage write count sane.
-  if (_saveLayerStateTimer != null) clearTimeout(_saveLayerStateTimer);
-  _saveLayerStateTimer = (setTimeout(() => {
-    _saveLayerStateTimer = null;
-    chrome.storage?.session?.set?.({
-      'dm-layer-locks': Array.from(lockedLayerIds),
-      'dm-layer-names': Object.fromEntries(layerNameOverrides),
-    });
-  }, 200) as unknown) as number;
-}
 
 function parseNumeric(val: string): { num: number; unit: string } | null {
   const m = val.match(/^(-?[\d.]+)\s*(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|deg|s|ms)?$/);
@@ -986,8 +958,7 @@ function getVisibleLayers(): DomNode[] {
     const q = layerSearch.toLowerCase();
     const matchIds = new Set<string>();
     for (const n of domTree) {
-      // Apply rename override before matching so renamed layers are findable.
-      const name = layerNameOverrides.get(n.id) || n.displayName;
+      const name = n.componentName || n.displayName;
       if (name.toLowerCase().includes(q) || n.tagName.toLowerCase().includes(q)) {
         matchIds.add(n.id);
         // Auto-expand parents of matches
@@ -3525,9 +3496,7 @@ function renderLayersTab(): string {
     '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;border-bottom:1px solid var(--dm-separator);background:var(--dm-accent-bg);">' +
       '<span style="font-size:9px;color:var(--dm-accent);font-weight:600;align-self:center;margin-right:4px;">' + msCount + ' selected:</span>' +
       '<button data-dm-bulk-action="show-all" title="Make all visible" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('eye', 10) + ' Show</button>' +
-      '<button data-dm-bulk-action="hide-all" title="Hide all" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('eyeOff', 10) + ' Hide</button>' +
-      '<button data-dm-bulk-action="lock-all" title="Lock all" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('pin', 10) + ' Lock</button>' +
-      '<button data-dm-bulk-action="unlock-all" title="Unlock all" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">Unlock</button>' +
+      '<button data-dm-bulk-action="hide-all" title="Hide all" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('eyeClosed', 10) + ' Hide</button>' +
       '<button data-dm-bulk-action="duplicate-all" title="Duplicate all" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('copy', 10) + ' Duplicate</button>' +
       '<button data-dm-bulk-action="delete-all" title="Delete all" style="padding:3px 8px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:4px;color:var(--dm-danger);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('trash', 10) + ' Delete</button>' +
       '<button data-dm-bulk-action="clear-selection" title="Exit multi-select" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;margin-left:auto;">' + icon('x', 10) + ' Clear</button>' +
@@ -3552,12 +3521,11 @@ function renderLayersTab(): string {
     const isSel = n.id === selectedId;
     const isHov = n.id === hoveredLayerId;
     const isMulti = multiSet.has(n.id);
-    const isLocked = lockedLayerIds.has(n.id);
-    const isRenaming = renamingLayerId === n.id;
     const hasChanges = elementHasChanges(n.id);
-    const overrideName = layerNameOverrides.get(n.id);
-    // Display name precedence: user rename > component name > smart name.
-    const displayName = overrideName || n.componentName || n.displayName;
+    // Display name precedence: component name (from React fiber walk) > smart
+    // name. We don't carry user-supplied overrides — the live DOM is the
+    // source of truth here.
+    const displayName = n.componentName || n.displayName;
     const bg = isSel ? 'var(--dm-accent-bg)' : isMulti ? 'var(--dm-accent-bg)' : isHov ? 'var(--dm-bg-secondary)' : 'transparent';
 
     // Chevron for expand/collapse
@@ -3577,7 +3545,7 @@ function renderLayersTab(): string {
         : n.containerKind === 'pseudo'
           ? 'sparkles'
           : (TAG_ICON_MAP[n.tagName] || 'box');
-    const tagIcon = '<span style="color:' + (isSel ? 'var(--dm-accent)' : 'var(--dm-text-dim)') + ';display:flex;flex-shrink:0;">' + icon(tagIconName, 10) + '</span>';
+    const tagIcon = '<span style="color:' + (isSel ? 'var(--dm-accent)' : 'var(--dm-text-dim)') + ';display:flex;flex-shrink:0;">' + icon(tagIconName, 12) + '</span>';
 
     // Indentation guides
     let guides = '';
@@ -3585,17 +3553,16 @@ function renderLayersTab(): string {
       guides += '<span class="dm-indent-guide" style="left:' + (4 + (d - 1) * 16 + 7) + 'px;"></span>';
     }
 
-    // Drag handle — disabled if the layer is locked.
-    const dragHandle = isLocked
-      ? '<span class="dm-layer-drag" title="Locked — unlock to drag" style="color:var(--dm-text-dimmer);display:flex;flex-shrink:0;opacity:0.4;cursor:not-allowed;">' + icon('gripVertical', 12) + '</span>'
-      : '<span class="dm-layer-drag" style="color:var(--dm-text-dimmer);display:flex;cursor:grab;flex-shrink:0;">' + icon('gripVertical', 12) + '</span>';
+    const dragHandle = '<span class="dm-layer-drag" style="color:var(--dm-text-dimmer);display:flex;cursor:grab;flex-shrink:0;">' + icon('gripVertical', 12) + '</span>';
 
-    // Hover actions — visibility, scroll-into-view, lock toggle, rename.
+    // Hover actions — only the two that can't be done from the canvas:
+    // scroll the page to the layer, and toggle visibility. Renaming
+    // belongs to the live DOM (the page already names every node), so
+    // there's no rename here. Locking was removed too — Lock didn't
+    // align with the "Layers tab mirrors the live DOM" stance.
     const hoverActions = '<span class="dm-layer-hover-actions" style="display:flex;gap:2px;margin-left:auto;flex-shrink:0;">' +
-      '<button data-dm-rename-layer="' + n.id + '" title="Rename layer" aria-label="Rename" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;">' + icon('pencil', 11) + '</button>' +
-      '<button data-dm-scroll-to="' + n.id + '" title="Scroll page to this layer" aria-label="Scroll to layer" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;">' + icon('target', 11) + '</button>' +
-      '<button data-dm-toggle-lock="' + n.id + '" title="' + (isLocked ? 'Unlock' : 'Lock — prevents selection / drag') + '" aria-label="Toggle lock" style="background:none;border:none;color:' + (isLocked ? 'var(--dm-accent)' : 'var(--dm-text-muted)') + ';cursor:pointer;display:flex;padding:2px;">' + icon(isLocked ? 'pin' : 'pin', 11) + '</button>' +
-      '<button data-dm-toggle-vis="' + n.id + '" title="Toggle visibility" aria-label="Toggle visibility" style="background:none;border:none;color:' + (n.isVisible ? 'var(--dm-text-muted)' : 'var(--dm-accent)') + ';cursor:pointer;display:flex;padding:2px;">' + icon(n.isVisible ? 'eye' : 'eyeOff', 12) + '</button></span>';
+      '<button data-dm-scroll-to="' + n.id + '" title="Scroll page to this layer" aria-label="Scroll to layer" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;">' + icon('crosshair', 11) + '</button>' +
+      '<button data-dm-toggle-vis="' + n.id + '" title="' + (n.isVisible ? 'Hide layer' : 'Show layer') + '" aria-label="Toggle visibility" style="background:none;border:none;color:' + (n.isVisible ? 'var(--dm-text-muted)' : 'var(--dm-accent)') + ';cursor:pointer;display:flex;padding:2px;">' + icon(n.isVisible ? 'eye' : 'eyeClosed', 12) + '</button></span>';
 
     const tagColor = isSel ? 'var(--dm-accent)' : 'var(--dm-text-secondary)';
     const borderColor = isSel ? 'var(--dm-accent)' : (isMulti ? 'var(--dm-accent-border)' : 'transparent');
@@ -3613,10 +3580,6 @@ function renderLayersTab(): string {
     const commentCount = comments.filter(cc => cc.elementId === n.id).length;
     const commentChip = commentCount > 0
       ? '<span title="' + commentCount + ' comment' + (commentCount === 1 ? '' : 's') + ' on this layer" style="display:inline-flex;align-items:center;gap:2px;padding:1px 5px;border-radius:9999px;background:rgba(251,191,36,0.18);color:#92400e;font-size:9px;font-weight:600;flex-shrink:0;font-family:SF Mono,Monaco,monospace;">' + icon('messageSquare', 8) + ' ' + commentCount + '</span>'
-      : '';
-    // Lock badge — small lock icon when locked, even outside hover.
-    const lockBadge = isLocked
-      ? '<span title="Locked" style="color:var(--dm-accent);display:flex;flex-shrink:0;">' + icon('pin', 10) + '</span>'
       : '';
     // Container-kind badge — surfaces shadow / iframe / pseudo subtrees.
     const containerBadge = n.containerKind === 'shadow'
@@ -3641,13 +3604,10 @@ function renderLayersTab(): string {
       ? '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;opacity:0.7;">' + escapeAttr('<' + n.tagName + '>') + '</span>'
       : '';
 
-    // Name cell — either an inline rename input, or the static label.
-    const nameCell = isRenaming
-      ? '<input type="text" class="dm-input dm-layer-rename-input" data-dm-layer-rename-input="' + n.id + '" value="' + escapeAttr(overrideName || n.displayName) + '" autofocus style="font-size:11px;font-family:SF Mono,Monaco,monospace;padding:2px 4px;border:1px solid var(--dm-accent-border);border-radius:3px;background:var(--dm-bg);color:var(--dm-text);flex:1;min-width:0;"/>'
-      : '<span data-dm-layer-name="' + n.id + '" style="font-size:11px;color:' + tagColor + ';font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;' + (overrideName ? 'font-style:italic;' : '') + '">' + escapeAttr(displayName) + '</span>';
+    const nameCell = '<span style="font-size:11px;color:' + tagColor + ';font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">' + escapeAttr(displayName) + '</span>';
 
-    return '<div class="dm-layer-item" data-dm-layer="' + n.id + '"' + (isLocked ? '' : ' draggable="true"') + ' data-dm-layer-drag="' + n.id + '" style="display:flex;align-items:center;gap:3px;padding:3px 6px 3px ' + (4 + indent) + 'px;background:' + bg + ';cursor:' + (isLocked ? 'not-allowed' : 'pointer') + ';border-left:2px solid ' + borderColor + ';position:relative;min-height:30px;opacity:' + (!n.isVisible || dimmedByAncestor.has(n.id) ? '0.4' : '1') + ';" title="' + escapeAttr(displayName + (isLocked ? ' (locked)' : '')) + '">' +
-      guides + dragHandle + chevron + tagIcon + colorSwatch + multiBadge + lockBadge + containerBadge + changeDot + commentChip +
+    return '<div class="dm-layer-item" data-dm-layer="' + n.id + '" draggable="true" data-dm-layer-drag="' + n.id + '" style="display:flex;align-items:center;gap:3px;padding:3px 6px 3px ' + (4 + indent) + 'px;background:' + bg + ';cursor:pointer;border-left:2px solid ' + borderColor + ';position:relative;min-height:30px;opacity:' + (!n.isVisible || dimmedByAncestor.has(n.id) ? '0.4' : '1') + ';" title="' + escapeAttr(displayName) + '">' +
+      guides + dragHandle + chevron + tagIcon + colorSwatch + multiBadge + containerBadge + changeDot + commentChip +
       nameCell +
       tagSubtitle + zChip +
       hoverActions + '</div>';
@@ -6038,33 +5998,6 @@ function setupDelegation() {
       return;
     }
 
-    // Layer lock toggle — locked layers ignore selection / drag.
-    const lockBtn = target.closest<HTMLElement>('[data-dm-toggle-lock]');
-    if (lockBtn) {
-      e.stopPropagation();
-      const id = lockBtn.dataset.dmToggleLock!;
-      if (lockedLayerIds.has(id)) lockedLayerIds.delete(id);
-      else lockedLayerIds.add(id);
-      saveLayerState();
-      render();
-      return;
-    }
-
-    // Inline rename — pencil button enters edit mode.
-    const renameBtn = target.closest<HTMLElement>('[data-dm-rename-layer]');
-    if (renameBtn) {
-      e.stopPropagation();
-      renamingLayerId = renameBtn.dataset.dmRenameLayer!;
-      render();
-      // Focus the input after render. morphdom preserves focus on inputs
-      // already focused, but the input is brand-new so we explicitly seed.
-      setTimeout(() => {
-        const inp = root.querySelector<HTMLInputElement>('[data-dm-layer-rename-input="' + renamingLayerId + '"]');
-        if (inp) { inp.focus(); inp.select(); }
-      }, 0);
-      return;
-    }
-
     // Scroll-into-view — page-side scroll to bring the element into the viewport.
     const scrollToBtn = target.closest<HTMLElement>('[data-dm-scroll-to]');
     if (scrollToBtn) {
@@ -6091,8 +6024,6 @@ function setupDelegation() {
       const ids = [...multiSelectIds];
       if (action === 'show-all') ids.forEach(id => { if (!domTree.find(n => n.id === id)?.isVisible) toggleLayerVisibility(id); });
       else if (action === 'hide-all') ids.forEach(id => { if (domTree.find(n => n.id === id)?.isVisible) toggleLayerVisibility(id); });
-      else if (action === 'lock-all') { ids.forEach(id => lockedLayerIds.add(id)); saveLayerState(); render(); }
-      else if (action === 'unlock-all') { ids.forEach(id => lockedLayerIds.delete(id)); saveLayerState(); render(); }
       else if (action === 'duplicate-all') ids.forEach(id => duplicateLayer(id));
       else if (action === 'delete-all') ids.forEach(id => deleteLayer(id));
       else if (action === 'clear-selection') { multiSelectIds.length = 0; multiSelectActive = false; render(); }
@@ -6107,11 +6038,11 @@ function setupDelegation() {
       return;
     }
 
-    // Layer selection — locked layers are ignored.
+    // Layer selection — clicking the row selects that element. Skip when
+    // the click landed on one of the row's interactive sub-buttons.
     const layerEl = target.closest<HTMLElement>('[data-dm-layer]');
-    if (layerEl && !target.closest('[data-dm-toggle-collapse]') && !target.closest('[data-dm-toggle-vis]') && !target.closest('[data-dm-toggle-lock]') && !target.closest('[data-dm-rename-layer]') && !target.closest('[data-dm-scroll-to]') && !target.closest('[data-dm-delete-layer]') && !target.closest('[data-dm-layer-rename-input]')) {
+    if (layerEl && !target.closest('[data-dm-toggle-collapse]') && !target.closest('[data-dm-toggle-vis]') && !target.closest('[data-dm-scroll-to]') && !target.closest('[data-dm-delete-layer]')) {
       const id = layerEl.dataset.dmLayer!;
-      if (lockedLayerIds.has(id)) return;
       selectElement(id);
       return;
     }
@@ -8246,42 +8177,9 @@ function setupDelegation() {
     }
   });
 
-  // ─── Double-click on a layer name → enter inline rename mode ───────
-  root.addEventListener('dblclick', (e) => {
-    const nameEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-layer-name]');
-    if (!nameEl) return;
-    e.preventDefault();
-    e.stopPropagation();
-    renamingLayerId = nameEl.dataset.dmLayerName!;
-    render();
-    setTimeout(() => {
-      const inp = root.querySelector<HTMLInputElement>('[data-dm-layer-rename-input="' + renamingLayerId + '"]');
-      if (inp) { inp.focus(); inp.select(); }
-    }, 0);
-  });
-
-  // Commit rename on blur — empty value clears the override (back to the
-  // tracker's smart name). Cancel via Escape (handled in keydown below).
-  root.addEventListener('focusout', (e) => {
-    const inp = (e.target as HTMLElement).closest<HTMLInputElement>('[data-dm-layer-rename-input]');
-    if (!inp) return;
-    const id = inp.dataset.dmLayerRenameInput!;
-    const value = inp.value.trim();
-    if (value) layerNameOverrides.set(id, value);
-    else layerNameOverrides.delete(id);
-    saveLayerState();
-    if (renamingLayerId === id) { renamingLayerId = null; render(); }
-  });
-
   // Keydown handler
   root.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
-
-    // Inline-rename input — Enter commits (focusout), Escape cancels.
-    if (target.matches('[data-dm-layer-rename-input]')) {
-      if (e.key === 'Enter') { e.preventDefault(); (target as HTMLInputElement).blur(); return; }
-      if (e.key === 'Escape') { e.preventDefault(); renamingLayerId = null; render(); return; }
-    }
 
     // Escape dismisses confirmation overlays (Clear All / Delete comment).
     if ((clearAllConfirming || deletingCommentId) && e.key === 'Escape') {
