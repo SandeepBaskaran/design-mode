@@ -15,11 +15,17 @@ export function cutElement(elementId: string): boolean {
   clipboard = { html: el.outerHTML, tagName: el.tagName, styles: el.getAttribute('style') || '' };
   const selector = generateSelector(el);
   // Capture the element's location BEFORE removal so Clear All / Import
-  // can put it back at exactly the same spot. We pass origin (not
-  // destination) — semantically this is where the element WAS.
+  // can put it back at exactly the same spot. parentId (data-dm-id of
+  // parent) survives DOM reorders better than parentSelector — replay
+  // prefers it.
   const parent = el.parentElement;
   const origin = parent
-    ? { parentSelector: generateSelector(parent), index: Array.from(parent.children).indexOf(el) }
+    ? {
+        parentSelector: generateSelector(parent),
+        index: Array.from(parent.children).indexOf(el),
+        parentId: parent !== document.body && parent !== document.documentElement
+          ? getOrAssignId(parent as HTMLElement) : undefined,
+      }
     : undefined;
   recordDomChange(
     elementId, selector, 'delete', el.tagName.toLowerCase(),
@@ -60,7 +66,12 @@ export function pasteElement(targetId: string, position: 'before' | 'after' | 'i
   // with the same id.
   const parent = el.parentElement;
   const destination = parent
-    ? { parentSelector: generateSelector(parent), index: Array.from(parent.children).indexOf(el) }
+    ? {
+        parentSelector: generateSelector(parent),
+        index: Array.from(parent.children).indexOf(el),
+        parentId: parent !== document.body && parent !== document.documentElement
+          ? getOrAssignId(parent as HTMLElement) : undefined,
+      }
     : undefined;
   recordDomChange(
     id, generateSelector(el), 'insert', el.tagName.toLowerCase(),
@@ -84,7 +95,12 @@ export function duplicateElement(elementId: string): string | null {
   el.parentElement?.insertBefore(clone, el.nextSibling);
   const parent = clone.parentElement;
   const destination = parent
-    ? { parentSelector: generateSelector(parent), index: Array.from(parent.children).indexOf(clone) }
+    ? {
+        parentSelector: generateSelector(parent),
+        index: Array.from(parent.children).indexOf(clone),
+        parentId: parent !== document.body && parent !== document.documentElement
+          ? getOrAssignId(parent as HTMLElement) : undefined,
+      }
     : undefined;
   recordDomChange(
     id, generateSelector(clone), 'duplicate', clone.tagName.toLowerCase(),
@@ -103,7 +119,12 @@ export function deleteElement(elementId: string): boolean {
   // can put it back at exactly the same spot.
   const parent = el.parentElement;
   const origin = parent
-    ? { parentSelector: generateSelector(parent), index: Array.from(parent.children).indexOf(el) }
+    ? {
+        parentSelector: generateSelector(parent),
+        index: Array.from(parent.children).indexOf(el),
+        parentId: parent !== document.body && parent !== document.documentElement
+          ? getOrAssignId(parent as HTMLElement) : undefined,
+      }
     : undefined;
   recordDomChange(elementId, selector, 'delete', tagName, html, undefined, origin);
   el.remove();
@@ -114,12 +135,14 @@ export function moveElement(elementId: string, direction: 'up' | 'down'): boolea
   const el = getElementById(elementId);
   if (!el || isDmElement(el) || !el.parentElement) return false;
   const parent = el.parentElement;
+  const parentId = parent !== document.body && parent !== document.documentElement
+    ? getOrAssignId(parent as HTMLElement) : undefined;
   // Capture origin BEFORE the move so the Changes tab can show
   // `from <selector> > position N` and Clear All can put the element back.
-  // Mirrors the REORDER_LAYER handler in content/index.ts.
   const origin = {
     parentSelector: generateSelector(parent),
     index: Array.from(parent.children).indexOf(el),
+    parentId,
   };
   if (direction === 'up' && el.previousElementSibling) {
     parent.insertBefore(el, el.previousElementSibling);
@@ -131,6 +154,7 @@ export function moveElement(elementId: string, direction: 'up' | 'down'): boolea
   const destination = {
     parentSelector: generateSelector(parent),
     index: Array.from(parent.children).indexOf(el),
+    parentId,
   };
   recordDomChange(
     elementId, generateSelector(el), 'move', el.tagName.toLowerCase(),

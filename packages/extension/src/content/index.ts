@@ -163,12 +163,16 @@ function revertAllPageMutations() {
       temp.innerHTML = ch.outerHTML!;
       const restored = temp.firstElementChild as HTMLElement | null;
       if (!restored) continue;
-      // Restore at origin if we recorded it (cutElement / deleteElement
-      // capture origin since this commit). Fall back to a body append
-      // for entries from older sessions that didn't capture origin —
-      // the element will be visible somewhere instead of vanishing.
+      // Restore at origin if we recorded it. Prefer parentId (data-dm-id
+      // of the parent at record time) over parentSelector — selectors
+      // with nth-of-type are fragile across reorders. Fall back to body
+      // so the element doesn't vanish entirely on legacy entries.
       if (ch.origin) {
-        const parent = document.querySelector(ch.origin.parentSelector) as HTMLElement | null;
+        let parent: HTMLElement | null = null;
+        if ((ch.origin as any).parentId) {
+          parent = document.querySelector(`[data-dm-id="${(ch.origin as any).parentId}"]`) as HTMLElement | null;
+        }
+        if (!parent) parent = document.querySelector(ch.origin.parentSelector) as HTMLElement | null;
         if (parent) {
           const idx = Math.min(ch.origin.index, parent.children.length);
           const before = parent.children[idx];
@@ -190,7 +194,15 @@ function revertAllPageMutations() {
       const source = getElementById(ch.elementId) ||
         (ch.selector ? document.querySelector(ch.selector) : null) as HTMLElement | null;
       if (!source || !document.contains(source)) continue;
-      const originParent = ch.origin && document.querySelector(ch.origin.parentSelector) as HTMLElement | null;
+      // Prefer parentId for the same reason as the replay path —
+      // selectors drift, data-dm-id is stable.
+      let originParent: HTMLElement | null = null;
+      if (ch.origin && (ch.origin as any).parentId) {
+        originParent = document.querySelector(`[data-dm-id="${(ch.origin as any).parentId}"]`) as HTMLElement | null;
+      }
+      if (!originParent && ch.origin) {
+        originParent = document.querySelector(ch.origin.parentSelector) as HTMLElement | null;
+      }
       if (originParent && source !== originParent) {
         const idx = Math.min(ch.origin!.index, originParent.children.length);
         const before = originParent.children[idx];
@@ -1470,12 +1482,17 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       const source = getElementById(msg.sourceId);
       const target = getElementById(msg.targetId);
       if (source && target && source !== target && target.parentElement) {
-        // Capture origin BEFORE the move so Clear All can put the element back.
-        let origin: { parentSelector: string; index: number } | undefined;
+        // Capture origin BEFORE the move. parentId (data-dm-id of the
+        // parent at record time) is the most reliable lookup hook on
+        // replay; selectors with nth-of-type are fragile across reorders.
+        const dmAttrParent = (p: HTMLElement | null) =>
+          p && p !== document.body && p !== document.documentElement ? getOrAssignId(p) : undefined;
+        let origin: { parentSelector: string; index: number; parentId?: string } | undefined;
         if (source.parentElement) {
           origin = {
             parentSelector: generateSelector(source.parentElement),
             index: Array.from(source.parentElement.children).indexOf(source),
+            parentId: dmAttrParent(source.parentElement),
           };
         }
         const parent = target.parentElement;
@@ -1488,7 +1505,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         recordDomChange(
           msg.sourceId, sourceSelector, 'move', source.tagName.toLowerCase(),
           undefined,
-          { parentSelector, index },
+          { parentSelector, index, parentId: dmAttrParent(parent) },
           origin,
         );
       }

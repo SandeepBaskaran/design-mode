@@ -39,14 +39,17 @@ export interface DomChange {
   id: string; elementId: string; selector: string;
   action: 'delete' | 'duplicate' | 'move' | 'insert';
   tagName: string; outerHTML?: string;
-  // For 'move' actions: where the element ended up. Lets us replay the move
-  // after a page reload AND tell the agent exactly which container the
-  // element belongs in now.
-  destination?: { parentSelector: string; index: number };
-  // Where the element was BEFORE the (first) move. Captured once and never
-  // updated on subsequent moves so Clear All can put it back regardless of
-  // how many times it was dragged.
-  origin?: { parentSelector: string; index: number };
+  // Where the element ended up. Lets us replay the move / re-create the
+  // duplicate at the right position. `parentId` is the data-dm-id of the
+  // parent at record time; preferred on replay because the user-friendly
+  // `parentSelector` can resolve to the wrong element if the page has
+  // been mutated since (selectors with `nth-of-type` are especially
+  // fragile across reorders).
+  destination?: { parentSelector: string; index: number; parentId?: string };
+  // Where the element was BEFORE the (first) move / delete. Captured once
+  // and never updated on subsequent moves so Clear All can put it back
+  // regardless of how many times it was dragged.
+  origin?: { parentSelector: string; index: number; parentId?: string };
   timestamp: number;
 }
 
@@ -212,6 +215,24 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
   //
   // Older exports without outerHTML / destination on duplicate / insert
   // skip cleanly (no reconstruction possible) — same behaviour as before.
+  // Helper: resolve the parent of a destination/origin record. Prefers
+  // parentId (data-dm-id stamped at record time) — that's stable across
+  // reorders. Falls back to parentSelector if the id is missing or has
+  // since been stripped from the DOM. Final fallback is body so the
+  // element doesn't vanish entirely.
+  const resolveParent = (loc: { parentSelector: string; index: number; parentId?: string } | undefined): HTMLElement | null => {
+    if (!loc) return null;
+    if (loc.parentId) {
+      const byId = document.querySelector(`[${DATA_ATTR}="${loc.parentId}"]`) as HTMLElement | null;
+      if (byId) return byId;
+    }
+    try {
+      const bySel = document.querySelector(loc.parentSelector) as HTMLElement | null;
+      if (bySel) return bySel;
+    } catch {}
+    return null;
+  };
+
   for (const c of saved.domChanges) {
     try {
       if (c.action === 'duplicate' || c.action === 'insert') {
@@ -228,7 +249,7 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
         // subsequent move with the same elementId can locate it via
         // [data-dm-id].
         fragment.setAttribute(DATA_ATTR, c.elementId);
-        const parent = document.querySelector(c.destination.parentSelector) as HTMLElement | null;
+        const parent = resolveParent(c.destination);
         if (!parent) continue;
         const siblings = Array.from(parent.children);
         const idx = Math.min(c.destination.index, siblings.length);
@@ -236,12 +257,13 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
         if (before) parent.insertBefore(fragment, before);
         else parent.appendChild(fragment);
       } else if (c.action === 'move' && c.destination) {
-        // Prefer id-based lookup — selectors recorded at edit time may
-        // describe positions that no longer match after a reconstruction.
+        // Prefer id-based lookup for both source and parent — selectors
+        // recorded at edit time may describe positions that no longer
+        // match after a reconstruction.
         const source =
           (document.querySelector(`[${DATA_ATTR}="${c.elementId}"]`) as HTMLElement | null) ||
           (document.querySelector(c.selector) as HTMLElement | null);
-        const parent = document.querySelector(c.destination.parentSelector) as HTMLElement | null;
+        const parent = resolveParent(c.destination);
         if (source && parent) {
           const siblings = Array.from(parent.children);
           const idx = Math.min(c.destination.index, siblings.length);
