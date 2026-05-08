@@ -233,7 +233,7 @@ let mcpAutoConnect = true;
 type McpMode = 'local' | 'cloud' | 'self-hosted';
 let mcpMode: McpMode = 'local';
 let mcpCloudToken = '';
-let mcpCloudUrl = 'https://mcp.designmode.app';
+let mcpCloudUrl = 'https://www.mcp.designmode.app';
 let mcpCloudTenantId = '';
 let mcpCloudRegistering = false;
 let inspectorHoverColor = '#4F9EFF';
@@ -1627,8 +1627,8 @@ function flipButtons(s: Record<string, string>): string {
 function rotateQuickButtons(s: Record<string, string>): string {
   void s;
   return iconButtonRow([
-    { icon: 'rotateCcwSquare', attr: 'data-dm-rotate-step="-90"', title: 'Rotate 90° counter-clockwise' },
-    { icon: 'rotateCwSquare', attr: 'data-dm-rotate-step="90"', title: 'Rotate 90° clockwise' },
+    { icon: 'rotateCcw', attr: 'data-dm-rotate-step="-90"', title: 'Rotate 90° counter-clockwise' },
+    { icon: 'rotateCw', attr: 'data-dm-rotate-step="90"', title: 'Rotate 90° clockwise' },
   ]);
 }
 
@@ -1650,7 +1650,7 @@ function layoutModeRow(s: Record<string, string>): string {
   const isVStack = isFlex && (flexDir === 'column' || flexDir === 'column-reverse');
   const isGrid = display === 'grid' || display === 'inline-grid';
   return segmentedRow([
-    { icon: 'blocks', attr: 'data-dm-layout-mode="free"', active: isFree, title: 'Freeform (no layout)' },
+    { icon: 'squareDashed', attr: 'data-dm-layout-mode="free"', active: isFree, title: 'Freeform (no layout)' },
     { icon: 'columns3', attr: 'data-dm-layout-mode="hstack"', active: isHStack, title: 'Horizontal stack' },
     { icon: 'rows3', attr: 'data-dm-layout-mode="vstack"', active: isVStack, title: 'Vertical stack' },
     { icon: 'layoutGrid', attr: 'data-dm-layout-mode="grid"', active: isGrid, title: 'Grid' },
@@ -3351,17 +3351,27 @@ function spacingBox(s: Record<string, string>, displayInfo: any): string {
 /* ── Layout render helpers ── */
 function renderMcpStatus(): string {
   let dotStyle = '', tooltipText = '', textColor = '';
+  const isCloud = mcpMode === 'cloud' || mcpMode === 'self-hosted';
+  const offlineHint = isCloud
+    ? (mcpCloudToken
+        ? 'Cloud relay unreachable. Click to retry. Check Settings → MCP for the server URL + token.'
+        : 'No cloud token yet. Open Settings → MCP and click Connect to Cloud.')
+    : 'MCP not running. Click to retry the connection.\n\nStart the server with `npm start --prefix packages/mcp-local`.';
   if (mcpState === 'offline') {
     dotStyle = 'width:7px;height:7px;border-radius:50%;background:var(--dm-text-muted);flex-shrink:0;';
-    tooltipText = 'MCP not running. Click to retry the connection.\n\nStart the server with `npm start --prefix packages/mcp-local`.';
+    tooltipText = offlineHint;
     textColor = 'var(--dm-text-muted)';
   } else if (mcpState === 'running') {
     dotStyle = 'width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:dm-pulse 2s ease-in-out infinite;';
-    tooltipText = 'MCP server is running, but no agent is connected yet. Click to refresh.';
+    tooltipText = isCloud
+      ? 'Cloud relay connected. Side panel must stay open for agent calls to land.'
+      : 'MCP server is running, but no agent is connected yet. Click to refresh.';
     textColor = '#22c55e';
   } else {
     dotStyle = 'width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.4);flex-shrink:0;';
-    tooltipText = 'MCP connected. Click to refresh status.';
+    tooltipText = isCloud
+      ? 'Cloud relay connected and serving an agent.'
+      : 'MCP connected. Click to refresh status.';
     textColor = '#22c55e';
   }
   // The whole chip is now clickable — clicking it calls refreshMcpStatus()
@@ -5647,7 +5657,10 @@ function setupDelegation() {
               else if (mcpState === 'running') showCaptureToast('success', 'MCP running — waiting for agent');
               else showCaptureToast('error', 'MCP offline');
             } else if (mcpState === 'offline') {
-              showCaptureToast('error', 'MCP still offline. Run `npm start --prefix packages/mcp-local`.');
+              const cloudMode = mcpMode === 'cloud' || mcpMode === 'self-hosted';
+              showCaptureToast('error', cloudMode
+                ? (mcpCloudToken ? 'Cloud relay still unreachable.' : 'No cloud token. Open Settings → MCP.')
+                : 'MCP still offline. Run `npm start --prefix packages/mcp-local`.');
             }
           });
           break;

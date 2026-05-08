@@ -160,6 +160,24 @@ function dispatchCloudMessage(msg: any) {
         sendRelayResponse(msg.requestId, report);
       })();
       return;
+    case 'CLOUD_APPLY_CHANGES': {
+      // Same shape as the local APPLY_CHANGES but the cloud expects an
+      // ack for the agent's tool call. Apply via the managed-stylesheet
+      // path so changes show up in the Changes tab and survive reloads.
+      const items: Array<{ elementId: string; styles: Record<string, string> }> =
+        Array.isArray(msg.payload?.changes) ? msg.payload.changes : [];
+      let totalProps = 0, totalEls = 0;
+      for (const ch of items) {
+        if (!ch?.elementId || !ch.styles) continue;
+        for (const [prop, val] of Object.entries(ch.styles)) {
+          applyStyleChange(ch.elementId, prop, val as string);
+          totalProps++;
+        }
+        totalEls++;
+      }
+      sendRelayResponse(msg.requestId, { ok: true, totalProps, totalEls });
+      return;
+    }
     case 'CLOUD_CLEAR_CHANGES':
       clearAllChanges();
       sendRelayResponse(msg.requestId, { ok: true });
@@ -225,8 +243,12 @@ async function openConfiguredTransport() {
     const mode = (conf['dm-mcp-mode'] as 'local' | 'cloud' | 'self-hosted' | undefined) || 'local';
     if (mode === 'local') { connectToServer({ mode: 'local' }); return; }
     const cloudToken = conf['dm-mcp-cloud-token'];
-    const cloudUrl = conf['dm-mcp-cloud-url'] || (mode === 'cloud' ? 'https://mcp.designmode.app' : '');
-    if (!cloudToken || !cloudUrl) { connectToServer({ mode: 'local' }); return; }
+    const cloudUrl = conf['dm-mcp-cloud-url'] || (mode === 'cloud' ? 'https://www.mcp.designmode.app' : '');
+    // No token yet (user picked Cloud mode but hasn't registered) — leave
+    // every transport closed instead of dialing localhost. The MCP status
+    // dot stays "offline" and the panel's tooltip points the user to
+    // Settings → MCP → Connect to Cloud.
+    if (!cloudToken || !cloudUrl) { disconnectFromServer(); return; }
     connectToServer({ mode, cloudToken, cloudUrl });
   } catch {
     connectToServer({ mode: 'local' });
