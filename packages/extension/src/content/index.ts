@@ -87,6 +87,102 @@ function getFullState() {
   };
 }
 
+// Walks every tracked change and reverts it on the live DOM, returning
+// the page to its pre-Design-Mode state — short of an actual reload.
+// Both Clear All and Import call this before clearing arrays / applying
+// a fresh payload, so a fresh import always starts from a clean slate.
+//
+// Importantly: this only mutates the page. It does NOT touch the
+// in-memory change arrays or the override stylesheet — the caller is
+// expected to follow up with `clearAllChanges()` (which empties both).
+function revertAllPageMutations() {
+  // 1. Text changes: restore each tracked element's earliest oldText so
+  //    multiple overlapping edits collapse to the original.
+  const firstTextOld = new Map<string, { elementId: string; oldText: string; isHtml?: boolean }>();
+  for (const ch of getTextChanges()) {
+    if (!firstTextOld.has(ch.elementId)) firstTextOld.set(ch.elementId, ch);
+  }
+  for (const [, ch] of firstTextOld) {
+    const el = getElementById(ch.elementId);
+    if (!el) continue;
+    if (ch.isHtml) el.innerHTML = ch.oldText;
+    else el.textContent = ch.oldText;
+  }
+
+  // 2. DOM changes pass A: remove duplicates / inserts (we created
+  //    them, we kill them); restore deletes from outerHTML if they're
+  //    no longer in the DOM.
+  const moves = getDomChanges().filter(ch => ch.action === 'move' && ch.origin);
+  for (const ch of getDomChanges()) {
+    try {
+      if (ch.action === 'duplicate' || ch.action === 'insert') {
+        const el = getElementById(ch.elementId) || document.querySelector(ch.selector);
+        if (el) el.remove();
+      } else if (ch.action === 'delete' && ch.outerHTML) {
+        if (document.querySelector(ch.selector)) continue;
+        const temp = document.createElement('div');
+        temp.innerHTML = ch.outerHTML;
+        const restored = temp.firstElementChild as HTMLElement | null;
+        if (restored) (document.body || document.documentElement).appendChild(restored);
+      }
+    } catch {}
+  }
+
+  // 3. DOM changes pass B: belt-and-braces. Force-remove any element
+  //    bearing a data-dm-id that maps to a duplicate / insert change.
+  //    Catches stragglers when getElementById returned a stale node from
+  //    elementMap or the saved selector drifted (the duplicate moved
+  //    after creation, so its position-based selector no longer matches
+  //    the current location). Without this sweep, the bug surfaces as
+  //    "Clear All didn't actually clear the duplicate."
+  for (const ch of getDomChanges()) {
+    if (ch.action !== 'duplicate' && ch.action !== 'insert') continue;
+    document.querySelectorAll(`[data-dm-id="${ch.elementId}"]`).forEach(el => el.remove());
+  }
+
+  // 4. DOM changes pass C: relocate moved elements back to their origin.
+  //    Skip when the source isn't currently attached — the duplicate-
+  //    revert pass above might have just removed it, and getElementById
+  //    would otherwise return the detached node from elementMap.
+  for (const ch of moves) {
+    try {
+      const source = getElementById(ch.elementId) ||
+        (ch.selector ? document.querySelector(ch.selector) : null) as HTMLElement | null;
+      if (!source || !document.contains(source)) continue;
+      const originParent = ch.origin && document.querySelector(ch.origin.parentSelector) as HTMLElement | null;
+      if (originParent && source !== originParent) {
+        const idx = Math.min(ch.origin!.index, originParent.children.length);
+        const before = originParent.children[idx];
+        if (before && before !== source) originParent.insertBefore(source, before);
+        else if (!before) originParent.appendChild(source);
+      }
+    } catch {}
+  }
+
+  // 5. Strip any stray inline styles older code paths might have written
+  //    on tracked elements. Only touches elements that participated in
+  //    some change — page-author inline styles are left alone.
+  const touchedIds = new Set<string>();
+  for (const c of getStyleChanges()) touchedIds.add(c.elementId);
+  for (const c of getTextChanges()) touchedIds.add(c.elementId);
+  for (const c of getDomChanges()) touchedIds.add(c.elementId);
+  for (const id of touchedIds) {
+    const el = getElementById(id);
+    if (!el) continue;
+    if (el.style.display === 'none' || el.style.display === '') el.style.removeProperty('display');
+    el.style.removeProperty('animation');
+    el.style.removeProperty('animation-name');
+  }
+
+  // 6. Clean leftover preview markers from any in-flight View Original.
+  document.querySelectorAll('[data-dm-preview-restored="1"]').forEach(el => el.remove());
+  document.querySelectorAll<HTMLElement>('[data-dm-preview-hidden="1"]').forEach(el => {
+    el.style.display = el.dataset.dmPreviewPrevDisplay || '';
+    delete el.dataset.dmPreviewPrevDisplay;
+    el.removeAttribute('data-dm-preview-hidden');
+  });
+}
+
 async function getChangesPayload() {
   const pageComments = await getPageComments();
   // Decorate style changes with the number of elements currently matching
@@ -872,87 +968,13 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       setOverridesEnabled(true);
       if ((window as any).__dmPreviewSaved) delete (window as any).__dmPreviewSaved;
 
-      // 1. Revert text changes (textContent isn't stylesheet-able). For
-      // HTML edits, restore innerHTML so bold/italic/lists are preserved.
-      const firstTextOld = new Map<string, { elementId: string; oldText: string; isHtml?: boolean }>();
-      for (const ch of getTextChanges()) {
-        if (!firstTextOld.has(ch.elementId)) firstTextOld.set(ch.elementId, ch);
-      }
-      for (const [, ch] of firstTextOld) {
-        const el = getElementById(ch.elementId);
-        if (!el) continue;
-        if (ch.isHtml) el.innerHTML = ch.oldText;
-        else el.textContent = ch.oldText;
-      }
+      // Page DOM revert — text / DOM mutations / inline-style sweep /
+      // preview markers — runs synchronously so the user sees the
+      // state-flip immediately on click.
+      revertAllPageMutations();
 
-      // 2. Revert DOM changes:
-      //    - duplicate / insert → remove the added node
-      //    - delete             → re-create from outerHTML if missing
-      //    - move               → put the element back at its origin parent + index
-      const moves = getDomChanges().filter(ch => ch.action === 'move' && ch.origin);
-      for (const ch of getDomChanges()) {
-        try {
-          if (ch.action === 'duplicate' || ch.action === 'insert') {
-            const el = getElementById(ch.elementId) || document.querySelector(ch.selector);
-            if (el) el.remove();
-          } else if (ch.action === 'delete' && ch.outerHTML) {
-            if (document.querySelector(ch.selector)) continue;
-            const temp = document.createElement('div');
-            temp.innerHTML = ch.outerHTML;
-            const restored = temp.firstElementChild as HTMLElement | null;
-            if (restored) (document.body || document.documentElement).appendChild(restored);
-          }
-        } catch {}
-      }
-      // Process moves AFTER duplicates are gone (so origin index lines up).
-      // Origin parent might also have been moved — try our best.
-      for (const ch of moves) {
-        try {
-          const source = getElementById(ch.elementId) ||
-            (ch.selector ? document.querySelector(ch.selector) : null) as HTMLElement | null;
-          // If the source isn't currently attached, the duplicate-revert
-          // step above already removed it. getElementById would return
-          // the detached node from elementMap and we'd accidentally
-          // re-insert the duplicate at its origin — leaving the user
-          // looking at "Clear All didn't clear anything." Skip it.
-          if (!source || !document.contains(source)) continue;
-          const originParent = ch.origin && document.querySelector(ch.origin.parentSelector) as HTMLElement | null;
-          if (originParent && source !== originParent) {
-            const idx = Math.min(ch.origin!.index, originParent.children.length);
-            const before = originParent.children[idx];
-            if (before && before !== source) originParent.insertBefore(source, before);
-            else if (!before) originParent.appendChild(source);
-          }
-        } catch {}
-      }
-
-      // 3. Clean leftover preview markers from any in-flight View Original mode.
-      document.querySelectorAll('[data-dm-preview-restored="1"]').forEach(el => el.remove());
-      document.querySelectorAll<HTMLElement>('[data-dm-preview-hidden="1"]').forEach(el => {
-        el.style.display = el.dataset.dmPreviewPrevDisplay || '';
-        delete el.dataset.dmPreviewPrevDisplay;
-        el.removeAttribute('data-dm-preview-hidden');
-      });
-
-      // 4. Defensive sweep — strip stray inline styles on tracked elements
-      //    that older code paths might have written (visibility:none, etc.).
-      //    Only touches elements that participated in some change, so we
-      //    don't reset things the page itself set inline.
-      const touchedIds = new Set<string>();
-      for (const c of getStyleChanges()) touchedIds.add(c.elementId);
-      for (const c of getTextChanges()) touchedIds.add(c.elementId);
-      for (const c of getDomChanges()) touchedIds.add(c.elementId);
-      for (const id of touchedIds) {
-        const el = getElementById(id);
-        if (!el) continue;
-        // Only clear styles we know we may have leaked. Don't touch arbitrary
-        // page-author inline styles.
-        if (el.style.display === 'none' || el.style.display === '') el.style.removeProperty('display');
-        el.style.removeProperty('animation');
-        el.style.removeProperty('animation-name');
-      }
-
-      // 5. Comments + arrays + override stylesheet.
+      // Comments live in chrome.storage.local (separate from the change
+      // arrays), so they need their own async cleanup.
       getPageComments().then(async (pageComments) => {
         for (const c of pageComments) await deleteComment(c.id);
         clearAllChanges();
@@ -1045,9 +1067,13 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       sendResponse({ error: 'No element selected' }); break;
     }
     case 'IMPORT_CHANGES': {
-      // Replace every change on the page with the imported payload. Clears
-      // first so we don't double-apply, then replays via the same path
-      // session-restore uses. Comments are scoped to the current pageUrl.
+      // Replace every change on the page with the imported payload. Revert
+      // current-session DOM mutations FIRST so a fresh import always
+      // starts from a clean slate — otherwise residue from prior edits
+      // (duplicates, moves, hidden elements) would silently layer with
+      // whatever the imported JSON adds. Then clear in-memory arrays and
+      // replay via the same path session-restore uses. Comments are
+      // scoped to the current pageUrl.
       (async () => {
         try {
           const payload = msg.payload || {};
@@ -1055,6 +1081,12 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           const textChanges = Array.isArray(payload.textChanges) ? payload.textChanges : [];
           const domChanges = Array.isArray(payload.domChanges) ? payload.domChanges : [];
           const comments = Array.isArray(payload.comments) ? payload.comments : [];
+          revertAllPageMutations();
+          // Drop any current-page comments before we replace them with
+          // the imported set; otherwise pins from a prior session would
+          // remain on the page and mix with the imported pins.
+          const existingComments = await getPageComments();
+          for (const c of existingComments) await deleteComment(c.id);
           clearAllChanges();
           applyChangesPayload({ styleChanges, textChanges, domChanges });
           await replacePageComments(comments);
