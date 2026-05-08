@@ -131,7 +131,14 @@ function revertAllPageMutations() {
   for (const ch of getDomChanges()) {
     if (ch.action !== 'duplicate' && ch.action !== 'insert') continue;
     document.querySelectorAll(`[data-dm-id="${ch.elementId}"]`).forEach(el => el.remove());
+    // Class-based fallback — duplicates / pastes carry a `dm-clone-<id>`
+    // marker class that survives even when the page (e.g. a React app)
+    // strips the data-dm-id attribute on its next render.
+    document.querySelectorAll(`.dm-clone-${ch.elementId}`).forEach(el => el.remove());
   }
+  // Final cleanup: any orphan `.dm-clone` element on the page whose
+  // owning change is gone too. Belt-and-braces × 2.
+  document.querySelectorAll('.dm-clone').forEach(el => el.remove());
 
   // 4. DOM changes pass C: restore deletes in REVERSE chronological
   //    order. Reverse so that when the user deletes B then C from

@@ -47,6 +47,10 @@ export function pasteElement(targetId: string, position: 'before' | 'after' | 'i
   el.removeAttribute('data-dm-id');
   el.querySelectorAll('[data-dm-id]').forEach(c => c.removeAttribute('data-dm-id'));
   const id = getOrAssignId(el);
+  // Marker class same as duplicateElement — paste is structurally a
+  // duplicate of the clipboard contents, so the same identity story
+  // applies (visible "(copy)" label + Clear All fallback hook).
+  el.classList.add('dm-clone', `dm-clone-${id}`);
   if (position === 'before') target.parentElement?.insertBefore(el, target);
   else if (position === 'inside') target.appendChild(el);
   else target.parentElement?.insertBefore(el, target.nextSibling);
@@ -72,9 +76,12 @@ export function duplicateElement(elementId: string): string | null {
   clone.removeAttribute('data-dm-id');
   clone.querySelectorAll('[data-dm-id]').forEach(c => c.removeAttribute('data-dm-id'));
   const id = getOrAssignId(clone);
+  // Marker class so the duplicate is visibly distinct from its source —
+  // the Layers tab uses this to suffix "(copy)" on the row, and the
+  // class is a stable hook for Clear All to find the duplicate even if
+  // the page strips data-dm-id (React re-renders, etc.).
+  clone.classList.add('dm-clone', `dm-clone-${id}`);
   el.parentElement?.insertBefore(clone, el.nextSibling);
-  // Same capture as paste — outerHTML + destination are needed to replay
-  // the duplicate on a fresh page (cleared session, imported JSON, etc.).
   const parent = clone.parentElement;
   const destination = parent
     ? { parentSelector: generateSelector(parent), index: Array.from(parent.children).indexOf(clone) }

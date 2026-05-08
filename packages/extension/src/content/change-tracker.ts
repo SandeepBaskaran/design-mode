@@ -73,12 +73,15 @@ export function clearAllChanges() {
 
 // ── Managed override stylesheet ─────────────────────────────────────
 // Edits land as rules in a single <style id="dm-applied-styles">, keyed
-// by the change's saved CSS selector. Rules apply via natural selector
-// matching, so SPA re-renders that recreate the element with the same
-// shape transparently keep our edits applied — no data-dm-id stamping
-// or MutationObserver required.
+// by the change's elementId. Each rule injects with the precise
+// `[data-dm-id="<id>"]` selector so it targets EXACTLY that element —
+// not lookalikes, not duplicates, not siblings that happen to match the
+// user-friendly selector. The user-friendly selector is still saved on
+// the StyleChange (for display + the "apply to N matching" zap), but
+// the live CSS rule is element-scoped to prevent edit-bleed between
+// the original and a duplicate.
 
-const appliedRules = new Map<string, Map<string, string>>(); // selector -> prop -> value
+const appliedRules = new Map<string, Map<string, string>>(); // elementId -> prop -> value
 const injectedKeyframes = new Set<string>();
 let appliedStyleEl: HTMLStyleElement | null = null;
 
@@ -104,29 +107,29 @@ function rebuildStyleSheet() {
     const kf = BUILTIN_KEYFRAMES[name];
     if (kf) blocks.push(kf);
   }
-  for (const [selector, props] of appliedRules) {
+  for (const [elementId, props] of appliedRules) {
     if (props.size === 0) continue;
     const decls: string[] = [];
     for (const [prop, val] of props) decls.push(`  ${kebab(prop)}: ${val};`);
-    blocks.push(`${selector} {\n${decls.join('\n')}\n}`);
+    blocks.push(`[data-dm-id="${elementId}"] {\n${decls.join('\n')}\n}`);
   }
   el.textContent = blocks.join('\n\n');
 }
 
-function upsertRule(selector: string, property: string, value: string) {
-  if (!appliedRules.has(selector)) appliedRules.set(selector, new Map());
-  appliedRules.get(selector)!.set(property, value);
+function upsertRule(elementId: string, property: string, value: string) {
+  if (!appliedRules.has(elementId)) appliedRules.set(elementId, new Map());
+  appliedRules.get(elementId)!.set(property, value);
   if (property === 'animationName' || property === 'animation-name') {
     if (BUILTIN_KEYFRAMES[value]) injectedKeyframes.add(value);
   }
   rebuildStyleSheet();
 }
 
-function removeRule(selector: string, property: string) {
-  const props = appliedRules.get(selector);
+function removeRule(elementId: string, property: string) {
+  const props = appliedRules.get(elementId);
   if (!props) return;
   props.delete(property);
-  if (props.size === 0) appliedRules.delete(selector);
+  if (props.size === 0) appliedRules.delete(elementId);
   rebuildStyleSheet();
 }
 
@@ -189,14 +192,10 @@ export function loadSession(): Promise<{ styleChanges: StyleChange[]; textChange
 // memory arrays so the side panel reflects them. Used by both
 // replaySession (storage-backed) and the IMPORT_CHANGES message handler.
 export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }) {
-  for (const c of saved.styleChanges) {
-    if (!appliedRules.has(c.selector)) appliedRules.set(c.selector, new Map());
-    appliedRules.get(c.selector)!.set(c.property, c.newValue);
-    if ((c.property === 'animationName' || c.property === 'animation-name') && BUILTIN_KEYFRAMES[c.newValue]) {
-      injectedKeyframes.add(c.newValue);
-    }
-  }
-  rebuildStyleSheet();
+  // DOM mutations replay BEFORE styles so re-created duplicates have
+  // their data-dm-id stamped before the rules below try to bind to it.
+  // (Style rules are now `[data-dm-id="<id>"] { ... }` — no element
+  // bearing that id, no rule effect.) This block is moved below.
 
   for (const c of saved.textChanges) {
     try {
@@ -265,6 +264,27 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
     } catch {}
   }
 
+  // Now that duplicate / insert reconstructions are in place (each
+  // bearing its recorded data-dm-id), inject the style rules. They're
+  // keyed by elementId, so we ALSO stamp data-dm-id back onto any
+  // element that the change record's user-friendly selector resolves
+  // to but doesn't yet carry the attribute. Without this stamp, a
+  // post-reload page (which renders its own DOM with no design-mode
+  // attributes) wouldn't have anything for `[data-dm-id="X"]` to bind.
+  for (const c of saved.styleChanges) {
+    let target = document.querySelector(`[${DATA_ATTR}="${c.elementId}"]`) as HTMLElement | null;
+    if (!target && c.selector) {
+      try { target = document.querySelector(c.selector) as HTMLElement | null; } catch {}
+      if (target) target.setAttribute(DATA_ATTR, c.elementId);
+    }
+    if (!appliedRules.has(c.elementId)) appliedRules.set(c.elementId, new Map());
+    appliedRules.get(c.elementId)!.set(c.property, c.newValue);
+    if ((c.property === 'animationName' || c.property === 'animation-name') && BUILTIN_KEYFRAMES[c.newValue]) {
+      injectedKeyframes.add(c.newValue);
+    }
+  }
+  rebuildStyleSheet();
+
   styleChanges.length = 0; styleChanges.push(...saved.styleChanges);
   textChanges.length = 0; textChanges.push(...saved.textChanges);
   domChanges.length = 0; domChanges.push(...saved.domChanges);
@@ -295,7 +315,7 @@ export function removeStyleChange(id: string): void {
   const idx = styleChanges.findIndex(c => c.id === id);
   if (idx !== -1) {
     const ch = styleChanges[idx];
-    removeRule(ch.selector, ch.property);
+    removeRule(ch.elementId, ch.property);
     styleChanges.splice(idx, 1);
     persistSession();
   }
@@ -331,15 +351,15 @@ export function applyStyleChange(
     const existing = styleChanges[existingIdx];
     if (value === existing.oldValue || value === '') {
       // Value returned to original (or cleared) — drop the rule and the change entry
-      removeRule(existing.selector, property);
+      removeRule(elementId, property);
       styleChanges.splice(existingIdx, 1);
       persistSession();
       if (refreshPanel) refreshPanel();
       return null;
     }
-    // Selector may have shifted between edits (e.g., classes changed); keep the
-    // existing rule's selector to avoid orphaning the previous rule line.
-    upsertRule(existing.selector, property, value);
+    // Rules are keyed by elementId so the live CSS scope-by-data-dm-id
+    // doesn't move when the element's user-friendly selector drifts.
+    upsertRule(elementId, property, value);
     const merged: StyleChange = { ...existing, newValue: value, timestamp: Date.now() };
     if (meta) {
       merged.groupId = meta.groupId;
@@ -354,7 +374,7 @@ export function applyStyleChange(
   }
 
   const oldValue = window.getComputedStyle(el).getPropertyValue(k);
-  upsertRule(selector, property, value);
+  upsertRule(elementId, property, value);
   // We used to drop rules whose computed value didn't change (invalid CSS,
   // var() that resolves to the same color, etc.) but that swallowed valid
   // user intent — record the change and let the user confirm visually.

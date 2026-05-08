@@ -44,9 +44,17 @@ export function buildDomTree(root: HTMLElement = document.body): DomNode[] {
     let name = node.tagName.toLowerCase();
     if (node.id) name += `#${node.id}`;
     else if (node.className && typeof node.className === 'string') {
-      const c = node.className.trim().split(/\s+/)[0];
+      // Prefer the first non-marker class for the layer label so duplicates
+      // still show their original class (e.g. `.card-1`) instead of the
+      // synthetic `.dm-clone-dm-3`. The "(copy)" suffix below makes the
+      // duplicate identity explicit.
+      const cls = node.className.trim().split(/\s+/).filter(c => !c.startsWith('dm-clone'));
+      const c = cls[0];
       if (c) name += `.${c}`;
     }
+    // Suffix duplicates / pastes so the Layers tab makes the
+    // original-vs-copy distinction obvious at a glance.
+    if (node.classList?.contains('dm-clone')) name += ' (copy)';
     const cs = window.getComputedStyle(node);
 
     // Enrichment 1 — z-index when non-default. The renderer surfaces this
