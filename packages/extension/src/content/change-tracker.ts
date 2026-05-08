@@ -4,7 +4,7 @@
 // ============================================================
 
 import { getElementById, generateSelector, getComputedStyleSubset, reserveIdsAtLeast } from './helpers';
-import { DEFAULT_WS_PORT } from '../shared';
+import { DEFAULT_WS_PORT, DATA_ATTR } from '../shared';
 import { BUILTIN_KEYFRAMES } from './keyframes-library';
 import { captureElementScreenshot, captureViewportScreenshot } from './screenshots';
 
@@ -207,15 +207,49 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
     } catch {}
   }
 
-  // Delete + move are replay-safe; duplicate/insert need outerHTML which
-  // isn't tracked across reloads, so those only persist within a session.
+  // Replay DOM mutations in chronological order. duplicate / insert
+  // come first in any user's edit sequence (you can't move what you
+  // haven't created yet) so iterating saved order naturally satisfies
+  // the precondition that a `move` finds its source already in the DOM.
+  //
+  // Each action's reconstruction:
+  //   * duplicate / insert  → re-create from outerHTML at destination,
+  //                            stamp the recorded data-dm-id back on it
+  //                            so subsequent move entries can find it.
+  //   * move                → relocate by id-or-selector to destination.
+  //   * delete              → remove the element by selector.
+  //
+  // Older exports without outerHTML / destination on duplicate / insert
+  // skip cleanly (no reconstruction possible) — same behaviour as before.
   for (const c of saved.domChanges) {
     try {
-      if (c.action === 'delete') {
-        const el = document.querySelector(c.selector);
-        if (el) el.remove();
+      if (c.action === 'duplicate' || c.action === 'insert') {
+        // Skip if it's already in the DOM (mid-session replay where
+        // we never lost the page) or if we have no outerHTML to work
+        // with (legacy entry from before this fix).
+        const existing = document.querySelector(`[${DATA_ATTR}="${c.elementId}"]`);
+        if (existing || !c.outerHTML || !c.destination) continue;
+        const tmpl = document.createElement('template');
+        tmpl.innerHTML = c.outerHTML.trim();
+        const fragment = tmpl.content.firstElementChild as HTMLElement | null;
+        if (!fragment) continue;
+        // Stamp the recorded id onto the reconstructed element so a
+        // subsequent move with the same elementId can locate it via
+        // [data-dm-id].
+        fragment.setAttribute(DATA_ATTR, c.elementId);
+        const parent = document.querySelector(c.destination.parentSelector) as HTMLElement | null;
+        if (!parent) continue;
+        const siblings = Array.from(parent.children);
+        const idx = Math.min(c.destination.index, siblings.length);
+        const before = siblings[idx];
+        if (before) parent.insertBefore(fragment, before);
+        else parent.appendChild(fragment);
       } else if (c.action === 'move' && c.destination) {
-        const source = document.querySelector(c.selector) as HTMLElement | null;
+        // Prefer id-based lookup — selectors recorded at edit time may
+        // describe positions that no longer match after a reconstruction.
+        const source =
+          (document.querySelector(`[${DATA_ATTR}="${c.elementId}"]`) as HTMLElement | null) ||
+          (document.querySelector(c.selector) as HTMLElement | null);
         const parent = document.querySelector(c.destination.parentSelector) as HTMLElement | null;
         if (source && parent) {
           const siblings = Array.from(parent.children);
@@ -224,6 +258,9 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
           if (before && before !== source) parent.insertBefore(source, before);
           else if (!before) parent.appendChild(source);
         }
+      } else if (c.action === 'delete') {
+        const el = document.querySelector(c.selector);
+        if (el) el.remove();
       }
     } catch {}
   }

@@ -910,8 +910,14 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         try {
           const source = getElementById(ch.elementId) ||
             (ch.selector ? document.querySelector(ch.selector) : null) as HTMLElement | null;
+          // If the source isn't currently attached, the duplicate-revert
+          // step above already removed it. getElementById would return
+          // the detached node from elementMap and we'd accidentally
+          // re-insert the duplicate at its origin — leaving the user
+          // looking at "Clear All didn't clear anything." Skip it.
+          if (!source || !document.contains(source)) continue;
           const originParent = ch.origin && document.querySelector(ch.origin.parentSelector) as HTMLElement | null;
-          if (source && originParent && source !== originParent) {
+          if (originParent && source !== originParent) {
             const idx = Math.min(ch.origin!.index, originParent.children.length);
             const before = originParent.children[idx];
             if (before && before !== source) originParent.insertBefore(source, before);

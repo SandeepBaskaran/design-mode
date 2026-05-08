@@ -40,7 +40,18 @@ export function pasteElement(targetId: string, position: 'before' | 'after' | 'i
   if (position === 'before') target.parentElement?.insertBefore(el, target);
   else if (position === 'inside') target.appendChild(el);
   else target.parentElement?.insertBefore(el, target.nextSibling);
-  recordDomChange(id, generateSelector(el), 'insert', el.tagName.toLowerCase());
+  // Capture outerHTML + destination so import/replay can reconstruct
+  // this element on a fresh page. outerHTML is captured AFTER insertion so
+  // the data-dm-id stamp is preserved and the duplicate is re-attachable
+  // with the same id.
+  const parent = el.parentElement;
+  const destination = parent
+    ? { parentSelector: generateSelector(parent), index: Array.from(parent.children).indexOf(el) }
+    : undefined;
+  recordDomChange(
+    id, generateSelector(el), 'insert', el.tagName.toLowerCase(),
+    el.outerHTML, destination,
+  );
   return id;
 }
 
@@ -52,7 +63,16 @@ export function duplicateElement(elementId: string): string | null {
   clone.querySelectorAll('[data-dm-id]').forEach(c => c.removeAttribute('data-dm-id'));
   const id = getOrAssignId(clone);
   el.parentElement?.insertBefore(clone, el.nextSibling);
-  recordDomChange(id, generateSelector(clone), 'duplicate', clone.tagName.toLowerCase());
+  // Same capture as paste — outerHTML + destination are needed to replay
+  // the duplicate on a fresh page (cleared session, imported JSON, etc.).
+  const parent = clone.parentElement;
+  const destination = parent
+    ? { parentSelector: generateSelector(parent), index: Array.from(parent.children).indexOf(clone) }
+    : undefined;
+  recordDomChange(
+    id, generateSelector(clone), 'duplicate', clone.tagName.toLowerCase(),
+    clone.outerHTML, destination,
+  );
   return id;
 }
 
