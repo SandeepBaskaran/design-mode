@@ -14,7 +14,17 @@ export function cutElement(elementId: string): boolean {
   if (!el || isDmElement(el)) return false;
   clipboard = { html: el.outerHTML, tagName: el.tagName, styles: el.getAttribute('style') || '' };
   const selector = generateSelector(el);
-  recordDomChange(elementId, selector, 'delete', el.tagName.toLowerCase(), el.outerHTML);
+  // Capture the element's location BEFORE removal so Clear All / Import
+  // can put it back at exactly the same spot. We pass origin (not
+  // destination) — semantically this is where the element WAS.
+  const parent = el.parentElement;
+  const origin = parent
+    ? { parentSelector: generateSelector(parent), index: Array.from(parent.children).indexOf(el) }
+    : undefined;
+  recordDomChange(
+    elementId, selector, 'delete', el.tagName.toLowerCase(),
+    el.outerHTML, undefined, origin,
+  );
   el.remove();
   return true;
 }
@@ -82,7 +92,13 @@ export function deleteElement(elementId: string): boolean {
   const selector = generateSelector(el);
   const tagName = el.tagName.toLowerCase();
   const html = el.outerHTML;
-  recordDomChange(elementId, selector, 'delete', tagName, html);
+  // Capture the element's location BEFORE removal so Clear All / Import
+  // can put it back at exactly the same spot.
+  const parent = el.parentElement;
+  const origin = parent
+    ? { parentSelector: generateSelector(parent), index: Array.from(parent.children).indexOf(el) }
+    : undefined;
+  recordDomChange(elementId, selector, 'delete', tagName, html, undefined, origin);
   el.remove();
   return true;
 }

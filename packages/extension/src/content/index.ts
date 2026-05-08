@@ -110,20 +110,13 @@ function revertAllPageMutations() {
   }
 
   // 2. DOM changes pass A: remove duplicates / inserts (we created
-  //    them, we kill them); restore deletes from outerHTML if they're
-  //    no longer in the DOM.
+  //    them, we kill them).
   const moves = getDomChanges().filter(ch => ch.action === 'move' && ch.origin);
   for (const ch of getDomChanges()) {
     try {
       if (ch.action === 'duplicate' || ch.action === 'insert') {
         const el = getElementById(ch.elementId) || document.querySelector(ch.selector);
         if (el) el.remove();
-      } else if (ch.action === 'delete' && ch.outerHTML) {
-        if (document.querySelector(ch.selector)) continue;
-        const temp = document.createElement('div');
-        temp.innerHTML = ch.outerHTML;
-        const restored = temp.firstElementChild as HTMLElement | null;
-        if (restored) (document.body || document.documentElement).appendChild(restored);
       }
     } catch {}
   }
@@ -140,7 +133,48 @@ function revertAllPageMutations() {
     document.querySelectorAll(`[data-dm-id="${ch.elementId}"]`).forEach(el => el.remove());
   }
 
-  // 4. DOM changes pass C: relocate moved elements back to their origin.
+  // 4. DOM changes pass C: restore deletes in REVERSE chronological
+  //    order. Reverse so that when the user deletes B then C from
+  //    [A, B, C, D], the indices recorded at delete-time (B: 1, C: 1
+  //    after B is gone) un-stack correctly: restoring C first puts
+  //    [A, C, D], then restoring B puts [A, B, C, D].
+  //
+  //    Detection of "still in DOM" uses data-dm-id rather than the
+  //    saved position-based selector. The old code checked the
+  //    selector — but `body > div:nth-of-type(2)` matches WHATEVER
+  //    sits at position 2, including a sibling that slid into the
+  //    deleted element's place. The check then skipped the restore
+  //    and the user saw "Clear All did nothing." data-dm-id is
+  //    unique-per-element, so it actually answers the question.
+  const deletes = getDomChanges().filter(ch => ch.action === 'delete' && ch.outerHTML);
+  for (let i = deletes.length - 1; i >= 0; i--) {
+    const ch = deletes[i];
+    try {
+      const stillThere = document.querySelector(`[data-dm-id="${ch.elementId}"]`);
+      if (stillThere) continue;
+      const temp = document.createElement('div');
+      temp.innerHTML = ch.outerHTML!;
+      const restored = temp.firstElementChild as HTMLElement | null;
+      if (!restored) continue;
+      // Restore at origin if we recorded it (cutElement / deleteElement
+      // capture origin since this commit). Fall back to a body append
+      // for entries from older sessions that didn't capture origin —
+      // the element will be visible somewhere instead of vanishing.
+      if (ch.origin) {
+        const parent = document.querySelector(ch.origin.parentSelector) as HTMLElement | null;
+        if (parent) {
+          const idx = Math.min(ch.origin.index, parent.children.length);
+          const before = parent.children[idx];
+          if (before) parent.insertBefore(restored, before);
+          else parent.appendChild(restored);
+          continue;
+        }
+      }
+      (document.body || document.documentElement).appendChild(restored);
+    } catch {}
+  }
+
+  // 5. DOM changes pass D: relocate moved elements back to their origin.
   //    Skip when the source isn't currently attached — the duplicate-
   //    revert pass above might have just removed it, and getElementById
   //    would otherwise return the detached node from elementMap.
@@ -159,7 +193,7 @@ function revertAllPageMutations() {
     } catch {}
   }
 
-  // 5. Strip any stray inline styles older code paths might have written
+  // 6. Strip any stray inline styles older code paths might have written
   //    on tracked elements. Only touches elements that participated in
   //    some change — page-author inline styles are left alone.
   const touchedIds = new Set<string>();
@@ -174,7 +208,7 @@ function revertAllPageMutations() {
     el.style.removeProperty('animation-name');
   }
 
-  // 6. Clean leftover preview markers from any in-flight View Original.
+  // 7. Clean leftover preview markers from any in-flight View Original.
   document.querySelectorAll('[data-dm-preview-restored="1"]').forEach(el => el.remove());
   document.querySelectorAll<HTMLElement>('[data-dm-preview-hidden="1"]').forEach(el => {
     el.style.display = el.dataset.dmPreviewPrevDisplay || '';
