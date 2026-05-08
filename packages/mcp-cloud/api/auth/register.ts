@@ -8,6 +8,7 @@
 
 import { mintToken, storeToken } from '../../lib/auth.js';
 import { logEvent } from '../../lib/log.js';
+import { corsHeaders, preflight, withCors } from '../../lib/cors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -25,17 +26,18 @@ export async function POST(req: Request): Promise<Response> {
     const streamUrl = `${proto}://${host}/api/extension/stream`;
     const inboxUrl = `${proto}://${host}/api/extension/inbox`;
     logEvent('auth.register', { tenantId, latencyMs: Date.now() - started, status: 200 });
-    return Response.json({ token, tenantId, mcpUrl, streamUrl, inboxUrl });
+    return withCors(Response.json({ token, tenantId, mcpUrl, streamUrl, inboxUrl }));
   } catch (err: any) {
     logEvent('auth.register', { latencyMs: Date.now() - started, status: 500, error: err?.code || 'unknown' });
     return new Response(JSON.stringify({ error: 'register failed' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() },
     });
   }
 }
 
-// Reject every other method so a misconfigured client gets a clear hint.
+export async function OPTIONS() { return preflight(); }
+
 export async function GET() {
-  return new Response('Method Not Allowed', { status: 405, headers: { 'Allow': 'POST' } });
+  return new Response('Method Not Allowed', { status: 405, headers: { 'Allow': 'POST', ...corsHeaders() } });
 }

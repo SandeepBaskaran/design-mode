@@ -44,6 +44,9 @@ function startPanelHeartbeat() {
   if (panelHeartbeatTimer) return;
   panelHeartbeatTimer = setInterval(async () => {
     if (!on) return;
+    // Bail when the extension has been reloaded / disabled — chrome.runtime
+    // is null in orphaned content scripts.
+    if (!chrome.runtime?.id) { disable(); return; }
     try {
       const r: { open?: boolean } | undefined = await new Promise((resolve) => {
         try { chrome.runtime.sendMessage({ type: 'IS_PANEL_OPEN' }, (resp) => resolve(resp)); }
@@ -103,6 +106,11 @@ async function getChangesPayload() {
 }
 
 function notifyPanel(type: string, payload?: any) {
+  // chrome.runtime.id goes undefined the moment the extension is reloaded
+  // / disabled / removed while a content script is still alive on a page.
+  // Calling sendMessage at that point throws "Extension context
+  // invalidated". Guard so the orphan content script just no-ops.
+  if (!chrome.runtime?.id) return;
   try {
     chrome.runtime.sendMessage({ type, ...payload });
   } catch {}

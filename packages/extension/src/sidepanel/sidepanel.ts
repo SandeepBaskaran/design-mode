@@ -3327,7 +3327,7 @@ function spacingBox(s: Record<string, string>, displayInfo: any): string {
   const h = displayInfo?.rect?.height ? Math.round(displayInfo.rect.height) : 0;
 
   const fld = (prop: string, val: string, ariaLabel: string) =>
-    '<input data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="px" value="' + escapeAttr(val) + '" aria-label="' + ariaLabel + '" style="width:30px;height:18px;background:transparent;border:none;color:var(--dm-text-secondary);font-family:inherit;font-size:10px;text-align:center;outline:none;padding:0;border-radius:3px;" onfocus="this.style.background=\'var(--dm-input-bg)\';this.select()" onblur="this.style.background=\'transparent\'"/>';
+    '<input data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="px" data-dm-pad-field="1" value="' + escapeAttr(val) + '" aria-label="' + ariaLabel + '" style="width:30px;height:18px;background:transparent;border:none;color:var(--dm-text-secondary);font-family:inherit;font-size:10px;text-align:center;outline:none;padding:0;border-radius:3px;"/>';
 
   return '<div style="position:relative;background:var(--dm-bg-secondary);border:1px dashed var(--dm-separator-strong);border-radius:10px;padding:28px 32px;margin:6px 0 4px;">' +
     // Margin labels (centered on outer box edges)
@@ -5460,8 +5460,12 @@ function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: stri
 
   let body = '';
   if (mcpMode === 'local') {
-    body = '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">WebSocket Port</span><input type="number" class="dm-input" data-dm-setting="wsPort" value="' + escapeAttr(String(mcpPort)) + '" style="width:80px;text-align:right;"/></div>' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Auto-connect</span><input type="checkbox" data-dm-setting="autoConnect"' + (mcpAutoConnect ? ' checked' : '') + ' style="accent-color:var(--dm-accent);"/></div>' +
+    // Stable id on each input so morphdom keys the swap when the mode
+    // flips. Without these ids, morphdom would diff the wsPort number
+    // input against the cloud-mode url text input at the same position
+    // and Chrome would reject value="https://…" as non-numeric.
+    body = '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">WebSocket Port</span><input id="dm-mcp-ws-port" type="number" class="dm-input" data-dm-setting="wsPort" value="' + escapeAttr(String(mcpPort)) + '" style="width:80px;text-align:right;"/></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Auto-connect</span><input id="dm-mcp-auto-connect" type="checkbox" data-dm-setting="autoConnect"' + (mcpAutoConnect ? ' checked' : '') + ' style="accent-color:var(--dm-accent);"/></div>' +
       '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-top:4px;line-height:1.4;">Port and auto-connect are stored locally. Run <code style="font-family:SF Mono,monospace;">npm start</code> in <code style="font-family:SF Mono,monospace;">packages/mcp-local</code> to bring up the bridge.</div>';
   } else {
     // Cloud + self-hosted share the same UI; only the URL field is
@@ -5471,7 +5475,7 @@ function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: stri
     const mcpEndpoint = (mcpCloudUrl || '').replace(/\/$/, '') + '/mcp';
 
     const urlField = isSelf
-      ? '<div style="display:flex;flex-direction:column;gap:4px;"><span style="' + lS + '">Server URL</span><input type="text" class="dm-input" data-dm-setting="cloudUrl" value="' + escapeAttr(mcpCloudUrl) + '" placeholder="https://your-deploy.vercel.app" style="font-size:10px;"/></div>'
+      ? '<div style="display:flex;flex-direction:column;gap:4px;"><span style="' + lS + '">Server URL</span><input id="dm-mcp-cloud-url" type="text" class="dm-input" data-dm-setting="cloudUrl" value="' + escapeAttr(mcpCloudUrl) + '" placeholder="https://your-deploy.vercel.app" style="font-size:10px;"/></div>'
       : '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Server</span><span style="font-size:10px;color:var(--dm-text-secondary);font-family:SF Mono,monospace;">' + escapeAttr(mcpCloudUrl) + '</span></div>';
 
     if (!hasToken) {
@@ -5500,8 +5504,11 @@ function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: stri
     }
   }
 
+  // The mode-keyed wrapper id forces morphdom to swap the whole branch
+  // on a mode change, instead of trying to diff a number input against
+  // a text input across the swap.
   return '<div style="' + sS + '"><div style="' + sT + '">MCP Server</div>' + modeRow +
-    '<div style="display:flex;flex-direction:column;gap:6px;">' + body + '</div></div>';
+    '<div id="dm-mcp-mode-' + mcpMode + '" style="display:flex;flex-direction:column;gap:6px;">' + body + '</div></div>';
 }
 
 function maskToken(t: string): string {
@@ -5608,6 +5615,24 @@ function render() {
 
 /* ── Phase 1: Event Delegation (bound once, never re-bound) ── */
 function setupDelegation() {
+  // Padding-pad inputs and the like — focus highlights the cell, blur
+  // restores transparency, and on focus we select-all so a single keystroke
+  // overwrites the value. Used to live as inline `onfocus="this.select()"`
+  // attributes but MV3 CSP blocks inline handlers, so it's delegated here.
+  root.addEventListener('focusin', (e) => {
+    const t = e.target as HTMLElement;
+    if (t.matches?.('[data-dm-pad-field]') && t instanceof HTMLInputElement) {
+      t.style.background = 'var(--dm-input-bg)';
+      t.select();
+    }
+  });
+  root.addEventListener('focusout', (e) => {
+    const t = e.target as HTMLElement;
+    if (t.matches?.('[data-dm-pad-field]') && t instanceof HTMLInputElement) {
+      t.style.background = 'transparent';
+    }
+  });
+
   // Click handler — async because the eyedropper awaits Chrome's
   // EyeDropper.open() promise.
   root.addEventListener('click', async (e) => {

@@ -514,6 +514,14 @@ async function runCloudStream() {
   let backoff = 1000;
   sseAbort = new AbortController();
   while (sseAbort && !sseAbort.signal.aborted && cloudToken && cloudBaseUrl) {
+    // The extension may have been reloaded / disabled while the SSE was
+    // open. The `chrome.runtime.id` check is the cheapest way to notice
+    // an orphan content script — we'd otherwise loop forever calling
+    // fetch and logging warnings.
+    if (typeof chrome !== 'undefined' && !chrome.runtime?.id) {
+      sseAbort?.abort();
+      return;
+    }
     try {
       const resp = await fetch(`${cloudBaseUrl}/api/extension/stream`, {
         method: 'GET',
@@ -521,7 +529,6 @@ async function runCloudStream() {
         signal: sseAbort.signal,
       });
       if (!resp.ok || !resp.body) {
-        // Auth-failed or other terminal — bail; user must re-register.
         if (resp.status === 401) { console.warn('[Design Mode] cloud stream auth failed'); return; }
         throw new Error(`stream status ${resp.status}`);
       }
@@ -542,7 +549,9 @@ async function runCloudStream() {
       }
     } catch (err) {
       if (sseAbort?.signal.aborted) return;
-      console.warn('[Design Mode] cloud stream lost, retrying:', err);
+      // Quieted from warn → debug. Reconnect storms during a redeploy or
+      // a brief network blip aren't worth crowding the console for.
+      console.debug('[Design Mode] cloud stream lost, retrying:', err);
     }
     await new Promise(r => setTimeout(r, backoff));
     backoff = Math.min(backoff * 2, 15000);

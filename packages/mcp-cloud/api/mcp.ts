@@ -15,6 +15,7 @@ import { authenticate } from '../lib/auth.js';
 import { awaitResponse, publishInbound } from '../lib/store.js';
 import { logEvent } from '../lib/log.js';
 import { consumeQuota } from '../lib/quota.js';
+import { corsHeaders, preflight, withCors } from '../lib/cors.js';
 import { randomBytes } from 'node:crypto';
 
 export const config = { runtime: 'nodejs' };
@@ -157,12 +158,12 @@ async function handleToolCall(tenantId: string, name: string, args: any): Promis
 async function handle(req: Request): Promise<Response> {
   let row;
   try { row = await authenticate(req); }
-  catch (resp) { return resp as Response; }
+  catch (resp) { return withCors(resp as Response); }
 
   let body: any;
   try { body = await req.json(); }
   catch {
-    return Response.json(rpcError(null, -32700, 'Parse error'), { status: 400 });
+    return withCors(Response.json(rpcError(null, -32700, 'Parse error'), { status: 400 }));
   }
 
   const id = body?.id ?? null;
@@ -213,22 +214,21 @@ async function handle(req: Request): Promise<Response> {
     case 'notifications/initialized':
       // No reply expected for notifications.
       logEvent('mcp.notification', { tenantId: row.tenantId, type: method });
-      return new Response(null, { status: 204 });
+      return new Response(null, { status: 204, headers: corsHeaders() });
     default:
       response = rpcError(id, -32601, `Method not found: ${method}`);
   }
 
   logEvent('mcp.call', { tenantId: row.tenantId, type: method, latencyMs: Date.now() - started, status: 200 });
-  return Response.json(response);
+  return withCors(Response.json(response));
 }
 
 export const POST = handle;
 
-// MCP Streamable HTTP also allows GET for SSE streaming responses; for our
-// synchronous toolset the POST path is sufficient. Reject GET cleanly so
-// misconfigured clients see a clear hint.
+export async function OPTIONS() { return preflight(); }
+
 export async function GET() {
   return new Response('Method Not Allowed — use POST for JSON-RPC.', {
-    status: 405, headers: { 'Allow': 'POST' },
+    status: 405, headers: { 'Allow': 'POST', ...corsHeaders() },
   });
 }

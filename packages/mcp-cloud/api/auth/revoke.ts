@@ -7,6 +7,7 @@
 
 import { bearerFromHeaders, revokeToken, verifyToken } from '../../lib/auth.js';
 import { logEvent } from '../../lib/log.js';
+import { corsHeaders, preflight, withCors } from '../../lib/cors.js';
 
 export const config = { runtime: 'nodejs' };
 
@@ -18,14 +19,16 @@ export async function POST(req: Request): Promise<Response> {
     logEvent('auth.revoke', { latencyMs: Date.now() - started, status: 401 });
     return new Response(JSON.stringify({ error: 'invalid or missing token' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() },
     });
   }
   const ok = await revokeToken(token);
   logEvent('auth.revoke', { tenantId: row.tenantId, latencyMs: Date.now() - started, status: ok ? 200 : 404 });
-  return Response.json({ ok });
+  return withCors(Response.json({ ok }));
 }
 
+export async function OPTIONS() { return preflight(); }
+
 export async function GET() {
-  return new Response('Method Not Allowed', { status: 405, headers: { 'Allow': 'POST' } });
+  return new Response('Method Not Allowed', { status: 405, headers: { 'Allow': 'POST', ...corsHeaders() } });
 }

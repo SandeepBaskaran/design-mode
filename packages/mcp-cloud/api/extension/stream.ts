@@ -10,13 +10,14 @@
 import { authenticate } from '../../lib/auth.js';
 import { readInbound } from '../../lib/store.js';
 import { logEvent } from '../../lib/log.js';
+import { corsHeaders, preflight, withCors } from '../../lib/cors.js';
 
 export const config = { runtime: 'nodejs' };
 
 export async function GET(req: Request): Promise<Response> {
   let row;
   try { row = await authenticate(req); }
-  catch (resp) { return resp as Response; }
+  catch (resp) { return withCors(resp as Response); }
 
   const started = Date.now();
   const tenantId = row.tenantId;
@@ -66,10 +67,15 @@ export async function GET(req: Request): Promise<Response> {
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
+      ...corsHeaders(),
     },
   });
 }
 
+export async function OPTIONS() { return preflight(); }
+
 export async function POST() {
-  return new Response('Method Not Allowed', { status: 405, headers: { 'Allow': 'GET' } });
+  return new Response('Method Not Allowed', {
+    status: 405, headers: { 'Allow': 'GET', ...corsHeaders() },
+  });
 }

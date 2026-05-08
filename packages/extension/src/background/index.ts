@@ -14,9 +14,12 @@ let pinnedTabUrl: string | null = null;
 // sees the right state.
 let sidepanelOpen = false;
 
-// Open side panel when extension icon is clicked
+// Open side panel when extension icon is clicked. setPanelBehavior is a
+// Promise; in transient SW restart conditions Chrome will reject it with
+// `Error: No SW` if the worker is being torn down. Catch — there's
+// nothing useful to do, the new SW instance will rerun this on boot.
 if (chrome.sidePanel) {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 }
 
 // When side panel connects, pin the current tab and auto-activate
@@ -30,21 +33,18 @@ chrome.runtime.onConnect.addListener((port) => {
         try {
           await injectContentScript(tab.id);
         } catch {}
-        // Delay for script to initialize then activate
         setTimeout(async () => {
           try {
-            // Activate design mode — this calls enable() which already enables inspect
             await chrome.tabs.sendMessage(tab.id!, { type: 'ACTIVATE_DESIGN_MODE' });
-            // Do NOT send TOGGLE_INSPECT — enable() already calls enableInspect()
             const state = await chrome.tabs.sendMessage(tab.id!, { type: 'GET_STATE' });
-            port.postMessage({ type: 'INIT_STATE', ...state, pinnedUrl: pinnedTabUrl });
+            try { port.postMessage({ type: 'INIT_STATE', ...state, pinnedUrl: pinnedTabUrl }); } catch {}
           } catch (err) {
             console.error('[DM] Auto-activate failed:', err);
-            port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: pinnedTabUrl });
+            try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: pinnedTabUrl }); } catch {}
           }
         }, 300);
       }
-    });
+    }).catch(() => { /* tab query racing SW teardown — no point logging */ });
 
     port.onDisconnect.addListener(() => {
       sidepanelOpen = false;
