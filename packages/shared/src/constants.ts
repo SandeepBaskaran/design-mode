@@ -107,8 +107,6 @@ export const DEFAULT_SHORTCUTS = [
   { key: 'a', modifiers: ['alt'], action: 'add-annotation', label: 'Add Annotation', category: 'Annotations' },
   { key: 'd', modifiers: ['alt'], action: 'toggle-drawing', label: 'Toggle Drawing', category: 'Drawing' },
   { key: 'f', modifiers: ['alt'], action: 'freeze-animations', label: 'Freeze Animations', category: 'Animation' },
-  { key: 'r', modifiers: ['alt'], action: 'toggle-rearrange', label: 'Toggle Rearrange', category: 'Rearrange' },
-  { key: 'p', modifiers: ['alt'], action: 'toggle-palette', label: 'Toggle Palette', category: 'Design' },
   { key: 'Escape', modifiers: [], action: 'deselect', label: 'Deselect', category: 'General' },
   { key: 'Delete', modifiers: [], action: 'delete-element', label: 'Delete Element', category: 'Editing' },
   { key: 'z', modifiers: ['ctrl'], action: 'undo', label: 'Undo', category: 'Editing' },

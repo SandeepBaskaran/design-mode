@@ -208,16 +208,43 @@ export function hideAllPins() {
 
 export async function getPageComments(): Promise<CommentData[]> {
   const all = await loadComments();
-  return all.filter(c => c.pageUrl === window.location.href);
+  // Always return in creation order. The side panel renders rows in array
+  // order, the pin ordinal is creation-order, and Copy Prompt walks the
+  // array — sorting once at the read site keeps all three consistent and
+  // means an import doesn't have to worry about the on-disk order.
+  return all
+    .filter(c => c.pageUrl === window.location.href)
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 }
 
 // Replaces all comments for the current page. Off-page comments are left
-// alone so an import on one URL doesn't wipe another URL's data. Re-renders
-// pins if the panel had them active.
+// alone so an import on one URL doesn't wipe another URL's data.
+//
+// Imported comments carry the *original* page's data-dm-id values for
+// their target elements. Those ids almost never line up with the new
+// page's stamps, so the pin's `getElementById(elementId)` lookup misses
+// and the pin silently fails to render — leaving the row in the changes
+// tab without anything on the page to anchor to ("residue"). For each
+// imported comment, fall back to its saved selector and stamp the
+// recorded elementId onto the matching element so subsequent lookups,
+// and the pin render, all succeed.
 export async function replacePageComments(incoming: CommentData[]): Promise<void> {
   const all = await loadComments();
   const others = all.filter(c => c.pageUrl !== window.location.href);
-  const stamped = incoming.map(c => ({ ...c, pageUrl: window.location.href }));
+  const dataAttr = 'data-dm-id';
+  const stamped = incoming
+    .map(c => ({ ...c, pageUrl: window.location.href }))
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  for (const c of stamped) {
+    if (!c.elementId) continue;
+    const byId = document.querySelector('[' + dataAttr + '="' + c.elementId + '"]');
+    if (byId) continue;
+    if (!c.selector) continue;
+    try {
+      const bySel = document.querySelector(c.selector) as HTMLElement | null;
+      if (bySel) bySel.setAttribute(dataAttr, c.elementId);
+    } catch { /* invalid selector — skip rather than throw */ }
+  }
   await saveComments([...others, ...stamped]);
   pinElements.forEach(p => p.remove());
   pinElements.clear();

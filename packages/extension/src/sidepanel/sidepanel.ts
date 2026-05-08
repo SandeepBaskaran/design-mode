@@ -536,6 +536,13 @@ function applyShadowFromFields() {
   const insetStr = type === 'inset' ? 'inset ' : '';
   applyStyle('boxShadow', insetStr + x + 'px ' + y + 'px ' + blur + 'px ' + spread + 'px ' + colorStr);
 }
+// The single dispatcher for every style edit triggered from the Design tab.
+// Every input/select/button/picker in the panel ends up calling this with
+// a `(property, value)` pair — DO NOT add parallel SP_APPLY_STYLE call sites
+// in render helpers; build virtual props and route them through here. The
+// content script's APPLY_STYLE handler does the multi-select fan-out, undo
+// bookkeeping, and stylesheet write — keeping all of it on one path is what
+// makes Changes-tab grouping and reverts predictable.
 async function applyStyle(property: string, value: string) {
   // Route virtual stroke props (`__stroke_color`, `__stroke_weight`,
   // `__stroke_style`) to their real CSS targets based on the active
@@ -543,6 +550,27 @@ async function applyStyle(property: string, value: string) {
   // section's UI mode-agnostic — fields write through one helper.
   if (property === '__stroke_color' || property === '__stroke_weight' || property === '__stroke_style') {
     applyStrokeProperty(property, value);
+    return;
+  }
+  // Unified colour picker output for box-shadow / text-shadow. The
+  // composer reads `[data-dm-shadow-field="colorhex"]` (and similarly
+  // for textshadow); we mirror the picker's value into that hidden
+  // input so the existing composer keeps working without a parallel
+  // dispatch path. Same picker UX as the rest of the Design tab —
+  // HSV + tokens + eyedropper — instead of the OS native colour dialog.
+  if (property === '__shadow_color' || property === '__textshadow_color') {
+    const fieldKind = property === '__shadow_color' ? 'shadow' : 'textshadow';
+    const hex = (() => {
+      if (value.startsWith('#')) return value.replace('#', '');
+      const rgb = parseColorRgb(value);
+      return rgb ? rgbToHexStr(rgb[0], rgb[1], rgb[2]).slice(1) : '000000';
+    })();
+    const hexEl = root.querySelector<HTMLInputElement>('[data-dm-' + fieldKind + '-field="colorhex"]');
+    if (hexEl) hexEl.value = hex;
+    const colorEl = root.querySelector<HTMLInputElement>('[data-dm-' + fieldKind + '-field="color"]');
+    if (colorEl) colorEl.value = '#' + hex;
+    if (fieldKind === 'shadow') applyShadowFromFields();
+    else applyTextShadowFromFields();
     return;
   }
   const res = await send({ type: 'SP_APPLY_STYLE', property, value });
@@ -849,18 +877,6 @@ async function revertGroup(groupKey: string) {
   await refreshState();
 }
 
-// Copy just one group's changes to the clipboard as a Copy-Prompt payload.
-// Reuses the existing SP_COPY_PROMPT message but scopes it via groupKey
-// so the agent sees only the relevant element's edits.
-async function copyGroupAsPrompt(groupKey: string) {
-  const r = await send({ type: 'SP_COPY_PROMPT', groupKey });
-  if (r?.text) {
-    try { await navigator.clipboard.writeText(r.text); showCaptureToast('success', 'Copied group prompt'); }
-    catch { showCaptureToast('error', 'Copy failed'); }
-  } else if (r?.error) {
-    showCaptureToast('error', r.error);
-  }
-}
 async function copyPrompt() { const res = await send({ type: 'SP_EXPORT', format: 'markdown', level: 'detailed' }); const output = res.output || res.markdown || ''; if (output) { await navigator.clipboard.writeText(output); const btn = root.querySelector('#dm-copy-prompt-btn'); if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); } } }
 async function sendToAgent() {
   const res = await send({ type: 'SP_EXPORT', format: 'markdown', level: 'detailed' }); const output = res.output || res.markdown || '';
@@ -869,14 +885,57 @@ async function sendToAgent() {
   else alert('MCP server is not running. Start it with: npm start');
 }
 function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); chrome.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
-async function scrollToComment(comment: CommentEntry) { await send({ type: 'SP_SELECT_ELEMENT', elementId: comment.elementId }); info = { id: comment.elementId, tagName: '', className: '', computedStyles: {}, boundingRect: { x: 0, y: 0, width: 0, height: 0 }, breadcrumbs: [] }; editComment(comment); }
+// Click on a compact comment row in the changes tab. We expand the row
+// inline (the same "viewing" card the page-pin click triggers) so the
+// user sees Resolve / Edit / Delete in one place. Clicking the same row
+// again collapses it. Selects the element on the page as a side effect
+// so the user can see what the comment is about.
+function scrollToComment(comment: CommentEntry) {
+  if (viewingCommentId === comment.id) {
+    viewingCommentId = null;
+  } else {
+    viewingCommentId = comment.id;
+    editingCommentId = null;
+    commentMode = false;
+  }
+  send({ type: 'SP_SELECT_ELEMENT', elementId: comment.elementId });
+  render();
+}
 async function toggleLayerVisibility(layerId: string) { await send({ type: 'SP_TOGGLE_VISIBILITY', elementId: layerId }); await refreshDomTree(); }
 async function deleteLayer(layerId: string) { await send({ type: 'SP_DOM_ACTION', action: 'delete', elementId: layerId }); if (info?.id === layerId) info = null; await refreshDomTree(); await refreshChanges(); }
 async function duplicateLayer(layerId: string) { await send({ type: 'SP_DOM_ACTION', action: 'duplicate', elementId: layerId }); await refreshDomTree(); await refreshChanges(); }
-async function reorderLayer(sourceId: string, targetId: string, position: 'before' | 'after' = 'before') {
+async function reorderLayer(sourceId: string, targetId: string, position: 'before' | 'after' | 'inside' = 'before') {
   await send({ type: 'SP_REORDER_LAYER', sourceId, targetId, position });
   await refreshDomTree();
   await refreshChanges();
+}
+
+// Walk parent ids up the visible tree until we hit either `ancestorId` or
+// the root. Returns true if `ancestorId` is an ancestor of `descendantId`
+// (or equal). Used to reject drag-and-drop where the target is inside the
+// element being dragged — that would orphan the page subtree.
+function isLayerAncestor(ancestorId: string, descendantId: string): boolean {
+  if (!ancestorId || !descendantId) return false;
+  if (ancestorId === descendantId) return true;
+  const map = new Map(domTree.map(n => [n.id, n] as const));
+  let cursor = map.get(descendantId);
+  while (cursor) {
+    if (cursor.id === ancestorId) return true;
+    cursor = cursor.parentId ? map.get(cursor.parentId) : undefined;
+  }
+  return false;
+}
+
+// Decide which of the three drop zones the cursor is in. Top sliver →
+// before-sibling, middle → drop INTO target as last child (indent),
+// bottom sliver → after-sibling. Sliver size scales with row height so
+// thin layer rows still get a reachable middle zone.
+function dropZoneAt(target: HTMLElement, clientY: number): 'before' | 'inside' | 'after' {
+  const rect = target.getBoundingClientRect();
+  const sliver = Math.min(8, rect.height * 0.28);
+  if (clientY < rect.top + sliver) return 'before';
+  if (clientY > rect.bottom - sliver) return 'after';
+  return 'inside';
 }
 
 /* ── Message handling ── */
@@ -900,6 +959,17 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'COMMENT_BUBBLE_CLICKED') {
     const c = comments.find(cc => cc.id === msg.commentId);
     if (c) { tab = 'changes'; viewingCommentId = msg.commentId; editingCommentId = null; commentMode = false; render(); }
+  }
+  // Alt+A on the page: open the comment add field for the focused layer.
+  // Mirrors the side-panel comment button (action row) so the keyboard
+  // shortcut and the click both land in the same flow.
+  if (msg.type === 'OPEN_COMMENT_FOR_SELECTED') {
+    if (!info) return;
+    startComment();
+    setTimeout(() => {
+      const ta = root.querySelector<HTMLTextAreaElement>('[data-dm-comment-input]');
+      if (ta) ta.focus();
+    }, 30);
   }
   if (msg.type === 'STATE_UPDATE') {
     enabled = msg.enabled ?? enabled;
@@ -1146,11 +1216,11 @@ function inp(label: string, prop: string, value: string, unit = 'px'): string {
   const displayUnit = parsed ? (parsed.unit || unit) : '';
   const isNum = !!parsed;
   const numAttrs = isNum ? ' data-dm-numeric="1" data-dm-unit="' + escapeAttr(displayUnit) + '" inputmode="decimal"' : '';
-  return '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
-    (label ? '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</label>' : '') +
-    '<div style="display:flex;align-items:center;border-radius:5px;overflow:hidden;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);">' +
-    '<input type="text" class="dm-input" data-dm-prop="' + prop + '"' + numAttrs + ' value="' + escapeAttr(displayVal) + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;"/>' +
-    (displayUnit ? '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;flex-shrink:0;opacity:0.6;pointer-events:none;">' + displayUnit + '</span>' : '') +
+  return '<div class="dm-field">' +
+    (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
+    '<div class="dm-input-shell">' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '"' + numAttrs + ' value="' + escapeAttr(displayVal) + '"/>' +
+    (displayUnit ? '<span class="dm-input-unit">' + displayUnit + '</span>' : '') +
     '</div></div>';
 }
 
@@ -1167,26 +1237,26 @@ function inpKw(label: string, prop: string, value: string, unit: string, keyword
   const displayUnit = parsed ? (parsed.unit || unit) : (isKeyword ? unit : '');
   const placeholder = isKeyword ? '0' : '';
   const keywordChip = isKeyword
-    ? '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;flex-shrink:0;opacity:0.4;pointer-events:none;">(' + keyword.charAt(0).toUpperCase() + keyword.slice(1) + ')</span>'
-    : (displayUnit ? '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;flex-shrink:0;opacity:0.6;pointer-events:none;">' + displayUnit + '</span>' : '');
-  return '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
-    (label ? '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</label>' : '') +
-    '<div style="display:flex;align-items:center;border-radius:5px;overflow:hidden;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);">' +
-    '<input type="text" class="dm-input" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(unit) + '" data-dm-kw="' + escapeAttr(keyword) + '" inputmode="decimal" placeholder="' + placeholder + '" value="' + escapeAttr(displayVal) + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;"/>' +
+    ? '<span class="dm-input-unit dm-input-unit-faint">(' + keyword.charAt(0).toUpperCase() + keyword.slice(1) + ')</span>'
+    : (displayUnit ? '<span class="dm-input-unit">' + displayUnit + '</span>' : '');
+  return '<div class="dm-field">' +
+    (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
+    '<div class="dm-input-shell">' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(unit) + '" data-dm-kw="' + escapeAttr(keyword) + '" inputmode="decimal" placeholder="' + placeholder + '" value="' + escapeAttr(displayVal) + '"/>' +
     keywordChip +
     '</div></div>';
 }
 
 function sel(label: string, prop: string, value: string, options: string[]): string {
   const opts = options.map(o => '<option value="' + o + '"' + (o === value ? ' selected' : '') + '>' + o + '</option>').join('');
-  return '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</label>' +
-    '<select class="dm-select" data-dm-prop="' + prop + '" style="min-width:0;">' + opts + '</select></div>';
+  return '<div class="dm-field"><label class="dm-field-label">' + label + '</label>' +
+    '<select class="dm-select" data-dm-prop="' + prop + '">' + opts + '</select></div>';
 }
 
 function selKV(label: string, prop: string, value: string, options: Array<{ value: string; label: string }>): string {
   const opts = options.map(o => '<option value="' + escapeAttr(o.value) + '"' + (o.value === value ? ' selected' : '') + '>' + escapeAttr(o.label) + '</option>').join('');
-  return '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</label>' +
-    '<select class="dm-select" data-dm-prop="' + prop + '" style="min-width:0;">' + opts + '</select></div>';
+  return '<div class="dm-field"><label class="dm-field-label">' + label + '</label>' +
+    '<select class="dm-select" data-dm-prop="' + prop + '">' + opts + '</select></div>';
 }
 
 const FONT_WEIGHTS: Array<{ value: string; label: string }> = [
@@ -1462,7 +1532,7 @@ function colorInp(label: string, prop: string, value: string, omitPanel = false)
   // render when the full color panel is already open (avoid stacking).
   const tokensPanel = (tokensOpen && !isOpen && !omitPanel) ? renderTokensDropdown(prop, value) : '';
   return '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;position:relative;">' +
-    (label ? '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</label>' : '') +
+    (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
     '<div style="display:flex;align-items:center;gap:4px;min-width:0;position:relative;">' +
     '<button type="button" data-dm-color-trigger="' + escapeAttr(prop) + '" title="Pick a color" style="width:28px;height:28px;border:1px solid var(--dm-input-border);border-radius:5px;cursor:pointer;background:' + escapeAttr(value || hex || '#000') + ';padding:0;flex-shrink:0;outline:' + (isOpen ? '2px solid var(--dm-accent)' : 'none') + ';"></button>' +
     '<input type="text" class="dm-input" data-dm-prop="' + prop + '" data-dm-tokens-trigger="' + escapeAttr(prop) + '" value="' + escapeAttr(displayColor) + '" style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);flex:1;min-width:0;"/>' +
@@ -1472,15 +1542,23 @@ function colorInp(label: string, prop: string, value: string, omitPanel = false)
     '</div>';
 }
 
-function grid(cols: number, ...children: string[]): string { return '<div style="display:grid;grid-template-columns:repeat(' + cols + ',1fr);gap:8px;">' + children.join('') + '</div>'; }
-function sp(): string { return '<div style="height:10px;"></div>'; }
-function sub(text: string): string { return '<div style="color:var(--dm-text-dim);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;margin-top:6px;">' + text + '</div>'; }
+function grid(cols: number, ...children: string[]): string {
+  // Grid sizes used by callers are 2/3/4. The fallback inline style covers
+  // any non-class column count without breaking. Avoid template literals to
+  // keep this hot helper allocation-tight.
+  const cls = (cols === 2 || cols === 3 || cols === 4) ? 'dm-grid dm-grid-' + cols : '';
+  return cls
+    ? '<div class="' + cls + '">' + children.join('') + '</div>'
+    : '<div style="display:grid;grid-template-columns:repeat(' + cols + ',1fr);gap:8px;">' + children.join('') + '</div>';
+}
+function sp(): string { return '<div class="dm-spacer"></div>'; }
+function sub(text: string): string { return '<div class="dm-section-sub">' + text + '</div>'; }
 // 12-column grid helper. Each spec is a column span (1-12) and the HTML
 // to drop in that cell. Cells stack into multiple rows automatically when
 // spans don't fit a single 12-track row.
 function grid12(cells: Array<{ span: number; content: string }>): string {
-  return '<div style="display:grid;grid-template-columns:repeat(12, 1fr);gap:6px;align-items:end;">' +
-    cells.map(c => '<div style="grid-column:span ' + c.span + ';min-width:0;">' + c.content + '</div>').join('') +
+  return '<div class="dm-grid-12">' +
+    cells.map(c => '<div class="dm-cell dm-cell-' + c.span + '">' + c.content + '</div>').join('') +
     '</div>';
 }
 // Wrap content as visually disabled (greyed out, non-interactive) — used
@@ -2129,8 +2207,8 @@ function fillPositionPad(idx: number, value: string): string {
     const active = c.pos === norm;
     return '<button data-dm-fill-pos-cell="' + c.pos + '" data-dm-fill-pos-idx="' + idx + '" data-active="' + (active ? 'true' : 'false') + '" title="' + c.title + ' (' + c.pos + ')" style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:' + (active ? 'var(--dm-accent-bg)' : 'transparent') + ';border:1px solid ' + (active ? 'var(--dm-accent-border)' : 'transparent') + ';color:' + (active ? 'var(--dm-accent)' : 'var(--dm-text-muted)') + ';border-radius:3px;cursor:pointer;font-size:11px;padding:0;">' + c.glyph + '</button>';
   }).join('');
-  return '<div style="display:flex;flex-direction:column;gap:3px;">' +
-    '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Position</label>' +
+  return '<div class="dm-field">' +
+    '<label class="dm-field-label">Position</label>' +
     '<div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:2px;border:1px solid var(--dm-input-border);border-radius:4px;padding:2px;background:var(--dm-input-bg);">' +
     cellHtml +
     '</div>' +
@@ -2175,7 +2253,7 @@ function renderFillLayerBody(layer: FillLayer, idx: number): string {
       return '<div style="display:grid;grid-template-columns:1fr 80px 28px;gap:6px;align-items:end;">' +
         colorInp('Stop ' + (sIdx + 1), '__fill_stop_color__' + idx + '_' + sIdx, stop.color || '#000000') +
         inp('Pos', '__fill_stop_pos__' + idx + '_' + sIdx, stop.position || '', '') +
-        '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">_</label>' +
+        '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">_</label>' +
         '<button class="dm-section-action" data-dm-fill-stop-remove="' + idx + '_' + sIdx + '" title="Remove stop" style="width:100%;height:28px;color:var(--dm-danger);">' + icon('trash', 11) + '</button>' +
         '</div></div>';
     }).join('<div style="height:4px;"></div>');
@@ -2477,8 +2555,8 @@ function renderShadowEditor(s: Record<string, string>): string {
   }
   const p = parseBoxShadowComputed(s.boxShadow || 'none');
   const numInp = (lbl: string, field: string, val: number) =>
-    '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
-    '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + lbl + '</label>' +
+    '<div class="dm-field">' +
+    '<label class="dm-field-label">' + lbl + '</label>' +
     '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
     '<input type="number" data-dm-shadow-field="' + field + '" value="' + val + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
     '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;opacity:0.6;flex-shrink:0;">px</span>' +
@@ -2492,13 +2570,20 @@ function renderShadowEditor(s: Record<string, string>): string {
     '</select>' +
     '<button data-dm-action="clear-shadow" title="Remove shadow" style="padding:4px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-muted);cursor:pointer;display:flex;">' + icon('trash', 10) + '</button>' +
     '</div>' +
-    // Color + opacity
+    // Color + opacity. The colour swatch uses the same unified picker
+    // (HSV + design tokens + eyedropper) the rest of the Design tab
+    // uses; the `__shadow_color` virtual prop routes its output back
+    // through `applyShadowFromFields` via the dispatcher in applyStyle.
+    // Hidden mirror inputs keep the composer's existing field-reading
+    // logic intact without a second code path.
     sub('Color') +
-    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
-    '<input type="color" data-dm-shadow-field="color" value="' + p.color + '" style="width:28px;height:28px;border:1px solid var(--dm-input-border);border-radius:5px;cursor:pointer;background:none;padding:0;flex-shrink:0;"/>' +
+    '<input type="hidden" data-dm-shadow-field="color" value="' + p.color + '"/>' +
+    '<input type="hidden" data-dm-shadow-field="colorhex" value="' + p.color.replace('#','') + '"/>' +
+    colorInp('', '__shadow_color', p.color) +
+    '<div style="display:flex;align-items:center;gap:6px;margin:8px 0;">' +
+    '<label class="dm-field-label" style="flex-shrink:0;">Opacity</label>' +
     '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;flex:1;">' +
-    '<input type="text" class="dm-input" data-dm-shadow-field="colorhex" value="' + p.color.replace('#','') + '" style="background:none;border:none;padding:6px;flex:1;min-width:0;font-family:SF Mono,Monaco,monospace;"/>' +
-    '<input type="number" data-dm-shadow-field="opacity" min="0" max="100" value="' + p.opacity + '" style="width:36px;background:none;border:none;padding:6px 4px;text-align:right;font-size:10px;color:var(--dm-text);"/>' +
+    '<input type="number" data-dm-shadow-field="opacity" min="0" max="100" value="' + p.opacity + '" style="background:none;border:none;padding:6px;flex:1;min-width:0;font-size:10px;color:var(--dm-text);text-align:right;"/>' +
     '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;flex-shrink:0;">%</span>' +
     '</div></div>' +
     grid(2, numInp('Offset X','x',p.x), numInp('Offset Y','y',p.y)) + sp() +
@@ -2522,15 +2607,22 @@ function parseTextShadow(val: string): { x: number; y: number; blur: number; col
 function renderTextShadowEditor(s: Record<string, string>): string {
   const p = parseTextShadow(s.textShadow || 'none');
   const numField = (label: string, prop: string, val: number) =>
-    '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
-    '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</label>' +
+    '<div class="dm-field">' +
+    '<label class="dm-field-label">' + label + '</label>' +
     '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
     '<input type="number" data-dm-textshadow-field="' + prop + '" value="' + val + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
     '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;opacity:0.6;flex-shrink:0;">px</span>' +
     '</div></div>';
+  // Hidden mirror inputs feed the existing applyTextShadowFromFields
+  // composer so the unified colour picker (HSV + tokens + eyedropper)
+  // can replace the OS native colour dialog without a parallel apply
+  // path. Same pattern as the box-shadow editor above.
+  const colorHex = rgbToHex(p.color);
   return '<div style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:8px;">' +
+    '<input type="hidden" data-dm-textshadow-field="color" value="' + colorHex + '"/>' +
+    '<input type="hidden" data-dm-textshadow-field="colorhex" value="' + colorHex.replace('#', '') + '"/>' +
     grid(2, numField('Offset X', 'x', p.x), numField('Offset Y', 'y', p.y)) + sp() +
-    grid(2, numField('Blur', 'blur', p.blur), '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Color</label><div style="display:flex;align-items:center;gap:4px;"><input type="color" data-dm-textshadow-field="color" value="' + rgbToHex(p.color) + '" style="width:28px;height:28px;border:1px solid var(--dm-input-border);border-radius:5px;cursor:pointer;background:none;padding:0;flex-shrink:0;"/><input type="text" class="dm-input" data-dm-textshadow-field="colorhex" value="' + rgbToHex(p.color).replace('#','') + '" style="flex:1;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;font-family:SF Mono,Monaco,monospace;"/></div></div>') +
+    grid(2, numField('Blur', 'blur', p.blur), colorInp('Color', '__textshadow_color', colorHex)) +
     '<div style="margin-top:6px;display:flex;justify-content:flex-end;"><button data-dm-action="clear-text-shadow" style="padding:3px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-dim);cursor:pointer;font-size:9px;font-family:inherit;">Remove</button></div>' +
     '</div>';
 }
@@ -2688,8 +2780,8 @@ function renderShadowEntryEditor(entry: EffectEntry & { shadow: ShadowParts }): 
     '__effd_box_' + (entry as any).chainIdx + '_';
   const numField = (label: string, field: 'x' | 'y' | 'blur' | 'spread', val: number, withSpread = true) =>
     (!withSpread && field === 'spread') ? '' :
-    '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
-    '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</label>' +
+    '<div class="dm-field">' +
+    '<label class="dm-field-label">' + label + '</label>' +
     '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
     '<input type="number" data-dm-prop="' + prefix + field + '" value="' + val + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
     '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;opacity:0.6;flex-shrink:0;">px</span>' +
@@ -2728,8 +2820,8 @@ function renderBlurEntryEditor(entry: { kind: 'layer-blur' | 'backdrop-blur'; ch
     ? '__effd_lblur_' + entry.chainIdx + '_'
     : '__effd_bblur_' + entry.chainIdx + '_';
   return '<div style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:8px;">' +
-    '<div style="display:flex;flex-direction:column;gap:3px;">' +
-    '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Radius</label>' +
+    '<div class="dm-field">' +
+    '<label class="dm-field-label">Radius</label>' +
     '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
     '<input type="number" data-dm-prop="' + prefix + 'radius" min="0" value="' + entry.radius + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
     '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;opacity:0.6;flex-shrink:0;">px</span>' +
@@ -2787,8 +2879,8 @@ function parseScale(val: string): TwoComp {
 }
 
 function tcompField(group: 'translate' | 'scale', axis: 'x' | 'y', label: string, value: string, unit: string): string {
-  return '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
-    '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</label>' +
+  return '<div class="dm-field">' +
+    '<label class="dm-field-label">' + label + '</label>' +
     '<div style="display:flex;align-items:center;border-radius:5px;overflow:hidden;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);">' +
     '<input type="text" class="dm-input" data-dm-tcomp-group="' + group + '" data-dm-tcomp-axis="' + axis + '" data-dm-numeric="1" data-dm-unit="' + unit + '" inputmode="decimal" value="' + escapeAttr(value) + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;"/>' +
     (unit ? '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;flex-shrink:0;opacity:0.6;pointer-events:none;">' + unit + '</span>' : '') +
@@ -2799,12 +2891,12 @@ function renderTransformComponents(s: Record<string, string>): string {
   const t = parseTranslate(s.translate || '');
   const sc = parseScale(s.scale || '');
   return grid(2,
-    '<div style="display:flex;flex-direction:column;gap:3px;">' +
-      '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Translate</label>' +
+    '<div class="dm-field">' +
+      '<label class="dm-field-label">Translate</label>' +
       grid(2, tcompField('translate', 'x', 'X', t.x, 'px'), tcompField('translate', 'y', 'Y', t.y, 'px')) +
     '</div>',
-    '<div style="display:flex;flex-direction:column;gap:3px;">' +
-      '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Scale</label>' +
+    '<div class="dm-field">' +
+      '<label class="dm-field-label">Scale</label>' +
       grid(2, tcompField('scale', 'x', 'X', sc.x, ''), tcompField('scale', 'y', 'Y', sc.y, '')) +
     '</div>'
   );
@@ -2915,8 +3007,8 @@ function renderAnimationEditor(s: Record<string, string>): string {
   const customLabel = isBuiltin || name === 'none' ? '' :
     '<div style="margin-top:4px;font-size:9px;color:var(--dm-text-dim);">Custom: <span style="font-family:monospace;color:var(--dm-text-muted);">' + escapeAttr(name) + '</span> (page must define @keyframes)</div>';
   const iterInput =
-    '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
-    '<label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Iterations</label>' +
+    '<div class="dm-field">' +
+    '<label class="dm-field-label">Iterations</label>' +
     '<div style="display:flex;align-items:center;gap:4px;">' +
     '<input type="text" class="dm-input" data-dm-prop="animationIterationCount" value="' + escapeAttr(iter) + '" style="flex:1;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;"/>' +
     '<button data-dm-prop="animationIterationCount" data-dm-value="' + (isInfinite ? '1' : 'infinite') + '" title="Toggle infinite" style="padding:6px 8px;background:' + (isInfinite ? 'var(--dm-accent-bg)' : 'var(--dm-btn-bg)') + ';border:1px solid ' + (isInfinite ? 'var(--dm-accent-border)' : 'var(--dm-btn-border)') + ';border-radius:4px;color:' + (isInfinite ? 'var(--dm-accent)' : 'var(--dm-text-dim)') + ';cursor:pointer;font-size:11px;font-family:inherit;">∞</button>' +
@@ -3808,7 +3900,7 @@ function renderDesignTab(): string {
   const txCase = s.textTransform || 'none';
   const lstStyle = (s as any).listStyleType || 'none';
   const inputWithIcon = (iconName: keyof typeof icons, prop: string, value: string, kw: string, unit: string, title: string): string =>
-    '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;">' +
+    '<div class="dm-field">' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;" title="' + escapeAttr(title) + '">' + icon(iconName, 11) + '</label>' +
     inpKw('', prop, value, unit, kw).replace(/<label[^>]*><\/label>/, '') +
     '</div>';
@@ -3861,7 +3953,7 @@ function renderDesignTab(): string {
     ]) + sp() +
     grid12([
       { span: 6, content: inp('Line clamp', '__line_clamp', lineClampVal || '0', '') },
-      { span: 6, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;visibility:hidden;">_</label><button class="dm-icon-row-button" data-dm-typo-action="truncate" title="Truncate (text-overflow: ellipsis + white-space: nowrap + overflow: hidden)" style="width:100%;height:30px;padding:6px;font-size:11px;">Truncate</button></div>' },
+      { span: 6, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">_</label><button class="dm-icon-row-button" data-dm-typo-action="truncate" title="Truncate (text-overflow: ellipsis + white-space: nowrap + overflow: hidden)" style="width:100%;height:30px;padding:6px;font-size:11px;">Truncate</button></div>' },
     ]) + sp() +
 
     sub('Direction (i18n)') +
@@ -4085,8 +4177,8 @@ function renderDesignTab(): string {
       { span: 3, content: inp('X', 'left', s.left || 'auto') },
       { span: 3, content: inp('Y', 'top', s.top || 'auto') },
       { span: 2, content: inp('Z', 'zIndex', s.zIndex || 'auto', '') },
-      { span: 2, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;visibility:hidden;">\u2191</label>' + zOrderBtnHtml('arrowUpToLine', 'data-dm-z-step="up"', 'Bring forward') + '</div>' },
-      { span: 2, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;visibility:hidden;">\u2193</label>' + zOrderBtnHtml('arrowDownToLine', 'data-dm-z-step="down"', 'Send backward') + '</div>' },
+      { span: 2, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">\u2191</label>' + zOrderBtnHtml('arrowUpToLine', 'data-dm-z-step="up"', 'Bring forward') + '</div>' },
+      { span: 2, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">\u2193</label>' + zOrderBtnHtml('arrowDownToLine', 'data-dm-z-step="down"', 'Send backward') + '</div>' },
     ]) + sp() : '') +
     // Rot (4) + CCW (2) + CW (2) + FlipH (2) + FlipV (2) = 12.
     '<div style="display:grid;grid-template-columns:repeat(12, 1fr);gap:6px;align-items:stretch;">' +
@@ -4189,8 +4281,8 @@ function renderDesignTab(): string {
 
   // Gap fields (column / row) \u2014 context-gated by layout mode.
   // Horizontal stack \u2192 only Col gap. Vertical stack \u2192 only Row gap. Grid \u2192 both.
-  const colGapField = '<div style="display:flex;flex-direction:column;gap:3px;"><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + icon('alignHorizontalSpaceAround', 11) + ' Col gap</label>' + inpKw('', 'columnGap', s.columnGap === 'normal' ? '' : (s.columnGap || ''), 'px', 'normal') + '</div>';
-  const rowGapField = '<div style="display:flex;flex-direction:column;gap:3px;"><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + icon('alignVerticalSpaceAround', 11) + ' Row gap</label>' + inpKw('', 'rowGap', s.rowGap === 'normal' ? '' : (s.rowGap || ''), 'px', 'normal') + '</div>';
+  const colGapField = '<div class="dm-field"><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + icon('alignHorizontalSpaceAround', 11) + ' Col gap</label>' + inpKw('', 'columnGap', s.columnGap === 'normal' ? '' : (s.columnGap || ''), 'px', 'normal') + '</div>';
+  const rowGapField = '<div class="dm-field"><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + icon('alignVerticalSpaceAround', 11) + ' Row gap</label>' + inpKw('', 'rowGap', s.rowGap === 'normal' ? '' : (s.rowGap || ''), 'px', 'normal') + '</div>';
   const flexDir = s.flexDirection || 'row';
   const isHStackFlex = isFlex && (flexDir === 'row' || flexDir === 'row-reverse');
   const isVStackFlex = isFlex && (flexDir === 'column' || flexDir === 'column-reverse');
@@ -4208,9 +4300,9 @@ function renderDesignTab(): string {
     // W (4) + aspect (2) + H (4) + shrink (2)
     grid12([
       { span: 4, content: inp('W', 'width', s.width || 'auto') },
-      { span: 2, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00b7</label>' + aspectBtn + '</div>' },
+      { span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00b7</label>' + aspectBtn + '</div>' },
       { span: 4, content: inp('H', 'height', s.height || 'auto') },
-      { span: 2, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00b7</label>' + shrinkBtn + '</div>' },
+      { span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00b7</label>' + shrinkBtn + '</div>' },
     ]) + sp() +
     // Min W (3) + Max W (3) + Min H (3) + Max H (3)
     grid12([
@@ -4222,7 +4314,7 @@ function renderDesignTab(): string {
     // Children align (6) + Col/Row gap stacked (6) \u2014 top-aligned so the
     // gap fields start at the same Y as the children-align pad.
     ((isFlex || isGrid) ? '<div style="display:grid;grid-template-columns:repeat(12, 1fr);gap:6px;align-items:start;">' +
-      '<div style="grid-column:span 6;min-width:0;display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Children align</label>' + childrenAlignPad(s) + '</div>' +
+      '<div style="grid-column:span 6;min-width:0;display:flex;flex-direction:column;gap:3px;"><label class="dm-field-label">Children align</label>' + childrenAlignPad(s) + '</div>' +
       '<div style="grid-column:span 6;min-width:0;">' + gapsBlock + '</div>' +
     '</div>' + sp() : '') +
     // Chrome DevTools-style box: padding nested inside margin.
@@ -4230,7 +4322,7 @@ function renderDesignTab(): string {
     // Clip content (6) + Clip path (6) — both with title above field so
     // they line up visually.
     grid12([
-      { span: 6, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Clip content</label><div style="height:30px;display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:0 8px;">' + clipBtn + '</div></div>' },
+      { span: 6, content: '<div class="dm-field"><label class="dm-field-label">Clip content</label><div style="height:30px;display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:0 8px;">' + clipBtn + '</div></div>' },
       { span: 6, content: sel('Clip path', 'clipPath', (s as any).clipPath || 'none', [
         'none',
         'inset(10px)',
@@ -4270,7 +4362,7 @@ function renderDesignTab(): string {
       (isGrid ? sub('Grid container') +
         inp('Cols', 'gridTemplateColumns', s.gridTemplateColumns || 'none', '') + sp() +
         inp('Rows', 'gridTemplateRows', s.gridTemplateRows || 'none', '') + sp() +
-        '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Areas</label><textarea class="dm-input" data-dm-prop="gridTemplateAreas" rows="3" placeholder=\'"a a b" "c c b"\' style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;font-family:SF Mono,Monaco,monospace;resize:vertical;">' + escapeAttr((s as any).gridTemplateAreas || '') + '</textarea></div>' + sp() +
+        '<div class="dm-field"><label class="dm-field-label">Areas</label><textarea class="dm-input" data-dm-prop="gridTemplateAreas" rows="3" placeholder=\'"a a b" "c c b"\' style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;font-family:SF Mono,Monaco,monospace;resize:vertical;">' + escapeAttr((s as any).gridTemplateAreas || '') + '</textarea></div>' + sp() +
         grid(2,
           inp('Auto cols', 'gridAutoColumns', (s as any).gridAutoColumns || 'auto', ''),
           inp('Auto rows', 'gridAutoRows', (s as any).gridAutoRows || 'auto', '')
@@ -4329,7 +4421,7 @@ function renderDesignTab(): string {
   ]);
 
   const isolationCur = ((s as any).isolation || 'auto') === 'isolate';
-  const isolationBtn = '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;" title="Forces a new stacking context. Useful when blend modes should not bleed across siblings.">Iso</label>' +
+  const isolationBtn = '<div class="dm-field"><label class="dm-field-label" title="Forces a new stacking context. Useful when blend modes should not bleed across siblings.">Iso</label>' +
     '<button class="dm-icon-row-button" data-dm-prop="isolation" data-dm-value="' + (isolationCur ? 'auto' : 'isolate') + '" data-active="' + (isolationCur ? 'true' : 'false') + '" title="' + (isolationCur ? 'Stop forcing a new stacking context' : 'Force a new stacking context (isolate)') + '" style="width:100%;height:30px;padding:6px;">' +
     icon(isolationCur ? 'box' : 'squareDashed', 14) + '</button></div>';
 
@@ -4556,7 +4648,7 @@ function renderDesignTab(): string {
     ]) + sp() +
     grid12([
       { span: 6, content: sel('Attachment', 'backgroundAttachment', s.backgroundAttachment || 'scroll', ['scroll','fixed','local']) },
-      { span: 6, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;visibility:hidden;">_</label><button class="dm-btn" data-dm-fill-action="gradient-text" title="Sets background-clip:text + -webkit-text-fill-color:transparent so the topmost gradient/image fills the glyph shape" style="height:30px;font-size:11px;">Gradient text</button></div>' },
+      { span: 6, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">_</label><button class="dm-btn" data-dm-fill-action="gradient-text" title="Sets background-clip:text + -webkit-text-fill-color:transparent so the topmost gradient/image fills the glyph shape" style="height:30px;font-size:11px;">Gradient text</button></div>' },
     ]) + sp() +
 
     sub('Mask') +
@@ -4663,7 +4755,7 @@ function renderDesignTab(): string {
     { span: 4, content: colorInp('Color', '__stroke_color', strokeColor, true) },
     { span: 2, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
     { span: sidesAvailable ? 4 : 6, content: sel('Style', '__stroke_style', strokeStyleCur, styleOptions) },
-    ...(sidesAvailable ? [{ span: 2, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00B7</label>' + sidesBtn + '</div>' }] : []),
+    ...(sidesAvailable ? [{ span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00B7</label>' + sidesBtn + '</div>' }] : []),
   ]);
 
   const colorPanel = strokeColorPanelOpen ? sp() + renderColorPanel('__stroke_color', strokeColor) : '';
@@ -4678,7 +4770,7 @@ function renderDesignTab(): string {
     const cVal = (s as any)[cProp] || s.borderTopColor || '#000000';
     const stVal = (s as any)[stProp] || s.borderTopStyle || 'solid';
     return grid12([
-      { span: 2, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + lbl + '</label><div style="height:30px;display:flex;align-items:center;font-size:11px;color:var(--dm-text-muted);">' + key.toLowerCase() + '</div></div>' },
+      { span: 2, content: '<div class="dm-field"><label class="dm-field-label">' + lbl + '</label><div style="height:30px;display:flex;align-items:center;font-size:11px;color:var(--dm-text-muted);">' + key.toLowerCase() + '</div></div>' },
       { span: 3, content: inp('Width', wProp, wVal) },
       { span: 4, content: colorInp('Colour', cProp, cVal, true) },
       { span: 3, content: sel('Style', stProp, stVal, styleOptions) },
@@ -4710,10 +4802,10 @@ function renderDesignTab(): string {
     return src !== 'none' && src !== '' && src.includes('data:image/svg');
   })();
   const dashedPanel = dashedActive ? sp() + grid12([
-    { span: 4, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Dash</label><input type="number" class="dm-input" data-dm-prop="--dm-stroke-dash" data-dm-numeric="1" data-dm-unit="px" min="1" step="1" value="' + escapeAttr(dashCur) + '" placeholder="1" style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;"/></div>' },
-    { span: 4, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Gap</label><input type="number" class="dm-input" data-dm-prop="--dm-stroke-gap" data-dm-numeric="1" data-dm-unit="px" min="1" step="1" value="' + escapeAttr(gapCur) + '" placeholder="1" style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;"/></div>' },
-    { span: 2, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">·</label>' + capBtn('square', 'square', capCur === 'square', 'Square cap') + '</div>' },
-    { span: 2, content: '<div style="display:flex;flex-direction:column;gap:3px;"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">·</label>' + capBtn('squareRoundCorner', 'round', capCur === 'round', 'Round cap') + '</div>' },
+    { span: 4, content: '<div class="dm-field"><label class="dm-field-label">Dash</label><input type="number" class="dm-input" data-dm-prop="--dm-stroke-dash" data-dm-numeric="1" data-dm-unit="px" min="1" step="1" value="' + escapeAttr(dashCur) + '" placeholder="1" style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;"/></div>' },
+    { span: 4, content: '<div class="dm-field"><label class="dm-field-label">Gap</label><input type="number" class="dm-input" data-dm-prop="--dm-stroke-gap" data-dm-numeric="1" data-dm-unit="px" min="1" step="1" value="' + escapeAttr(gapCur) + '" placeholder="1" style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;"/></div>' },
+    { span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">·</label>' + capBtn('square', 'square', capCur === 'square', 'Square cap') + '</div>' },
+    { span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">·</label>' + capBtn('squareRoundCorner', 'round', capCur === 'round', 'Round cap') + '</div>' },
   ]) + sp() + grid12([
     { span: 6, content: '<button class="dm-btn" data-dm-stroke-action="custom-dashes" data-active="' + (customDashActive ? 'true' : 'false') + '" title="Render the typed dash / gap exactly. Synthesises an SVG into border-image-source with corner-aware tiling." style="height:30px;font-size:11px;width:100%;">Custom dashes</button>' },
     { span: 6, content: '<button class="dm-btn" data-dm-stroke-action="native-dashes" title="Drop back to the browser-default CSS dashed pattern (clears border-image)." style="height:30px;font-size:11px;width:100%;">Native pattern</button>' },
@@ -5188,8 +5280,13 @@ function renderChangesTab(): string {
   // Inline confirmation overlay for Clear All. Mirrors the per-comment
   // delete pattern so the destructive action is one extra click, not
   // a system dialog.
+  // Confirmation overlays are positioned fixed (viewport-relative) instead
+  // of absolute (parent-relative). The Changes tab is scrollable; the
+  // overlay's parent is the FULL list height, so an absolute overlay would
+  // sit at the geometric centre of the list — often below the fold — and
+  // the user would never see it.
   const clearAllOverlay = clearAllConfirming
-    ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);z-index:30;display:flex;align-items:center;justify-content:center;">' +
+    ? '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
       '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:200px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
       '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;">Clear all changes?</div>' +
       '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;line-height:1.5;">Removes every tracked style, text, DOM, and comment change. Resets the undo stack. This can\'t be undone.</div>' +
@@ -5201,7 +5298,7 @@ function renderChangesTab(): string {
 
   // Same inline overlay for deleting a single comment.
   const deleteCommentOverlay = deletingCommentId
-    ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);z-index:30;display:flex;align-items:center;justify-content:center;">' +
+    ? '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
       '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:200px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
       '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;">Delete comment?</div>' +
       '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;line-height:1.5;">The comment, its pin, and any unsaved replies will be removed. This can\'t be undone.</div>' +
@@ -5302,7 +5399,6 @@ function renderChangesTab(): string {
       (isStale ? '<span style="font-size:8px;padding:1px 6px;border-radius:9999px;background:rgba(0,0,0,0.06);color:var(--dm-text-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;flex-shrink:0;">stale</span>' : '') +
       '<span style="font-size:9px;background:var(--dm-accent-bg);color:var(--dm-accent);border-radius:8px;padding:1px 6px;flex-shrink:0;">' + count + '</span>' +
       (group.elementId ? '<button data-dm-select-change-el="' + escapeAttr(group.elementId) + '" title="Select element" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('crosshair', 10) + '</button>' : '') +
-      '<button data-dm-copy-group="' + escapeAttr(key) + '" title="Copy this group\'s changes as a prompt" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('clipboard', 10) + '</button>' +
       '<button data-dm-revert-group="' + escapeAttr(key) + '" title="Revert all changes in this group" style="background:none;border:none;color:var(--dm-danger);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('trash', 10) + '</button>' +
       '</div>';
 
@@ -5998,7 +6094,9 @@ function setupDelegation() {
         // v1.2: Shadow actions
         case 'add-shadow': applyStyle('boxShadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.12)'); break;
         case 'clear-shadow': applyStyle('boxShadow', 'none'); break;
-        case 'preview-animation': send({ type: 'SP_PREVIEW_ANIMATION' }); break;
+        case 'preview-animation':
+          send({ type: 'SP_PREVIEW_ANIMATION' }).then(() => showCaptureToast('success', 'Animation previewed'));
+          break;
         case 'open-in-vscode': {
           const src = (info as any)?.sourceLocation;
           if (src) send({ type: 'SP_OPEN_VSCODE', source: src });
@@ -6019,7 +6117,9 @@ function setupDelegation() {
           });
           break;
         }
-        case 'preview-transition': send({ type: 'SP_PREVIEW_TRANSITION_RULE' }); break;
+        case 'preview-transition':
+          send({ type: 'SP_PREVIEW_TRANSITION_RULE' }).then(() => showCaptureToast('success', 'Transition previewed'));
+          break;
         case 'resize-to-fit': applyStyle('width', 'max-content'); applyStyle('height', 'max-content'); break;
         case 'toggle-aspect-ratio': {
           const cur = (info?.computedStyles?.aspectRatio || 'auto').trim();
@@ -6230,16 +6330,6 @@ function setupDelegation() {
       return;
     }
 
-    // Per-group: Copy as prompt — emits a scoped Copy-Prompt payload for
-    // just this element's changes.
-    const copyGroupBtn = target.closest<HTMLElement>('[data-dm-copy-group]');
-    if (copyGroupBtn) {
-      e.stopPropagation();
-      const key = copyGroupBtn.dataset.dmCopyGroup!;
-      copyGroupAsPrompt(key);
-      return;
-    }
-
     // Per-group: Revert all changes in this group.
     const revertGroupBtn = target.closest<HTMLElement>('[data-dm-revert-group]');
     if (revertGroupBtn) {
@@ -6271,7 +6361,7 @@ function setupDelegation() {
     // header itself, not on one of the action buttons (select / copy /
     // revert) the header now carries.
     const changeGroupHeader = target.closest<HTMLElement>('[data-dm-change-group]');
-    if (changeGroupHeader && !target.closest('[data-dm-select-change-el], [data-dm-copy-group], [data-dm-revert-group]')) {
+    if (changeGroupHeader && !target.closest('[data-dm-select-change-el], [data-dm-revert-group]')) {
       const key = changeGroupHeader.dataset.dmChangeGroup!;
       if (changesGroupCollapsed.has(key)) changesGroupCollapsed.delete(key);
       else changesGroupCollapsed.add(key);
@@ -8184,20 +8274,6 @@ function setupDelegation() {
       }
     }
 
-    // Color picker
-    const colorPicker = target.closest<HTMLInputElement>('[data-dm-color]');
-    if (colorPicker) {
-      const prop = colorPicker.dataset.dmColor!;
-      const val = colorPicker.value;
-      const borderColors = ['borderTopColor','borderRightColor','borderBottomColor','borderLeftColor'];
-      if (borderColorLinked && borderColors.includes(prop)) {
-        Promise.all(borderColors.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
-          const last = rs[rs.length-1]; if (last?.info) info = last.info; render();
-        }); return;
-      }
-      applyStyle(prop, val); return;
-    }
-
     // Shadow field inputs (color picker + number fields)
     const shadowInput = target.closest<HTMLInputElement>('[data-dm-shadow-field]');
     if (shadowInput) { applyShadowFromFields(); return; }
@@ -8665,7 +8741,57 @@ function setupDelegation() {
     }
   });
 
-  // Drag and drop for layer reorder
+  // Drag and drop for layer reorder — Keynote-style single insertion
+  // bar. On every dragover we re-anchor a floating `#dm-drop-indicator`
+  // line to the precise drop location so the user reads the destination
+  // (sibling vs child, and at what depth) from the line's geometry. For
+  // a "drop INTO target as last child" gesture the line indents one
+  // extra level AND the target gets a `.dm-drop-parent` highlight — the
+  // user sees both pieces of feedback at once.
+  const INDENT_PX = 16;
+
+  const ensureDropIndicator = (): HTMLElement => {
+    let el = document.getElementById('dm-drop-indicator') as HTMLElement | null;
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'dm-drop-indicator';
+      document.body.appendChild(el);
+    }
+    return el;
+  };
+
+  const hideDropIndicator = () => {
+    const el = document.getElementById('dm-drop-indicator');
+    if (el) el.style.display = 'none';
+    root.querySelectorAll('.dm-drop-parent').forEach(n => n.classList.remove('dm-drop-parent'));
+  };
+
+  const positionDropIndicator = (target: HTMLElement, zone: 'before' | 'inside' | 'after') => {
+    const el = ensureDropIndicator();
+    const rect = target.getBoundingClientRect();
+    // Find the layer row's depth from the rendered indent. The row's
+    // `padding-left` carries `4 + depth * 16px` (see renderLayersTab).
+    // Inferring from the rendered padding keeps this in sync without a
+    // dedicated data-attribute.
+    const padLeft = parseFloat(getComputedStyle(target).paddingLeft) || 0;
+    const baseDepth = Math.max(0, Math.round((padLeft - 4) / INDENT_PX));
+    const dropDepth = zone === 'inside' ? baseDepth + 1 : baseDepth;
+    const left = rect.left + 4 + dropDepth * INDENT_PX;
+    const width = Math.max(40, rect.right - left - 8);
+    let top: number;
+    if (zone === 'before') top = rect.top - 1;
+    else if (zone === 'after') top = rect.bottom - 1;
+    else top = rect.bottom - 1; // 'inside' — sits at the bottom but indented
+
+    root.querySelectorAll('.dm-drop-parent').forEach(n => n.classList.remove('dm-drop-parent'));
+    if (zone === 'inside') target.classList.add('dm-drop-parent');
+
+    el.style.display = 'block';
+    el.style.top = top + 'px';
+    el.style.left = left + 'px';
+    el.style.width = width + 'px';
+  };
+
   root.addEventListener('dragstart', (e) => {
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-layer-drag]');
     if (target) {
@@ -8676,37 +8802,48 @@ function setupDelegation() {
 
   root.addEventListener('dragover', (e) => {
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-layer-drag]');
-    if (target) {
-      e.preventDefault();
-      (e as DragEvent).dataTransfer!.dropEffect = 'move';
-      target.classList.add('dm-drag-over');
+    if (!target || !dragLayerId) return;
+    const targetId = target.dataset.dmLayerDrag!;
+    // Reject visually when target is inside the dragged subtree — the
+    // "no-drop" cursor + a hidden indicator are the bail-out signals.
+    if (isLayerAncestor(dragLayerId, targetId)) {
+      (e as DragEvent).dataTransfer!.dropEffect = 'none';
+      hideDropIndicator();
+      return;
     }
+    e.preventDefault();
+    (e as DragEvent).dataTransfer!.dropEffect = 'move';
+    const zone = dropZoneAt(target, (e as DragEvent).clientY);
+    positionDropIndicator(target, zone);
   });
 
   root.addEventListener('dragleave', (e) => {
-    const target = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-layer-drag]');
-    if (target) target.classList.remove('dm-drag-over');
+    // Hide only if we actually left the layer rows, not just slipped off
+    // the indicator border for a frame. The indicator re-positions on
+    // the next dragover, which is fine.
+    const related = (e as DragEvent).relatedTarget as HTMLElement | null;
+    if (!related || !related.closest?.('[data-dm-layer-drag]')) hideDropIndicator();
   });
 
   root.addEventListener('drop', (e) => {
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-layer-drag]');
     if (target) {
       e.preventDefault();
-      target.classList.remove('dm-drag-over');
       const targetId = target.dataset.dmLayerDrag!;
-      if (dragLayerId && targetId && dragLayerId !== targetId) {
-        // Drop on the upper half of the target → insert before; lower half → insert after.
-        const rect = target.getBoundingClientRect();
-        const position = (e as DragEvent).clientY < rect.top + rect.height / 2 ? 'before' : 'after';
-        reorderLayer(dragLayerId, targetId, position);
+      const zone = dropZoneAt(target, (e as DragEvent).clientY);
+      hideDropIndicator();
+      if (dragLayerId && targetId && dragLayerId !== targetId && !isLayerAncestor(dragLayerId, targetId)) {
+        reorderLayer(dragLayerId, targetId, zone);
       }
       dragLayerId = null;
+    } else {
+      hideDropIndicator();
     }
   });
 
   root.addEventListener('dragend', () => {
     dragLayerId = null;
-    root.querySelectorAll('.dm-drag-over').forEach(d => d.classList.remove('dm-drag-over'));
+    hideDropIndicator();
   });
 }
 

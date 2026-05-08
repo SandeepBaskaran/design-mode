@@ -113,8 +113,13 @@ function rebuildStyleSheet() {
   for (const [elementId, props] of appliedRules) {
     if (props.size === 0) continue;
     const decls: string[] = [];
-    for (const [prop, val] of props) decls.push(`  ${kebab(prop)}: ${val};`);
-    blocks.push(`[data-dm-id="${elementId}"] {\n${decls.join('\n')}\n}`);
+    // !important + duplicated attribute selector (specificity 0,2,0) so the
+    // override sheet beats page CSS that uses chained classes or its own
+    // !important (Tailwind, BEM, design-system layers). The override sheet
+    // is "user intent expressed after the page has rendered" — by definition
+    // it should win over the page's authored styles.
+    for (const [prop, val] of props) decls.push(`  ${kebab(prop)}: ${val} !important;`);
+    blocks.push(`[data-dm-id="${elementId}"][data-dm-id] {\n${decls.join('\n')}\n}`);
   }
   el.textContent = blocks.join('\n\n');
 }
@@ -363,6 +368,134 @@ export function removeTextChange(id: string): void {
   if (idx !== -1) { textChanges.splice(idx, 1); persistSession(); }
 }
 
+// ── Companion auto-fix ─────────────────────────────────────────────
+// Many CSS properties only paint when a sibling property is also set
+// to a non-default. Setting `border-top-width: 4px` while
+// `border-top-style: none` paints nothing; same for outline; same for
+// `transition-property` while duration is `0s`; same for `top/left`
+// while position is `static`. The user expectation is "I edited this,
+// it should show" — so when we detect one of these well-known traps
+// before the user's edit, we write the missing companion first. All
+// companions emitted by one user action share a `groupId` so the
+// Changes tab collapses them into a single revertable row.
+//
+// Each companion rule is gated on the *current computed value* — if
+// the user has already set the companion to something visible, we
+// leave it alone.
+
+const NUM_RE = /^(-?\d*\.?\d+)\s*([a-z%]*)$/i;
+function asPxNumber(v: string): number {
+  if (!v) return 0;
+  if (v === 'auto' || v === 'normal' || v === 'none') return 0;
+  const m = v.trim().match(NUM_RE);
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  return isNaN(n) ? 0 : n;
+}
+
+function durationToMs(v: string): number {
+  if (!v) return 0;
+  const t = v.trim();
+  // computed value may be a comma list; first non-zero wins
+  for (const part of t.split(',')) {
+    const s = part.trim();
+    const m = s.match(/^(-?\d*\.?\d+)\s*(ms|s)?$/i);
+    if (!m) continue;
+    const n = parseFloat(m[1]);
+    if (isNaN(n) || n === 0) continue;
+    return (m[2]?.toLowerCase() === 's') ? n * 1000 : n;
+  }
+  return 0;
+}
+
+interface Companion { property: string; value: string; }
+
+export function computeCompanions(
+  property: string, value: string, cs: CSSStyleDeclaration,
+): Companion[] {
+  const out: Companion[] = [];
+  const v = (value ?? '').toString().trim();
+  if (!v) return out;
+  const get = (p: string) => cs.getPropertyValue(p).trim();
+
+  // Border longhands — width or color set, but style is none → nothing draws.
+  for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+    if (property === `border${side[0].toUpperCase()}${side.slice(1)}Width` || property === `border-${side}-width`) {
+      if (asPxNumber(v) > 0 && get(`border-${side}-style`) === 'none') {
+        out.push({ property: `border-${side}-style`, value: 'solid' });
+      }
+    }
+    if (property === `border${side[0].toUpperCase()}${side.slice(1)}Color` || property === `border-${side}-color`) {
+      if (get(`border-${side}-style`) === 'none') out.push({ property: `border-${side}-style`, value: 'solid' });
+      if (asPxNumber(get(`border-${side}-width`)) === 0) out.push({ property: `border-${side}-width`, value: '1px' });
+    }
+  }
+  // Outline mirrors border.
+  if (property === 'outlineWidth' || property === 'outline-width') {
+    if (asPxNumber(v) > 0 && get('outline-style') === 'none') out.push({ property: 'outline-style', value: 'solid' });
+  }
+  if (property === 'outlineColor' || property === 'outline-color') {
+    if (get('outline-style') === 'none') out.push({ property: 'outline-style', value: 'solid' });
+    if (asPxNumber(get('outline-width')) === 0) out.push({ property: 'outline-width', value: '1px' });
+  }
+  // Transition — picking properties with no duration is invisible.
+  if (property === 'transitionProperty' || property === 'transition-property') {
+    if (v !== 'none' && durationToMs(get('transition-duration')) === 0) {
+      out.push({ property: 'transition-duration', value: '200ms' });
+    }
+  }
+  // Animation — naming a keyframes set with 0s duration runs nothing.
+  if (property === 'animationName' || property === 'animation-name') {
+    if (v !== 'none' && durationToMs(get('animation-duration')) === 0) {
+      out.push({ property: 'animation-duration', value: '1s' });
+    }
+  }
+  // Position offsets / z-index — useless on `position: static`.
+  if (
+    property === 'top' || property === 'right' || property === 'bottom' || property === 'left' ||
+    property === 'zIndex' || property === 'z-index'
+  ) {
+    if (get('position') === 'static') out.push({ property: 'position', value: 'relative' });
+  }
+  // Text-decoration sub-properties only render with a line.
+  if (
+    property === 'textDecorationColor' || property === 'text-decoration-color' ||
+    property === 'textDecorationStyle' || property === 'text-decoration-style' ||
+    property === 'textDecorationThickness' || property === 'text-decoration-thickness'
+  ) {
+    if (get('text-decoration-line') === 'none') out.push({ property: 'text-decoration-line', value: 'underline' });
+  }
+  return out;
+}
+
+// Wraps applyStyleChange with companion writes that share a groupId so
+// the Changes tab collapses them into a single auto-fix row. Returns
+// the *primary* StyleChange (the user's edit) so callers can still hook
+// undo bookkeeping to it as before.
+export function applyWithCompanions(
+  elementId: string, property: string, value: string,
+  refreshPanel?: () => void,
+  meta?: StyleChangeMeta,
+): StyleChange | null {
+  const el = getElementById(elementId);
+  if (!el) return applyStyleChange(elementId, property, value, refreshPanel, meta);
+  const cs = window.getComputedStyle(el);
+  const companions = computeCompanions(property, value, cs);
+  if (companions.length > 0) {
+    // Reuse the caller's groupId when present (e.g. preset / multi-select)
+    // so auto-fixes ride along inside the same Changes-tab row instead of
+    // creating a parallel auto-fix row.
+    const groupId = meta?.groupId ?? `auto-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const groupLabel = meta?.groupLabel ?? 'Auto-fix';
+    const groupKind = meta?.groupKind ?? 'preset';
+    for (const c of companions) {
+      applyStyleChange(elementId, c.property, c.value, undefined, { groupId, groupKind, groupLabel });
+    }
+    return applyStyleChange(elementId, property, value, refreshPanel, { groupId, groupKind, groupLabel });
+  }
+  return applyStyleChange(elementId, property, value, refreshPanel, meta);
+}
+
 export function applyStyleChange(
   elementId: string, property: string, value: string,
   refreshPanel?: () => void,
@@ -421,6 +554,45 @@ export function applyStyleChange(
   syncChange(change);
   persistSession();
   if (refreshPanel) refreshPanel();
+  // Dev-only canary: log every applyStyle attempt with before → after
+  // computed values. Most rows will be `✓ moved`; any `✗ no-op` line
+  // points at a remaining failure mode (specificity loss, missing
+  // companion, invalid value). Off by default; enable in the page
+  // DevTools with `localStorage.setItem('dm-debug', '1')`.
+  try {
+    if (localStorage.getItem('dm-debug') === '1') {
+      requestAnimationFrame(() => {
+        const after = window.getComputedStyle(el).getPropertyValue(k);
+        const moved = after !== oldValue;
+        // Best-effort hint about WHY a no-op happened — saves the user
+        // from inspecting the page rules themselves.
+        let hint = '';
+        if (!moved) {
+          const cs2 = window.getComputedStyle(el);
+          if (/^border-(top|right|bottom|left)-(width|color)$/.test(k)) {
+            const side = k.split('-')[1];
+            if (cs2.getPropertyValue(`border-${side}-style`).trim() === 'none') hint = `border-${side}-style is none`;
+          } else if (k === 'outline-width' || k === 'outline-color') {
+            if (cs2.getPropertyValue('outline-style').trim() === 'none') hint = 'outline-style is none';
+          } else if (k === 'transition-property' && durationToMs(cs2.getPropertyValue('transition-duration')) === 0) {
+            hint = 'transition-duration is 0s';
+          } else if (k === 'animation-name' && durationToMs(cs2.getPropertyValue('animation-duration')) === 0) {
+            hint = 'animation-duration is 0s';
+          } else if ((k === 'top' || k === 'left' || k === 'right' || k === 'bottom' || k === 'z-index') &&
+                     cs2.getPropertyValue('position').trim() === 'static') {
+            hint = 'position is static';
+          } else if (cs2.getPropertyValue('display').trim() === 'none') {
+            hint = 'element is display:none';
+          } else {
+            hint = 'page CSS may be more specific';
+          }
+        }
+        const tag = moved ? '✓ moved' : `✗ no-op: ${hint}`;
+        // eslint-disable-next-line no-console
+        console.log(`[design-mode] applyStyle ${property} ${value} → "${after}" (${tag})`, { selector });
+      });
+    }
+  } catch {}
   return change;
 }
 
@@ -467,12 +639,16 @@ export function applyHtmlChange(
   return change;
 }
 
+// Returns the recorded change, OR null when the change cancels out an
+// earlier one and shouldn't be logged at all (delete-of-extension-created
+// element, move-back-to-origin). Callers that already discarded the
+// return value continue to work — the persistent log just gets cleaner.
 export function recordDomChange(
   elementId: string, selector: string, action: DomChange['action'],
   tagName: string, outerHTML?: string,
   destination?: DomChange['destination'],
   origin?: DomChange['origin']
-): DomChange {
+): DomChange | null {
   // Dedup 'move' actions per element — if the user drags the same layer
   // around multiple times we only care about its final position, not the
   // breadcrumb trail. Preserve the FIRST move's `origin` so Clear All can
@@ -485,6 +661,53 @@ export function recordDomChange(
         if (!inheritedOrigin && prev.origin) inheritedOrigin = prev.origin;
         domChanges.splice(i, 1);
       }
+    }
+    // No-op move: the element ended up exactly where it started. Drop
+    // the record entirely — the user effectively undid their drag.
+    if (destination && inheritedOrigin) {
+      const sameSpot =
+        destination.parentId && inheritedOrigin.parentId
+          ? destination.parentId === inheritedOrigin.parentId && destination.index === inheritedOrigin.index
+          : destination.parentSelector === inheritedOrigin.parentSelector && destination.index === inheritedOrigin.index;
+      if (sameSpot) {
+        persistSession();
+        return null;
+      }
+    }
+  }
+  // Smart cleanup: if `delete` cancels an earlier `duplicate` or `insert`
+  // for the same element, the element never existed in the original
+  // page. The whole chain (creation + every style/text edit on it +
+  // this delete) becomes meaningless — drop them all so the Changes
+  // tab reflects net intent, not bookkeeping.
+  if (action === 'delete') {
+    const createIdx = domChanges.findIndex(d =>
+      d.elementId === elementId && (d.action === 'duplicate' || d.action === 'insert')
+    );
+    if (createIdx !== -1) {
+      domChanges.splice(createIdx, 1);
+      // Drop every style change recorded against this element + remove
+      // its rules from the override stylesheet.
+      for (let i = styleChanges.length - 1; i >= 0; i--) {
+        if (styleChanges[i].elementId === elementId) {
+          removeRule(elementId, styleChanges[i].property);
+          styleChanges.splice(i, 1);
+        }
+      }
+      // Drop every text change recorded against this element.
+      for (let i = textChanges.length - 1; i >= 0; i--) {
+        if (textChanges[i].elementId === elementId) {
+          textChanges.splice(i, 1);
+        }
+      }
+      // Drop intermediate moves recorded against this element too.
+      for (let i = domChanges.length - 1; i >= 0; i--) {
+        if (domChanges[i].elementId === elementId) {
+          domChanges.splice(i, 1);
+        }
+      }
+      persistSession();
+      return null;
     }
   }
   const change: DomChange = {

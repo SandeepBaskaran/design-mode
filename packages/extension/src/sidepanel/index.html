@@ -415,8 +415,41 @@
     .dm-layer-item:hover .dm-layer-hover-actions {
       opacity: 1;
     }
-    .dm-layer-item.dm-drag-over {
-      border-top: 2px solid var(--dm-accent) !important;
+    /* Drop indicator for layer drag-drop — Keynote-style "insertion bar".
+       A single floating line element (#dm-drop-indicator) is positioned
+       on every dragover frame to snap precisely between rows. The line's
+       horizontal `left` matches the destination depth (each indent step
+       is 16px), so the user can read the depth from the line itself.
+       For a "drop INTO target as a child" gesture the line indents one
+       extra level AND the target row gets an accent-tinted highlight to
+       say "this row becomes the parent." */
+    #dm-drop-indicator {
+      position: fixed;
+      height: 3px;
+      background: var(--dm-accent);
+      border-radius: 999px;
+      box-shadow: 0 0 0 1px var(--dm-bg), 0 0 6px rgba(79, 158, 255, 0.5);
+      pointer-events: none;
+      z-index: 9999;
+      display: none;
+      transition: top 80ms ease, left 80ms ease, width 80ms ease;
+    }
+    #dm-drop-indicator::before,
+    #dm-drop-indicator::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--dm-accent);
+      transform: translateY(-50%);
+    }
+    #dm-drop-indicator::before { left: -2px; }
+    #dm-drop-indicator::after  { right: -2px; }
+    .dm-layer-item.dm-drop-parent {
+      background: var(--dm-accent-bg) !important;
+      box-shadow: inset 0 0 0 1px var(--dm-accent-border);
     }
 
     /* ── Changes revert button ── */
@@ -473,6 +506,83 @@
 
     /* ── Animations ── */
     @keyframes dm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ── High-frequency Design-tab atoms.
+       Every input row, dropdown, sub-section header, grid, and spacer in the
+       Design tab used to ship its own ~10-property inline `style="…"` blob.
+       These classes back the `inp` / `inpKw` / `sel` / `sub` / `grid` / `sp`
+       helpers — same visuals, ~1.5k fewer lines of generated markup. */
+    .dm-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .dm-field-label {
+      font-size: 10px;
+      color: var(--dm-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .dm-field-label-icon {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dm-field-label-hidden { visibility: hidden; }
+    .dm-input-shell {
+      display: flex;
+      align-items: center;
+      border-radius: 5px;
+      overflow: hidden;
+      background: var(--dm-input-bg);
+      border: 1px solid var(--dm-input-border);
+    }
+    /* Bare input inside an input shell — strips its own border/background
+       so the shell renders the chrome and the input owns the text only. */
+    .dm-input-bare {
+      background: none;
+      border: none;
+      padding: 6px;
+      width: 100%;
+      min-width: 0;
+    }
+    .dm-input-unit {
+      font-size: 9px;
+      color: var(--dm-text-dim);
+      padding-right: 6px;
+      flex-shrink: 0;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    .dm-input-unit-faint { opacity: 0.4; }
+    .dm-section-sub {
+      color: var(--dm-text-dim);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+      margin-top: 6px;
+    }
+    .dm-spacer { height: 10px; }
+    .dm-grid { display: grid; gap: 8px; }
+    .dm-grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .dm-grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .dm-grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .dm-grid-12 {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 6px;
+      align-items: end;
+    }
+    .dm-grid-12 > .dm-cell { min-width: 0; }
+    .dm-grid-12 > .dm-cell-1 { grid-column: span 1; }
+    .dm-grid-12 > .dm-cell-2 { grid-column: span 2; }
+    .dm-grid-12 > .dm-cell-3 { grid-column: span 3; }
+    .dm-grid-12 > .dm-cell-4 { grid-column: span 4; }
+    .dm-grid-12 > .dm-cell-5 { grid-column: span 5; }
+    .dm-grid-12 > .dm-cell-6 { grid-column: span 6; }
+    .dm-grid-12 > .dm-cell-7 { grid-column: span 7; }
+    .dm-grid-12 > .dm-cell-8 { grid-column: span 8; }
+    .dm-grid-12 > .dm-cell-9 { grid-column: span 9; }
+    .dm-grid-12 > .dm-cell-10 { grid-column: span 10; }
+    .dm-grid-12 > .dm-cell-11 { grid-column: span 11; }
+    .dm-grid-12 > .dm-cell-12 { grid-column: span 12; }
 
     /* ── Hover indicator ── */
     .dm-hover-indicator {

@@ -9,7 +9,7 @@ import { getElementById, getOrAssignId, generateSelector } from './helpers';
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, downloadDataUrl } from './screenshots';
 import { getCustomPresets, saveCustomPreset, deleteCustomPreset, updateCustomPreset, importPresets, getPageTokens } from './presets';
@@ -492,6 +492,14 @@ function registerAllShortcuts() {
     const css = exportCSS(ch);
     copyToClipboard(css);
   });
+  // Alt+A — fast path to add a comment on the focused element. Reuses the
+  // existing comment infrastructure (pin + side-panel add field); no-op if
+  // nothing is selected.
+  registerShortcut('add-annotation', () => {
+    const sid = getSelectedElementId();
+    if (!sid) return;
+    notifyPanel('OPEN_COMMENT_FOR_SELECTED', { elementId: sid });
+  });
 }
 
 /* —— Message handler —— */
@@ -914,7 +922,12 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           const el = getElementById(id);
           if (!el) continue;
           const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
-          const change = applyStyleChange(id, msg.property, msg.value, () => {
+          // Route through applyWithCompanions so well-known traps
+          // (border-width without border-style, transition-property
+          // with 0s duration, etc.) auto-emit the missing companion
+          // alongside the user's edit. Companions share a groupId so
+          // the Changes tab collapses them into one revertable row.
+          const change = applyWithCompanions(id, msg.property, msg.value, () => {
             const el2 = getElementById(id);
             if (el2 && id === sid) onElementSelected(buildElementInfo(el2));
           }, groupMeta);
@@ -1052,7 +1065,9 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           for (const [prop, val] of Object.entries(msg.preset.styles as Record<string, string>)) {
             const kebab = prop.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
             const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
-            const change = applyStyleChange(sid, prop, val, undefined, {
+            // Companions ride along with the same groupId so the preset
+            // row in the Changes tab still collapses to one entry.
+            const change = applyWithCompanions(sid, prop, val, undefined, {
               groupId, groupKind: 'preset', groupLabel,
             });
             const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
@@ -1106,7 +1121,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           const kebab = msg.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
           const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
           const varValue = `var(${msg.cssVar})`;
-          const change = applyStyleChange(sid, msg.property, varValue);
+          const change = applyWithCompanions(sid, msg.property, varValue);
           const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
           if (afterValue !== beforeValue) {
             undoStack.push({ kind: 'style', elementId: sid, property: msg.property, oldValue: beforeValue, newValue: varValue, changeId: change?.id });
@@ -1481,10 +1496,27 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'REORDER_LAYER': {
       const source = getElementById(msg.sourceId);
       const target = getElementById(msg.targetId);
-      if (source && target && source !== target && target.parentElement) {
-        // Capture origin BEFORE the move. parentId (data-dm-id of the
-        // parent at record time) is the most reliable lookup hook on
-        // replay; selectors with nth-of-type are fragile across reorders.
+      // Three positions: 'before' / 'after' insert as siblings of target;
+      // 'inside' makes source the last child of target (indent). Outdent
+      // is handled naturally by dropping into an ancestor row's middle
+      // band — same code path, just a higher target.
+      const rawPos = msg.position;
+      const position: 'before' | 'after' | 'inside' =
+        rawPos === 'inside' || rawPos === 'after' ? rawPos : 'before';
+      // Reject drops where target is inside the dragged subtree (would
+      // detach source from the document). Walk target's ancestors up
+      // looking for source. Equality is also rejected.
+      const isDescendant = (() => {
+        if (!source || !target) return false;
+        if (source === target) return true;
+        for (let p: Element | null = target; p; p = p.parentElement) {
+          if (p === source) return true;
+        }
+        return false;
+      })();
+      const canDropInside = position === 'inside' ? !!source && !!target : true;
+      const canDropSibling = position !== 'inside' ? !!source && !!target && !!target.parentElement : true;
+      if (source && target && !isDescendant && canDropInside && canDropSibling) {
         const dmAttrParent = (p: HTMLElement | null) =>
           p && p !== document.body && p !== document.documentElement ? getOrAssignId(p) : undefined;
         let origin: { parentSelector: string; index: number; parentId?: string } | undefined;
@@ -1495,10 +1527,16 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
             parentId: dmAttrParent(source.parentElement),
           };
         }
-        const parent = target.parentElement;
-        const position: 'before' | 'after' = msg.position === 'after' ? 'after' : 'before';
-        if (position === 'after') parent.insertBefore(source, target.nextSibling);
-        else parent.insertBefore(source, target);
+        // Compute the destination parent + the node we insert before.
+        // For 'inside' the target itself is the parent and we append.
+        const parent: HTMLElement = position === 'inside' ? target : target.parentElement!;
+        const beforeNode: Node | null =
+          position === 'inside' ? null
+          : position === 'after' ? target.nextSibling
+          : target;
+        parent.insertBefore(source, beforeNode);
+        // Bring the moved row into view so the user sees where it landed.
+        try { source.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch {}
         const sourceSelector = generateSelector(source);
         const parentSelector = generateSelector(parent);
         const index = Array.from(parent.children).indexOf(source);
@@ -1508,6 +1546,12 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           { parentSelector, index, parentId: dmAttrParent(parent) },
           origin,
         );
+        // Keep the moved element selected so the Design tab + breadcrumb
+        // follow the move; without this the panel still points at the
+        // pre-move ancestor selection.
+        setSelectedElementId(msg.sourceId);
+        const info = buildElementInfo(source);
+        onElementSelected(info);
       }
       getChangesPayload().then(p => sendResponse({ ok: true, ...p }));
       return true;
