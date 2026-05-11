@@ -40,6 +40,15 @@ export function toggleSelection(id: string): void {
   refreshOverlays();
 }
 
+// Replace the entire selection set in one shot. Used by the side panel
+// when modifier-driven layer clicks compute the next set explicitly,
+// instead of toggling one id at a time through the page.
+export function setSelectedIds(ids: string[]): void {
+  selectedIds.clear();
+  for (const id of ids) selectedIds.add(id);
+  refreshOverlays();
+}
+
 export function clearSelection(): void {
   selectedIds.clear();
   removeAllOverlays();

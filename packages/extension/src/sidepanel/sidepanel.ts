@@ -106,6 +106,10 @@ type CaptureMode = 'clipboard' | 'download' | 'both';
 let captureMode: CaptureMode = 'clipboard';
 let multiSelectActive = false;
 let multiSelectIds: string[] = [];
+// Anchor for Shift-click range selection — the last layer the user
+// single-clicked (without a modifier). Mirrors how Finder / Figma anchor
+// shift-extends; Cmd-clicks leave the anchor alone.
+let multiSelectAnchor: string | null = null;
 let animationsFrozen = false;
 let captureToast: { kind: 'success' | 'error'; text: string } | null = null;
 let captureToastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -252,12 +256,22 @@ let mcpCloudTenantId = '';
 let mcpCloudRegistering = false;
 let inspectorHoverColor = '#4F9EFF';
 let inspectorSelectColor = '#FF6B35';
+// Display unit for pixel-based inputs (W/H, min/max, padding/margin/border
+// width). When set to rem, the panel converts resolved px to rem for
+// display and writes new values back as rem to the override stylesheet —
+// so the Changes tab shows the user's chosen unit, not a forced
+// translation. The conversion uses the root document's font-size at boot
+// (typically 16px); we cache it once so the value is stable across
+// renders without re-reading getComputedStyle each time.
+let inputUnit: 'px' | 'rem' = 'px';
+let remRootPx = 16;
 
 chrome.storage?.local?.get?.([
   'dm-theme', 'dm-color-format', 'dm-capture-mode',
   'dm-mcp-port', 'dm-mcp-auto-connect',
   'dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url', 'dm-mcp-cloud-tenant',
   'dm-inspector-hover-color', 'dm-inspector-select-color',
+  'dm-input-unit',
 ], (result: any) => {
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
   if (result?.['dm-color-format']) { colorFormat = result['dm-color-format']; }
@@ -270,6 +284,13 @@ chrome.storage?.local?.get?.([
   if (typeof result?.['dm-mcp-cloud-tenant'] === 'string') mcpCloudTenantId = result['dm-mcp-cloud-tenant'];
   if (typeof result?.['dm-inspector-hover-color'] === 'string') inspectorHoverColor = result['dm-inspector-hover-color'];
   if (typeof result?.['dm-inspector-select-color'] === 'string') inspectorSelectColor = result['dm-inspector-select-color'];
+  if (result?.['dm-input-unit'] === 'rem' || result?.['dm-input-unit'] === 'px') inputUnit = result['dm-input-unit'];
+  // Resolve the host page's rem root once so px → rem conversions are
+  // accurate even when the page customises the root font-size.
+  try {
+    const rootFs = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    if (rootFs > 0) remRootPx = rootFs;
+  } catch {}
   render();
 });
 // Section expand/collapse state — restore the user's per-section
@@ -786,6 +807,61 @@ async function selectElement(elementId: string) {
     if (layerEl) layerEl.scrollIntoView({ block: 'nearest' });
   }, 60);
 }
+
+// Push the panel's intended multi-select set to the content script so the
+// page-side overlays and the APPLY_STYLE fan-out stay in sync. An empty
+// array deactivates multi-select mode.
+async function pushMultiSelectIds(ids: string[]) {
+  multiSelectIds = ids;
+  multiSelectActive = ids.length > 0;
+  await send({ type: 'SP_SET_MULTI_SELECT_IDS', ids });
+}
+
+// Modifier-driven layer click dispatcher. Plain click is single-select,
+// Cmd/Ctrl+click toggles in the multi-select set, Shift+click extends a
+// range from the anchor. The clicked layer always becomes the focused
+// element (its properties show in the Design tab) regardless of the
+// modifier, so users can fan an edit out while keeping the row they
+// just clicked as the "primary" target.
+async function handleLayerClick(id: string, e: MouseEvent) {
+  const isShift = !!e.shiftKey;
+  const isToggle = !isShift && (e.metaKey || e.ctrlKey);
+  if (isShift && multiSelectAnchor) {
+    const visible = getVisibleLayers();
+    const ai = visible.findIndex(n => n.id === multiSelectAnchor);
+    const bi = visible.findIndex(n => n.id === id);
+    if (ai !== -1 && bi !== -1) {
+      const [start, end] = ai <= bi ? [ai, bi] : [bi, ai];
+      const rangeIds = visible.slice(start, end + 1).map(n => n.id);
+      const merged = Array.from(new Set([...multiSelectIds, ...rangeIds]));
+      await pushMultiSelectIds(merged);
+      await selectElement(id);
+      return;
+    }
+    // No anchor / one of the endpoints missing — fall through to a
+    // plain single-select rather than no-op'ing.
+  }
+  if (isToggle) {
+    const set = new Set(multiSelectIds);
+    if (set.has(id)) {
+      set.delete(id);
+    } else {
+      // First cmd-click on an empty set seeds with the existing anchor
+      // so the previously focused layer is part of the group too.
+      if (set.size === 0 && multiSelectAnchor && multiSelectAnchor !== id) {
+        set.add(multiSelectAnchor);
+      }
+      set.add(id);
+    }
+    await pushMultiSelectIds(Array.from(set));
+    await selectElement(id);
+    return;
+  }
+  // Plain click: drop any existing multi-select, set anchor, focus.
+  multiSelectAnchor = id;
+  if (multiSelectIds.length > 0) await pushMultiSelectIds([]);
+  await selectElement(id);
+}
 async function selectParent() { const res = await send({ type: 'SP_SELECT_PARENT' }); if (res.payload || res.info) info = res.payload || res.info; render(); }
 async function selectChild() { const res = await send({ type: 'SP_SELECT_CHILD' }); if (res.payload || res.info) info = res.payload || res.info; render(); }
 async function undoAction() { const res = await send({ type: 'SP_UNDO' }); if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; if (res.info) info = res.info; undoCount = res.undoCount ?? Math.max(0, undoCount - 1); redoCount = res.redoCount ?? redoCount + 1; render(); await refreshDomTree(); await refreshChanges(); }
@@ -1250,17 +1326,52 @@ function sec(title: string, iconName: keyof typeof icons, content: string, defau
     '</div><div class="' + bodyClass + '" data-dm-section-body="' + id + '" style="' + bodyStyle + '">' + content + '</div></div>';
 }
 
+// Translate a resolved CSS value to (display, displayUnit, writeUnit)
+// while honouring the Settings → Input unit preference. When the preference
+// is `rem` and the value is in `px`, the number is converted using the
+// page's resolved rem-root font-size and the write unit becomes `rem` —
+// so a user-typed edit lands in the change tracker as `rem`, not `px`.
+// Non-px units (`%`, `em`, `vw`, …) pass through unchanged; they already
+// carry an explicit unit and the user's px ↔ rem toggle doesn't apply.
+function formatPxValueForDisplay(value: string): { display: string; unit: string; writeUnit: string } {
+  const parsed = parseNumeric(value);
+  if (!parsed) return { display: value, unit: 'px', writeUnit: 'px' };
+  const sourceUnit = parsed.unit || 'px';
+  if (sourceUnit !== 'px' || inputUnit !== 'rem') {
+    return { display: String(parsed.num), unit: sourceUnit, writeUnit: sourceUnit };
+  }
+  const rem = parsed.num / remRootPx;
+  // Round to 4 decimals, then strip trailing zeros so 16px reads as `1`
+  // not `1.0000` and 24px reads as `1.5` not `1.5000`.
+  const rounded = Math.round(rem * 10000) / 10000;
+  const display = String(rounded);
+  return { display, unit: 'rem', writeUnit: 'rem' };
+}
+
 function inp(label: string, prop: string, value: string, unit = 'px'): string {
   const parsed = parseNumeric(value);
-  const displayVal = parsed ? String(parsed.num) : value;
-  const displayUnit = parsed ? (parsed.unit || unit) : '';
-  const isNum = !!parsed;
-  const numAttrs = isNum ? ' data-dm-numeric="1" data-dm-unit="' + escapeAttr(displayUnit) + '" inputmode="decimal"' : '';
+  if (!parsed) {
+    // Non-numeric (e.g. `auto`, `inherit`) — render raw, no unit chip.
+    return '<div class="dm-field">' +
+      (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
+      '<div class="dm-input-shell">' +
+      '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" value="' + escapeAttr(value) + '"/>' +
+      '</div></div>';
+  }
+  const sourceUnit = parsed.unit || unit;
+  // Only apply the px ↔ rem conversion when the input is genuinely a px
+  // value (the source unit matters more than the caller's hint `unit`).
+  const usePxConversion = sourceUnit === 'px' && inputUnit === 'rem';
+  const displayVal = usePxConversion
+    ? String(Math.round((parsed.num / remRootPx) * 10000) / 10000)
+    : String(parsed.num);
+  const displayUnit = usePxConversion ? 'rem' : sourceUnit;
+  const writeUnit = displayUnit;
   return '<div class="dm-field">' +
     (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
     '<div class="dm-input-shell">' +
-    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '"' + numAttrs + ' value="' + escapeAttr(displayVal) + '"/>' +
-    (displayUnit ? '<span class="dm-input-unit">' + displayUnit + '</span>' : '') +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(writeUnit) + '" inputmode="decimal" value="' + escapeAttr(displayVal) + '"/>' +
+    '<span class="dm-input-unit">' + displayUnit + '</span>' +
     '</div></div>';
 }
 
@@ -1295,20 +1406,26 @@ function sizeInput(label: string, prop: 'width' | 'height', resolvedValue: strin
   // resolved computed value (always px) implies Fixed mode.
   const intent = elementId ? lastStyleChangeFor(elementId, prop) : null;
   const mode = inferSizeMode(intent ?? resolvedValue);
-  const parsed = parseNumeric(resolvedValue);
-  const numericDisplay = parsed ? String(parsed.num) : resolvedValue;
-  const displayUnit = parsed ? (parsed.unit || 'px') : 'px';
+  // Display always shows the *resolved* numeric value — even in Hug / Fill
+  // mode the user wants to see what the browser ended up rendering, not a
+  // keyword. The select on the right of the shell is the mode indicator.
+  // (Display honours the px / rem unit preference; the wire value the
+  // change tracker stores is still the literal CSS — `fit-content`,
+  // `100%`, or the user-typed number with the chosen unit.)
+  const formatted = formatPxValueForDisplay(resolvedValue);
+  const numericDisplay = formatted.display;
+  const displayUnit = formatted.unit;
+  const writeUnit = formatted.writeUnit;
   const isFixed = mode === 'fixed';
-  const displayVal = mode === 'hug' ? 'Hug' : mode === 'fill' ? 'Fill' : numericDisplay;
   const inputAttrs = isFixed
-    ? ' data-dm-numeric="1" data-dm-unit="' + escapeAttr(displayUnit) + '" inputmode="decimal"'
+    ? ' data-dm-numeric="1" data-dm-unit="' + escapeAttr(writeUnit) + '" inputmode="decimal"'
     : ' readonly tabindex="-1"';
   const inputStyle = isFixed ? '' : ' style="color:var(--dm-text-muted);cursor:default;"';
   return '<div class="dm-field">' +
     '<label class="dm-field-label">' + label + '</label>' +
     '<div class="dm-input-shell">' +
-    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '"' + inputAttrs + inputStyle + ' value="' + escapeAttr(displayVal) + '"/>' +
-    (isFixed ? '<span class="dm-input-unit">' + displayUnit + '</span>' : '') +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '"' + inputAttrs + inputStyle + ' value="' + escapeAttr(numericDisplay) + '"/>' +
+    '<span class="dm-input-unit">' + displayUnit + '</span>' +
     '<select class="dm-size-mode" data-dm-size-mode="' + prop + '" title="Size mode" aria-label="' + label + ' size mode">' +
       '<option value="fixed"' + (mode === 'fixed' ? ' selected' : '') + '>Fixed</option>' +
       '<option value="hug"' + (mode === 'hug' ? ' selected' : '') + '>Hug</option>' +
@@ -3694,25 +3811,25 @@ function renderLayersTab(): string {
   const selectedId = info?.id || '';
   const visible = getVisibleLayers();
 
-  // Search bar + multi-select toggle. Off by default; flipping it on lets
-  // clicks in the page or the layers list ADD elements to a selection set.
-  // Shows a count badge while active so the user always knows the size.
-  const msActive = multiSelectActive;
+  // Multi-select works through the regular click flow now — Cmd/Ctrl+click
+  // toggles a layer in the set, Shift+click extends a range from the
+  // anchor (last single-click). The old dedicated toggle button next to
+  // search is gone; a small selection chip surfaces the count and offers
+  // a one-click clear so users can exit the set without hunting for the
+  // last selected row.
   const msCount = multiSelectIds.length;
-  const msTitle = msActive
-    ? `Multi-select on — ${msCount} layer${msCount === 1 ? '' : 's'}. Click to exit.`
-    : 'Multi-select: pick many layers and apply one edit to all of them.';
-  const msBtn =
-    '<button data-dm-action="toggle-multi-select" title="' + escapeAttr(msTitle) + '" style="display:flex;align-items:center;gap:4px;padding:6px 9px;background:' + (msActive ? 'var(--dm-accent-bg)' : 'var(--dm-btn-bg)') + ';border:1px solid ' + (msActive ? 'var(--dm-accent-border)' : 'var(--dm-btn-border)') + ';border-radius:6px;color:' + (msActive ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';cursor:pointer;font-size:10px;font-family:inherit;flex-shrink:0;">' +
-    icon('layers', 12) +
-    '<span>Multi-select</span>' +
-    (msActive && msCount > 0 ? '<span style="font-weight:700;background:var(--dm-accent);color:white;border-radius:9999px;padding:0 6px;font-size:9px;line-height:14px;">' + msCount + '</span>' : '') +
-    '</button>';
+  const selectionChip = msCount > 0
+    ? '<button data-dm-action="clear-multi-select" title="Clear multi-select" style="display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;flex-shrink:0;font-weight:600;">' +
+      icon('layers', 11) +
+      '<span>' + msCount + ' selected</span>' +
+      '<span style="opacity:0.7;display:flex;">' + icon('x', 10) + '</span>' +
+      '</button>'
+    : '';
   const searchBar = '<div style="padding:8px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;">' +
     '<div style="position:relative;flex:1;min-width:0;">' +
     '<span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--dm-text-dim);display:flex;pointer-events:none;">' + icon('search', 12) + '</span>' +
     '<input type="text" class="dm-layer-search" data-dm-layer-search placeholder="Search layers..." value="' + escapeAttr(layerSearch) + '"/></div>' +
-    msBtn +
+    selectionChip +
     '</div>';
 
   // Visibility / state filter chips. Each chip carries a count badge so
@@ -5898,6 +6015,12 @@ function renderSettingsView(): string {
     '<button data-dm-color-format="rgba" style="' + (cfRgba ? activeBtn : inactiveBtn) + '">RGBA</button>' +
     '<button data-dm-color-format="hsl" style="' + (cfHsl ? activeBtn : inactiveBtn) + '">HSL</button>' +
     '</div></div>' +
+    '<div style="' + sS + '"><div style="' + sT + '">Input unit</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">How sizes are shown in the editor — W/H, padding, margin, border-width. The page CSS is unchanged either way; only the display + the value the change tracker stores switches.</div>' +
+    '<div style="display:flex;gap:4px;">' +
+    '<button data-dm-input-unit="px" style="' + (inputUnit === 'px' ? activeBtn : inactiveBtn) + '">PX</button>' +
+    '<button data-dm-input-unit="rem" style="' + (inputUnit === 'rem' ? activeBtn : inactiveBtn) + '">REM</button>' +
+    '</div></div>' +
     '<div style="' + sS + '"><div style="' + sT + '">Screenshot Capture</div>' +
     '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button does</div>' +
     '<div style="display:flex;gap:4px;">' +
@@ -5938,6 +6061,33 @@ function renderCaptureToast(): string {
   return '<div style="position:fixed;bottom:14px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:6px;font-size:11px;font-family:inherit;color:white;background:' + (isErr ? '#dc2626' : '#1f2937') + ';box-shadow:0 4px 12px rgba(0,0,0,0.25);z-index:60;pointer-events:none;white-space:nowrap;">' + escapeAttr(captureToast.text) + '</div>';
 }
 
+// Per-tab scroll memory — the tab body element persists across renders
+// (morphdom matches by id), so without intervention `scrollTop` carries
+// over between tab switches. That feels wrong: each tab is its own
+// document and the user expects to land where they last left it. We
+// listen to scroll on the body and stash the last position per tab; on
+// switch, the new render() restores the destination tab's saved value.
+const tabScrollPositions: Partial<Record<Tab, number>> = {};
+let pendingTabScrollRestore: number | null = null;
+
+function ensureTabScrollListener(): void {
+  const el = document.getElementById('dm-tab-body');
+  if (!el || (el as any).__dmScrollBound) return;
+  (el as any).__dmScrollBound = true;
+  el.addEventListener('scroll', () => {
+    // Don't record while a programmatic restore is in flight; the
+    // browser fires `scroll` synchronously when we set scrollTop and we
+    // shouldn't overwrite the value we just told it to use.
+    if (pendingTabScrollRestore !== null) return;
+    tabScrollPositions[tab] = el.scrollTop;
+  }, { passive: true });
+}
+
+function captureTabScroll(): void {
+  const el = document.getElementById('dm-tab-body');
+  if (el) tabScrollPositions[tab] = el.scrollTop;
+}
+
 function render() {
   let html: string;
 
@@ -5954,7 +6104,7 @@ function render() {
 
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative;">' +
       renderHeader() + renderActionRow() + renderCommentCard() + renderTabs() +
-      '<div style="flex:1;overflow-y:auto;overflow-x:hidden;">' + tabContent + '</div>' +
+      '<div id="dm-tab-body" style="flex:1;overflow-y:auto;overflow-x:hidden;">' + tabContent + '</div>' +
       renderStickyBottom() + renderComputedCssOverlay() + renderCaptureToast() + '</div>';
   }
 
@@ -5992,6 +6142,16 @@ function render() {
     const ta = root.querySelector('[data-dm-comment-input]') as HTMLTextAreaElement;
     if (ta && document.activeElement !== ta) ta.focus();
   }
+
+  // Bind the per-tab scroll listener once the tab body exists, and apply
+  // any pending scroll restore queued by the tab-switch handler. Done
+  // after morphdom so the destination element is in place.
+  ensureTabScrollListener();
+  if (pendingTabScrollRestore !== null) {
+    const el = document.getElementById('dm-tab-body');
+    if (el) el.scrollTop = pendingTabScrollRestore;
+    pendingTabScrollRestore = null;
+  }
 }
 
 /* ── Phase 1: Event Delegation (bound once, never re-bound) ── */
@@ -6026,6 +6186,15 @@ function setupDelegation() {
     const tabBtn = target.closest<HTMLElement>('[data-dm-tab]');
     if (tabBtn) {
       const newTab = tabBtn.dataset.dmTab as Tab;
+      if (newTab === tab) return;
+      // Save the old tab's scroll before swapping so we can return the
+      // user to where they were when they come back. Only queue a
+      // restore when the destination tab has a remembered position;
+      // first-visit tabs keep their natural auto-scroll behaviour
+      // (e.g. Layers scrolling the selected layer into view).
+      captureTabScroll();
+      const savedScroll = tabScrollPositions[newTab];
+      if (savedScroll !== undefined) pendingTabScrollRestore = savedScroll;
       tab = newTab;
       if (newTab === 'layers') {
         refreshDomTree().then(() => scrollSelectedLayerIntoView());
@@ -6312,12 +6481,8 @@ function setupDelegation() {
           if (src) send({ type: 'SP_OPEN_VSCODE', source: src });
           break;
         }
-        case 'toggle-multi-select': {
-          send({ type: 'SP_TOGGLE_MULTI_SELECT' }).then(res => {
-            multiSelectActive = !!res.active;
-            multiSelectIds = res.ids || [];
-            render();
-          });
+        case 'clear-multi-select': {
+          pushMultiSelectIds([]).then(() => render());
           break;
         }
         case 'toggle-freeze': {
@@ -6462,12 +6627,22 @@ function setupDelegation() {
       return;
     }
 
-    // Layer selection — clicking the row selects that element. Skip when
-    // the click landed on one of the row's interactive sub-buttons.
+    // Layer selection — clicking the row selects that element. Modifier
+    // keys drive multi-select directly (the old standalone toggle button
+    // is gone):
+    //   Plain click    → single-select, clear multi, set anchor to id.
+    //   Cmd/Ctrl+click → toggle id in the multi-select set. First cmd-
+    //                    click seeds the set with the existing anchor so
+    //                    the focused layer comes along.
+    //   Shift+click    → select the range from the anchor to id in the
+    //                    current visible-layer order, union'd with the
+    //                    existing set so prior cmd-clicks survive.
+    // Skip when the click landed on one of the row's interactive sub-
+    // buttons (collapse / visibility / crosshair / delete).
     const layerEl = target.closest<HTMLElement>('[data-dm-layer]');
     if (layerEl && !target.closest('[data-dm-toggle-collapse]') && !target.closest('[data-dm-toggle-vis]') && !target.closest('[data-dm-scroll-to]') && !target.closest('[data-dm-delete-layer]')) {
       const id = layerEl.dataset.dmLayer!;
-      selectElement(id);
+      handleLayerClick(id, e as MouseEvent);
       return;
     }
 
@@ -6674,6 +6849,19 @@ function setupDelegation() {
       captureMode = captureModeBtn.dataset.dmCaptureMode as CaptureMode;
       chrome.storage?.local?.set?.({ 'dm-capture-mode': captureMode });
       render();
+      return;
+    }
+
+    // Input unit (px / rem) — switches the display unit for size-style
+    // inputs across the whole panel.
+    const inputUnitBtn = target.closest<HTMLElement>('[data-dm-input-unit]');
+    if (inputUnitBtn) {
+      const next = inputUnitBtn.dataset.dmInputUnit as 'px' | 'rem';
+      if (next === 'px' || next === 'rem') {
+        inputUnit = next;
+        chrome.storage?.local?.set?.({ 'dm-input-unit': inputUnit });
+        render();
+      }
       return;
     }
 

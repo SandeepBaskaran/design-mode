@@ -24,6 +24,7 @@ import { isFrozen, toggleFreeze, unfreezeAnimations, getAnimationState } from '.
 import {
   isMultiSelectActive, enableMultiSelect, disableMultiSelect,
   getSelectedIds as getMultiSelectIds, clearSelection as clearMultiSelect,
+  setSelectedIds as setMultiSelectIds,
   refreshOverlays as refreshMultiSelectOverlays,
   toggleSelection as toggleMultiSelectMember,
 } from './multi-select';
@@ -608,10 +609,13 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         }
       }
       if (el) {
-        if (isMultiSelectActive()) {
-          toggleMultiSelectMember(msg.elementId);
-          notifyPanel('MULTI_SELECT_UPDATE', { payload: { ids: getMultiSelectIds() } });
-        }
+        // Note: SELECT_ELEMENT used to also toggle multi-select when
+        // multi-select mode was active. That was the page's behaviour
+        // when the side panel had a "Multi-select" toggle button — now
+        // that the panel drives multi-select via Cmd/Shift+click on its
+        // layer rows and pushes the resulting set through
+        // SET_MULTI_SELECT_IDS, SELECT_ELEMENT is focus-only. Toggling
+        // here would undo the panel's explicit set on every click.
         const info = selectAndNotify(el);
         const r = el.getBoundingClientRect();
         if (r.top < 0 || r.bottom > window.innerHeight) {
@@ -1325,6 +1329,24 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
     case 'GET_MULTI_SELECT': {
+      sendResponse({ active: isMultiSelectActive(), ids: getMultiSelectIds() });
+      break;
+    }
+    // Panel-driven multi-select. The side panel computes the next set
+    // from modifier-keyed layer clicks and pushes it here verbatim;
+    // we enable multi-select mode if the set is non-empty, disable it
+    // (which also clears overlays) otherwise. The result mirrors back
+    // to the panel via MULTI_SELECT_UPDATE so any stragglers — e.g. an
+    // ID we couldn't bind to a live element — get filtered in one round.
+    case 'SET_MULTI_SELECT_IDS': {
+      const ids: string[] = Array.isArray(msg.ids) ? msg.ids.filter((x: unknown) => typeof x === 'string') : [];
+      if (ids.length === 0) {
+        if (isMultiSelectActive()) disableMultiSelect();
+      } else {
+        if (!isMultiSelectActive()) enableMultiSelect();
+        setMultiSelectIds(ids);
+      }
+      notifyPanel('MULTI_SELECT_UPDATE', { payload: { ids: getMultiSelectIds() } });
       sendResponse({ active: isMultiSelectActive(), ids: getMultiSelectIds() });
       break;
     }
