@@ -5839,7 +5839,19 @@ function renderSettingsView(): string {
     '<button data-dm-action="show-shortcuts" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('keyboard', 11) + ' Keyboard shortcuts</button>' +
     '<button data-dm-action="reset-settings" style="flex:1;padding:6px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:6px;color:var(--dm-danger);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('rotateCcw', 11) + ' Reset settings</button>' +
     '</div>' +
-    '</div><div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v0.9.0</div></div></div>';
+    '</div><div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v' + extensionVersion() + '</div></div></div>';
+}
+
+// Read the live manifest version so the Settings footer stays in lockstep
+// with the published build — no more hard-coded strings drifting from the
+// actual release. Guards for the (impossible in MV3 but cheap) case where
+// chrome.runtime is missing so dev / fixture pages don't crash.
+function extensionVersion(): string {
+  try {
+    return chrome?.runtime?.getManifest?.()?.version || '';
+  } catch {
+    return '';
+  }
 }
 
 /* ── Phase 1: Render with morphdom ── */
