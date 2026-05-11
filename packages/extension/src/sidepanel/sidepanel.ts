@@ -1407,24 +1407,28 @@ function sizeInput(label: string, prop: 'width' | 'height', resolvedValue: strin
   const intent = elementId ? lastStyleChangeFor(elementId, prop) : null;
   const mode = inferSizeMode(intent ?? resolvedValue);
   // Display always shows the *resolved* numeric value — even in Hug / Fill
-  // mode the user wants to see what the browser ended up rendering, not a
-  // keyword. The select on the right of the shell is the mode indicator.
-  // (Display honours the px / rem unit preference; the wire value the
-  // change tracker stores is still the literal CSS — `fit-content`,
-  // `100%`, or the user-typed number with the chosen unit.)
+  // mode the user wants to see what the browser actually rendered. The
+  // dropdown is the mode indicator; the number is the truth.
+  // (Display honours the px / rem unit preference; the value the change
+  // tracker stores is still the literal CSS — `fit-content`, `100%`, or
+  // the user-typed number with the chosen unit.)
   const formatted = formatPxValueForDisplay(resolvedValue);
   const numericDisplay = formatted.display;
   const displayUnit = formatted.unit;
   const writeUnit = formatted.writeUnit;
   const isFixed = mode === 'fixed';
-  const inputAttrs = isFixed
-    ? ' data-dm-numeric="1" data-dm-unit="' + escapeAttr(writeUnit) + '" inputmode="decimal"'
-    : ' readonly tabindex="-1"';
-  const inputStyle = isFixed ? '' : ' style="color:var(--dm-text-muted);cursor:default;"';
+  // We render either an <input> (Fixed, editable) or a <span> (Hug /
+  // Fill, read-only). Swapping element types makes morphdom replace the
+  // node outright rather than trying to morph readonly / value
+  // attributes back and forth across mode changes — which it does
+  // unreliably when an input has been focused recently.
+  const valueCell = isFixed
+    ? '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(writeUnit) + '" inputmode="decimal" value="' + escapeAttr(numericDisplay) + '"/>'
+    : '<span class="dm-input-readonly" data-dm-size-readonly="' + prop + '" title="Read-only in ' + mode + ' mode — switch to Fixed to edit">' + escapeAttr(numericDisplay) + '</span>';
   return '<div class="dm-field">' +
     '<label class="dm-field-label">' + label + '</label>' +
     '<div class="dm-input-shell">' +
-    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '"' + inputAttrs + inputStyle + ' value="' + escapeAttr(numericDisplay) + '"/>' +
+    valueCell +
     '<span class="dm-input-unit">' + displayUnit + '</span>' +
     '<select class="dm-size-mode" data-dm-size-mode="' + prop + '" title="Size mode" aria-label="' + label + ' size mode">' +
       '<option value="fixed"' + (mode === 'fixed' ? ' selected' : '') + '>Fixed</option>' +
@@ -3854,7 +3858,7 @@ function renderLayersTab(): string {
 
   // Bulk-action toolbar — shows when multi-select has 2+ layers. Each
   // action operates on every selected layer at once.
-  const bulkBar = (msActive && msCount >= 2) ? (
+  const bulkBar = (msCount >= 2) ? (
     '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;border-bottom:1px solid var(--dm-separator);background:var(--dm-accent-bg);">' +
       '<span style="font-size:9px;color:var(--dm-accent);font-weight:600;align-self:center;margin-right:4px;">' + msCount + ' selected:</span>' +
       '<button data-dm-bulk-action="show-all" title="Make all visible" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('eye', 10) + ' Show</button>' +
@@ -4598,29 +4602,33 @@ function renderDesignTab(): string {
       '<div style="grid-column:span 6;min-width:0;">' + gapsBlock + '</div>' +
     '</div>' + sp() : '') +
     // Chrome DevTools-style box: padding nested inside margin.
-    spacingBox(s, displayInfo) + sp() +
-    // Clip content (6) + Clip path (6) — sit side-by-side but they're
-    // independent CSS features. `overflow: hidden` clips children that
-    // overflow this element's box; `clip-path` shapes the visible area
-    // of this element itself. The Clip path label gets an info chip to
-    // make that clear since the visual pairing implies otherwise.
-    grid12([
-      { span: 6, content: '<div class="dm-field"><label class="dm-field-label">Clip content</label><div style="height:30px;display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:0 8px;">' + clipBtn + '</div></div>' },
-      { span: 6, content: '<div class="dm-field" title="clip-path shapes this element\'s own visible area. It works independently of \'Clip content\' (overflow: hidden), which only clips overflowing children."><label class="dm-field-label" style="display:flex;align-items:center;gap:4px;">Clip path<span style="font-size:9px;color:var(--dm-text-dim);font-weight:400;text-transform:none;letter-spacing:0;">(independent of overflow)</span></label>' +
-        '<select class="dm-select" data-dm-prop="clipPath">' +
-          ['none','inset(10px)','circle(50%)','ellipse(50% 50%)','polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)','inset(0 round 12px)']
-            .map(o => '<option value="' + o + '"' + (((s as any).clipPath || 'none') === o ? ' selected' : '') + '>' + o + '</option>')
-            .join('') +
-        '</select></div>' },
-    ]) + sp() +
-    // Overflow X (4) / Y (4) / Box-sizing (4)
-    grid12([
-      { span: 4, content: sel('Overflow X', 'overflowX', s.overflowX || 'visible', ['visible','hidden','scroll','auto']) },
-      { span: 4, content: sel('Overflow Y', 'overflowY', s.overflowY || 'visible', ['visible','hidden','scroll','auto']) },
-      { span: 4, content: sel('Box sizing', 'boxSizing', (s as any).boxSizing || 'content-box', ['content-box','border-box']) },
-    ]) +
-    // Advanced disclosure (only for flex item / grid template details).
+    spacingBox(s, displayInfo) +
+    // Advanced disclosure: clip / overflow / box-sizing live here now —
+    // they're rarely-toggled box-model fine-tuning that crowds the top
+    // of the panel when always visible. Flex / grid container + item
+    // details still live below them in this same disclosure.
     advancedDisclosure('layout', layoutAdvOpen,
+      sub('Clip + overflow') +
+      // Clip content (6) + Clip path (6) — sit side-by-side but they're
+      // independent CSS features. `overflow: hidden` clips children that
+      // overflow this element's box; `clip-path` shapes the visible area
+      // of this element itself. The Clip path label gets an info chip to
+      // make that clear since the visual pairing implies otherwise.
+      grid12([
+        { span: 6, content: '<div class="dm-field"><label class="dm-field-label">Clip content</label><div style="height:30px;display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:0 8px;">' + clipBtn + '</div></div>' },
+        { span: 6, content: '<div class="dm-field" title="clip-path shapes this element\'s own visible area. It works independently of \'Clip content\' (overflow: hidden), which only clips overflowing children."><label class="dm-field-label" style="display:flex;align-items:center;gap:4px;">Clip path<span style="font-size:9px;color:var(--dm-text-dim);font-weight:400;text-transform:none;letter-spacing:0;">(independent of overflow)</span></label>' +
+          '<select class="dm-select" data-dm-prop="clipPath">' +
+            ['none','inset(10px)','circle(50%)','ellipse(50% 50%)','polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)','inset(0 round 12px)']
+              .map(o => '<option value="' + o + '"' + (((s as any).clipPath || 'none') === o ? ' selected' : '') + '>' + o + '</option>')
+              .join('') +
+          '</select></div>' },
+      ]) + sp() +
+      // Overflow X (4) / Y (4) / Box-sizing (4)
+      grid12([
+        { span: 4, content: sel('Overflow X', 'overflowX', s.overflowX || 'visible', ['visible','hidden','scroll','auto']) },
+        { span: 4, content: sel('Overflow Y', 'overflowY', s.overflowY || 'visible', ['visible','hidden','scroll','auto']) },
+        { span: 4, content: sel('Box sizing', 'boxSizing', (s as any).boxSizing || 'content-box', ['content-box','border-box']) },
+      ]) + sp() +
       inp('Aspect ratio (raw)', 'aspectRatio', aspectRatioCur || 'auto', '') + sp() +
       // Container-level: align-content (only meaningful for flex+wrap or grid).
       ((isFlex || isGrid) ? sel('Align content', 'alignContent', s.alignContent || 'normal',
@@ -7978,10 +7986,11 @@ function setupDelegation() {
     }
 
 
-    // W / H size-mode dropdown (Fixed / Hug / Fill). Sits inside the
-    // input shell so the dropdown text doubles as the unit chip when
-    // mode === 'fixed'. Switching to Fixed from Hug / Fill snapshots the
-    // current resolved px so the visual size doesn't jump.
+    // W / H size-mode dropdown (Fixed / Hug / Fill). Switching to Fixed
+    // from Hug / Fill snapshots the current resolved px so the visual
+    // size doesn't jump. The snapshot is converted to rem when the
+    // Settings → Input unit preference is rem, so the Changes-tab
+    // entry reads in the unit the user picked.
     const sizeModeSel = target.closest<HTMLSelectElement>('[data-dm-size-mode]');
     if (sizeModeSel) {
       const prop = sizeModeSel.dataset.dmSizeMode!;
@@ -7990,7 +7999,19 @@ function setupDelegation() {
       else if (mode === 'fill') applyStyle(prop, '100%');
       else if (mode === 'fixed') {
         const resolved = (info?.computedStyles?.[prop] || '').trim();
-        applyStyle(prop, resolved && resolved !== 'auto' ? resolved : '100px');
+        if (!resolved || resolved === 'auto') {
+          applyStyle(prop, inputUnit === 'rem' ? (Math.round((100 / remRootPx) * 10000) / 10000) + 'rem' : '100px');
+        } else if (inputUnit === 'rem') {
+          const parsed = parseNumeric(resolved);
+          if (parsed && (parsed.unit === 'px' || !parsed.unit)) {
+            const rem = Math.round((parsed.num / remRootPx) * 10000) / 10000;
+            applyStyle(prop, rem + 'rem');
+          } else {
+            applyStyle(prop, resolved);
+          }
+        } else {
+          applyStyle(prop, resolved);
+        }
       }
       return;
     }

@@ -551,6 +551,23 @@
       pointer-events: none;
     }
     .dm-input-unit-faint { opacity: 0.4; }
+    /* Read-only value cell used in place of <input> when a size field is
+       in Hug / Fill mode. Same metrics as .dm-input-bare so the shell
+       doesn't reflow when the mode toggles. */
+    .dm-input-readonly {
+      background: none;
+      border: none;
+      padding: 6px;
+      width: 100%;
+      min-width: 0;
+      color: var(--dm-text-muted);
+      font: inherit;
+      cursor: default;
+      user-select: text;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     /* Size-mode picker (Fixed / Hug / Fill) for W / H inputs. Sits inside
        the input shell — borderless, faint, with a chevron on hover. */
     .dm-size-mode {
