@@ -551,6 +551,31 @@
       pointer-events: none;
     }
     .dm-input-unit-faint { opacity: 0.4; }
+    /* Size-mode picker (Fixed / Hug / Fill) for W / H inputs. Sits inside
+       the input shell — borderless, faint, with a chevron on hover. */
+    .dm-size-mode {
+      appearance: none;
+      -webkit-appearance: none;
+      background: none;
+      border: none;
+      border-left: 1px solid var(--dm-input-border);
+      color: var(--dm-text-muted);
+      font-size: 9px;
+      font-family: inherit;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      padding: 0 6px;
+      height: 100%;
+      min-height: 28px;
+      cursor: pointer;
+      outline: none;
+      flex-shrink: 0;
+      transition: color 0.12s ease, background 0.12s ease;
+    }
+    .dm-size-mode:hover { color: var(--dm-text); background: rgba(0, 0, 0, 0.03); }
+    [data-theme="dark"] .dm-size-mode:hover { background: rgba(255, 255, 255, 0.04); }
+    .dm-size-mode:focus { color: var(--dm-text); }
     .dm-section-sub {
       color: var(--dm-text-dim);
       font-size: 10px;

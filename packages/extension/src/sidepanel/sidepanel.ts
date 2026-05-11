@@ -1264,6 +1264,59 @@ function inp(label: string, prop: string, value: string, unit = 'px'): string {
     '</div></div>';
 }
 
+// Figma-style W / H input with a Fixed / Hug / Fill mode picker.
+//   Fixed → user-entered number + unit (px, %, em, …).
+//   Hug   → `fit-content` — the box shrinks to its children.
+//   Fill  → `100%` — the box expands to its parent.
+// The mode is inferred from the user's most recent override for this
+// (element, property) so the dropdown reflects intent rather than the
+// resolved px that getComputedStyle reports for every layout state. When
+// the user has never overridden the property, the resolved value is
+// shown as Fixed — the most honest default.
+function inferSizeMode(value: string): 'fixed' | 'hug' | 'fill' {
+  const v = (value || '').trim().toLowerCase();
+  if (!v) return 'fixed';
+  if (v === 'fit-content' || v === 'max-content' || v === 'min-content' || v === 'auto') return 'hug';
+  if (v.startsWith('fit-content(') || v.startsWith('max-content(') || v.startsWith('min-content(')) return 'hug';
+  if (v === '100%' || v === 'stretch' || v === '-webkit-fill-available') return 'fill';
+  return 'fixed';
+}
+
+function lastStyleChangeFor(elementId: string, property: string): string | null {
+  for (let i = styleChanges.length - 1; i >= 0; i--) {
+    const c = styleChanges[i];
+    if (c.elementId === elementId && c.property === property) return c.newValue;
+  }
+  return null;
+}
+
+function sizeInput(label: string, prop: 'width' | 'height', resolvedValue: string, elementId: string): string {
+  // Intent from the override stylesheet wins. Without an override, the
+  // resolved computed value (always px) implies Fixed mode.
+  const intent = elementId ? lastStyleChangeFor(elementId, prop) : null;
+  const mode = inferSizeMode(intent ?? resolvedValue);
+  const parsed = parseNumeric(resolvedValue);
+  const numericDisplay = parsed ? String(parsed.num) : resolvedValue;
+  const displayUnit = parsed ? (parsed.unit || 'px') : 'px';
+  const isFixed = mode === 'fixed';
+  const displayVal = mode === 'hug' ? 'Hug' : mode === 'fill' ? 'Fill' : numericDisplay;
+  const inputAttrs = isFixed
+    ? ' data-dm-numeric="1" data-dm-unit="' + escapeAttr(displayUnit) + '" inputmode="decimal"'
+    : ' readonly tabindex="-1"';
+  const inputStyle = isFixed ? '' : ' style="color:var(--dm-text-muted);cursor:default;"';
+  return '<div class="dm-field">' +
+    '<label class="dm-field-label">' + label + '</label>' +
+    '<div class="dm-input-shell">' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '"' + inputAttrs + inputStyle + ' value="' + escapeAttr(displayVal) + '"/>' +
+    (isFixed ? '<span class="dm-input-unit">' + displayUnit + '</span>' : '') +
+    '<select class="dm-size-mode" data-dm-size-mode="' + prop + '" title="Size mode" aria-label="' + label + ' size mode">' +
+      '<option value="fixed"' + (mode === 'fixed' ? ' selected' : '') + '>Fixed</option>' +
+      '<option value="hug"' + (mode === 'hug' ? ' selected' : '') + '>Hug</option>' +
+      '<option value="fill"' + (mode === 'fill' ? ' selected' : '') + '>Fill</option>' +
+    '</select>' +
+    '</div></div>';
+}
+
 // Numeric input that knows about a CSS keyword default (e.g. `normal` for
 // line-height / letter-spacing). If the live value is the keyword, the input
 // renders empty with a `(Normal)` chip on the right at 0.4 opacity — making
@@ -1763,26 +1816,51 @@ function layoutModeRow(s: Record<string, string>): string {
   ]);
 }
 
-// 9-cell children alignment pad (writes justify-content + align-items on
-// flex containers, justify-items + align-items on grid). Each cell is a
-// {h, v} combination.
-function childrenAlignPad(s: Record<string, string>): string {
-  const display = s.display || 'block';
+// 9-cell children alignment pad. The CSS that drives X / Y depends on the
+// container kind:
+//   - grid                   → X = justify-items,   Y = align-items
+//   - flex row / row-reverse → X = justify-content, Y = align-items
+//   - flex col / col-reverse → X = align-items,     Y = justify-content
+//                              (main axis is vertical for column flex, so
+//                              justify-content controls Y, not X — without
+//                              this swap the pad's row cells nudge the
+//                              wrong axis)
+// `axesForContainer` returns the per-axis CSS property and its current
+// value resolved from the computed styles, so both the renderer and the
+// click handler share one source of truth.
+function axesForContainer(s: Record<string, string>): { xProp: string; yProp: string; xVal: string; yVal: string } {
+  const display = (s.display || 'block').toLowerCase();
   const isGrid = display === 'grid' || display === 'inline-grid';
+  const isFlex = display === 'flex' || display === 'inline-flex';
+  const flexDir = (s.flexDirection || 'row').toLowerCase();
+  const isFlexColumn = isFlex && (flexDir === 'column' || flexDir === 'column-reverse');
   const justifyProp = isGrid ? 'justifyItems' : 'justifyContent';
-  const justifyVal = (s[justifyProp] || s.justifyContent || 'flex-start').toLowerCase();
-  const alignVal = (s.alignItems || 'stretch').toLowerCase();
-  const hToCss: Record<string, string> = { left: 'flex-start', center: 'center', right: 'flex-end' };
-  const vToCss: Record<string, string> = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
+  if (isFlexColumn) {
+    return {
+      xProp: 'alignItems',
+      yProp: 'justifyContent',
+      xVal: (s.alignItems || 'stretch').toLowerCase(),
+      yVal: (s.justifyContent || 'flex-start').toLowerCase(),
+    };
+  }
+  return {
+    xProp: justifyProp,
+    yProp: 'alignItems',
+    xVal: (s[justifyProp] || 'flex-start').toLowerCase(),
+    yVal: (s.alignItems || 'stretch').toLowerCase(),
+  };
+}
+
+function childrenAlignPad(s: Record<string, string>): string {
+  const { xVal, yVal } = axesForContainer(s);
   const cssToH: Record<string, string> = { 'flex-start': 'left', start: 'left', center: 'center', 'flex-end': 'right', end: 'right' };
   const cssToV: Record<string, string> = { 'flex-start': 'top', start: 'top', center: 'center', 'flex-end': 'bottom', end: 'bottom' };
-  const curH = cssToH[justifyVal] || 'left';
-  const curV = cssToV[alignVal] || 'top';
+  const curH = cssToH[xVal] || 'left';
+  const curV = cssToV[yVal] || 'top';
   const cells: { h: string; v: string }[] = [];
   for (const v of ['top','center','bottom'])
     for (const h of ['left','center','right'])
       cells.push({ h, v });
-  void hToCss; void vToCss;
   return '<div style="display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:2px;width:100%;aspect-ratio:1/1;">' +
     cells.map(c => {
       const active = c.h === curH && c.v === curV;
@@ -4363,7 +4441,6 @@ function renderDesignTab(): string {
     (aspectActive ? 'var(--dm-accent-bg)' : 'var(--dm-btn-bg)') + ';border:1px solid ' +
     (aspectActive ? 'var(--dm-accent-border)' : 'var(--dm-btn-border)') + ';color:' +
     (aspectActive ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';">' + icon(aspectActive ? 'link2' : 'unlink2', 16) + '</button>';
-  const shrinkBtn = '<button data-dm-action="resize-to-fit" title="Resize to content (max-content)" style="width:100%;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:pointer;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text-secondary);">' + icon('shrink', 14) + '</button>';
 
   // Gap fields (column / row) \u2014 context-gated by layout mode.
   // Horizontal stack \u2192 only Col gap. Vertical stack \u2192 only Row gap. Grid \u2192 both.
@@ -4383,12 +4460,12 @@ function renderDesignTab(): string {
 
   const layoutContent =
     layoutModeRow(s) + sp() +
-    // W (4) + aspect (2) + H (4) + shrink (2)
+    // W (5) + aspect (2) + H (5). The standalone "resize to content"
+    // button is gone \u2014 Hug mode in each size input owns that intent now.
     grid12([
-      { span: 4, content: inp('W', 'width', s.width || 'auto') },
+      { span: 5, content: sizeInput('W', 'width', s.width || 'auto', info?.id || '') },
       { span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00b7</label>' + aspectBtn + '</div>' },
-      { span: 4, content: inp('H', 'height', s.height || 'auto') },
-      { span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00b7</label>' + shrinkBtn + '</div>' },
+      { span: 5, content: sizeInput('H', 'height', s.height || 'auto', info?.id || '') },
     ]) + sp() +
     // Min W (3) + Max W (3) + Min H (3) + Max H (3)
     grid12([
@@ -6253,7 +6330,6 @@ function setupDelegation() {
         case 'preview-transition':
           send({ type: 'SP_PREVIEW_TRANSITION_RULE' }).then(() => showCaptureToast('success', 'Transition previewed'));
           break;
-        case 'resize-to-fit': applyStyle('width', 'max-content'); applyStyle('height', 'max-content'); break;
         case 'toggle-aspect-ratio': {
           const cur = (info?.computedStyles?.aspectRatio || 'auto').trim();
           const isSet = cur && cur !== 'auto';
@@ -6915,7 +6991,9 @@ function setupDelegation() {
       return;
     }
 
-    // 9-cell children alignment pad — writes justify-content + align-items.
+    // 9-cell children alignment pad — writes to the X / Y axis CSS as
+    // resolved by axesForContainer(), which flips the property mapping for
+    // flex-column (where justify-content drives Y, not X).
     const childAlignBtn = target.closest<HTMLElement>('[data-dm-children-align]');
     if (childAlignBtn) {
       e.stopPropagation();
@@ -6923,10 +7001,9 @@ function setupDelegation() {
       const [h, v] = cell.split('-');
       const hMap: Record<string, string> = { left: 'flex-start', center: 'center', right: 'flex-end' };
       const vMap: Record<string, string> = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
-      const display = info?.computedStyles?.display || 'block';
-      const isGrid = display === 'grid' || display === 'inline-grid';
-      applyStyle(isGrid ? 'justifyItems' : 'justifyContent', hMap[h] || 'flex-start');
-      applyStyle('alignItems', vMap[v] || 'stretch');
+      const { xProp, yProp } = axesForContainer(info?.computedStyles || {});
+      applyStyle(xProp, hMap[h] || 'flex-start');
+      applyStyle(yProp, vMap[v] || 'flex-start');
       return;
     }
 
@@ -7712,6 +7789,23 @@ function setupDelegation() {
       return;
     }
 
+
+    // W / H size-mode dropdown (Fixed / Hug / Fill). Sits inside the
+    // input shell so the dropdown text doubles as the unit chip when
+    // mode === 'fixed'. Switching to Fixed from Hug / Fill snapshots the
+    // current resolved px so the visual size doesn't jump.
+    const sizeModeSel = target.closest<HTMLSelectElement>('[data-dm-size-mode]');
+    if (sizeModeSel) {
+      const prop = sizeModeSel.dataset.dmSizeMode!;
+      const mode = sizeModeSel.value;
+      if (mode === 'hug') applyStyle(prop, 'fit-content');
+      else if (mode === 'fill') applyStyle(prop, '100%');
+      else if (mode === 'fixed') {
+        const resolved = (info?.computedStyles?.[prop] || '').trim();
+        applyStyle(prop, resolved && resolved !== 'auto' ? resolved : '100px');
+      }
+      return;
+    }
 
     // Select property change
     const propSelect = target.closest<HTMLSelectElement>('select[data-dm-prop]');
