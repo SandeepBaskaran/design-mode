@@ -2299,6 +2299,57 @@ type FillLayer = {
 // across selections so hidden layers don't get lost.
 const fillLayersByElement = new Map<string, FillLayer[]>();
 
+// Per-element settings-panel expansion state for non-solid fills. The
+// solid-fill row owns its own inline edit; only gradients / images
+// open the settings drawer when the user clicks the gear.
+// (kept on `expandedFillIdx`, declared near the other panel state).
+
+// Figma-style fill cap. CSS itself can stack more, but anything above
+// this is almost certainly a runaway — the user gets a toast instead
+// of an opaque "Add fill" no-op.
+const FILL_LIMIT = 32;
+
+// Split a color into its base (no alpha) + opacity 0-1. Solid fills in
+// the panel store opacity as the alpha channel of the CSS color so the
+// single `background-color` write covers both; we keep the two visible
+// inputs in sync by decomposing on read and re-composing on write.
+function splitColorOpacity(raw: string): { color: string; opacity: number } {
+  const v = (raw || '').trim();
+  // rgb(R, G, B) or rgba(R, G, B, A) — also handle modern space-separated.
+  const rgbaM = v.match(/^rgba?\(\s*([^)]+)\)$/i);
+  if (rgbaM) {
+    const tokens = rgbaM[1].split(/[\s,\/]+/).filter(Boolean);
+    if (tokens.length >= 3) {
+      const r = Math.round(parseFloat(tokens[0]));
+      const g = Math.round(parseFloat(tokens[1]));
+      const b = Math.round(parseFloat(tokens[2]));
+      const aTok = tokens[3];
+      let a = 1;
+      if (aTok !== undefined) {
+        a = aTok.endsWith('%') ? parseFloat(aTok) / 100 : parseFloat(aTok);
+        if (isNaN(a)) a = 1;
+      }
+      return { color: `rgb(${r}, ${g}, ${b})`, opacity: Math.max(0, Math.min(1, a)) };
+    }
+  }
+  // #RRGGBBAA — split alpha out into the opacity field.
+  const hex8 = v.match(/^#([0-9a-fA-F]{8})$/);
+  if (hex8) {
+    return { color: '#' + hex8[1].slice(0, 6), opacity: parseInt(hex8[1].slice(6, 8), 16) / 255 };
+  }
+  // #RGB / #RRGGBB / named / token — no alpha component, opacity 1.
+  return { color: v || '#000000', opacity: 1 };
+}
+
+function combineColorOpacity(color: string, opacity: number): string {
+  const clampedA = Math.max(0, Math.min(1, opacity));
+  if (clampedA >= 0.9999) return color || '#000000';
+  const rgb = parseColorRgb(color);
+  if (!rgb) return color || '#000000';
+  const a = Math.round(clampedA * 1000) / 1000;
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a})`;
+}
+
 function parseFillLayers(s: Record<string, string>): FillLayer[] {
   // Per-property comma lists, aligned to background-image entries by index.
   const sizes = parseCssCommaList(s.backgroundSize || '');
@@ -2439,6 +2490,55 @@ function renderFillRow(layer: FillLayer, idx: number, swatch: string, label: str
   // The wrapper carries `draggable` + the row index. Drop targets are the
   // same wrappers — handled by global dragover/drop listeners.
   return '<div data-dm-fill-row="' + idx + '" draggable="true">' + inner + '</div>';
+}
+
+// Solid fill row — Figma-style inline editor. No settings icon to wade
+// through; the swatch click opens the colour picker directly below the
+// row, the colour-code field is editable in place, opacity sits next
+// to it as a locked-suffix %, and the visibility / delete actions only
+// appear on hover so the resting state stays calm. The split into
+// color + alpha is local to the panel: at the CSS layer we still write
+// the resulting `background-color` (with rgba() when opacity < 1).
+function renderFillSolidRow(layer: FillLayer, idx: number): string {
+  const { color, opacity } = splitColorOpacity(layer.raw);
+  const colorDisplay = formatColorForDisplay(color);
+  const pctOpacity = Math.max(0, Math.min(100, Math.round(opacity * 100)));
+  const swatchProp = '__fill_color__' + idx;
+  const swatchOpen = activeColorPickerProp === swatchProp;
+  const visible = layer.visible !== false;
+  const swatchBg = color || '#000';
+  // Swatch — clickable colour preview. Opening outline indicates the
+  // active state so the user can tell which fill's panel is open.
+  const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + swatchProp + '" title="Pick a colour" style="background:' + escapeAttr(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
+  // Colour code — uses data-dm-tokens-trigger so focusing the field
+  // opens the design-token dropdown the rest of the panel uses for
+  // colour inputs. Writes through __fill_color__N (the existing handler
+  // already updates layer.raw and re-dispatches), preserving the alpha
+  // we read from the opacity field.
+  const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + swatchProp + '" data-dm-tokens-trigger="' + swatchProp + '" value="' + escapeAttr(colorDisplay) + '" spellcheck="false" autocomplete="off"/>';
+  // Opacity — same locked-% pattern as Appearance > Opacity. The
+  // __fill_opacity__N handler reconstructs an rgba() and writes through.
+  const opacityCell =
+    '<div class="dm-fill-opacity">' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__fill_opacity__' + idx + '" data-dm-numeric="1" data-dm-unit="" inputmode="decimal" value="' + pctOpacity + '"/>' +
+    '<span class="dm-input-unit">%</span>' +
+    '</div>';
+  // Hover-revealed actions on the right edge — eye toggle + delete.
+  const eyeBtn = '<button class="dm-fill-action dm-fill-action-hover" data-dm-fill-toggle="' + idx + '" title="' + (visible ? 'Hide fill' : 'Show fill') + '" data-active="' + (visible ? 'true' : 'false') + '">' + icon(visible ? 'eye' : 'eyeOff', 12) + '</button>';
+  const trashBtn = '<button class="dm-fill-action dm-fill-action-hover" data-dm-fill-remove="' + idx + '" title="Remove fill" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>';
+  // Drag handle uses the same Layers-tab pattern (a <span>, not a
+  // <button>) so Chromium reliably initiates a drag from it instead of
+  // capturing focus on the way down.
+  const grip = '<span class="dm-section-action" data-dm-fill-drag="' + idx + '" title="Drag to reorder" style="cursor:grab;flex-shrink:0;">' + icon('gripVertical', 12) + '</span>';
+  const row =
+    '<div class="dm-fill-row-solid">' +
+      grip + swatchBtn + codeInput + opacityCell + eyeBtn + trashBtn +
+    '</div>';
+  // Colour panel renders BELOW the row when the swatch is active.
+  // Same picker as the rest of the panel uses elsewhere — keeps the
+  // token list / eyedropper consistent.
+  const colorPanel = swatchOpen ? renderColorPanel(swatchProp, color) : '';
+  return '<div data-dm-fill-row="' + idx + '" draggable="true" style="margin-bottom:6px;">' + row + colorPanel + '</div>';
 }
 
 // Per-layer expanded body. Gradients get a visual stop list. Solids get a
@@ -4969,28 +5069,42 @@ function renderDesignTab(): string {
   };
 
   const fillRows = fillLayers.map((layer, idx) => {
+    // Solid fills use the inline Figma-style row (swatch / code /
+    // opacity / eye / trash) with the colour panel rendered directly
+    // below when the swatch is clicked. Non-solid layers keep the
+    // settings-icon flow so users can edit gradient stops / image URLs
+    // / position / blend without crowding the resting row.
+    if (layer.kind === 'solid') return renderFillSolidRow(layer, idx);
     const expanded = expandedFillIdx === idx;
     const body = expanded ? renderFillLayerBody(layer, idx) : '';
     return renderFillRow(layer, idx, fillSwatch(layer), fillLabel(layer), expanded, body);
   }).join('');
 
-  // Inline add menu \u2014 replaces the broken popover. When open, shows 5 type
-  // pills directly below the Add button (no absolute positioning).
+  // Add Fill \u2014 split button. The primary action always creates a solid
+  // fill (the common case) so users don't have to pick a type at
+  // creation time; the small caret on the right opens the alternative
+  // types (gradients / image) for the niche cases. Mirrors Figma's
+  // "+" workflow. Caps at FILL_LIMIT total layers \u2014 beyond that the
+  // user is hitting a hard ceiling, not a layout problem.
+  const fillAtLimit = fillLayers.length >= FILL_LIMIT;
   const addTypeBtn = (kindAttr: string, lbl: string, glyph: string): string =>
     '<button class="dm-btn" data-dm-fill-add="' + kindAttr + '" style="flex:1;padding:8px 6px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px;">' +
     '<span style="width:24px;height:14px;border-radius:3px;background:' + glyph + ';border:1px solid rgba(0,0,0,0.12);"></span>' +
     '<span>' + lbl + '</span></button>';
   const addFillMenu = fillAddOpen
     ? '<div style="display:flex;gap:6px;margin-top:6px;">' +
-        addTypeBtn('solid',  'Solid',  '#3b82f6') +
         addTypeBtn('linear', 'Linear', 'linear-gradient(90deg, #fff, #000)') +
         addTypeBtn('radial', 'Radial', 'radial-gradient(circle, #fff, #000)') +
         addTypeBtn('conic',  'Conic',  'conic-gradient(from 0deg, #fff, #000, #fff)') +
         addTypeBtn('image',  'Image',  'repeating-linear-gradient(45deg, #ddd 0 4px, #fff 4px 8px)') +
       '</div>'
     : '';
-  const addFillBtn = '<button class="dm-btn" data-dm-fill-add-open data-active="' + (fillAddOpen ? 'true' : 'false') + '" style="margin-top:6px;display:flex;align-items:center;gap:6px;padding:8px;width:100%;justify-content:center;">' +
-    icon(fillAddOpen ? 'x' : 'plus', 12) + '<span>' + (fillAddOpen ? 'Cancel' : 'Add fill') + '</span></button>';
+  const addFillBtn = '<div style="display:flex;gap:4px;margin-top:6px;">' +
+    '<button class="dm-btn" data-dm-fill-add="solid"' + (fillAtLimit ? ' disabled aria-disabled="true" title="Fill limit reached (' + FILL_LIMIT + ')"' : ' title="Add a solid fill (click the caret for gradient / image)"') + ' style="flex:1;display:flex;align-items:center;gap:6px;padding:8px;justify-content:center;' + (fillAtLimit ? 'opacity:0.5;cursor:not-allowed;' : '') + '">' +
+    icon('plus', 12) + '<span>Add fill</span></button>' +
+    '<button class="dm-btn" data-dm-fill-add-open data-active="' + (fillAddOpen ? 'true' : 'false') + '"' + (fillAtLimit ? ' disabled aria-disabled="true"' : '') + ' title="Add a gradient or image fill" style="padding:8px 10px;display:flex;align-items:center;justify-content:center;' + (fillAtLimit ? 'opacity:0.5;cursor:not-allowed;' : '') + '">' +
+    icon(fillAddOpen ? 'x' : 'chevronDown', 12) + '</button>' +
+    '</div>';
 
   // Fill Advanced \u2014 clip / origin / attachment + the gradient-text preset
   // and the mask-* family (CSS masks are the natural home for fill-shaped
@@ -7340,6 +7454,10 @@ function setupDelegation() {
       e.stopPropagation();
       const kind = fillAddBtn.dataset.dmFillAdd!;
       const layers = getFill();
+      if (layers.length >= FILL_LIMIT) {
+        showCaptureToast('error', 'Fill limit reached (' + FILL_LIMIT + ' layers).');
+        return;
+      }
       let newLayer: FillLayer | null = null;
       if (kind === 'solid') {
         newLayer = { kind: 'solid', raw: '#3b82f6', bgColorOnly: true, visible: true };
@@ -8374,14 +8492,37 @@ function setupDelegation() {
         const id = info?.id || '';
         if (!id) return;
         const layers = getFillLayers(id, info?.computedStyles || {});
-        // __fill_color__N — solid color
+        // __fill_color__N — solid colour. Preserves the existing alpha
+        // so a colour swap from the picker / text field doesn't reset
+        // the opacity field next to it.
         let m = prop.match(/^__fill_color__(\d+)$/);
         if (m) {
           const i = parseInt(m[1], 10);
           if (layers[i] && layers[i].kind === 'solid') {
-            layers[i].raw = raw;
+            const { opacity } = splitColorOpacity(layers[i].raw);
+            layers[i].raw = combineColorOpacity(raw, opacity);
             fillLayersByElement.set(id, layers);
             dispatchFillLayers(layers, applyStyle);
+          }
+          return;
+        }
+        // __fill_opacity__N — solid-fill opacity expressed as 0-100. We
+        // bake it into the colour's alpha channel so the single
+        // background-color write covers both. Clamped 0-100.
+        m = prop.match(/^__fill_opacity__(\d+)$/);
+        if (m) {
+          const i = parseInt(m[1], 10);
+          const layer = layers[i];
+          if (layer && layer.kind === 'solid') {
+            const n = parseFloat(raw);
+            if (!isNaN(n)) {
+              const clamped = Math.max(0, Math.min(100, n));
+              propInput.value = String(clamped);
+              const { color } = splitColorOpacity(layer.raw);
+              layer.raw = combineColorOpacity(color, clamped / 100);
+              fillLayersByElement.set(id, layers);
+              dispatchFillLayers(layers, applyStyle);
+            }
           }
           return;
         }
@@ -9002,11 +9143,35 @@ function setupDelegation() {
         propInput.value = String(clamped);
         applyStyle('opacity', String(Math.round(clamped) / 100));
       };
+      // Solid-fill opacity input — same shape as Appearance > Opacity
+      // but the value is baked into the colour's alpha channel rather
+      // than written to a CSS property. Kept as a separate helper so
+      // both Enter-commit and Arrow-step paths share the rounding +
+      // clamping rules.
+      const fillOpacityMatch = propName.match(/^__fill_opacity__(\d+)$/);
+      const commitFillOpacityPct = (rawStr: string) => {
+        if (!fillOpacityMatch) return;
+        const id = info?.id || '';
+        if (!id) return;
+        const layers = getFillLayers(id, info?.computedStyles || {});
+        const i = parseInt(fillOpacityMatch[1], 10);
+        const layer = layers[i];
+        if (!layer || layer.kind !== 'solid') return;
+        const n = parseFloat(rawStr);
+        if (isNaN(n)) return;
+        const clamped = Math.max(0, Math.min(100, n));
+        propInput.value = String(clamped);
+        const { color } = splitColorOpacity(layer.raw);
+        layer.raw = combineColorOpacity(color, clamped / 100);
+        fillLayersByElement.set(id, layers);
+        dispatchFillLayers(layers, applyStyle);
+      };
 
       if (e.key === 'Enter') {
         e.preventDefault();
         const raw = propInput.value.trim();
         if (propName === '__opacity_pct') { commitOpacityPct(raw); return; }
+        if (fillOpacityMatch) { commitFillOpacityPct(raw); return; }
         const isPureNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
         const val = isNumeric && unit && isPureNumber ? raw + unit : raw;
         applyStyle(propName, val);
@@ -9024,7 +9189,7 @@ function setupDelegation() {
         // we special-case so 1 → 2 → 3 still works as expected. The
         // opacity-pct input also wants integer steps (it lives in 0-100,
         // not 0-1) so it joins the integer-step group.
-        const integerUnitless = propName === 'zIndex' || propName === 'z-index' || propName === 'order' || propName === '__opacity_pct';
+        const integerUnitless = propName === 'zIndex' || propName === 'z-index' || propName === 'order' || propName === '__opacity_pct' || !!fillOpacityMatch;
         const isFractional = !unit && !integerUnitless;
         const step = isFractional
           ? (e.shiftKey ? 1 : 0.1)
@@ -9033,6 +9198,7 @@ function setupDelegation() {
         const newVal = e.key === 'ArrowUp' ? current + step : current - step;
         const rounded = Math.round(newVal * 100) / 100; // 2 decimals max
         if (propName === '__opacity_pct') { commitOpacityPct(String(rounded)); return; }
+        if (fillOpacityMatch) { commitFillOpacityPct(String(rounded)); return; }
         propInput.value = String(rounded);
         const val = unit ? rounded + unit : String(rounded);
         applyStyle(propName, val);
