@@ -628,8 +628,59 @@ async function applyStyle(property: string, value: string) {
     else applyTextShadowFromFields();
     return;
   }
+  // Fill virtual colour props. The inline colour picker (HSV drag, hue
+  // strip, hex / RGB / HSL inputs, eyedropper) calls applyStyle directly
+  // — there's no DOM input to dispatch a change event from when the
+  // user drags a marker, so the change-handler intercept never fires.
+  // Without this branch, dragging in the picker writes `__fill_color__0`
+  // to the content script, which isn't a real CSS property, and the
+  // colour silently never moves. Route to the same fill-layer update
+  // path the change-handler uses for text edits.
+  if (property.startsWith('__fill_color__') || property.startsWith('__fill_stop_color__')) {
+    applyFillColorProperty(property, value);
+    return;
+  }
   const res = await send({ type: 'SP_APPLY_STYLE', property, value });
   if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
+}
+
+// Apply a fill virtual colour prop to its target layer slot. Shared by
+// applyStyle (called by the inline colour-picker's drag / hex / RGB
+// inputs) and the change-event handler (typed values in the swatch
+// row). Solid fills preserve the existing alpha so a swatch swap from
+// the picker doesn't silently zero the opacity field next to it;
+// gradient stops update in place and re-build the gradient string.
+function applyFillColorProperty(prop: string, value: string) {
+  const id = info?.id || '';
+  if (!id) return;
+  const layers = getFillLayers(id, info?.computedStyles || {});
+  let m = prop.match(/^__fill_color__(\d+)$/);
+  if (m) {
+    const i = parseInt(m[1], 10);
+    if (layers[i] && layers[i].kind === 'solid') {
+      const { opacity } = splitColorOpacity(layers[i].raw);
+      layers[i].raw = combineColorOpacity(value, opacity);
+      fillLayersByElement.set(id, layers);
+      dispatchFillLayers(layers, applyStyle);
+    }
+    return;
+  }
+  m = prop.match(/^__fill_stop_color__(\d+)_(\d+)$/);
+  if (m) {
+    const i = parseInt(m[1], 10);
+    const sIdx = parseInt(m[2], 10);
+    const layer = layers[i];
+    if (layer && (layer.kind === 'linear' || layer.kind === 'radial' || layer.kind === 'conic')) {
+      const parsed = parseGradientStops(layer.raw);
+      if (parsed.stops[sIdx]) {
+        parsed.stops[sIdx].color = value;
+        layer.raw = buildGradient(layer.kind, parsed.prefix, parsed.stops);
+        fillLayersByElement.set(id, layers);
+        dispatchFillLayers(layers, applyStyle);
+      }
+    }
+    return;
+  }
 }
 
 // Map the stroke section's virtual props to actual CSS targets. With the
