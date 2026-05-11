@@ -1703,16 +1703,35 @@ function renderInlineColorPicker(prop: string, value: string): string {
   );
 }
 
-// Format the user's color value for display in the input field. Honors the
-// configured `colorFormat` setting (HEX vs RGBA). `var(--token)` references
-// pass through verbatim — they're more useful than the resolved hex would be.
+// Format the user's color value for display in the input field. Honors
+// the configured `colorFormat` setting (HEX vs RGBA). `var(--token)`
+// references are resolved against the design-tokens cache so the field
+// shows the actual rendered colour — the user can still tell they
+// picked a token from the swatch's accent ring + the token entry's
+// active state in the panel; the field surfaces the *value* that's
+// actually painting on the page. The underlying change-tracker still
+// stores `var(--name)` (the user's intent) — only this display is
+// resolved.
 function formatColorForDisplay(value: string): string {
   const v = (value || '').trim();
   if (!v) return '';
-  if (v.startsWith('var(')) return v;          // keep token references readable
-  if (colorFormat === 'rgba') return v;         // value is already in rgb/rgba/hex form
-  // 'hex' mode — convert any rgb()/rgba() to #RRGGBB. Hex passthrough.
-  return rgbToHex(v);
+  const resolved = resolveCssVarToColor(v);
+  const target = resolved ?? v;
+  if (colorFormat === 'rgba') return target;
+  return rgbToHex(target);
+}
+
+// Walk a `var(--name, fallback)` reference back to a concrete colour
+// value via the design-tokens cache. Returns null when the reference
+// isn't found (the caller falls back to the raw text so the user can
+// still see what they typed). Tolerates fallback values inside the
+// var() — only the primary name drives the lookup.
+function resolveCssVarToColor(value: string): string | null {
+  const m = value.match(/^var\(\s*(--[\w-]+)/);
+  if (!m) return null;
+  const tokenName = m[1];
+  const token = designTokens.find(t => t.name === tokenName);
+  return token?.value ? token.value.trim() : null;
 }
 
 // Format a token's display value the same way (used in the dropdown label).
@@ -2626,7 +2645,13 @@ function renderFillSolidRow(layer: FillLayer, idx: number): string {
   const swatchProp = '__fill_color__' + idx;
   const swatchOpen = activeColorPickerProp === swatchProp;
   const visible = layer.visible !== false;
-  const swatchBg = color || '#000';
+  // Resolve `var(--name)` against the design-tokens cache before
+  // handing the colour to the swatch's inline `background:` — the
+  // panel's own stylesheet doesn't see the host page's custom
+  // properties, so `background: var(--accent)` would render as
+  // transparent inside the side panel. Fallback to the raw value
+  // (which covers plain hex / rgb / rgba) when the token isn't found.
+  const swatchBg = resolveCssVarToColor(color) || color || '#000';
   // Swatch — clickable colour preview. Opening outline indicates the
   // active state so the user can tell which fill's panel is open.
   const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + swatchProp + '" title="Pick a colour" style="background:' + escapeAttr(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
