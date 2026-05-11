@@ -1326,6 +1326,22 @@ function sec(title: string, iconName: keyof typeof icons, content: string, defau
     '</div><div class="' + bodyClass + '" data-dm-section-body="' + id + '" style="' + bodyStyle + '">' + content + '</div></div>';
 }
 
+// Opacity input — CSS stores 0-1 but humans think in 0-100%. Shows the
+// percent value with a locked `%` chip; the change handler intercepts
+// `__opacity_pct`, clamps 0-100, divides by 100, and writes the real
+// `opacity` property so the Changes tab records the canonical CSS
+// (`opacity: 0.5`) rather than the percent presentation.
+function opacityInput(value: string): string {
+  const raw = parseFloat(value);
+  const pct = isNaN(raw) ? 100 : Math.max(0, Math.min(100, Math.round(raw * 100)));
+  return '<div class="dm-field">' +
+    '<label class="dm-field-label">Opacity</label>' +
+    '<div class="dm-input-shell">' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__opacity_pct" data-dm-numeric="1" data-dm-unit="" inputmode="decimal" value="' + pct + '"/>' +
+    '<span class="dm-input-unit">%</span>' +
+    '</div></div>';
+}
+
 // Translate a resolved CSS value to (display, displayUnit, writeUnit)
 // while honouring the Settings → Input unit preference. When the preference
 // is `rem` and the value is in `px`, the number is converted using the
@@ -2083,44 +2099,47 @@ function parseRadiusXY(val: string): [string, string] {
   return [x, y];
 }
 
-function cornerRadiusGrid(s: Record<string, string>, isExpanded: boolean, _isLinked: boolean): string {
+// Primary corner-radius value to surface on the appearance row's single
+// input. When all four corners match, shows the value; when they vary,
+// shows the literal "Mixed" string so the user can still see the cell
+// without losing the differing per-corner state.
+function cornerRadiusPrimary(s: Record<string, string>): string {
   const tl = s.borderTopLeftRadius || '0px';
   const tr = s.borderTopRightRadius || '0px';
   const bl = s.borderBottomLeftRadius || '0px';
   const br = s.borderBottomRightRadius || '0px';
-  const allEqual = tl === tr && tr === bl && bl === br;
-  const primaryDisplay = allEqual ? tl : 'Mixed';
-  // Title row: label + primary input + scan toggle.
-  const scanBtn = '<button class="dm-section-action" data-dm-corner-expand title="' +
-    (isExpanded ? 'Collapse corners' : 'Edit each corner separately') +
-    '" data-active="' + (isExpanded ? 'true' : 'false') + '" style="flex-shrink:0;align-self:flex-end;margin-bottom:6px;">' +
-    icon('scan', 12) + '</button>';
-  const titleRow = '<div style="display:flex;align-items:flex-end;gap:6px;">' +
-    '<div style="flex:1;">' + inp('Corner radius', 'borderRadius', primaryDisplay) + '</div>' +
-    scanBtn +
-    '</div>';
-  if (!isExpanded) return titleRow;
-  // Expanded: 2×2 of corners. Each corner cell carries the corner glyph + an
-  // X (horizontal) input and a Y (vertical) input — together they map to the
-  // CSS form `border-*-radius: X Y` (elliptical when X !== Y, circular when
-  // they match). Virtual __corner_*_x / _y props splice into the current
-  // value so editing one axis doesn't clobber the other.
-  const cornerCell = (glyph: string, key: 'tl'|'tr'|'bl'|'br', val: string): string => {
-    const [x, y] = parseRadiusXY(val);
+  return (tl === tr && tr === bl && bl === br) ? tl : 'Mixed';
+}
+
+// Expanded 2×2 panel that drops below the Appearance row when the user
+// clicks "Edit each corner". Each cell is a single numeric input wired
+// straight to its border-*-radius long-form property — no virtual
+// __corner_*_x / _y splicing — so the user types `0`, sees `0`, and
+// the change tracker records the literal CSS. The elliptical X/Y form
+// (`border-*-radius: 10px 20px`) is rare enough to live in the
+// Advanced section's raw inputs; not worth the always-paired UI here.
+function cornerRadius2x2(s: Record<string, string>): string {
+  const cells: Array<{ glyph: string; prop: string; val: string; label: string }> = [
+    { glyph: '┌', prop: 'borderTopLeftRadius',     val: s.borderTopLeftRadius     || '0px', label: 'top-left radius' },
+    { glyph: '┐', prop: 'borderTopRightRadius',    val: s.borderTopRightRadius    || '0px', label: 'top-right radius' },
+    { glyph: '└', prop: 'borderBottomLeftRadius',  val: s.borderBottomLeftRadius  || '0px', label: 'bottom-left radius' },
+    { glyph: '┘', prop: 'borderBottomRightRadius', val: s.borderBottomRightRadius || '0px', label: 'bottom-right radius' },
+  ];
+  const cornerCell = (c: typeof cells[0]): string => {
+    // The corner cell takes any value but renders px / rem per the
+    // user's input-unit preference, matching the rest of the panel.
+    // Round-corner-only: takes the first axis if the user has set an
+    // elliptical pair (`10px 20px`); the second axis is editable in
+    // Advanced. parseRadiusXY normalises elliptical → [x, y].
+    const [xRaw] = parseRadiusXY(c.val);
+    const formatted = formatPxValueForDisplay(xRaw);
     return '<div style="display:flex;align-items:center;gap:4px;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:4px 6px;">' +
-      '<span style="font-family:SF Mono,Monaco,monospace;font-size:11px;color:var(--dm-text-muted);width:14px;flex-shrink:0;text-align:center;">' + glyph + '</span>' +
-      '<input class="dm-input" data-dm-prop="__corner_' + key + '_x" value="' + escapeAttr(x) + '" placeholder="X" title="Horizontal radius" aria-label="' + key + ' horizontal radius" style="background:none;border:none;padding:2px;flex:1;min-width:0;font-size:11px;"/>' +
-      '<span style="font-size:10px;color:var(--dm-text-dim);flex-shrink:0;">/</span>' +
-      '<input class="dm-input" data-dm-prop="__corner_' + key + '_y" value="' + escapeAttr(y) + '" placeholder="Y" title="Vertical radius" aria-label="' + key + ' vertical radius" style="background:none;border:none;padding:2px;flex:1;min-width:0;font-size:11px;"/>' +
+      '<span style="font-family:SF Mono,Monaco,monospace;font-size:11px;color:var(--dm-text-muted);width:14px;flex-shrink:0;text-align:center;">' + c.glyph + '</span>' +
+      '<input class="dm-input" data-dm-prop="' + c.prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" value="' + escapeAttr(formatted.display) + '" placeholder="0" title="' + c.label + '" aria-label="' + c.label + '" style="background:none;border:none;padding:2px;flex:1;min-width:0;font-size:11px;"/>' +
+      '<span style="font-size:9px;color:var(--dm-text-dim);flex-shrink:0;">' + formatted.unit + '</span>' +
     '</div>';
   };
-  return titleRow +
-    '<div class="dm-corner-grid" style="margin-top:6px;">' +
-      cornerCell('┌', 'tl', tl) +
-      cornerCell('┐', 'tr', tr) +
-      cornerCell('└', 'bl', bl) +
-      cornerCell('┘', 'br', br) +
-    '</div>';
+  return '<div class="dm-corner-grid">' + cells.map(cornerCell).join('') + '</div>';
 }
 
 function inferStrokePosition(s: Record<string, string>): 'inside' | 'outside' | 'center' {
@@ -2235,7 +2254,7 @@ function plusActionBtn(attr: string, title: string): string {
 }
 
 void strokeStylePopoverOpen; void plusActionBtn; void eyeToggleBtn; void advancedDisclosure;
-void advancedToggleBtn; void cornerRadiusGrid; void strokePositionRow; void sidesPopoverTrigger;
+void advancedToggleBtn; void cornerRadius2x2; void cornerRadiusPrimary; void strokePositionRow; void sidesPopoverTrigger;
 void effectsAddMenuTrigger; void inferStrokePosition; void layoutModeRow; void positionAlignGrid;
 void flipButtons; void detectParentContext;
 
@@ -4731,13 +4750,21 @@ function renderDesignTab(): string {
 
   const isFormLayer = kind === 'form';
 
+  // Top row of the Appearance section — three controls in one 12-col
+  // grid: Opacity (5), Corner radius (5), Edit-each-corner toggle (2).
+  // Blend mode + isolation moved into Advanced; they're niche stacking-
+  // context controls, not the kind of thing you reach for on every layer.
+  const cornerPrimary = cornerRadiusPrimary(s);
+  const cornerExpandRowBtn = '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">·</label>' +
+    '<button class="dm-icon-row-button" data-dm-corner-expand title="' + (cornerRadiusExpanded ? 'Collapse corners' : 'Edit each corner separately') + '" data-active="' + (cornerRadiusExpanded ? 'true' : 'false') + '" style="width:100%;height:30px;padding:0;display:flex;align-items:center;justify-content:center;">' +
+    icon('scan', 14) + '</button></div>';
   const appearanceContent =
     grid12([
-      { span: 4, content: inp('Opacity', 'opacity', s.opacity || '1', '') },
-      { span: 6, content: sel('Blend', 'mixBlendMode', s.mixBlendMode || 'normal', ['normal','multiply','screen','overlay','darken','lighten','color-dodge','color-burn','hard-light','soft-light','difference','exclusion','hue','saturation','color','luminosity','plus-lighter']) },
-      { span: 2, content: isolationBtn },
+      { span: 5, content: opacityInput(s.opacity || '1') },
+      { span: 5, content: inp('Corner radius', 'borderRadius', cornerPrimary) },
+      { span: 2, content: cornerExpandRowBtn },
     ]) + sp() +
-    cornerRadiusGrid(s, cornerRadiusExpanded, cornerRadiusLinked) + sp() +
+    (cornerRadiusExpanded ? cornerRadius2x2(s) + sp() : '') +
     // "Color adjust" is just a quick-toggle UI on top of the standard
     // CSS `filter` property — each button toggles one function (e.g.
     // `brightness(120%)`) on or off in the filter chain. The raw
@@ -4748,6 +4775,16 @@ function renderDesignTab(): string {
     '<div title="Quick toggles for individual filter functions (brightness, contrast, saturate, etc.). Edits the same CSS property as the raw Filter input below.">' + sub('Color adjust (filter quick toggles)') + colorAdjustRow + '</div>' + sp() +
     '<div title="Raw value for the CSS `filter` shorthand — type custom filters here (e.g. blur(4px) saturate(150%)). Mirrors the toggles above.">' + inp('Filter (raw value)', 'filter', s.filter || 'none', '') + '</div>' +
     advancedDisclosure('appearance', appearanceAdvOpen,
+      // Blend mode + isolation live up here in Advanced. They drive
+      // stacking-context behaviour rather than visual style, so they
+      // belong with the other context-y controls (visibility, pointer
+      // events, etc.) rather than the always-visible top row.
+      sub('Blend + stacking') +
+      grid12([
+        { span: 8, content: sel('Blend', 'mixBlendMode', s.mixBlendMode || 'normal', ['normal','multiply','screen','overlay','darken','lighten','color-dodge','color-burn','hard-light','soft-light','difference','exclusion','hue','saturation','color','luminosity','plus-lighter']) },
+        { span: 4, content: isolationBtn },
+      ]) + sp() +
+
       sub('Visibility & cursor') +
       grid12([
         { span: 6, content: sel('Visible', 'visibility', s.visibility || 'visible', ['visible','hidden','collapse']) },
@@ -8122,6 +8159,19 @@ function setupDelegation() {
       const raw = propInput.value.trim();
       const isPureNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
       const val = isNumeric && unit && isPureNumber ? raw + unit : raw;
+      // Opacity percent input — display 0-100 with a locked `%` chip,
+      // write 0-1 decimal so the Changes tab shows canonical CSS.
+      // Clamped to the 0-100 range on commit so users can't get the
+      // element invisible / >1-decimal-equivalent by mistake.
+      if (prop === '__opacity_pct') {
+        const n = parseFloat(raw);
+        if (!isNaN(n)) {
+          const clamped = Math.max(0, Math.min(100, n));
+          propInput.value = String(clamped);
+          applyStyle('opacity', String(Math.round(clamped) / 100));
+        }
+        return;
+      }
       // Dash / gap inputs in the dashed-stroke panel — clamp to >= 1px
       // (positive integers only; CSS doesn't accept 0 here, matching
       // Figma's dash/gap UX).
@@ -8447,7 +8497,13 @@ function setupDelegation() {
           const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();
         }); return;
       }
-      if (cornerRadiusLinked && (borderRadii.includes(prop) || prop === 'borderRadius')) {
+      // Corner-radius fan-out only triggers for the shorthand `borderRadius`
+      // input on the main row — that input is explicitly the "all four
+      // corners equal" control. Per-corner inputs in the expanded 2×2
+      // panel write to their specific long-form prop (borderTopLeftRadius
+      // etc.) and must NOT fan out, otherwise edit-each-corner would
+      // immediately equalise every corner again.
+      if (prop === 'borderRadius') {
         Promise.all(borderRadii.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
           const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();
         }); return;
@@ -8927,13 +8983,25 @@ function setupDelegation() {
     if (propInput) {
       const isNumeric = propInput.dataset.dmNumeric === '1';
       const unit = propInput.dataset.dmUnit || '';
+      const propName = propInput.dataset.dmProp || '';
+
+      // Opacity percent input — same conversion as the change handler:
+      // display 0-100, clamp, divide by 100, write the real CSS prop.
+      const commitOpacityPct = (rawStr: string) => {
+        const n = parseFloat(rawStr);
+        if (isNaN(n)) return;
+        const clamped = Math.max(0, Math.min(100, n));
+        propInput.value = String(clamped);
+        applyStyle('opacity', String(Math.round(clamped) / 100));
+      };
 
       if (e.key === 'Enter') {
         e.preventDefault();
         const raw = propInput.value.trim();
+        if (propName === '__opacity_pct') { commitOpacityPct(raw); return; }
         const isPureNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
         const val = isNumeric && unit && isPureNumber ? raw + unit : raw;
-        applyStyle(propInput.dataset.dmProp!, val);
+        applyStyle(propName, val);
         return;
       }
 
@@ -8945,9 +9013,10 @@ function setupDelegation() {
         // they use 0.1 (with Shift = 1). Properties with a unit
         // (px, %, deg, em…) keep the original 1 / Shift+10 cadence. The
         // sole unitless prop that wants integer steps is z-index, which
-        // we special-case so 1 → 2 → 3 still works as expected.
-        const propName = propInput.dataset.dmProp || '';
-        const integerUnitless = propName === 'zIndex' || propName === 'z-index' || propName === 'order';
+        // we special-case so 1 → 2 → 3 still works as expected. The
+        // opacity-pct input also wants integer steps (it lives in 0-100,
+        // not 0-1) so it joins the integer-step group.
+        const integerUnitless = propName === 'zIndex' || propName === 'z-index' || propName === 'order' || propName === '__opacity_pct';
         const isFractional = !unit && !integerUnitless;
         const step = isFractional
           ? (e.shiftKey ? 1 : 0.1)
@@ -8955,9 +9024,10 @@ function setupDelegation() {
         const current = parseFloat(propInput.value) || 0;
         const newVal = e.key === 'ArrowUp' ? current + step : current - step;
         const rounded = Math.round(newVal * 100) / 100; // 2 decimals max
+        if (propName === '__opacity_pct') { commitOpacityPct(String(rounded)); return; }
         propInput.value = String(rounded);
         const val = unit ? rounded + unit : String(rounded);
-        applyStyle(propInput.dataset.dmProp!, val);
+        applyStyle(propName, val);
         return;
       }
 
