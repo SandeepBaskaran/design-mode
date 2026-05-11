@@ -4771,15 +4771,6 @@ function renderDesignTab(): string {
       { span: 2, content: cornerExpandRowBtn },
     ]) + sp() +
     (cornerRadiusExpanded ? cornerRadius2x2(s) + sp() : '') +
-    // "Color adjust" is just a quick-toggle UI on top of the standard
-    // CSS `filter` property — each button toggles one function (e.g.
-    // `brightness(120%)`) on or off in the filter chain. The raw
-    // "Filter" input below is the same CSS property surfaced as text
-    // so users can type custom values like `blur(4px) saturate(150%)`.
-    // Tooltips on both make the relationship explicit; without them the
-    // pairing reads as two unrelated controls.
-    '<div title="Quick toggles for individual filter functions (brightness, contrast, saturate, etc.). Edits the same CSS property as the raw Filter input below.">' + sub('Color adjust (filter quick toggles)') + colorAdjustRow + '</div>' + sp() +
-    '<div title="Raw value for the CSS `filter` shorthand — type custom filters here (e.g. blur(4px) saturate(150%)). Mirrors the toggles above.">' + inp('Filter (raw value)', 'filter', s.filter || 'none', '') + '</div>' +
     advancedDisclosure('appearance', appearanceAdvOpen,
       // Blend mode + isolation live up here in Advanced. They drive
       // stacking-context behaviour rather than visual style, so they
@@ -4790,6 +4781,17 @@ function renderDesignTab(): string {
         { span: 8, content: sel('Blend', 'mixBlendMode', s.mixBlendMode || 'normal', ['normal','multiply','screen','overlay','darken','lighten','color-dodge','color-burn','hard-light','soft-light','difference','exclusion','hue','saturation','color','luminosity','plus-lighter']) },
         { span: 4, content: isolationBtn },
       ]) + sp() +
+
+      // Color adjust is a quick-toggle UI on top of the standard CSS
+      // `filter` property — each button toggles one function (e.g.
+      // `brightness(120%)`) on or off in the filter chain. The raw
+      // "Filter" input is the same property surfaced as text so users
+      // can type custom values like `blur(4px) saturate(150%)`. Both
+      // moved here from the always-visible block: filters are
+      // occasional-use, not the daily look-and-feel controls (opacity,
+      // corner radius) that earn their seat at the top.
+      '<div title="Quick toggles for individual filter functions (brightness, contrast, saturate, etc.). Edits the same CSS property as the raw Filter input below.">' + sub('Color adjust (filter quick toggles)') + colorAdjustRow + '</div>' + sp() +
+      '<div title="Raw value for the CSS `filter` shorthand — type custom filters here (e.g. blur(4px) saturate(150%)). Mirrors the toggles above.">' + inp('Filter (raw value)', 'filter', s.filter || 'none', '') + '</div>' + sp() +
 
       sub('Visibility & cursor') +
       grid12([
