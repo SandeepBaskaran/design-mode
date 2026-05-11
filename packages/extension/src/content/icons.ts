@@ -200,6 +200,9 @@ export const icons = {
   // ── Z-order ──
   arrowUpToLine: `<svg ${S}><path d="M5 3h14"/><path d="m18 13-6-6-6 6"/><path d="M12 7v14"/></svg>`,
   arrowDownToLine: `<svg ${S}><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg>`,
+  // ── Vertical alignment (used by the Typography section's middle-align
+  // button — chevrons folding toward a central horizontal line). ──
+  foldVertical: `<svg ${S}><path d="M2 12h20"/><path d="M10 4v4"/><path d="M10 16v4"/><path d="M14 4v4"/><path d="M14 16v4"/><path d="m17 21-5-5-5 5"/><path d="m17 3-5 5-5-5"/></svg>`,
 
   // ── Component (variant) section ──
   component: `<svg ${S}><path d="M5.5 8.5 9 12l-3.5 3.5L2 12l3.5-3.5Z"/><path d="m12 2 3.5 3.5L12 9 8.5 5.5 12 2Z"/><path d="M12 15l3.5 3.5L12 22l-3.5-3.5L12 15Z"/><path d="M18.5 8.5 22 12l-3.5 3.5L15 12l3.5-3.5Z"/></svg>`,

@@ -4162,6 +4162,13 @@ function renderDesignTab(): string {
   const decoCur = s.textDecorationLine || 'none';
   const txAlign = s.textAlign || 'left';
   const txCase = s.textTransform || 'none';
+  // Vertical text alignment lives on the same row as horizontal alignment.
+  // The buttons write to `vertical-align`, matching the long-form select
+  // already exposed in Typography Advanced. CSS-wise, `vertical-align`
+  // takes effect on inline-block / table-cell elements; block elements
+  // don't honour it directly — for those the Layout section's Children
+  // align pad (flex / grid) is the right control.
+  const vertAlign = ((s as any).verticalAlign || 'baseline').toLowerCase();
   // `list-style-type` computes to `disc` for every element (CSS initial),
   // even non-list ones. Painting bullets requires a list-display value
   // (`<ul>`/`<ol>`/`<li>` or `display: list-item`), so we treat the
@@ -4298,32 +4305,32 @@ function renderDesignTab(): string {
       { icon: 'caseLower', attr: 'data-dm-prop="textTransform" data-dm-value="lowercase"', active: txCase === 'lowercase', title: 'lowercase' },
       { icon: 'caseSensitive', attr: 'data-dm-prop="textTransform" data-dm-value="capitalize"', active: txCase === 'capitalize', title: 'Title Case' },
     ]) + sp() +
-    // Alignment row + list row. The list-style row is only meaningful
-    // for actual list elements; otherwise the alignment row goes full
-    // width (the row is suppressed instead of rendered with no-op
-    // toggles that mislead users into thinking a `<p>` is a bulleted
-    // list because `list-style-type` computes to `disc` everywhere).
+    // Alignment row: horizontal (4 buttons) + vertical (3 buttons), each
+    // half taking 6 of 12 columns. The list-style row sits underneath
+    // and only renders for actual list elements — `list-style-type`
+    // computes to `disc` everywhere, so showing the toggle on every
+    // element would mislead users into thinking a `<p>` is a bulleted
+    // list.
+    grid12([
+      { span: 6, content: iconButtonRow([
+        { icon: 'textAlignStart', attr: 'data-dm-prop="textAlign" data-dm-value="left"', active: txAlign === 'left' || txAlign === 'start', title: 'Align left' },
+        { icon: 'textAlignCenter', attr: 'data-dm-prop="textAlign" data-dm-value="center"', active: txAlign === 'center', title: 'Align center' },
+        { icon: 'textAlignEnd', attr: 'data-dm-prop="textAlign" data-dm-value="right"', active: txAlign === 'right' || txAlign === 'end', title: 'Align right' },
+        { icon: 'textAlignJustify', attr: 'data-dm-prop="textAlign" data-dm-value="justify"', active: txAlign === 'justify', title: 'Justify' },
+      ]) },
+      { span: 6, content: iconButtonRow([
+        { icon: 'arrowUpToLine', attr: 'data-dm-prop="verticalAlign" data-dm-value="top"', active: vertAlign === 'top', title: 'Align top (vertical-align: top — works on inline-block / table-cell)' },
+        { icon: 'foldVertical', attr: 'data-dm-prop="verticalAlign" data-dm-value="middle"', active: vertAlign === 'middle', title: 'Align middle (vertical-align: middle)' },
+        { icon: 'arrowDownToLine', attr: 'data-dm-prop="verticalAlign" data-dm-value="bottom"', active: vertAlign === 'bottom', title: 'Align bottom (vertical-align: bottom)' },
+      ]) },
+    ]) + sp() +
     (isListLayer
-      ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">' +
-          iconButtonRow([
-            { icon: 'textAlignStart', attr: 'data-dm-prop="textAlign" data-dm-value="left"', active: txAlign === 'left' || txAlign === 'start', title: 'Align left' },
-            { icon: 'textAlignCenter', attr: 'data-dm-prop="textAlign" data-dm-value="center"', active: txAlign === 'center', title: 'Align center' },
-            { icon: 'textAlignEnd', attr: 'data-dm-prop="textAlign" data-dm-value="right"', active: txAlign === 'right' || txAlign === 'end', title: 'Align right' },
-            { icon: 'textAlignJustify', attr: 'data-dm-prop="textAlign" data-dm-value="justify"', active: txAlign === 'justify', title: 'Justify' },
-          ]) +
-          iconButtonRow([
-            { icon: 'minus', attr: 'data-dm-list-style="none"', active: lstStyle === 'none' || !lstStyle, title: 'No list marker' },
-            { icon: 'list', attr: 'data-dm-list-style="disc"', active: lstStyle === 'disc', title: 'Bulleted list' },
-            { icon: 'listOrdered', attr: 'data-dm-list-style="decimal"', active: lstStyle === 'decimal', title: 'Numbered list' },
-          ]) +
-        '</div>'
-      : iconButtonRow([
-          { icon: 'textAlignStart', attr: 'data-dm-prop="textAlign" data-dm-value="left"', active: txAlign === 'left' || txAlign === 'start', title: 'Align left' },
-          { icon: 'textAlignCenter', attr: 'data-dm-prop="textAlign" data-dm-value="center"', active: txAlign === 'center', title: 'Align center' },
-          { icon: 'textAlignEnd', attr: 'data-dm-prop="textAlign" data-dm-value="right"', active: txAlign === 'right' || txAlign === 'end', title: 'Align right' },
-          { icon: 'textAlignJustify', attr: 'data-dm-prop="textAlign" data-dm-value="justify"', active: txAlign === 'justify', title: 'Justify' },
-        ])
-    ) + sp() +
+      ? iconButtonRow([
+          { icon: 'minus', attr: 'data-dm-list-style="none"', active: lstStyle === 'none' || !lstStyle, title: 'No list marker' },
+          { icon: 'list', attr: 'data-dm-list-style="disc"', active: lstStyle === 'disc', title: 'Bulleted list' },
+          { icon: 'listOrdered', attr: 'data-dm-list-style="decimal"', active: lstStyle === 'decimal', title: 'Numbered list' },
+        ]) + sp()
+      : '') +
     typographyAdvancedHtml,
     true,
     typographyActionsHtml
