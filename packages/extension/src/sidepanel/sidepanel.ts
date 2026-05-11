@@ -4755,8 +4755,14 @@ function renderDesignTab(): string {
   // Blend mode + isolation moved into Advanced; they're niche stacking-
   // context controls, not the kind of thing you reach for on every layer.
   const cornerPrimary = cornerRadiusPrimary(s);
+  // Button reuses .dm-icon-row-button's default padding (6px) instead of
+  // the explicit height:30px;padding:0 the earlier draft hard-coded —
+  // that combination rendered ~2px taller than the .dm-input-shell next
+  // to it (padding-driven height of an input wins on the small fraction
+  // of a px-line difference). Letting padding drive the height keeps the
+  // button visually flush with the Opacity / Corner-radius fields.
   const cornerExpandRowBtn = '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">·</label>' +
-    '<button class="dm-icon-row-button" data-dm-corner-expand title="' + (cornerRadiusExpanded ? 'Collapse corners' : 'Edit each corner separately') + '" data-active="' + (cornerRadiusExpanded ? 'true' : 'false') + '" style="width:100%;height:30px;padding:0;display:flex;align-items:center;justify-content:center;">' +
+    '<button class="dm-icon-row-button" data-dm-corner-expand title="' + (cornerRadiusExpanded ? 'Collapse corners' : 'Edit each corner separately') + '" data-active="' + (cornerRadiusExpanded ? 'true' : 'false') + '" style="width:100%;">' +
     icon('scan', 14) + '</button></div>';
   const appearanceContent =
     grid12([
