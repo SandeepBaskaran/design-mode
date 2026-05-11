@@ -829,19 +829,70 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           }
           removeTextChange(msg.changeId);
         } else {
-          // DOM change — actually reverse the action when possible
+          // DOM change — actually reverse the action when possible.
+          // Mirrors `revertAllPageMutations`'s per-action logic so a
+          // single-row revert behaves identically to Clear All for that
+          // change, including the belt-and-braces sweeps that catch
+          // stale elementMap entries and React data-dm-id strips.
           const domChange = getDomChanges().find(c => c.id === msg.changeId);
           if (domChange) {
             try {
               if (domChange.action === 'duplicate' || domChange.action === 'insert') {
-                const el = getElementById(domChange.elementId) || document.querySelector(domChange.selector);
+                // Primary: id lookup. Fallback: position-based selector.
+                const el = getElementById(domChange.elementId) ||
+                  (domChange.selector ? document.querySelector(domChange.selector) as HTMLElement | null : null);
                 if (el) el.remove();
+                // Belt-and-braces: any other element bearing this dm-id
+                // (elementMap drift) and the dm-clone-<id> marker class
+                // (survives a React strip of data-dm-id).
+                document.querySelectorAll(`[data-dm-id="${domChange.elementId}"]`).forEach(n => n.remove());
+                document.querySelectorAll(`.dm-clone-${domChange.elementId}`).forEach(n => n.remove());
+                // Cascade: a duplicate/insert that's being reverted no
+                // longer exists on the page, so any style/text/move/
+                // delete records pointing at the same elementId are
+                // orphans. Drop them so the Changes tab doesn't keep
+                // showing stale rows the user can't act on.
+                for (const c of getStyleChanges()) {
+                  if (c.elementId === domChange.elementId) removeStyleChange(c.id);
+                }
+                for (const c of getTextChanges()) {
+                  if (c.elementId === domChange.elementId) removeTextChange(c.id);
+                }
+                for (const c of getDomChanges()) {
+                  if (c.id !== domChange.id && c.elementId === domChange.elementId) {
+                    removeDomChange(c.id);
+                  }
+                }
               } else if (domChange.action === 'delete' && domChange.outerHTML) {
-                if (!document.querySelector(domChange.selector)) {
+                // Use data-dm-id (stable) for the still-there check.
+                // The saved selector is position-based and can match the
+                // sibling that slid into the deleted element's slot.
+                const stillThere = document.querySelector(`[data-dm-id="${domChange.elementId}"]`);
+                if (!stillThere) {
                   const temp = document.createElement('div');
                   temp.innerHTML = domChange.outerHTML;
                   const restored = temp.firstElementChild as HTMLElement | null;
-                  if (restored) (document.body || document.documentElement).appendChild(restored);
+                  if (restored) {
+                    let placed = false;
+                    if (domChange.origin) {
+                      let parent: HTMLElement | null = null;
+                      const originParentId = (domChange.origin as any).parentId;
+                      if (originParentId) {
+                        parent = document.querySelector(`[data-dm-id="${originParentId}"]`) as HTMLElement | null;
+                      }
+                      if (!parent && domChange.origin.parentSelector) {
+                        try { parent = document.querySelector(domChange.origin.parentSelector) as HTMLElement | null; } catch {}
+                      }
+                      if (parent) {
+                        const idx = Math.min(domChange.origin.index, parent.children.length);
+                        const before = parent.children[idx];
+                        if (before) parent.insertBefore(restored, before);
+                        else parent.appendChild(restored);
+                        placed = true;
+                      }
+                    }
+                    if (!placed) (document.body || document.documentElement).appendChild(restored);
+                  }
                 }
               }
               // 'move' has no original-position info — record removal only

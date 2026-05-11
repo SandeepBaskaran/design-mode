@@ -37,7 +37,7 @@ export function startWebSocketServer(port: number): Promise<WebSocketServer> {
     wss.on('connection', (ws) => {
       console.error('[Design Mode] Extension connected');
       activeConnection = ws;
-      ws.send(JSON.stringify({ type: 'HELLO', payload: { version: '1.0.0' } }));
+      ws.send(JSON.stringify({ type: 'HELLO', payload: { version: '1.0.1' } }));
 
       ws.on('message', (data) => {
         try {

@@ -3,7 +3,7 @@
 // ============================================================
 
 export const APP_NAME = 'Design Mode';
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.0.1';
 
 // Default WebSocket port for companion server
 export const DEFAULT_WS_PORT = 9960;

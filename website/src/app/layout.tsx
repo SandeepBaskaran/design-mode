@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.scss";
 import { MobileNotice } from "./MobileNotice";
 import { Analytics } from "./Analytics";
+import { LinkTracker } from "./LinkTracker";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://design-mode.dev"),
@@ -46,6 +47,7 @@ export default function RootLayout({
         <MobileNotice />
         <main className="main-content">{children}</main>
         <Analytics />
+        <LinkTracker />
       </body>
     </html>
   );

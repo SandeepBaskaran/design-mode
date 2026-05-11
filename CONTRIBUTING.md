@@ -10,10 +10,12 @@ Larger changes are welcome but please open an issue first to talk through scope.
 design-mode/
 ├── packages/
 │   ├── extension/    Chrome extension (Manifest V3 side panel, Vite, TypeScript)
-│   ├── server/       MCP companion + WebSocket bridge (Node, TypeScript, tsx)
+│   ├── mcp-local/    MCP companion + WebSocket bridge (Node, TypeScript, tsx)
+│   ├── mcp-cloud/    Hosted MCP relay (Vercel-deployable)
 │   └── shared/       Shared types, message schemas, constants
-├── website/          Marketing/docs site (Next.js 14)
+├── website/          Marketing + docs + interactive demo (Next.js 14)
 ├── docs/             Project docs (e2e-testcases.md)
+├── scripts/          Repo helpers (pre-publish check)
 └── icons/            Extension icons
 ```
 

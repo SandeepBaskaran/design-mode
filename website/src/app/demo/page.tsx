@@ -29,7 +29,7 @@ export default function DemoPage() {
     <>
       <article className="article">
         <header>
-          <TopNav />
+          <TopNav variant="demo" />
           <div className="hero" style={{ paddingTop: "2.5rem", paddingBottom: "1.5rem" }}>
             <h1>Live demo</h1>
             <p className="tagline">

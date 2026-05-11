@@ -99,7 +99,7 @@ export function getComputedStyleSubset(el: HTMLElement): Record<string, string> 
     'display','flexDirection','flexWrap','justifyContent','alignItems','alignSelf',
     'flexGrow','flexShrink','flexBasis','gap','rowGap','columnGap',
     'gridTemplateColumns','gridTemplateRows','gridColumn','gridRow',
-    'width','height','minWidth','maxWidth','minHeight','maxHeight',
+    'width','height','minWidth','maxWidth','minHeight','maxHeight','aspectRatio',
     'marginTop','marginRight','marginBottom','marginLeft',
     'paddingTop','paddingRight','paddingBottom','paddingLeft',
     'boxSizing','overflow','overflowX','overflowY',

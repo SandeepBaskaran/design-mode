@@ -4,7 +4,7 @@ User-facing reference for everything in the Layers tab. Each control + each visu
 
 For the implementation status of layer-related features, see PARITY.md (where applicable). This document is for **understanding what each thing in the Layers tab does**.
 
-Last updated: 2026-05-08.
+Last updated: 2026-05-11.
 
 ## Design stance — what we deliberately don't do
 
@@ -56,7 +56,7 @@ Above all three tabs sits a row of action buttons — visible regardless of whic
 
 ## Search bar + Multi-select toggle (Layers tab only)
 
-Pinned at the top of the Layers tab body.
+Pinned ("position: sticky") at the top of the Layers tab body — stays visible while the rows scroll beneath. The filter chip row below it is pinned together with the search bar, so both search and filter controls remain reachable no matter how deep into the tree you've scrolled. The multi-select bulk-action toolbar sits *below* the sticky band — it's transient and tied to the active selection, not navigation.
 
 ### Search input
 

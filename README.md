@@ -47,11 +47,13 @@ A free, open-source Chromium extension that turns any website into a live design
 design-mode/
 ├── packages/
 │   ├── extension/    Chrome extension (Manifest V3 side panel, Vite, TypeScript)
-│   ├── server/       MCP companion + WebSocket bridge (Node.js, TypeScript)
+│   ├── mcp-local/    MCP companion + WebSocket bridge (Node.js, TypeScript)
+│   ├── mcp-cloud/    Hosted MCP relay (Vercel-deployable)
 │   └── shared/       Shared types, message schemas, constants
-├── website/          Single-page docs (Next.js 14)
+├── website/          Marketing + docs + interactive demo (Next.js 14)
 ├── docs/             Project docs (e2e-testcases.md)
 ├── icons/            Extension icons (16 / 48 / 128 PNG + chrome.svg)
+├── scripts/          Repo helpers (pre-publish check)
 └── package.json      npm workspaces root
 ```
 
@@ -63,7 +65,7 @@ design-mode/
 npm install
 ```
 
-This installs every workspace (`extension`, `server`, `shared`, `website`) in one shot.
+This installs every workspace (`extension`, `mcp-local`, `mcp-cloud`, `shared`, `website`) in one shot.
 
 ### 2. Build the extension
 
@@ -154,9 +156,11 @@ Run `npm start` for the full ASCII banner.
 
 ```bash
 npm run dev:extension   # rebuild extension once (then refresh in chrome://extensions)
-npm run dev:server      # start MCP/WebSocket bridge with tsx watch
+npm run dev:mcp-local   # start the local MCP server + ws://localhost:9960 bridge
+npm run dev:mcp-cloud   # run the hosted MCP relay locally (Vercel dev)
 npm run dev:website     # next dev for the docs site
 npm run build           # build extension + website
+npm run package:extension # build + zip dist into packages/extension/design-mode-extension.zip
 npm run clean           # nuke all build artefacts
 ```
 
@@ -182,10 +186,12 @@ Walk through every phase in [`docs/e2e-testcases.md`](./docs/e2e-testcases.md) a
 freshly-built `packages/extension/dist/`. The convenience script
 
 ```bash
-npm run prepublish:check
+npm run verify
 ```
 
-runs the full build then prints the e2e checklist reminder. The checklist covers:
+runs `scripts/prepublish-check.mjs` — full build, manifest sanity, MCP tool-count
+guard, MCP bundle integrity, website build — then prints the e2e checklist
+reminder. The manual checklist covers:
 
 - Activation, MCP connection, and tab toggle
 - Inspect / click select, hover stability, escape-to-deselect
@@ -211,7 +217,9 @@ runs the full build then prints the e2e checklist reminder. The checklist covers
   Edits live in `chrome.storage` on your machine; the optional MCP server runs
   on `localhost`. Full details: [PRIVACY.md](./PRIVACY.md).
 - The marketing site at `design-mode.dev` loads Google Fonts and (when configured
-  via `NEXT_PUBLIC_GA_ID`) Google Analytics. Forks ship without analytics by default.
+  via `NEXT_PUBLIC_GA_ID`) Google Analytics. CTA clicks and outbound links on the
+  site emit anonymous GA events; forks ship without analytics by default
+  (events safely no-op when `NEXT_PUBLIC_GA_ID` is unset).
 - Vulnerability reports: [SECURITY.md](./SECURITY.md).
 
 ## Contributing

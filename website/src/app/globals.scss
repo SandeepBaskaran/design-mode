@@ -95,10 +95,20 @@ strong {
 .article {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  align-items: center;
   gap: 0.875rem;
   max-width: 1024px;
   margin: 0 auto;
-  padding: 3.5rem 1.5rem 3rem;
+  padding: 2rem 1.5rem 1.5rem;
+}
+
+// Header spans the full article width so the top nav stretches edge-to-edge
+// (article centers its children, so without an explicit width the header
+// would collapse to the natural width of its content).
+.article > header {
+  width: 100%;
+  max-width: 1024px;
 }
 
 // ── Header (page-title row) ──────────────────────────────────────────────
@@ -202,16 +212,46 @@ strong {
   }
 }
 
+// Secondary CTA — text-only counterpart to the dark "Add to Chrome" button.
+// Sits between the GitHub icon and the primary CTA in the top nav.
+.secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.875rem;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0.5rem;
+  color: rgba(0, 0, 0, 0.78);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.2);
+    color: #000;
+    text-decoration: none;
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+}
+
 // ── Hero ─────────────────────────────────────────────────────────────────
 .hero {
   text-align: center;
-  margin-top: 2rem;
-  padding-top: 4rem;
-  padding-bottom: 4rem;
+  margin-top: 1.25rem;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
 
   h1 {
-    font-size: 2rem;
+    font-size: 1.875rem;
     font-weight: 600;
     line-height: 1.15;
     margin-bottom: 0.75rem;
@@ -227,41 +267,108 @@ strong {
   }
 }
 
+// ── Overview row — image left, value-prop content right ─────────────────
+// The section is a flex row so the side-panel screenshot and the bullet
+// list read as a single composition. 720px keeps the columns tight
+// enough that the eye reads them as a single composition (a fuller-width
+// row reads as two unrelated halves of the page).
+.overview-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  align-self: center;
+  width: 720px;
+  max-width: 100%;
+  gap: 2.5rem;
+  margin-top: 0.5rem;
+}
+
 // ── Hero cover image ─────────────────────────────────────────────────────
-// Scaled uniformly to ~50% so width AND height halve together (aspect ratio
-// preserved). Bottom of the image fades into the body background so it appears
-// to dissolve into the page rather than ending in a hard edge.
+// Constrained by max-height (instead of width) since the screenshot is
+// portrait. Capping the height is what makes the whole page fit inside
+// a typical desktop viewport without scrolling.
 .hero-cover {
-  width: 50%;
-  margin: 0 auto;
+  flex-shrink: 0;
   position: relative;
   overflow: hidden;
   border-radius: 8px;
+  // Cap at a height that, combined with nav + hero + footer, fits inside
+  // a typical desktop viewport (~937px usable on 1080p). Width follows.
+  max-height: 52vh;
+  margin: 0;
 
   img {
     display: block;
-    width: 100%;
-    height: auto;
+    height: 52vh;
+    max-height: 52vh;
+    width: auto;
     border-radius: 8px;
   }
 
-  // Soft white fade at the bottom — colour-matched to --body-bg
+  // Soft fade at the bottom — colour-matched to --body-bg so the image
+  // dissolves into the page rather than ending in a hard edge.
   &::after {
     content: '';
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    height: 38%;
+    height: 26%;
     background: linear-gradient(
       to bottom,
       rgba(253, 253, 252, 0) 0%,
-      rgba(253, 253, 252, 0.65) 55%,
+      rgba(253, 253, 252, 0.55) 55%,
       var(--body-bg) 100%
     );
     pointer-events: none;
     border-bottom-left-radius: 8px;
     border-bottom-right-radius: 8px;
+  }
+}
+
+// Right-hand column: paragraph + bullet list.
+.overview-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+
+  p {
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+}
+
+.feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+
+  li {
+    position: relative;
+    padding-left: 1.25rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: rgba(0, 0, 0, 0.82);
+
+    // Custom bullet — small filled circle aligned with the cap-height of
+    // the first line. Cleaner than the default disc, and visually links
+    // each row without competing with the surrounding type.
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0.25rem;
+      top: 0.55em;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #111;
+    }
   }
 }
 
@@ -316,7 +423,37 @@ strong {
   }
 
   .article {
-    padding: 3rem 1.25rem 2.5rem;
+    padding: 2rem 1.25rem 2rem;
+  }
+
+  // Stack image above content on narrower viewports — flex-row collapses
+  // since there isn't enough horizontal room for both columns to breathe.
+  .overview-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .hero-cover {
+    max-height: none;
+    width: 60%;
+
+    img {
+      height: auto;
+      max-height: none;
+      width: 100%;
+    }
+  }
+
+  .overview-content {
+    text-align: center;
+  }
+
+  .feature-list {
+    max-width: 36rem;
+    margin: 0 auto;
+
+    li { text-align: left; }
   }
 }
 
@@ -347,6 +484,11 @@ strong {
       width: 16px !important;
       height: 16px !important;
     }
+  }
+
+  .secondary-btn {
+    padding: 0.45rem 0.7rem;
+    font-size: 0.75rem;
   }
 
   .icon-btn {
@@ -383,10 +525,20 @@ strong {
     line-height: 1.55;
   }
 
-  // Cover image — 50% is too small at a phone width; bump up so the
-  // detail stays legible while the fade still does its job.
+  // Cover image — 60% (from the 980px breakpoint) is still a little
+  // narrow at phone widths; bump it up so the side-panel detail stays
+  // legible while the fade still does its job.
   .hero-cover {
     width: 75%;
+  }
+
+  // Hide the secondary "Try the Demo" CTA on phones — the top nav is
+  // already crowded with three actions and the demo target needs a
+  // desktop viewport anyway (see MobileNotice). The "Back home" variant
+  // of `.secondary-btn` on /demo stays visible because returning to the
+  // marketing page is still useful even on a phone.
+  a.secondary-btn[href="/demo"] {
+    display: none;
   }
 
   .footer {

@@ -552,6 +552,40 @@ async function applyStyle(property: string, value: string) {
     applyStrokeProperty(property, value);
     return;
   }
+  // Aspect-ratio lock: when the W:H ratio is pinned (the link2 icon is
+  // active in the Layout section), editing one dimension drives the
+  // other. We detect "locked" by the live computed `aspect-ratio` —
+  // it's only set when the user explicitly engaged the lock button. We
+  // dispatch the partner FIRST so when the user's own edit's repaint
+  // arrives, both dimensions are already coherent.
+  if (property === 'width' || property === 'height') {
+    const arRaw = (info?.computedStyles?.aspectRatio || '').trim();
+    if (arRaw && arRaw !== 'auto') {
+      let ratio = NaN;
+      const slashM = arRaw.match(/^(-?[\d.]+)\s*\/\s*(-?[\d.]+)$/);
+      if (slashM) {
+        const a = parseFloat(slashM[1]);
+        const b = parseFloat(slashM[2]);
+        if (a > 0 && b > 0) ratio = a / b;
+      } else {
+        const n = parseFloat(arRaw);
+        if (!isNaN(n) && n > 0) ratio = n;
+      }
+      const parsedVal = (value || '').trim().match(/^(-?[\d.]+)\s*([a-z%]*)$/i);
+      if (!isNaN(ratio) && ratio > 0 && parsedVal) {
+        const num = parseFloat(parsedVal[1]);
+        const unit = (parsedVal[2] || 'px').trim() || 'px';
+        if (!isNaN(num) && num > 0) {
+          const partnerProp = property === 'width' ? 'height' : 'width';
+          const partnerNum = property === 'width' ? num / ratio : num * ratio;
+          // Use SP_APPLY_STYLE directly so we don't recursively re-enter
+          // this lock branch (the partner's own dispatch would try to
+          // ping the original prop again, ad infinitum).
+          await send({ type: 'SP_APPLY_STYLE', property: partnerProp, value: partnerNum.toFixed(2).replace(/\.?0+$/, '') + unit });
+        }
+      }
+    }
+  }
   // Unified colour picker output for box-shadow / text-shadow. The
   // composer reads `[data-dm-shadow-field="colorhex"]` (and similarly
   // for textshadow); we mirror the picker's value into that hidden
@@ -731,7 +765,13 @@ function applyStrokePosition(pos: 'inside' | 'outside' | 'center') {
     applyStyle('outlineStyle', style);
     applyStyle('outlineWidth', weight + 'px');
     applyStyle('outlineColor', color);
-    applyStyle('outlineOffset', (-Math.round(weight / 2)) + 'px');
+    // Outline-offset has to stay negative for the visual to read as
+    // "centered on the edge" (the outline straddles the border box).
+    // With weight 0, -weight/2 is also 0, which makes the next
+    // inferStrokePosition fall back to 'outside' — looks like the tab
+    // bounced. Floor at -1px so Center is unambiguous even before the
+    // user picks a weight.
+    applyStyle('outlineOffset', Math.min(-1, -Math.round(weight / 2)) + 'px');
   }
 }
 async function applyText(text: string) { const res = await send({ type: 'SP_SET_TEXT', text }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
@@ -827,7 +867,7 @@ function cancelComment() { commentMode = false; commentText = ''; editingComment
 function startComment() { if (!info) return; commentMode = true; commentText = ''; editingCommentId = null; viewingCommentId = null; commentDirty = false; render(); }
 function editComment(comment: CommentEntry) { commentMode = true; commentText = comment.text; editingCommentId = comment.id; viewingCommentId = null; commentDirty = false; render(); }
 async function deleteCommentEntry(commentId: string) { await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + commentId }); comments = comments.filter(c => c.id !== commentId); render(); }
-async function removeChange(changeId: string) { styleChanges = styleChanges.filter(c => (c.id || 'style-' + styleChanges.indexOf(c)) !== changeId); textChanges = textChanges.filter(c => c.id !== changeId); domChanges = domChanges.filter(c => (c.id || 'dom-' + c.action) !== changeId); batchAppliedChanges.delete(changeId); render(); await send({ type: 'SP_REMOVE_CHANGE', changeId }); await refreshChanges(); await refreshState(); }
+async function removeChange(changeId: string) { styleChanges = styleChanges.filter(c => (c.id || 'style-' + styleChanges.indexOf(c)) !== changeId); textChanges = textChanges.filter(c => c.id !== changeId); domChanges = domChanges.filter(c => (c.id || 'dom-' + c.action) !== changeId); batchAppliedChanges.delete(changeId); render(); await send({ type: 'SP_REMOVE_CHANGE', changeId }); await refreshChanges(); await refreshDomTree(); await refreshState(); }
 async function clearAllChanges() { await send({ type: 'SP_CLEAR_CHANGES' }); styleChanges = []; textChanges = []; domChanges = []; comments = []; batchAppliedChanges.clear(); render(); }
 
 // Tiny markdown-ish renderer for comment bodies. Supports inline code,
@@ -1688,11 +1728,13 @@ function flipButtons(s: Record<string, string>): string {
 }
 
 // Rotation 90° quick buttons — bump the `rotate` longhand by ±90deg.
+// The default icon size (14) reads as ambiguous in this dense row, so
+// these get bumped to 18 — same visual weight as the alignment glyphs.
 function rotateQuickButtons(s: Record<string, string>): string {
   void s;
   return iconButtonRow([
-    { icon: 'rotateCcw', attr: 'data-dm-rotate-step="-90"', title: 'Rotate 90° counter-clockwise' },
-    { icon: 'rotateCw', attr: 'data-dm-rotate-step="90"', title: 'Rotate 90° clockwise' },
+    { icon: 'rotateCcw', attr: 'data-dm-rotate-step="-90"', title: 'Rotate 90° counter-clockwise', size: 18 },
+    { icon: 'rotateCw',  attr: 'data-dm-rotate-step="90"',  title: 'Rotate 90° clockwise',          size: 18 },
   ]);
 }
 
@@ -1883,13 +1925,10 @@ function cornerRadiusGrid(s: Record<string, string>, isExpanded: boolean, _isLin
 }
 
 function inferStrokePosition(s: Record<string, string>): 'inside' | 'outside' | 'center' {
-  const ol = (s.outlineStyle || '').trim();
-  const off = parseFloat(s.outlineOffset || '0') || 0;
-  if (ol && ol !== 'none' && off < 0) return 'center';
+  // Inside takes priority — a 0-spread inset box-shadow is unique to our
+  // Inside-mode emitter; nothing else in the panel produces that pattern.
   // Browsers normalize box-shadow computed values to color-first format
-  // (`rgb(0,0,0) 0px 0px 0px 1px inset`), so a regex on input format alone
-  // misses the inset stroke. Use the unified parser. Match 0-spread inset
-  // entries too so a user-set 0px weight preserves Inside mode state.
+  // (`rgb(0,0,0) 0px 0px 0px 1px inset`), so we use the unified parser.
   const entries = parseCssCommaList(s.boxShadow || '');
   for (const e of entries) {
     const p = parseShadowEntry(e);
@@ -1897,14 +1936,30 @@ function inferStrokePosition(s: Record<string, string>): 'inside' | 'outside' | 
       return 'inside';
     }
   }
+  // Center mode used to require outline-offset < 0, but applying Center
+  // with weight=0 (the user just arrived from Inside before picking a
+  // weight) leaves offset at 0 — the next render then mis-classifies as
+  // Outside, which is the "click Center → it goes Outside, click again →
+  // it goes Center" bug. The reliable signal is "outline-style is set
+  // AND no border-style is set." `auto` is the focus-ring default and
+  // doesn't count as user intent.
+  const ol = (s.outlineStyle || '').trim();
+  const olActive = ol && ol !== 'none' && ol !== 'auto';
+  const bs = (s.borderTopStyle || '').trim();
+  if (olActive && (bs === '' || bs === 'none')) return 'center';
   return 'outside';
 }
 
 function strokePositionRow(_s: Record<string, string>, current: 'inside' | 'outside' | 'center'): string {
+  // Tab order: Outside → Center → Inside. Outside is the most common
+  // (matches `border-*`); Center is the next-most-common (outline);
+  // Inside is the niche box-shadow trick. Reading left-to-right matches
+  // "where does the stroke sit relative to the box edge" — outside, on
+  // the edge (centered), inside.
   return segmentedRow([
-    { label: 'Inside', attr: 'data-dm-stroke-pos="inside"', active: current === 'inside', title: 'Stroke inside (inset shadow)' },
     { label: 'Outside', attr: 'data-dm-stroke-pos="outside"', active: current === 'outside', title: 'Stroke outside (border)' },
-    { label: 'Center', attr: 'data-dm-stroke-pos="center"', active: current === 'center', title: 'Stroke centered (outline + offset)' },
+    { label: 'Center',  attr: 'data-dm-stroke-pos="center"',  active: current === 'center',  title: 'Stroke centered (outline + offset)' },
+    { label: 'Inside',  attr: 'data-dm-stroke-pos="inside"',  active: current === 'inside',  title: 'Stroke inside (inset shadow — only solid renders)' },
   ]);
 }
 
@@ -2508,8 +2563,13 @@ function layeredRow(opts: {
   expanded: boolean;
   body?: string;         // expanded body
 }): string {
+  // Grip is a <span>, not a <button>: a draggable parent with a <button>
+  // child mousedown-target is unreliable in Chromium — the button captures
+  // focus and the drag often fails to initiate. The Layers tab's working
+  // grip uses the same span pattern. The data attr is decorative; drag
+  // identifies the row via the outer wrapper's data-dm-<prefix>-row.
   const headRow = '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:5px;">' +
-    '<button class="dm-section-action" data-dm-' + opts.prefix + '-drag="' + opts.idx + '" title="Drag to reorder (use ↑/↓ buttons)" aria-label="Drag" style="cursor:grab;">' + icon('gripVertical', 12) + '</button>' +
+    '<span class="dm-section-action" data-dm-' + opts.prefix + '-drag="' + opts.idx + '" title="Drag to reorder" aria-label="Drag" style="cursor:grab;">' + icon('gripVertical', 12) + '</span>' +
     opts.swatch +
     '<span style="flex:1;min-width:0;font-size:11px;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(opts.label) + '</span>' +
     (opts.meta ? '<span style="font-size:10px;color:var(--dm-text-muted);">' + escapeAttr(opts.meta) + '</span>' : '') +
@@ -3720,7 +3780,12 @@ function renderLayersTab(): string {
       hoverActions + '</div>';
   }).join('');
 
-  return searchBar + filterChipsRow + bulkBar + '<div style="overflow-y:auto;">' + rows + '</div>';
+  // Search + filter chips pin to the top of the layers list while the rows
+  // scroll beneath them — the multi-select bulk bar sits below the sticky
+  // header so it scrolls with the list (it's transient and tied to the
+  // active selection, not navigation).
+  const stickyHeader = '<div style="position:sticky;top:0;z-index:5;background:var(--dm-bg);">' + searchBar + filterChipsRow + '</div>';
+  return stickyHeader + bulkBar + '<div style="overflow-y:auto;">' + rows + '</div>';
 }
 
 // Layer kind classifier — what sections in the design panel should show.
@@ -3898,7 +3963,15 @@ function renderDesignTab(): string {
   const decoCur = s.textDecorationLine || 'none';
   const txAlign = s.textAlign || 'left';
   const txCase = s.textTransform || 'none';
-  const lstStyle = (s as any).listStyleType || 'none';
+  // `list-style-type` computes to `disc` for every element (CSS initial),
+  // even non-list ones. Painting bullets requires a list-display value
+  // (`<ul>`/`<ol>`/`<li>` or `display: list-item`), so we treat the
+  // toggle row as relevant only for actual list elements. For everything
+  // else lstStyle reads as 'none' so no button looks active and the row
+  // is suppressed entirely below.
+  const isListLayer = tag === 'ul' || tag === 'ol' || tag === 'li' ||
+    s.display === 'list-item' || s.display === 'inline list-item';
+  const lstStyle = isListLayer ? ((s as any).listStyleType || 'disc') : 'none';
   const inputWithIcon = (iconName: keyof typeof icons, prop: string, value: string, kw: string, unit: string, title: string): string =>
     '<div class="dm-field">' +
     '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;" title="' + escapeAttr(title) + '">' + icon(iconName, 11) + '</label>' +
@@ -4026,21 +4099,32 @@ function renderDesignTab(): string {
       { icon: 'caseLower', attr: 'data-dm-prop="textTransform" data-dm-value="lowercase"', active: txCase === 'lowercase', title: 'lowercase' },
       { icon: 'caseSensitive', attr: 'data-dm-prop="textTransform" data-dm-value="capitalize"', active: txCase === 'capitalize', title: 'Title Case' },
     ]) + sp() +
-    // Alignment + list row — half each. Left half = 4 align buttons (1.5 of 12
-    // cols each); right half = 3 list buttons (2 of 12 cols each).
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">' +
-      iconButtonRow([
-        { icon: 'textAlignStart', attr: 'data-dm-prop="textAlign" data-dm-value="left"', active: txAlign === 'left' || txAlign === 'start', title: 'Align left' },
-        { icon: 'textAlignCenter', attr: 'data-dm-prop="textAlign" data-dm-value="center"', active: txAlign === 'center', title: 'Align center' },
-        { icon: 'textAlignEnd', attr: 'data-dm-prop="textAlign" data-dm-value="right"', active: txAlign === 'right' || txAlign === 'end', title: 'Align right' },
-        { icon: 'textAlignJustify', attr: 'data-dm-prop="textAlign" data-dm-value="justify"', active: txAlign === 'justify', title: 'Justify' },
-      ]) +
-      iconButtonRow([
-        { icon: 'minus', attr: 'data-dm-list-style="none"', active: lstStyle === 'none' || !lstStyle, title: 'No list' },
-        { icon: 'list', attr: 'data-dm-list-style="disc"', active: lstStyle === 'disc', title: 'Bulleted list' },
-        { icon: 'listOrdered', attr: 'data-dm-list-style="decimal"', active: lstStyle === 'decimal', title: 'Numbered list' },
-      ]) +
-    '</div>' + sp() +
+    // Alignment row + list row. The list-style row is only meaningful
+    // for actual list elements; otherwise the alignment row goes full
+    // width (the row is suppressed instead of rendered with no-op
+    // toggles that mislead users into thinking a `<p>` is a bulleted
+    // list because `list-style-type` computes to `disc` everywhere).
+    (isListLayer
+      ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">' +
+          iconButtonRow([
+            { icon: 'textAlignStart', attr: 'data-dm-prop="textAlign" data-dm-value="left"', active: txAlign === 'left' || txAlign === 'start', title: 'Align left' },
+            { icon: 'textAlignCenter', attr: 'data-dm-prop="textAlign" data-dm-value="center"', active: txAlign === 'center', title: 'Align center' },
+            { icon: 'textAlignEnd', attr: 'data-dm-prop="textAlign" data-dm-value="right"', active: txAlign === 'right' || txAlign === 'end', title: 'Align right' },
+            { icon: 'textAlignJustify', attr: 'data-dm-prop="textAlign" data-dm-value="justify"', active: txAlign === 'justify', title: 'Justify' },
+          ]) +
+          iconButtonRow([
+            { icon: 'minus', attr: 'data-dm-list-style="none"', active: lstStyle === 'none' || !lstStyle, title: 'No list marker' },
+            { icon: 'list', attr: 'data-dm-list-style="disc"', active: lstStyle === 'disc', title: 'Bulleted list' },
+            { icon: 'listOrdered', attr: 'data-dm-list-style="decimal"', active: lstStyle === 'decimal', title: 'Numbered list' },
+          ]) +
+        '</div>'
+      : iconButtonRow([
+          { icon: 'textAlignStart', attr: 'data-dm-prop="textAlign" data-dm-value="left"', active: txAlign === 'left' || txAlign === 'start', title: 'Align left' },
+          { icon: 'textAlignCenter', attr: 'data-dm-prop="textAlign" data-dm-value="center"', active: txAlign === 'center', title: 'Align center' },
+          { icon: 'textAlignEnd', attr: 'data-dm-prop="textAlign" data-dm-value="right"', active: txAlign === 'right' || txAlign === 'end', title: 'Align right' },
+          { icon: 'textAlignJustify', attr: 'data-dm-prop="textAlign" data-dm-value="justify"', active: txAlign === 'justify', title: 'Justify' },
+        ])
+    ) + sp() +
     typographyAdvancedHtml,
     true,
     typographyActionsHtml
@@ -4268,7 +4352,9 @@ function renderDesignTab(): string {
   const clipBtn = '<button data-dm-prop="overflow" data-dm-value="' + (clipChecked ? 'visible' : 'hidden') + '" title="' + (clipChecked ? 'Currently clipping' : 'Toggle clip content (overflow: hidden)') + '" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dm-text-secondary);cursor:pointer;background:none;border:none;padding:0;font-family:inherit;text-align:left;width:100%;">' +
     '<span style="width:14px;height:14px;border:1px solid var(--dm-input-border);border-radius:3px;background:' + (clipChecked ? 'var(--dm-accent)' : 'var(--dm-input-bg)') + ';display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0;">' + (clipChecked ? icon('check', 10) : '') + '</span>' +
     '<span>' + (clipChecked ? 'On' : 'Off') + '</span></button>';
-  // Aspect-ratio button \u2014 turns blue when locked.
+  // Aspect-ratio button \u2014 link2 (blue) when locked, unlink2 when free.
+  // The W and H inputs are coupled when locked: editing one fans out to
+  // the other so the ratio holds. See applyStyle's locked-aspect path.
   const aspectRatioCur = ((s as any).aspectRatio || 'auto').trim();
   const aspectActive = !!aspectRatioCur && aspectRatioCur !== 'auto';
   const aspectBtn = '<button data-dm-action="toggle-aspect-ratio" title="' +
@@ -4276,7 +4362,7 @@ function renderDesignTab(): string {
     '" data-active="' + (aspectActive ? 'true' : 'false') + '" style="width:100%;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:pointer;background:' +
     (aspectActive ? 'var(--dm-accent-bg)' : 'var(--dm-btn-bg)') + ';border:1px solid ' +
     (aspectActive ? 'var(--dm-accent-border)' : 'var(--dm-btn-border)') + ';color:' +
-    (aspectActive ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';">' + icon('ratio', 14) + '</button>';
+    (aspectActive ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';">' + icon(aspectActive ? 'link2' : 'unlink2', 16) + '</button>';
   const shrinkBtn = '<button data-dm-action="resize-to-fit" title="Resize to content (max-content)" style="width:100%;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:pointer;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text-secondary);">' + icon('shrink', 14) + '</button>';
 
   // Gap fields (column / row) \u2014 context-gated by layout mode.
@@ -4319,18 +4405,19 @@ function renderDesignTab(): string {
     '</div>' + sp() : '') +
     // Chrome DevTools-style box: padding nested inside margin.
     spacingBox(s, displayInfo) + sp() +
-    // Clip content (6) + Clip path (6) — both with title above field so
-    // they line up visually.
+    // Clip content (6) + Clip path (6) — sit side-by-side but they're
+    // independent CSS features. `overflow: hidden` clips children that
+    // overflow this element's box; `clip-path` shapes the visible area
+    // of this element itself. The Clip path label gets an info chip to
+    // make that clear since the visual pairing implies otherwise.
     grid12([
       { span: 6, content: '<div class="dm-field"><label class="dm-field-label">Clip content</label><div style="height:30px;display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:0 8px;">' + clipBtn + '</div></div>' },
-      { span: 6, content: sel('Clip path', 'clipPath', (s as any).clipPath || 'none', [
-        'none',
-        'inset(10px)',
-        'circle(50%)',
-        'ellipse(50% 50%)',
-        'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-        'inset(0 round 12px)',
-      ]) },
+      { span: 6, content: '<div class="dm-field" title="clip-path shapes this element\'s own visible area. It works independently of \'Clip content\' (overflow: hidden), which only clips overflowing children."><label class="dm-field-label" style="display:flex;align-items:center;gap:4px;">Clip path<span style="font-size:9px;color:var(--dm-text-dim);font-weight:400;text-transform:none;letter-spacing:0;">(independent of overflow)</span></label>' +
+        '<select class="dm-select" data-dm-prop="clipPath">' +
+          ['none','inset(10px)','circle(50%)','ellipse(50% 50%)','polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)','inset(0 round 12px)']
+            .map(o => '<option value="' + o + '"' + (((s as any).clipPath || 'none') === o ? ' selected' : '') + '>' + o + '</option>')
+            .join('') +
+        '</select></div>' },
     ]) + sp() +
     // Overflow X (4) / Y (4) / Box-sizing (4)
     grid12([
@@ -4434,8 +4521,15 @@ function renderDesignTab(): string {
       { span: 2, content: isolationBtn },
     ]) + sp() +
     cornerRadiusGrid(s, cornerRadiusExpanded, cornerRadiusLinked) + sp() +
-    sub('Color adjust (filter)') + colorAdjustRow + sp() +
-    inp('Filter', 'filter', s.filter || 'none', '') +
+    // "Color adjust" is just a quick-toggle UI on top of the standard
+    // CSS `filter` property — each button toggles one function (e.g.
+    // `brightness(120%)`) on or off in the filter chain. The raw
+    // "Filter" input below is the same CSS property surfaced as text
+    // so users can type custom values like `blur(4px) saturate(150%)`.
+    // Tooltips on both make the relationship explicit; without them the
+    // pairing reads as two unrelated controls.
+    '<div title="Quick toggles for individual filter functions (brightness, contrast, saturate, etc.). Edits the same CSS property as the raw Filter input below.">' + sub('Color adjust (filter quick toggles)') + colorAdjustRow + '</div>' + sp() +
+    '<div title="Raw value for the CSS `filter` shorthand — type custom filters here (e.g. blur(4px) saturate(150%)). Mirrors the toggles above.">' + inp('Filter (raw value)', 'filter', s.filter || 'none', '') + '</div>' +
     advancedDisclosure('appearance', appearanceAdvOpen,
       sub('Visibility & cursor') +
       grid12([
@@ -4748,9 +4842,19 @@ function renderDesignTab(): string {
   // BELOW the entire stroke row (not inside the 4-col cell). Pass
   // omitPanel:true so colorInp produces just the swatch+input row.
   const strokeColorPanelOpen = activeColorPickerProp === '__stroke_color';
-  // Style dropdown \u2014 full CSS border-style set plus 'auto' (outline-only,
-  // browser-native focus ring; selecting auto also switches mode to Center).
-  const styleOptions = ['solid','dashed','dotted','double','groove','ridge','inset','outset','hidden','none','auto'];
+  // Style dropdown is mode-aware. Outside writes border-*-style which
+  // supports the full CSS set. Center writes outline-style which adds
+  // 'auto' (the browser focus-ring default \u2014 picking it auto-switches
+  // mode to Center). Inside synthesises the stroke via a 0-spread inset
+  // box-shadow; CSS shadows can't dash/dot themselves so only 'solid'
+  // visibly renders. Surface only the choices that actually paint \u2014
+  // listing dashed in Inside mode is misleading because the value gets
+  // recorded in `strokeStyleByElement` but the visual stays solid.
+  const allStyleOptions = ['solid','dashed','dotted','double','groove','ridge','inset','outset','hidden','none'];
+  const styleOptions =
+    strokePos === 'inside' ? ['solid','none']
+    : strokePos === 'center' ? [...allStyleOptions, 'auto']
+    : allStyleOptions; // outside
   const strokeRow = grid12([
     { span: 4, content: colorInp('Color', '__stroke_color', strokeColor, true) },
     { span: 2, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
@@ -4857,7 +4961,7 @@ function renderDesignTab(): string {
       const label = (Math.round(layer.weight * 10) / 10) + 'px · ' + layer.color;
       const eye = '<button class="dm-section-action" data-dm-stroke-toggle="' + idx + '" data-active="' + (visible ? 'true' : 'false') + '" title="' + (visible ? 'Hide' : 'Show') + '">' + icon(visible ? 'eye' : 'eyeOff', 12) + '</button>';
       const trash = '<button class="dm-section-action" data-dm-stroke-remove="' + idx + '" title="Remove stroke" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>';
-      const grip = '<button class="dm-section-action" data-dm-stroke-drag="' + idx + '" title="Drag to reorder" aria-label="Drag" style="cursor:grab;">' + icon('gripVertical', 12) + '</button>';
+      const grip = '<span class="dm-section-action" data-dm-stroke-drag="' + idx + '" title="Drag to reorder" aria-label="Drag" style="cursor:grab;">' + icon('gripVertical', 12) + '</span>';
       const activeBg = isActive ? 'var(--dm-accent-bg)' : 'var(--dm-bg-secondary)';
       const activeBorder = isActive ? 'var(--dm-accent-border)' : 'var(--dm-separator)';
       const head = '<div data-dm-stroke-select="' + idx + '" style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:' + activeBg + ';border:1px solid ' + activeBorder + ';border-radius:5px;cursor:pointer;">' +
@@ -5178,23 +5282,34 @@ function renderChangesTab(): string {
     groups.get(key)!.items.push(item);
   }
 
-  // Toggle pair — "View Original" and "View Changes" — the active one is highlighted
-  const activeStyle = 'padding:4px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:4px;color:var(--dm-accent);cursor:default;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;font-weight:500;';
+  // Single toggle replaces the old "View Original" / "View Changes" pair —
+  // when changes are visible (default) the button reads as active with an
+  // open-eye glyph; clicking flips to preview the original (eye-off, muted)
+  // and clicking again restores. One control = half the row width and one
+  // less interaction model to learn.
+  const activeStyle = 'padding:4px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:4px;color:var(--dm-accent);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;font-weight:500;';
   const inactiveStyle = 'padding:4px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;';
-  const originalBtn = '<button data-dm-action="preview-original"' + (previewingOriginal ? ' disabled' : '') + ' style="' + (previewingOriginal ? activeStyle : inactiveStyle) + '">' + icon('eyeOff', 10) + ' View Original</button>';
-  const changesBtn = '<button data-dm-action="restore-changes"' + (!previewingOriginal ? ' disabled' : '') + ' style="' + (!previewingOriginal ? activeStyle : inactiveStyle) + '">' + icon('eye', 10) + ' View Changes</button>';
+  const previewToggleAction = previewingOriginal ? 'restore-changes' : 'preview-original';
+  const previewToggleTitle = previewingOriginal
+    ? 'Currently previewing the original — click to show your edits'
+    : 'Click to temporarily hide your edits and preview the original';
+  const previewToggleBtn = '<button data-dm-action="' + previewToggleAction + '" title="' + previewToggleTitle + '" style="' + (previewingOriginal ? inactiveStyle : activeStyle) + '">' + icon(previewingOriginal ? 'eyeOff' : 'eye', 10) + ' Changes</button>';
   const previewBanner = previewingOriginal
-    ? '<div style="padding:6px 12px;background:var(--dm-accent-bg);border-bottom:1px solid var(--dm-accent-border);font-size:10px;color:var(--dm-accent);text-align:center;">Viewing original — click View Changes to see your edits</div>'
+    ? '<div style="padding:6px 12px;background:var(--dm-accent-bg);border-bottom:1px solid var(--dm-accent-border);font-size:10px;color:var(--dm-accent);text-align:center;">Previewing original — click Changes to see your edits</div>'
     : '';
 
-  // Action row 1 — buttons. View Original / View Changes / Clear / Export / Import.
+  // Action row 1 — buttons. Changes toggle / Clear all / Export / Import.
   // Import is a styled <label> wrapping a hidden file input, mirroring the
   // presets export/import pattern in Settings.
   const exportBtn = '<button data-dm-action="export-changes" title="Download every tracked change as a JSON file" style="' + inactiveStyle + '">' + icon('download', 10) + ' Export</button>';
   const importBtn = '<label title="Replace every change with an imported JSON file" style="' + inactiveStyle + '">' + icon('upload', 10) + ' Import<input type="file" accept=".json,application/json" data-dm-import-changes style="display:none;"/></label>';
-  const clearBtn = '<button data-dm-action="clear-all-changes" style="padding:4px 10px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:4px;color:var(--dm-danger);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:4px;">' + icon('trash', 10) + ' Clear changes</button>';
-  const topRow = '<div style="padding:6px 10px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' +
-    originalBtn + changesBtn + clearBtn + exportBtn + importBtn +
+  const clearBtn = '<button data-dm-action="clear-all-changes" style="padding:4px 10px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:4px;color:var(--dm-danger);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:4px;">' + icon('trash', 10) + ' Clear all</button>';
+  // Two clusters: primary (Changes toggle + Clear all) on the left, file
+  // I/O (Export + Import) on the right. `justify-content:space-between`
+  // pushes them apart while `flex-wrap` keeps the row tidy on narrow panels.
+  const topRow = '<div style="padding:6px 10px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;background:var(--dm-bg);">' +
+    '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' + previewToggleBtn + clearBtn + '</div>' +
+    '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' + exportBtn + importBtn + '</div>' +
     '</div>';
 
   // Action row 2 — Search + Expand-all toggle + Sort menu. Sort is an icon
@@ -5270,12 +5385,11 @@ function renderChangesTab(): string {
       label + ' <span style="opacity:0.6;">' + n + '</span></button>';
   };
   const commentsSubRow = showCommentsSub
-    ? '<div style="display:flex;gap:4px;align-items:center;padding:4px 10px;border-bottom:1px solid var(--dm-separator);flex-wrap:wrap;">' +
+    ? '<div style="display:flex;gap:4px;align-items:center;padding:4px 10px;border-bottom:1px solid var(--dm-separator);flex-wrap:wrap;background:var(--dm-bg);">' +
         '<span style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-right:4px;">Comments:</span>' +
         cchip('all', 'All') + cchip('open', 'Open') + cchip('resolved', 'Resolved') +
       '</div>'
     : '';
-  const filterRow = searchRow + filterChipsRow + commentsSubRow;
 
   // Inline confirmation overlay for Clear All. Mirrors the per-comment
   // delete pattern so the destructive action is one extra click, not
@@ -5319,7 +5433,14 @@ function renderChangesTab(): string {
     '</div>'
   ) : '';
 
-  const clearAllBtn = topRow + filterRow + bulkBar + previewBanner;
+  // Header rows pin to the top of the scrollable Changes tab so the user
+  // can keep filtering/searching/toggling-original while reading rows
+  // further down. The comments sub-filter, bulk-revert toolbar, and
+  // "previewing original" banner sit below the sticky band — they're
+  // contextual, not navigation, and including them in the pinned region
+  // would push the actual list rows too far down on small panels.
+  const stickyHeader = '<div style="position:sticky;top:0;z-index:5;background:var(--dm-bg);">' + topRow + searchRow + filterChipsRow + '</div>';
+  const headerHtml = stickyHeader + commentsSubRow + bulkBar + previewBanner;
 
   // Char-level diff for text changes — Myers-style longest common
   // subsequence, then collapse identical runs into <span>'s. Cheap enough
@@ -5603,7 +5724,7 @@ function renderChangesTab(): string {
     ? '<div style="text-align:center;padding:28px 16px;color:var(--dm-text-dim);font-size:11px;line-height:1.7;">No changes match this filter / search.<br/><a data-dm-action="reset-changes-filter" style="color:var(--dm-accent);cursor:pointer;text-decoration:underline;">Clear filter</a></div>'
     : '';
 
-  return '<div style="position:relative;">' + clearAllBtn + (filteredEmpty ? filteredEmptyHtml : groupHtml) + clearAllOverlay + deleteCommentOverlay + '</div>';
+  return '<div style="position:relative;">' + headerHtml + (filteredEmpty ? filteredEmptyHtml : groupHtml) + clearAllOverlay + deleteCommentOverlay + '</div>';
 }
 
 /* ── Settings View ── */
@@ -6523,10 +6644,19 @@ function setupDelegation() {
       return;
     }
 
-    // Color trigger input — open the dropdown
+    // Color trigger swatch — toggles the picker. Clicking the same
+    // swatch twice closes it (matches the popover's click-outside
+    // behaviour so users don't have to aim at empty space).
     const colorTrigger = target.closest<HTMLInputElement>('[data-dm-color-trigger]');
     if (colorTrigger) {
       const prop = colorTrigger.dataset.dmColorTrigger!;
+      if (activeColorPickerProp === prop) {
+        activeColorPickerProp = null;
+        tokensDropdownProp = null;
+        colorPickerSearch = '';
+        render();
+        return;
+      }
       activeColorPickerProp = prop;
       colorPickerSearch = '';
       render();
@@ -8479,7 +8609,19 @@ function setupDelegation() {
 
       if (isNumeric && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
-        const step = e.shiftKey ? 10 : 1;
+        // Step size depends on the property's natural scale. Unitless
+        // properties (line-height, opacity, scale, z-index decimals)
+        // live in the 0..2 range — stepping by 1 is far too coarse, so
+        // they use 0.1 (with Shift = 1). Properties with a unit
+        // (px, %, deg, em…) keep the original 1 / Shift+10 cadence. The
+        // sole unitless prop that wants integer steps is z-index, which
+        // we special-case so 1 → 2 → 3 still works as expected.
+        const propName = propInput.dataset.dmProp || '';
+        const integerUnitless = propName === 'zIndex' || propName === 'z-index' || propName === 'order';
+        const isFractional = !unit && !integerUnitless;
+        const step = isFractional
+          ? (e.shiftKey ? 1 : 0.1)
+          : (e.shiftKey ? 10 : 1);
         const current = parseFloat(propInput.value) || 0;
         const newVal = e.key === 'ArrowUp' ? current + step : current - step;
         const rounded = Math.round(newVal * 100) / 100; // 2 decimals max
@@ -8570,11 +8712,15 @@ function setupDelegation() {
     const [moved] = layers.splice(src, 1);
     layers.splice(target, 0, moved);
     fillLayersByElement.set(id, layers);
-    dispatchFillLayers(layers, applyStyle);
     // Keep expanded layer pointing at the same logical layer.
     if (expandedFillIdx === src) expandedFillIdx = target;
     else if (expandedFillIdx !== null && src < expandedFillIdx && target >= expandedFillIdx) expandedFillIdx -= 1;
     else if (expandedFillIdx !== null && src > expandedFillIdx && target <= expandedFillIdx) expandedFillIdx += 1;
+    // Repaint immediately from the new cache so the rows flip on drop;
+    // applyStyle responses arrive async and would otherwise leave the UI
+    // looking unchanged for a beat (which read as "drag did nothing").
+    render();
+    dispatchFillLayers(layers, applyStyle);
   });
 
   // ─── HTML5 drag-and-drop for Stroke layer reordering ───────────────────
@@ -8626,6 +8772,7 @@ function setupDelegation() {
     else if (src > activeStrokeIdx && tgt <= activeStrokeIdx) activeStrokeIdx += 1;
     const intent = strokeStyleByElement.get(id);
     const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
+    render();
     dispatchStrokeLayers(layers, pos, cs, applyStyle, styleNow);
   });
 

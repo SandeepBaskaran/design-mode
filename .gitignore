@@ -64,6 +64,24 @@ coverage/
 .env.production.local
 .env.*.local
 
+# ── Secrets / credentials (defence-in-depth) ─────────────────────────────
+# These are NEVER supposed to live in the repo. If something matching one
+# of these patterns ever lands here, the answer is "rotate the secret" not
+# "delete the file" — assume it's already been published.
+*.pem
+*.key
+*.p12
+*.pfx
+*.cert
+*.crt
+credentials.json
+secrets.json
+secrets/
+.secrets/
+
+# ── Vercel local state ───────────────────────────────────────────────────
+.vercel/
+
 # ── IDE / editor ─────────────────────────────────────────────────────────
 .vscode/
 .idea/

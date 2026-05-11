@@ -675,13 +675,14 @@ The session log of every edit, grouped by element. See `CHANGES.md` for the full
 
 ### At parity
 
-Top-row controls (always pinned above the list):
+Top-row controls (sticky-pinned above the list):
 
 | Control | What |
 |---|---|
-| **View Original / View Changes** | Toggle pair. View Original strips overrides via the change-tracker so the page renders raw; banner appears in the Changes tab. Copy Prompt + Send to Agent disable while previewing. |
-| **Expand all / Collapse all** | One-click toggle for every group's open / closed state. Label flips based on what's currently open. |
-| **Clear All** | Inline overlay confirms before wiping every tracked style / text / DOM / comment change. The overlay's *Clear all* button is danger-coloured; *Cancel* dismisses. |
+| **Changes toggle** | Single button (eye icon + "Changes" label). Active when your edits are visible (default); flips to muted `eye-off` while previewing the original. Banner appears in the Changes tab; Copy Prompt + Send to Agent disable while previewing. |
+| **Clear all** | Inline overlay confirms before wiping every tracked style / text / DOM / comment change. The overlay's *Clear all* button is danger-coloured; *Cancel* dismisses. |
+| **Export / Import** | File-IO cluster on the right. Export saves every change as JSON; Import replaces every change with an imported JSON. |
+| **Expand all / Collapse all** | Lives in the search row. One-click toggle for every group's open / closed state. Label flips based on what's currently open. |
 
 Filter row:
 

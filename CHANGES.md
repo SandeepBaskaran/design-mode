@@ -4,7 +4,7 @@ User-facing reference for everything in the Changes tab. Each control + each ent
 
 For implementation status see PARITY.md (where applicable). This document is for **understanding what each thing in the Changes tab does**.
 
-Last updated: 2026-05-06.
+Last updated: 2026-05-11.
 
 ---
 
@@ -24,33 +24,41 @@ The badge on the **Changes** tab in the tab strip shows the total count: `style 
 
 ---
 
-## Action row (top of tab)
+## Action header (top of tab)
 
-Two stacked rows pinned at the top of the Changes body whenever there's at least one change.
+Three rows pinned ("position: sticky") at the top of the Changes body whenever there's at least one change. The pinned region stays visible while the list scrolls beneath it, so the user can keep filtering / toggling-original / clearing while reading rows further down.
 
-### Row 1 — View Original / View Changes / Expand all / Clear All
+### Row 1 — Buttons row
 
-| Button | What | When useful |
-|---|---|---|
-| **View Original** (`eye-off` icon) | Temporarily strips all your overrides — the page renders as it would without Design Mode. | Comparing your design to the original; sanity-checking what actually shipped vs what you've added. |
-| **View Changes** (`eye` icon) | Re-applies all overrides. The default state. | Default during editing. |
-| **Expand all / Collapse all** (chevron icon) | One-click toggle for every group's open / closed state. The label flips based on what's actually open right now (if any group is collapsed, button reads *Expand all*; otherwise *Collapse all*). | Quickly scanning the full list, or hiding everything to focus on one group. |
-| **Sort dropdown** | Three options: **Oldest first** (default — matches the previous behaviour), **Newest first**, **By element** (groups all of an element's edits together while preserving relative group age). | Reviewing your most recent work first; or focusing on one element's edits at a time. |
-| **Clear All** (`trash` icon, danger-coloured) | Opens a confirmation dialog (overlay) before wiping every tracked change — styles, text edits, DOM operations, and comments. **Esc** dismisses the dialog. | One-shot reset to ship-state. |
+Split into two clusters: primary actions on the left, file-IO on the right.
 
-When **View Original** is active:
-- The Changes tab shows a banner: "Viewing original — click View Changes to see your edits."
+| Cluster | Button | What | When useful |
+|---|---|---|---|
+| Left | **Changes toggle** (`eye` / `eye-off` icon) | Single toggle replacing the old View Original / View Changes pair. Active (accent-tinted, `eye`) when your edits are visible — the default state. Click flips to previewing the original (muted, `eye-off`). Click again restores. | Comparing your design to the original; sanity-checking what actually shipped vs what you've added. |
+| Left | **Clear all** (`trash` icon, danger-coloured) | Opens a confirmation dialog (overlay) before wiping every tracked change — styles, text edits, DOM operations, and comments. **Esc** dismisses the dialog. | One-shot reset to ship-state. |
+| Right | **Export** (`download` icon) | Downloads every tracked change as a JSON file. | Stashing a session before clearing it, or shipping a snapshot to a teammate. |
+| Right | **Import** (`upload` icon) | Replaces every change with an imported JSON file. | Picking up where you left off, or applying a teammate's saved session. |
+
+When the Changes toggle is in **previewing-original** state:
+- A banner appears: "Previewing original — click Changes to see your edits."
 - The Design tab still shows tracked values (so you can keep editing while previewing).
 - The **Copy Prompt** and **Send to Agent** buttons in the sticky bottom are disabled — pause-then-send is a footgun.
 
-### Row 2 — Search + Filter chips
+### Row 2 — Search row
 
 | Control | What |
 |---|---|
 | **Search input** (with magnifier icon) | Live-filters the visible list. Case-insensitive, matches against selector / property name / old + new value / comment text / DOM action / tag name. A small `×` clears the box when typed. |
-| **All / Styles / Text / DOM / Comments** chips | Filter the visible list to one change kind. Each chip carries a count badge so you can see at a glance which kinds have entries. The active chip is accent-tinted. |
+| **Expand all / Collapse all** (chevron icon) | One-click toggle for every group's open / closed state. The label flips based on what's actually open right now (if any group is collapsed, button reads *Expand all*; otherwise *Collapse all*). |
+| **Sort dropdown** | Three options: **Oldest first** (default), **Newest first**, **By element** (groups all of an element's edits together while preserving relative group age). |
+
+### Row 3 — Filter chips
+
+**All / Styles / Text / DOM / Comments** — filter the visible list to one change kind. Each chip carries a count badge so you can see at a glance which kinds have entries. The active chip is accent-tinted.
 
 When the active filter / search produces zero matches, the list is replaced with a small "No changes match this filter / search" notice and a *Clear filter* link that resets both the chip and the search box.
+
+> **Below the sticky band**: the comments sub-filter (open / resolved), the bulk-revert toolbar (when 2+ rows are checked), and the "previewing original" banner all sit *below* the pinned rows — they're contextual, not navigation, and including them in the pinned region would push the actual list too far down on a narrow panel.
 
 ### Clear All — confirmation dialog
 
@@ -231,8 +239,8 @@ Same as the rest of the panel. Pinned at the bottom regardless of which tab is a
 
 | Button | What | Disabled when |
 |---|---|---|
-| **Copy Prompt** (`clipboard` icon) | Builds a markdown prompt summarising every tracked change — element selector, before/after values for styles, text diffs, DOM operations, and any comments. Includes file:line / framework hints when source detection found them. Copies to clipboard. | View Original is on, or no changes exist. |
-| **Send to Agent** (`send` icon) | Sends the same payload via the MCP `ws://localhost:9960` channel directly to a connected coding agent (Claude Code, Cursor, etc.). | View Original is on, or no changes, or MCP is offline, or MCP is running but no agent is connected. The button's tooltip names the specific blocker. |
+| **Copy Prompt** (`clipboard` icon) | Builds a markdown prompt summarising every tracked change — element selector, before/after values for styles, text diffs, DOM operations, and any comments. Includes file:line / framework hints when source detection found them. Copies to clipboard. | The Changes toggle is in preview-original state, or no changes exist. |
+| **Send to Agent** (`send` icon) | Sends the same payload via the MCP `ws://localhost:9960` channel directly to a connected coding agent (Claude Code, Cursor, etc.). | The Changes toggle is in preview-original state, or no changes, or MCP is offline, or MCP is running but no agent is connected. The button's tooltip names the specific blocker. |
 
 Send to Agent uses an accent style to distinguish it from Copy as the higher-stakes action.
 
@@ -260,7 +268,7 @@ Items within a group are sorted by **timestamp** (creation order — earliest fi
 ### Reviewing before shipping
 1. Make your edits via the Design tab.
 2. Switch to the Changes tab — every edit is here, grouped by element.
-3. Toggle **View Original** to see what shipping nothing looks like; toggle back to see your changes.
+3. Click the **Changes** toggle in the buttons row to see the original; click it again to restore your edits.
 4. Click **Copy Prompt**, paste into a coding agent, ship.
 
 ### Mass-applying a style

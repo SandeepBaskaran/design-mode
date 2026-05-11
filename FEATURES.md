@@ -258,15 +258,34 @@ Every edit you've made grouped by element.
 - Each group of changes for one selector has a header with `selector + N`
   changes badge + a select-element button.
 
-### 4.6 View Original / View Changes
+### 4.6 Changes toggle
 
-- Top of the tab. Toggle between the original page and your edited version
-  without losing any changes.
+- Single button at the top of the tab with an eye icon and "Changes"
+  label. When your edits are visible (default state), the button reads
+  active with `eye`. Click it to preview the original — the button
+  switches to a muted `eye-off` and a banner appears. Click again to
+  restore.
 
-### 4.7 Clear All
+### 4.7 Clear all
 
 - Drops every tracked change AND clears the override stylesheet — page
-  returns to its natural state.
+  returns to its natural state. Confirms via an overlay before doing it
+  (no muscle-memory disasters).
+
+### 4.8 Export / Import
+
+- **Export** writes every tracked change to a JSON file. Useful for
+  stashing a session before Clear all, or sharing a snapshot with a
+  teammate.
+- **Import** replaces every change with the JSON's contents. Picks up
+  where the export left off.
+
+### 4.9 Sticky header
+
+- The buttons row, search row, and filter chips row are all pinned
+  ("position: sticky") to the top of the Changes body. Stay accessible
+  while scrolling the list. The same pattern is used in the Layers tab
+  for its search + filter chip rows.
 
 ---
 
