@@ -4163,12 +4163,20 @@ function renderDesignTab(): string {
   const txAlign = s.textAlign || 'left';
   const txCase = s.textTransform || 'none';
   // Vertical text alignment lives on the same row as horizontal alignment.
-  // The buttons write to `vertical-align`, matching the long-form select
-  // already exposed in Typography Advanced. CSS-wise, `vertical-align`
-  // takes effect on inline-block / table-cell elements; block elements
-  // don't honour it directly — for those the Layout section's Children
-  // align pad (flex / grid) is the right control.
-  const vertAlign = ((s as any).verticalAlign || 'baseline').toLowerCase();
+  // The buttons write to `align-content` — modern CSS that vertically
+  // distributes a block / flex / grid element's content within its own
+  // height (requires a definite height to be visible). Works on plain
+  // block text layers; `vertical-align` (the long-form select in
+  // Typography Advanced) only affects inline-block / table-cell.
+  // Treat `start` / `flex-start` as "top" and `end` / `flex-end` as
+  // "bottom" so the active state survives whichever keyword the browser
+  // resolves to for the element's current display mode.
+  const alignContentRaw = ((s as any).alignContent || 'normal').toLowerCase();
+  const vAlignActive: 'top' | 'middle' | 'bottom' | null =
+    alignContentRaw === 'start' || alignContentRaw === 'flex-start' ? 'top'
+    : alignContentRaw === 'center' ? 'middle'
+    : alignContentRaw === 'end' || alignContentRaw === 'flex-end' ? 'bottom'
+    : null;
   // `list-style-type` computes to `disc` for every element (CSS initial),
   // even non-list ones. Painting bullets requires a list-display value
   // (`<ul>`/`<ol>`/`<li>` or `display: list-item`), so we treat the
@@ -4319,9 +4327,9 @@ function renderDesignTab(): string {
         { icon: 'textAlignJustify', attr: 'data-dm-prop="textAlign" data-dm-value="justify"', active: txAlign === 'justify', title: 'Justify' },
       ]) },
       { span: 6, content: iconButtonRow([
-        { icon: 'arrowUpToLine', attr: 'data-dm-prop="verticalAlign" data-dm-value="top"', active: vertAlign === 'top', title: 'Align top (vertical-align: top — works on inline-block / table-cell)' },
-        { icon: 'foldVertical', attr: 'data-dm-prop="verticalAlign" data-dm-value="middle"', active: vertAlign === 'middle', title: 'Align middle (vertical-align: middle)' },
-        { icon: 'arrowDownToLine', attr: 'data-dm-prop="verticalAlign" data-dm-value="bottom"', active: vertAlign === 'bottom', title: 'Align bottom (vertical-align: bottom)' },
+        { icon: 'arrowUpToLine', attr: 'data-dm-prop="alignContent" data-dm-value="start"', active: vAlignActive === 'top', title: 'Align top' },
+        { icon: 'foldVertical', attr: 'data-dm-prop="alignContent" data-dm-value="center"', active: vAlignActive === 'middle', title: 'Align middle' },
+        { icon: 'arrowDownToLine', attr: 'data-dm-prop="alignContent" data-dm-value="end"', active: vAlignActive === 'bottom', title: 'Align bottom' },
       ]) },
     ]) + sp() +
     (isListLayer

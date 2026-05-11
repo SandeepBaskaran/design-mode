@@ -96,7 +96,7 @@ export function getComputedStyleSubset(el: HTMLElement): Record<string, string> 
   const cs = window.getComputedStyle(el);
   const props = [
     'position','top','right','bottom','left','zIndex','transform',
-    'display','flexDirection','flexWrap','justifyContent','alignItems','alignSelf',
+    'display','flexDirection','flexWrap','justifyContent','alignItems','alignSelf','alignContent',
     'flexGrow','flexShrink','flexBasis','gap','rowGap','columnGap',
     'gridTemplateColumns','gridTemplateRows','gridColumn','gridRow',
     'width','height','minWidth','maxWidth','minHeight','maxHeight','aspectRatio',
