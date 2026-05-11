@@ -2277,13 +2277,18 @@ function parseCssCommaList(input: string): string[] {
 }
 
 // Fill layers — top of array paints on TOP (CSS comma-list order). The
-// solid (bgColorOnly) sits at the bottom of the array since
-// `background-color` always paints under the `background-image` stack.
+// serializer figures out which solid (if any) gets the
+// `background-color` slot; everything else lands in `background-image`,
+// with extra solids encoded as `linear-gradient(<c>, <c>)` so the
+// stack survives CSS's one-bg-color-per-element rule.
 type FillLayerKind = 'solid' | 'linear' | 'radial' | 'conic' | 'image';
 type FillLayer = {
   kind: FillLayerKind;
   raw: string;             // for solid: color; otherwise the full CSS entry for background-image
-  bgColorOnly?: boolean;   // true for the solid layer
+  // Legacy hint — older serialized sessions still carry it. New code
+  // shouldn't read this; serialization picks the bottom-most solid for
+  // the `background-color` slot regardless of the flag.
+  bgColorOnly?: boolean;
   visible: boolean;        // when false, the layer is dropped from CSS but kept in our state
   // Per-layer comma-positional background-* properties. Default to undefined
   // so the serializer can omit slots and let CSS use the default.
@@ -2361,6 +2366,21 @@ function parseFillLayers(s: Record<string, string>): FillLayer[] {
   const bgImg = s.backgroundImage || 'none';
   let i = 0;
   for (const v of parseCssCommaList(bgImg)) {
+    // CSS holds one background-color but the panel lets users stack
+    // multiple "solid" fills. Extras land in background-image as a
+    // single-color `linear-gradient(<c>, <c>)`. Detect that pattern on
+    // the way back in and surface it as a solid layer — otherwise the
+    // round-trip would silently demote the user's solid to a gradient.
+    const soloColor = isSingleColorLinearGradient(v);
+    if (soloColor) {
+      layers.push({
+        kind: 'solid',
+        raw: soloColor,
+        visible: true,
+      });
+      i++;
+      continue;
+    }
     let kind: FillLayerKind = 'image';
     if (/^(linear|repeating-linear)-gradient/.test(v)) kind = 'linear';
     else if (/^(radial|repeating-radial)-gradient/.test(v)) kind = 'radial';
@@ -2378,21 +2398,44 @@ function parseFillLayers(s: Record<string, string>): FillLayer[] {
     });
     i++;
   }
-  // Solid — append at bottom of our list (paints under image stack).
+  // Solid backed by background-color — append at the bottom of our
+  // stack. Visually it paints under all background-image entries,
+  // which matches its position in the array (the UI shows array index
+  // 0 on top, so the last element renders at the bottom).
   const bgColor = (s.backgroundColor || 'transparent').replace(/\s+/g, '');
   if (bgColor && bgColor !== 'rgba(0,0,0,0)' && bgColor !== 'transparent') {
     layers.push({
       kind: 'solid',
       raw: s.backgroundColor || 'transparent',
-      bgColorOnly: true,
       visible: true,
     });
   }
   return layers;
 }
 
+// Recognise `linear-gradient(<color>, <color>)` (with matching stops) as
+// a single-color fill — that's how the panel encodes a second solid
+// layer when CSS's one background-color slot is already taken. Returns
+// the colour to use, or null if `v` is a real gradient.
+function isSingleColorLinearGradient(v: string): string | null {
+  if (!/^linear-gradient\(/i.test(v)) return null;
+  const parsed = parseGradientStops(v);
+  if (parsed.stops.length !== 2) return null;
+  // Allow either form: with or without an angle prefix. Both stops must
+  // share the same colour text; positions don't matter (default 0% /
+  // 100%) — if the colours match the gradient renders as a flat fill.
+  const a = parsed.stops[0].color.trim().toLowerCase().replace(/\s+/g, '');
+  const b = parsed.stops[1].color.trim().toLowerCase().replace(/\s+/g, '');
+  if (!a || a !== b) return null;
+  return parsed.stops[0].color.trim();
+}
+
 // Serialize the full fill state into the four comma-positional CSS
-// properties. Hidden layers are skipped (preserved in state but not in CSS).
+// properties. Hidden layers are skipped (preserved in state but not in
+// CSS). When multiple solid layers exist, the bottom-most one writes
+// `background-color` and the others become single-color
+// `linear-gradient(<c>, <c>)` entries in `background-image` — that's
+// how CSS lets us stack what Figma exposes as plain solid fills.
 function serializeFillLayers(layers: FillLayer[]): {
   backgroundColor: string;
   backgroundImage: string;
@@ -2402,20 +2445,46 @@ function serializeFillLayers(layers: FillLayer[]): {
   backgroundBlendMode: string;
 } {
   const visible = layers.filter(l => l.visible !== false);
-  const solid = visible.find(l => l.bgColorOnly);
-  const imageLayers = visible.filter(l => !l.bgColorOnly);
-  const sizes = imageLayers.map(l => l.size || 'auto');
-  const repeats = imageLayers.map(l => l.repeat || 'repeat');
-  const positions = imageLayers.map(l => l.position || '0% 0%');
-  const blends = imageLayers.map(l => l.blendMode || 'normal');
+  // Pick the bottom-most solid (highest array index) for the
+  // `background-color` slot — visually it paints under the rest, which
+  // matches its position at the end of the stack.
+  let bgColorLayer: FillLayer | null = null;
+  for (let i = visible.length - 1; i >= 0; i--) {
+    if (visible[i].kind === 'solid') { bgColorLayer = visible[i]; break; }
+  }
+  type Entry = { raw: string; size: string; repeat: string; position: string; blend: string };
+  const entries: Entry[] = [];
+  for (const l of visible) {
+    if (l === bgColorLayer) continue;
+    if (l.kind === 'solid') {
+      // Stack-supporting solid → single-color linear gradient. The
+      // per-layer comma-positional properties use safe defaults
+      // (cover / no-repeat / center / normal) since a flat colour
+      // doesn't need tiling or positioning.
+      const c = l.raw;
+      entries.push({ raw: 'linear-gradient(' + c + ', ' + c + ')', size: 'auto', repeat: 'no-repeat', position: '0% 0%', blend: 'normal' });
+    } else {
+      entries.push({
+        raw: l.raw,
+        size: l.size || 'auto',
+        repeat: l.repeat || 'repeat',
+        position: l.position || '0% 0%',
+        blend: l.blendMode || 'normal',
+      });
+    }
+  }
+  const sizes = entries.map(e => e.size);
+  const repeats = entries.map(e => e.repeat);
+  const positions = entries.map(e => e.position);
+  const blends = entries.map(e => e.blend);
   const allDefault = (arr: string[], def: string) => arr.every(v => v === def);
   return {
-    backgroundColor: solid ? solid.raw : 'transparent',
-    backgroundImage: imageLayers.length ? imageLayers.map(l => l.raw).join(', ') : 'none',
-    backgroundSize: imageLayers.length && !allDefault(sizes, 'auto') ? sizes.join(', ') : 'auto',
-    backgroundRepeat: imageLayers.length && !allDefault(repeats, 'repeat') ? repeats.join(', ') : 'repeat',
-    backgroundPosition: imageLayers.length && !allDefault(positions, '0% 0%') ? positions.join(', ') : '0% 0%',
-    backgroundBlendMode: imageLayers.length && !allDefault(blends, 'normal') ? blends.join(', ') : 'normal',
+    backgroundColor: bgColorLayer ? bgColorLayer.raw : 'transparent',
+    backgroundImage: entries.length ? entries.map(e => e.raw).join(', ') : 'none',
+    backgroundSize: entries.length && !allDefault(sizes, 'auto') ? sizes.join(', ') : 'auto',
+    backgroundRepeat: entries.length && !allDefault(repeats, 'repeat') ? repeats.join(', ') : 'repeat',
+    backgroundPosition: entries.length && !allDefault(positions, '0% 0%') ? positions.join(', ') : '0% 0%',
+    backgroundBlendMode: entries.length && !allDefault(blends, 'normal') ? blends.join(', ') : 'normal',
   };
 }
 
@@ -7460,7 +7529,7 @@ function setupDelegation() {
       }
       let newLayer: FillLayer | null = null;
       if (kind === 'solid') {
-        newLayer = { kind: 'solid', raw: '#3b82f6', bgColorOnly: true, visible: true };
+        newLayer = { kind: 'solid', raw: '#FFFFFF', visible: true };
       } else if (kind === 'linear') {
         newLayer = { kind: 'linear', raw: 'linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(0,0,0,1) 100%)', visible: true, size: 'auto', repeat: 'no-repeat', position: '0% 0%', blendMode: 'normal' };
       } else if (kind === 'radial') {
@@ -7471,13 +7540,17 @@ function setupDelegation() {
         newLayer = { kind: 'image', raw: 'url(https://images.unsplash.com/photo-1502744688674-c619d1586c9e?auto=format&fit=crop&w=400)', visible: true, size: 'cover', repeat: 'no-repeat', position: '50% 50%', blendMode: 'normal' };
       }
       if (newLayer) {
-        // Solid replaces any existing solid. Image-stack layers go on TOP.
-        const next = newLayer.bgColorOnly
-          ? [...layers.filter(l => !l.bgColorOnly), newLayer]
-          : [newLayer, ...layers];
+        // Every new fill goes to the TOP of the stack (array index 0)
+        // so the user sees what they just added. Solid stacking is
+        // supported by the serializer — bottom-most solid wins the
+        // `background-color` slot, extras encode as single-color
+        // linear gradients in `background-image`.
+        const next = [newLayer, ...layers];
         setFill(next);
-        // Auto-expand the new layer so the user can edit it immediately.
-        expandedFillIdx = newLayer.bgColorOnly ? next.length - 1 : 0;
+        // Auto-expand only for non-solid layers (those use the
+        // settings-icon drawer to edit gradients / image URL). Solid
+        // fills use the inline row, no expansion needed.
+        expandedFillIdx = newLayer.kind === 'solid' ? null : 0;
       }
       fillAddOpen = false;
       return;
@@ -8254,7 +8327,9 @@ function setupDelegation() {
         const layers = getFillLayers(id, info?.computedStyles || {});
         const field = fillMatch[1];
         const i = parseInt(fillMatch[2], 10);
-        if (layers[i] && !layers[i].bgColorOnly) {
+        // Size / repeat / position / blend only apply to image / gradient
+        // layers — a flat solid colour has no tiling or origin.
+        if (layers[i] && layers[i].kind !== 'solid') {
           if (field === 'size') layers[i].size = val;
           else if (field === 'repeat') layers[i].repeat = val;
           else if (field === 'position') layers[i].position = val;
@@ -8575,7 +8650,9 @@ function setupDelegation() {
         if (m) {
           const field = m[1];
           const i = parseInt(m[2], 10);
-          if (layers[i] && !layers[i].bgColorOnly) {
+          // Size / repeat / position / blend only apply to non-solid
+          // layers (image / gradient). Solid fills don't have tiling.
+          if (layers[i] && layers[i].kind !== 'solid') {
             if (field === 'size') layers[i].size = raw;
             else if (field === 'repeat') layers[i].repeat = raw;
             else if (field === 'position') layers[i].position = raw;
@@ -9280,9 +9357,10 @@ function setupDelegation() {
     if (!id) return;
     const layers = getFillLayers(id, info?.computedStyles || {});
     if (src >= layers.length || target >= layers.length) return;
-    // The solid (bgColorOnly) is anchored at the bottom — disallow moving
-    // it or moving anything past it.
-    if (layers[src].bgColorOnly || layers[target].bgColorOnly) return;
+    // Solid fills are now reorderable like any other layer — the
+    // serializer figures out which solid wins the background-color
+    // slot (bottom-most), and stacks the rest as single-color
+    // linear-gradient entries in background-image. No anchor here.
     const [moved] = layers.splice(src, 1);
     layers.splice(target, 0, moved);
     fillLayersByElement.set(id, layers);
