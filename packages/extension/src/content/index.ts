@@ -1017,6 +1017,53 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
+    // Batched style writes. Used by the side panel when a single user
+    // gesture has to fan out to many CSS properties at once — stroke
+    // position switching writes ~12 border / outline / box-shadow
+    // longhands, and doing it as 12 separate APPLY_STYLE round-trips
+    // produced visible flicker (intermediate renders showing partial
+    // state) and a "moving through one tab at a time" feeling. One
+    // message, one re-paint, one info refresh, one Changes-tab group.
+    case 'APPLY_STYLES': {
+      const sid = getSelectedElementId();
+      if (!sid || !Array.isArray(msg.changes)) {
+        sendResponse({ error: 'No element selected' });
+        break;
+      }
+      const groupId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const groupMeta = {
+        groupId,
+        groupKind: 'multi-select' as const,
+        groupLabel: msg.groupLabel || 'Batch',
+      };
+      for (const c of msg.changes) {
+        if (!c?.property) continue;
+        const el = getElementById(sid);
+        if (!el) continue;
+        const kebab = c.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
+        const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
+        const change = applyWithCompanions(sid, c.property, c.value, undefined, groupMeta);
+        const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
+        if (afterValue !== beforeValue) {
+          undoStack.push({ kind: 'style', elementId: sid, property: c.property, oldValue: beforeValue, newValue: c.value, changeId: change?.id });
+        }
+      }
+      if (msg.changes.length > 0) redoStack.length = 0;
+      requestAnimationFrame(() => {
+        const focusedEl = getElementById(sid);
+        if (focusedEl) showSelect(focusedEl);
+      });
+      const updatedEl = getElementById(sid);
+      const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
+      getChangesPayload().then(p => sendResponse({
+        info: updatedInfo ? { ...updatedInfo, element: undefined } : null,
+        ...p,
+        undoCount: undoStack.length,
+        redoCount: redoStack.length,
+      }));
+      return true;
+    }
+
     case 'APPLY_PARENT_STYLE': {
       const sid = getSelectedElementId();
       const el = sid ? getElementById(sid) : null;

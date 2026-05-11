@@ -644,6 +644,23 @@ async function applyStyle(property: string, value: string) {
   if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
 }
 
+// Dispatch many CSS writes in one round-trip instead of N individual
+// SP_APPLY_STYLE messages. Used by anything that has to fan out a
+// single user gesture across many longhand properties (stroke-position
+// switching is the main caller). Without batching, each property was
+// its own send + content-side apply + response, and the panel
+// re-rendered after each — visible flicker plus the "tab moves through
+// every state" feeling. One message, one re-paint, one render.
+async function applyStylesBatch(changes: Array<{ property: string; value: string }>, groupLabel?: string) {
+  if (changes.length === 0) return;
+  const res = await send({ type: 'SP_APPLY_STYLES', changes, groupLabel });
+  if (res.info) info = res.info;
+  if (res.styleChanges) styleChanges = res.styleChanges;
+  if (res.textChanges) textChanges = res.textChanges;
+  if (res.domChanges) domChanges = res.domChanges;
+  render();
+}
+
 // Apply a fill virtual colour prop to its target layer slot. Shared by
 // applyStyle (called by the inline colour-picker's drag / hex / RGB
 // inputs) and the change-event handler (typed values in the swatch
@@ -718,7 +735,16 @@ function applyStrokeProperty(prop: string, value: string) {
       layers[idx].weight = num;
     }
     strokeLayersByElement.set(id, layers);
-    dispatchStrokeLayers(layers, pos, s, applyStyle, styleNow);
+    // Collect dispatchStrokeLayers' fan-out into a batch instead of
+    // firing N individual SP_APPLY_STYLE messages. Changing one Weight
+    // value fans out to 4 border-*-width + 4 colour + 4 style + 1 box-
+    // shadow = 13 writes; the unbatched path made the per-side fields
+    // visibly tear (each one updating on its own render) and that's
+    // the "width field isn't following the weight value" symptom.
+    const batch: Array<{ property: string; value: string }> = [];
+    const collect = (p: string, v: string) => batch.push({ property: p, value: v });
+    dispatchStrokeLayers(layers, pos, s, collect, styleNow);
+    applyStylesBatch(batch, prop === '__stroke_color' ? 'Stroke colour' : 'Stroke weight');
     return;
   }
 
@@ -734,10 +760,17 @@ function applyStrokeProperty(prop: string, value: string) {
     // Track user's intent regardless of mode so the dashed panel toggles
     // correctly even in Inside mode (where CSS can't render the dashed
     // visual). The actual border-style / outline-style is only written
-    // when the active mode supports it.
+    // when the active mode supports it. Outside writes to 4 sides at
+    // once — batch them so the 4 border-*-style longhands land in one
+    // round-trip.
     if (id) strokeStyleByElement.set(id, value as 'solid' | 'dashed');
     if (pos === 'outside') {
-      ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'].forEach(p => applyStyle(p, value));
+      applyStylesBatch([
+        { property: 'borderTopStyle', value },
+        { property: 'borderRightStyle', value },
+        { property: 'borderBottomStyle', value },
+        { property: 'borderLeftStyle', value },
+      ], 'Stroke style');
     } else if (pos === 'center') {
       applyStyle('outlineStyle', value);
     } else {
@@ -812,39 +845,43 @@ function applyStrokePosition(pos: 'inside' | 'outside' | 'center') {
   const styles = ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'];
   const colors = ['borderTopColor','borderRightColor','borderBottomColor','borderLeftColor'];
 
+  // Collect every write into one batch so the tab swap is a single
+  // round-trip + single re-render. Without batching, each applyStyle
+  // dispatched its own SP_APPLY_STYLE message and the panel rendered
+  // after every response — the tab visibly walked through each
+  // intermediate state instead of snapping to the destination.
+  const batch: Array<{ property: string; value: string }> = [];
   // Always sync per-side storage so switching back to Outside restores intent.
-  sides.forEach(p => applyStyle(p, weight + 'px'));
-  colors.forEach(p => applyStyle(p, color));
+  sides.forEach(p => batch.push({ property: p, value: weight + 'px' }));
+  colors.forEach(p => batch.push({ property: p, value: color }));
 
   if (pos === 'outside') {
-    styles.forEach(p => applyStyle(p, style));
-    const cleared = serializeStrokeLayers([], oldPos === 'center' ? 'inside' : oldPos, s.boxShadow || '');
-    applyStyle('boxShadow', cleared);
-    applyStyle('outlineStyle', 'none');
-    applyStyle('outlineWidth', '0px');
-    applyStyle('outlineOffset', '0px');
+    styles.forEach(p => batch.push({ property: p, value: style }));
+    batch.push({ property: 'boxShadow', value: serializeStrokeLayers([], oldPos === 'center' ? 'inside' : oldPos, s.boxShadow || '') });
+    batch.push({ property: 'outlineStyle', value: 'none' });
+    batch.push({ property: 'outlineWidth', value: '0px' });
+    batch.push({ property: 'outlineOffset', value: '0px' });
   } else if (pos === 'inside') {
-    styles.forEach(p => applyStyle(p, 'none'));
-    const css = serializeStrokeLayers([{ weight, color }], 'inside', s.boxShadow || '');
-    applyStyle('boxShadow', css);
-    applyStyle('outlineStyle', 'none');
-    applyStyle('outlineWidth', '0px');
-    applyStyle('outlineOffset', '0px');
+    styles.forEach(p => batch.push({ property: p, value: 'none' }));
+    batch.push({ property: 'boxShadow', value: serializeStrokeLayers([{ weight, color }], 'inside', s.boxShadow || '') });
+    batch.push({ property: 'outlineStyle', value: 'none' });
+    batch.push({ property: 'outlineWidth', value: '0px' });
+    batch.push({ property: 'outlineOffset', value: '0px' });
   } else { // center
-    styles.forEach(p => applyStyle(p, 'none'));
-    const cleared = serializeStrokeLayers([], oldPos === 'inside' ? 'inside' : oldPos, s.boxShadow || '');
-    applyStyle('boxShadow', cleared);
-    applyStyle('outlineStyle', style);
-    applyStyle('outlineWidth', weight + 'px');
-    applyStyle('outlineColor', color);
+    styles.forEach(p => batch.push({ property: p, value: 'none' }));
+    batch.push({ property: 'boxShadow', value: serializeStrokeLayers([], oldPos === 'inside' ? 'inside' : oldPos, s.boxShadow || '') });
+    batch.push({ property: 'outlineStyle', value: style });
+    batch.push({ property: 'outlineWidth', value: weight + 'px' });
+    batch.push({ property: 'outlineColor', value: color });
     // Outline-offset has to stay negative for the visual to read as
     // "centered on the edge" (the outline straddles the border box).
     // With weight 0, -weight/2 is also 0, which makes the next
     // inferStrokePosition fall back to 'outside' — looks like the tab
     // bounced. Floor at -1px so Center is unambiguous even before the
     // user picks a weight.
-    applyStyle('outlineOffset', Math.min(-1, -Math.round(weight / 2)) + 'px');
+    batch.push({ property: 'outlineOffset', value: Math.min(-1, -Math.round(weight / 2)) + 'px' });
   }
+  applyStylesBatch(batch, 'Stroke position: ' + pos);
 }
 async function applyText(text: string) { const res = await send({ type: 'SP_SET_TEXT', text }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
 async function applyHtml(html: string) { const res = await send({ type: 'SP_SET_HTML', html }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
@@ -2383,6 +2420,13 @@ const fillLayersByElement = new Map<string, FillLayer[]>();
 // this is almost certainly a runaway — the user gets a toast instead
 // of an opaque "Add fill" no-op.
 const FILL_LIMIT = 32;
+
+// Multi-stroke cap. Tighter than fills because each extra stroke is a
+// concentric ring expressed as a box-shadow chain entry — once you're
+// past ~5 the visual is already a thick rainbow border that's hard to
+// read, and the bookkeeping for per-layer weight / colour gets noisy
+// in the panel.
+const STROKE_LIMIT = 5;
 
 // Split a color into its base (no alpha) + opacity 0-1. Solid fills in
 // the panel store opacity as the alpha channel of the CSS color so the
@@ -5386,27 +5430,49 @@ function renderDesignTab(): string {
   const colorPanel = strokeColorPanelOpen ? sp() + renderColorPanel('__stroke_color', strokeColor) : '';
 
   // Per-side panel \u2014 only when Outside mode (other modes are uniform-only
-  // in CSS). 4 rows, each with Width + Color + Style for that side.
-  const sideRow = (lbl: string, key: 'Top'|'Right'|'Bottom'|'Left'): string => {
+  // in CSS). Header row labels each column once; per-side rows below are
+  // anonymous inputs with a hardcoded side name in the first cell. Keeps
+  // the panel from repeating "Width / Colour / Style" four times.
+  const SIDE_COLOR_PROPS = ['borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor'] as const;
+  const sideHeaderRow = grid12([
+    { span: 2, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">Side</label></div>' },
+    { span: 3, content: '<div class="dm-field"><label class="dm-field-label">Width</label></div>' },
+    { span: 4, content: '<div class="dm-field"><label class="dm-field-label">Colour</label></div>' },
+    { span: 3, content: '<div class="dm-field"><label class="dm-field-label">Style</label></div>' },
+  ]);
+  const sideRow = (key: 'Top' | 'Right' | 'Bottom' | 'Left'): string => {
     const wProp = 'border' + key + 'Width';
     const cProp = 'border' + key + 'Color';
     const stProp = 'border' + key + 'Style';
     const wVal = (s as any)[wProp] || '0px';
     const cVal = (s as any)[cProp] || s.borderTopColor || '#000000';
     const stVal = (s as any)[stProp] || s.borderTopStyle || 'solid';
+    // Hardcoded side label cell \u2014 same vertical metrics as the inputs so
+    // the row reads as one strip rather than a label-floating-above mess.
+    const sideLabelCell = '<div class="dm-field"><div style="height:30px;display:flex;align-items:center;font-size:11px;font-weight:500;color:var(--dm-text);">' + key + '</div></div>';
     return grid12([
-      { span: 2, content: '<div class="dm-field"><label class="dm-field-label">' + lbl + '</label><div style="height:30px;display:flex;align-items:center;font-size:11px;color:var(--dm-text-muted);">' + key.toLowerCase() + '</div></div>' },
-      { span: 3, content: inp('Width', wProp, wVal) },
-      { span: 4, content: colorInp('Colour', cProp, cVal, true) },
-      { span: 3, content: sel('Style', stProp, stVal, styleOptions) },
+      { span: 2, content: sideLabelCell },
+      { span: 3, content: inp('', wProp, wVal) },
+      { span: 4, content: colorInp('', cProp, cVal, true) },
+      { span: 3, content: sel('', stProp, stVal, styleOptions) },
     ]);
   };
+  // When the user clicks a per-side colour swatch, the picker for that
+  // specific prop opens \u2014 but the per-side rows pass `omitPanel: true`
+  // to keep the row compact. Render the active panel detached below the
+  // sides grid so the picker actually shows up.
+  const activeSideColorProp = SIDE_COLOR_PROPS.find(p => p === activeColorPickerProp) || '';
+  const sideColorPanel = activeSideColorProp
+    ? sp() + renderColorPanel(activeSideColorProp, (s as any)[activeSideColorProp] || s.borderTopColor || '#000000')
+    : '';
   const sidesGrid = (sidesAvailable && sidesExpanded) ? sp() +
     sub('Per-side (Outside mode only \u2014 Inside / Center are CSS-uniform)') +
-    sideRow('T', 'Top') + sp() +
-    sideRow('R', 'Right') + sp() +
-    sideRow('B', 'Bottom') + sp() +
-    sideRow('L', 'Left')
+    sideHeaderRow + sp() +
+    sideRow('Top') + sp() +
+    sideRow('Right') + sp() +
+    sideRow('Bottom') + sp() +
+    sideRow('Left') +
+    sideColorPanel
   : '';
 
   // Dashed panel — only visible when style is 'dashed'. CSS borders don't
@@ -5438,11 +5504,10 @@ function renderDesignTab(): string {
 
   // Outline-offset control — only meaningful in Center mode. Negative
   // values pull the outline inward (toward the box edge); positive push
-  // it outward. We seed at -(weight/2) when entering Center mode but the
-  // user can override here.
+  // it outward. Helper text lives inside the label parens so the field
+  // can use the full 12-column row instead of stealing half for a chip.
   const offsetRow = strokePos === 'center' ? sp() + grid12([
-    { span: 6, content: inp('Outline offset', 'outlineOffset', s.outlineOffset || '0px') },
-    { span: 6, content: '<div style="font-size:10px;color:var(--dm-text-dim);padding:14px 0 0;">Negative pulls inward</div>' },
+    { span: 12, content: inp('Outline offset (negative pulls inward)', 'outlineOffset', s.outlineOffset || '0px') },
   ]) : '';
 
   // Stroke Advanced — border-image suite. CSS lets you slice an image (or
@@ -5497,10 +5562,17 @@ function renderDesignTab(): string {
       sp();
   })() : '';
 
-  // + Add stroke button. Disabled in Center mode (CSS outline can't stack).
-  const addDisabled = strokePos === 'center';
+  // + Add stroke button. Disabled in Center mode (CSS outline can't
+  // stack) AND when the user has already reached STROKE_LIMIT.
+  const atStrokeLimit = strokeLayers.length >= STROKE_LIMIT;
+  const addDisabled = strokePos === 'center' || atStrokeLimit;
+  const addTitle = strokePos === 'center'
+    ? 'Multi-stroke is not available in Center mode (CSS outline can’t stack)'
+    : atStrokeLimit
+      ? 'Stroke limit reached (' + STROKE_LIMIT + ' layers)'
+      : 'Add another stroke on top';
   const addStrokeBtn = '<button class="dm-btn" data-dm-stroke-add' + (addDisabled ? ' disabled' : '') +
-    ' title="' + (addDisabled ? 'Multi-stroke is not available in Center mode (CSS outline can’t stack)' : 'Add another stroke on top') + '"' +
+    ' title="' + escapeAttr(addTitle) + '"' +
     ' style="margin-top:8px;display:flex;align-items:center;gap:6px;padding:8px;width:100%;justify-content:center;' + (addDisabled ? 'opacity:0.4;cursor:not-allowed;' : '') + '">' +
     icon('plus', 12) + '<span>Add stroke</span></button>';
 
@@ -7835,6 +7907,15 @@ function setupDelegation() {
       const pos = inferStrokePosition(cs);
       if (pos === 'center') return; // multi not supported on outline
       const layers = getStrokeLayers(id, cs, pos);
+      // Cap at STROKE_LIMIT layers. Outside-multi and Inside use the
+      // box-shadow chain, which technically scales to any count, but
+      // practical use rarely needs more than a handful — beyond ~5
+      // the visual just becomes a thick rainbow that's hard to reason
+      // about. Matches the spirit of the fill-layer cap.
+      if (layers.length >= STROKE_LIMIT) {
+        showCaptureToast('error', 'Stroke limit reached (' + STROKE_LIMIT + ' layers).');
+        return;
+      }
       // Default new stroke: 1px white on top of the stack.
       layers.unshift({ weight: 1, color: '#ffffff', visible: true });
       activeStrokeIdx = 0;
