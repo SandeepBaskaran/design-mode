@@ -245,6 +245,7 @@ const advancedOpen: Record<string, boolean> = {};   // keyed by section key
 let sidesPopoverOpen = false;
 let strokeStylePopoverOpen = false;
 let effectsMenuOpen = false;
+let motionMenuOpen = false;
 let fillAddOpen = false;
 let expandedFillIdx: number | null = null;
 let expandedStrokeIdx: number | null = null;
@@ -2386,7 +2387,18 @@ function effectsAddMenuTrigger(isOpen: boolean): string {
     { icon: 'sparkles', label: 'Filter drop-shadow', attr: 'data-dm-add-effect="filter-drop-shadow"' },
     { icon: 'eye', label: 'Layer blur', attr: 'data-dm-add-effect="layer-blur"' },
     { icon: 'panelRight', label: 'Background blur', attr: 'data-dm-add-effect="backdrop-blur"' },
-    { divider: true, label: '', attr: '' },
+  ];
+  return '<div style="position:relative;display:inline-flex;">' + trigger + popover(items) + '</div>';
+}
+
+// Motion add-menu — its own popover with the time/animation kinds that
+// used to share the Effects + menu. State lives in `motionMenuOpen` so
+// the two popovers don't fight each other.
+function motionAddMenuTrigger(isOpen: boolean): string {
+  const trigger = '<button class="dm-section-action" data-dm-motion-menu title="Add motion" data-active="' + (isOpen ? 'true' : 'false') + '">' +
+    icon('plus', 12) + '</button>';
+  if (!isOpen) return '<div style="position:relative;display:inline-flex;">' + trigger + '</div>';
+  const items: PopoverItem[] = [
     { icon: 'play', label: 'Transition', attr: 'data-dm-add-effect="transition"' },
     { icon: 'activity', label: 'Animation', attr: 'data-dm-add-effect="animation"' },
     { icon: 'move', label: 'Transform', attr: 'data-dm-add-effect="transform"' },
@@ -4460,29 +4472,33 @@ interface SectionVisibility {
   fill: boolean;
   stroke: boolean;
   effects: boolean;
+  motion: boolean;
   layoutGuide: boolean;
 }
 function visibleSections(kind: LayerKind): SectionVisibility {
   // Mirrors Figma: each kind exposes only the sections that make sense.
   // Layout Guide is shown on anything that has a box you'd lay things
   // inside — containers, pages, and the permissive `unknown` default.
+  // Motion (transitions / animations / transform / motion path / view
+  // transition / scroll-driven) goes wherever Effects goes — they apply
+  // to the same kinds.
   if (kind === 'void') {
-    return { position: true, layout: false, appearance: true, typography: false, fill: false, stroke: false, effects: false, layoutGuide: false };
+    return { position: true, layout: false, appearance: true, typography: false, fill: false, stroke: false, effects: false, motion: false, layoutGuide: false };
   }
   if (kind === 'media' || kind === 'svg') {
-    return { position: true, layout: false, appearance: true, typography: false, fill: true, stroke: true, effects: true, layoutGuide: false };
+    return { position: true, layout: false, appearance: true, typography: false, fill: true, stroke: true, effects: true, motion: true, layoutGuide: false };
   }
   if (kind === 'form') {
-    return { position: true, layout: false, appearance: true, typography: true, fill: true, stroke: true, effects: true, layoutGuide: false };
+    return { position: true, layout: false, appearance: true, typography: true, fill: true, stroke: true, effects: true, motion: true, layoutGuide: false };
   }
   if (kind === 'page') {
-    return { position: false, layout: true, appearance: true, typography: false, fill: true, stroke: false, effects: false, layoutGuide: true };
+    return { position: false, layout: true, appearance: true, typography: false, fill: true, stroke: false, effects: false, motion: false, layoutGuide: true };
   }
   if (kind === 'container') {
-    return { position: true, layout: true, appearance: true, typography: false, fill: true, stroke: true, effects: true, layoutGuide: true };
+    return { position: true, layout: true, appearance: true, typography: false, fill: true, stroke: true, effects: true, motion: true, layoutGuide: true };
   }
   // 'text' (and 'unknown' as a permissive default) — full kit including Typography.
-  return { position: true, layout: true, appearance: true, typography: true, fill: true, stroke: true, effects: true, layoutGuide: true };
+  return { position: true, layout: true, appearance: true, typography: true, fill: true, stroke: true, effects: true, motion: true, layoutGuide: true };
 }
 
 /* ── Phase 3: Design Tab ── */
@@ -4822,6 +4838,7 @@ function renderDesignTab(): string {
     icon(visibilityOff ? 'eyeOff' : 'eye', 12) + '</button>';
   const appearanceActionsHtml = visEyeBtn + advancedToggleBtn('appearance', appearanceAdvOpen);
   const effectsActionsHtml = effectsAddMenuTrigger(effectsMenuOpen);
+  const motionActionsHtml = motionAddMenuTrigger(motionMenuOpen);
 
   // Position content \u2014 laid out on a 12-col grid:
   //   \u2022 alignment row: 6 buttons \u00d7 2 cols
@@ -5780,13 +5797,15 @@ function renderDesignTab(): string {
       '<button class="dm-btn" data-dm-effect-action="clear-scroll-driven" title="Reset all scroll/view-timeline properties" style="padding:3px 8px;font-size:9px;">Clear</button>' +
     '</div>'
   );
-  const motionSection = motionPieces.length
-    ? '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--dm-separator);">' + motionPieces.join('') + '</div>'
-    : '';
+  // Motion lives in its own section now (rendered below Effects). The
+  // pieces array carries each editor; if nothing is set the section
+  // shows an empty hint and the + menu seeds the first kind.
+  const motionContent = motionPieces.length
+    ? motionPieces.join('')
+    : '<div style="font-size:11px;color:var(--dm-text-dim);text-align:center;padding:14px 0;">Click + to add motion.</div>';
 
-  const effectsAny = effectEntries.length > 0 || motionPieces.length > 0;
-  const effectsContent = effectsAny
-    ? effectRows + motionSection
+  const effectsContent = effectEntries.length > 0
+    ? effectRows
     : '<div style="font-size:11px;color:var(--dm-text-dim);text-align:center;padding:14px 0;">Click + to add an effect.</div>';
 
   // ── Layout guide ────────────────────────────────────────────────
@@ -5902,6 +5921,7 @@ function renderDesignTab(): string {
     (!vis.fill ? '' : sec('Fill', 'palette', fillContent, true, fillActionsHtml)) +
     (!vis.stroke ? '' : sec('Stroke', 'squareDashed', strokeContent, true)) +
     (!vis.effects ? '' : sec('Effects', 'sparkles', effectsContent, true, effectsActionsHtml)) +
+    (!vis.motion ? '' : sec('Motion', 'play', motionContent, true, motionActionsHtml)) +
     (!vis.layoutGuide ? '' : sec('Layout guide', 'layoutGrid', layoutGuideContent, true, layoutGuideSectionActions)) +
     '</div>';
 }
@@ -7521,9 +7541,10 @@ function setupDelegation() {
     // Click outside the Figma-style popovers (sides, effects-add) closes
     // them. Triggers themselves were intercepted earlier so reaching here
     // means the click was outside both the popover body and its trigger.
-    if ((sidesPopoverOpen || effectsMenuOpen) && !target.closest('.dm-popover') && !target.closest('[data-dm-sides-popover]') && !target.closest('[data-dm-effects-menu]')) {
+    if ((sidesPopoverOpen || effectsMenuOpen || motionMenuOpen) && !target.closest('.dm-popover') && !target.closest('[data-dm-sides-popover]') && !target.closest('[data-dm-effects-menu]') && !target.closest('[data-dm-motion-menu]')) {
       sidesPopoverOpen = false;
       effectsMenuOpen = false;
+      motionMenuOpen = false;
       render();
     }
     // Same outside-click behaviour for the Changes-tab sort popover.
@@ -7616,7 +7637,9 @@ function setupDelegation() {
     if (sidesPopBtn) { e.stopPropagation(); sidesPopoverOpen = !sidesPopoverOpen; render(); return; }
 
     const effectsMenuBtn = target.closest<HTMLElement>('[data-dm-effects-menu]');
-    if (effectsMenuBtn) { e.stopPropagation(); effectsMenuOpen = !effectsMenuOpen; render(); return; }
+    if (effectsMenuBtn) { e.stopPropagation(); effectsMenuOpen = !effectsMenuOpen; motionMenuOpen = false; render(); return; }
+    const motionMenuBtn = target.closest<HTMLElement>('[data-dm-motion-menu]');
+    if (motionMenuBtn) { e.stopPropagation(); motionMenuOpen = !motionMenuOpen; effectsMenuOpen = false; render(); return; }
 
     // Position alignment buttons. Pragmatic CSS mapping: dispatch to
     // align-self/justify-self for flex|grid parents, top/left + translate
@@ -8373,6 +8396,7 @@ function setupDelegation() {
         }
       }
       effectsMenuOpen = false;
+      motionMenuOpen = false;
       return;
     }
 
