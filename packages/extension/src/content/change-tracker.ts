@@ -104,6 +104,147 @@ function kebab(prop: string): string {
   return prop.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
 }
 
+// ── Overlay effects (Noise / Texture) ────────────────────────────────
+// The side panel writes one synthetic CSS prop `__effect_overlay`
+// carrying a JSON array of overlay entries. At stylesheet build time we
+// translate the array into an `::after` pseudo-element with chained
+// background-image SVG data URIs (one per visible entry). Doesn't
+// affect the element's layout — the pseudo is position:absolute and
+// pointer-events:none, just like the Layout Guide overlay.
+
+interface NoiseOverlay {
+  kind: 'noise';
+  visible?: boolean;
+  mode: 'mono' | 'duo' | 'multi';
+  sizeX: number; sizeY: number; density: number;
+  color1: string; color1Opacity: number;
+  color2: string; color2Opacity: number;
+  opacity: number;
+}
+interface TextureOverlay {
+  kind: 'texture';
+  visible?: boolean;
+  sizeX: number; sizeY: number; radius: number; clipToShape: boolean;
+}
+type OverlayEntry = NoiseOverlay | TextureOverlay;
+
+function parseOverlayChain(value: string): OverlayEntry[] {
+  if (!value || value === 'none') return [];
+  try {
+    const arr = JSON.parse(value);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((e: any) => e && (e.kind === 'noise' || e.kind === 'texture'));
+  } catch { return []; }
+}
+
+// Decode a hex / rgb string into RGB (0..1 floats) so feColorMatrix
+// can tint the noise to the user's colour. Falls back to black on
+// unknown formats; the tint is a soft no-op (transparent black).
+function hexToRgbFloat(hex: string): { r: number; g: number; b: number } {
+  if (!hex) return { r: 0, g: 0, b: 0 };
+  const m6 = hex.match(/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (m6) return { r: parseInt(m6[1], 16) / 255, g: parseInt(m6[2], 16) / 255, b: parseInt(m6[3], 16) / 255 };
+  const m3 = hex.match(/^#?([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+  if (m3) return { r: parseInt(m3[1] + m3[1], 16) / 255, g: parseInt(m3[2] + m3[2], 16) / 255, b: parseInt(m3[3] + m3[3], 16) / 255 };
+  const rgb = hex.match(/rgba?\(([^)]+)\)/i);
+  if (rgb) {
+    const parts = rgb[1].split(',').map(s => parseFloat(s.trim()));
+    return { r: (parts[0] || 0) / 255, g: (parts[1] || 0) / 255, b: (parts[2] || 0) / 255 };
+  }
+  return { r: 0, g: 0, b: 0 };
+}
+
+// SVG noise builder. feTurbulence generates the grain; the mode picks
+// a colour pipeline:
+//   • Mono — feColorMatrix tints to color1 at color1Opacity * density.
+//   • Duo  — two layered SVGs (one per colour). We return the Mono
+//     pipeline here; the caller stacks a second URL for color2.
+//   • Multi — passthrough noise (full-spectrum colour) attenuated by
+//     `opacity`.
+// baseFrequency = density/100 / size, capped to avoid extreme values.
+function buildNoiseDataUri(entry: NoiseOverlay, useSecondColor = false): string {
+  const sizeX = Math.max(0.1, Math.min(5, entry.sizeX || 0.5));
+  const sizeY = Math.max(0.1, Math.min(5, entry.sizeY || 0.5));
+  const density = Math.max(0, Math.min(100, entry.density || 0)) / 100;
+  const baseFreqX = (density / sizeX).toFixed(3);
+  const baseFreqY = (density / sizeY).toFixed(3);
+  const tile = 256;
+  let filterBody = `<feTurbulence type='fractalNoise' baseFrequency='${baseFreqX} ${baseFreqY}' numOctaves='2' stitchTiles='stitch'/>`;
+  if (entry.mode === 'multi') {
+    // Multi — keep colour, attenuate alpha by entry.opacity.
+    const a = Math.max(0, Math.min(100, entry.opacity || 0)) / 100;
+    filterBody += `<feColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 ${a.toFixed(3)} 0'/>`;
+  } else {
+    // Mono / Duo — tint to the selected colour at its opacity.
+    const color = useSecondColor ? entry.color2 : entry.color1;
+    const opacityPct = useSecondColor ? entry.color2Opacity : entry.color1Opacity;
+    const a = Math.max(0, Math.min(100, opacityPct || 0)) / 100;
+    const { r, g, b } = hexToRgbFloat(color);
+    filterBody += `<feColorMatrix values='0 0 0 0 ${r.toFixed(3)} 0 0 0 0 ${g.toFixed(3)} 0 0 0 0 ${b.toFixed(3)} 0 0 0 ${a.toFixed(3)} 0'/>`;
+  }
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${tile}' height='${tile}'>` +
+      `<filter id='n'>${filterBody}</filter>` +
+      `<rect width='100%' height='100%' filter='url(%23n)'/>` +
+    `</svg>`;
+  return `url("data:image/svg+xml;utf8,${svg.replace(/#/g, '%23').replace(/"/g, "'")}")`;
+}
+
+// SVG texture builder. Turbulence with feGaussianBlur for a paper /
+// canvas grain. Tinted to mid-gray so it composes by darkening; user
+// adjusts radius to soften or sharpen the grain.
+function buildTextureDataUri(entry: TextureOverlay): string {
+  const sizeX = Math.max(0.1, Math.min(5, entry.sizeX || 0.5));
+  const sizeY = Math.max(0.1, Math.min(5, entry.sizeY || 0.5));
+  const radius = Math.max(0, Math.min(20, entry.radius || 0));
+  const baseFreqX = (0.04 / sizeX).toFixed(3);
+  const baseFreqY = (0.04 / sizeY).toFixed(3);
+  const tile = 256;
+  const filterBody =
+    `<feTurbulence type='turbulence' baseFrequency='${baseFreqX} ${baseFreqY}' numOctaves='3' stitchTiles='stitch'/>` +
+    (radius > 0 ? `<feGaussianBlur stdDeviation='${radius.toFixed(2)}'/>` : '') +
+    `<feColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.35 0'/>`;
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${tile}' height='${tile}'>` +
+      `<filter id='t'>${filterBody}</filter>` +
+      `<rect width='100%' height='100%' filter='url(%23t)'/>` +
+    `</svg>`;
+  return `url("data:image/svg+xml;utf8,${svg.replace(/#/g, '%23').replace(/"/g, "'")}")`;
+}
+
+// Build the `::after` CSS for one element from its overlay JSON value.
+// Returns an empty string when there's nothing visible to paint so
+// the host doesn't get pointless `position: relative` / pseudo blocks.
+function buildOverlayCss(elementId: string, value: string): string {
+  const entries = parseOverlayChain(value).filter(e => e.visible !== false);
+  if (!entries.length) return '';
+  const images: string[] = [];
+  let anyClipToShape = false;
+  for (const e of entries) {
+    if (e.kind === 'noise') {
+      images.push(buildNoiseDataUri(e, false));
+      if (e.mode === 'duo') images.push(buildNoiseDataUri(e, true));
+    } else if (e.kind === 'texture') {
+      images.push(buildTextureDataUri(e));
+      if (e.clipToShape) anyClipToShape = true;
+    }
+  }
+  if (!images.length) return '';
+  return `[data-dm-id="${elementId}"][data-dm-id] {\n` +
+    `  position: relative !important;\n` +
+    `}\n` +
+    `[data-dm-id="${elementId}"]::after {\n` +
+    `  content: '' !important;\n` +
+    `  position: absolute !important;\n` +
+    `  inset: 0 !important;\n` +
+    `  pointer-events: none !important;\n` +
+    `  z-index: 2147483645 !important;\n` +
+    `  background-image: ${images.join(', ')} !important;\n` +
+    `  background-repeat: repeat !important;\n` +
+    (anyClipToShape ? `  border-radius: inherit !important;\n  clip-path: inherit !important;\n` : '') +
+    `}`;
+}
+
 function ensureStyleEl(): HTMLStyleElement {
   if (appliedStyleEl && appliedStyleEl.isConnected) return appliedStyleEl;
   const existing = document.getElementById('dm-applied-styles') as HTMLStyleElement | null;
@@ -130,8 +271,17 @@ function rebuildStyleSheet() {
     // !important (Tailwind, BEM, design-system layers). The override sheet
     // is "user intent expressed after the page has rendered" — by definition
     // it should win over the page's authored styles.
-    for (const [prop, val] of props) decls.push(`  ${kebab(prop)}: ${val} !important;`);
-    blocks.push(`[data-dm-id="${elementId}"][data-dm-id] {\n${decls.join('\n')}\n}`);
+    for (const [prop, val] of props) {
+      // __effect_overlay is a synthetic prop translated into a
+      // ::after pseudo-element overlay below; skip the primary decl
+      // emission so we don't write `--effect-overlay: <json>` onto
+      // the host element.
+      if (prop === '__effect_overlay') continue;
+      decls.push(`  ${kebab(prop)}: ${val} !important;`);
+    }
+    if (decls.length) {
+      blocks.push(`[data-dm-id="${elementId}"][data-dm-id] {\n${decls.join('\n')}\n}`);
+    }
     // For inherited typography props, stop the cascade at any descendant
     // the panel has stamped. The user only "wrote" the value on the
     // selected element; siblings/children with their own data-dm-id keep
@@ -146,6 +296,13 @@ function rebuildStyleSheet() {
     }
     if (inheritedDecls.length) {
       blocks.push(`[data-dm-id="${elementId}"] [data-dm-id] {\n${inheritedDecls.join('\n')}\n}`);
+    }
+    // Overlay effects (Noise / Texture) — translate `__effect_overlay`
+    // into a `::after` block with chained SVG-data-URI background-images.
+    const overlayVal = props.get('__effect_overlay');
+    if (overlayVal && overlayVal !== 'none') {
+      const css = buildOverlayCss(elementId, overlayVal);
+      if (css) blocks.push(css);
     }
   }
   el.textContent = blocks.join('\n\n');

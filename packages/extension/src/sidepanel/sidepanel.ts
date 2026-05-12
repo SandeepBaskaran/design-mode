@@ -682,6 +682,41 @@ async function applyStyle(property: string, value: string) {
     applyLayoutGuideProperty(property, value);
     return;
   }
+  // Overlay-chain per-field edits dispatched from buttons (Noise mode
+  // tabs) or the colour picker drag. Same problem as fill/stroke
+  // colour edits: dragging the picker bypasses the change handler so
+  // we need a direct intercept. Mode tabs reach here because the
+  // propBtn click handler calls applyStyle() directly.
+  if (property.startsWith('__effd_overlay_')) {
+    const id = info?.id || '';
+    if (!id) return;
+    const m = property.match(/^__effd_overlay_(\d+)_(\w+)$/);
+    if (!m) return;
+    const idx = parseInt(m[1], 10);
+    const field = m[2];
+    const list = getOverlayEntries(id).slice();
+    const entry = list[idx];
+    if (!entry) return;
+    if (entry.kind === 'noise') {
+      if (field === 'mode') (entry as any).mode = value as NoiseMode;
+      else if (field === 'color1' || field === 'color2') (entry as any)[field] = value;
+      else if (field === 'sizeX' || field === 'sizeY' || field === 'density' ||
+               field === 'color1Opacity' || field === 'color2Opacity' || field === 'opacity') {
+        const n = parseFloat(value);
+        (entry as any)[field] = isFinite(n) ? n : 0;
+      }
+    } else if (entry.kind === 'texture') {
+      if (field === 'clipToShape') (entry as any).clipToShape = value === 'true';
+      else if (field === 'sizeX' || field === 'sizeY' || field === 'radius') {
+        const n = parseFloat(value);
+        (entry as any)[field] = isFinite(n) ? n : 0;
+      }
+    }
+    list[idx] = entry;
+    setOverlayEntries(id, list);
+    dispatchOverlayEntries(id, list);
+    return;
+  }
   const res = await send({ type: 'SP_APPLY_STYLE', property, value });
   if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
 }
@@ -3366,11 +3401,98 @@ type ShadowParts = { inset: boolean; x: number; y: number; blur: number; spread:
 //       - checkbox OFF + other element → filter:drop-shadow (no spread).
 //     `chain` discriminates which slot the entry currently lives in;
 //     `showBehindTransparent` mirrors that (chain === 'box').
+// Overlay effects (Noise / Texture) don't live in any of the four CSS
+// chains above — there's no native CSS for them. They're painted via
+// an `::after` pseudo-element with chained background-image SVG data
+// URIs, written out of one synthetic prop `__effect_overlay` whose
+// value is a JSON array.
+type NoiseMode = 'mono' | 'duo' | 'multi';
+type OverlayEntry =
+  | { id: string; kind: 'noise'; chain: 'overlay'; chainIdx: number; raw: string; visible: boolean;
+      mode: NoiseMode;
+      sizeX: number; sizeY: number; density: number;
+      color1: string; color1Opacity: number;
+      color2: string; color2Opacity: number;
+      opacity: number }
+  | { id: string; kind: 'texture'; chain: 'overlay'; chainIdx: number; raw: string; visible: boolean;
+      sizeX: number; sizeY: number; radius: number; clipToShape: boolean };
 type EffectEntry =
   | { id: string; kind: 'inner-shadow'; chain: 'box'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean }
   | { id: string; kind: 'drop-shadow'; chain: 'box' | 'filter' | 'text'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean; showBehindTransparent: boolean }
   | { id: string; kind: 'layer-blur'; chain: 'filter'; chainIdx: number; raw: string; radius: number; visible: boolean }
-  | { id: string; kind: 'backdrop-blur'; chain: 'backdrop'; chainIdx: number; raw: string; radius: number; visible: boolean };
+  | { id: string; kind: 'backdrop-blur'; chain: 'backdrop'; chainIdx: number; raw: string; radius: number; visible: boolean }
+  | OverlayEntry;
+
+// Default seeds for new overlay entries. Match the Figma defaults shown
+// in the reference screenshots so a freshly-added Noise / Texture looks
+// the way users coming from Figma expect.
+function defaultNoiseEntry(mode: NoiseMode = 'mono'): OverlayEntry {
+  return {
+    id: 'noise-' + Math.random().toString(36).slice(2, 8),
+    kind: 'noise',
+    chain: 'overlay',
+    chainIdx: 0,
+    raw: '',
+    visible: true,
+    mode,
+    sizeX: 0.5,
+    sizeY: 0.5,
+    density: 100,
+    color1: '#000000',
+    color1Opacity: 25,
+    color2: '#ffffff',
+    color2Opacity: 25,
+    opacity: 15,
+  };
+}
+function defaultTextureEntry(): OverlayEntry {
+  return {
+    id: 'texture-' + Math.random().toString(36).slice(2, 8),
+    kind: 'texture',
+    chain: 'overlay',
+    chainIdx: 0,
+    raw: '',
+    visible: true,
+    sizeX: 0.5,
+    sizeY: 0.5,
+    radius: 4,
+    clipToShape: false,
+  };
+}
+
+// Per-element overlay-effects stash. Updated whenever a row is added /
+// removed / edited; serialized into the synthetic `__effect_overlay`
+// CSS prop which flows through the change-tracker (so the Changes tab
+// and session persistence pick it up). Hydrated from styleChanges on
+// selection so panel reopens / page reloads restore the rows.
+const overlayEffectsByElement = new Map<string, OverlayEntry[]>();
+
+function serializeOverlayEntries(entries: OverlayEntry[]): string {
+  if (!entries.length) return 'none';
+  return JSON.stringify(entries);
+}
+function parseOverlayEntries(value: string): OverlayEntry[] {
+  if (!value || value === 'none') return [];
+  try {
+    const arr = JSON.parse(value);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(e => e && (e.kind === 'noise' || e.kind === 'texture'));
+  } catch { return []; }
+}
+function getOverlayEntries(elementId: string): OverlayEntry[] {
+  if (!elementId) return [];
+  return overlayEffectsByElement.get(elementId) || [];
+}
+function setOverlayEntries(elementId: string, entries: OverlayEntry[]): void {
+  overlayEffectsByElement.set(elementId, entries);
+}
+// Push the typed array to the change-tracker via the synthetic prop.
+// The content-side translator (change-tracker.ts:rebuildStyleSheet)
+// recognises `__effect_overlay` and emits a `::after` rule.
+function dispatchOverlayEntries(elementId: string, entries: OverlayEntry[]): void {
+  if (!elementId) return;
+  applyStyle('__effect_overlay', serializeOverlayEntries(entries));
+}
 
 // Filter functions are space-separated, each call wrapped in parens. A
 // dumb whitespace split would tear apart `drop-shadow(0 4px 8px ...)`. This
@@ -3503,7 +3625,35 @@ function parseEffects(s: Record<string, string>, elementId: string, isText: bool
     }
   });
 
+  // Overlay chain (Noise / Texture). Source-of-truth is the in-memory
+  // stash, hydrated from the synthetic `__effect_overlay` change record
+  // on selection (see hydrateOverlayFromChanges). We keep the typed
+  // entries indexed and bumped here so drag-reorder, expand, and
+  // remove all use the same indices the typed array exposes.
+  const overlayList = getOverlayEntries(elementId);
+  overlayList.forEach((entry, i) => {
+    out.push({
+      ...entry,
+      chainIdx: i,
+      visible: entry.visible !== false && !hidden.has(entry.id),
+    });
+  });
+
   return out;
+}
+
+// Read the `__effect_overlay` synthetic prop from the per-element style
+// change records (which is where the change-tracker stores the JSON we
+// dispatched) and rebuild the in-memory overlay stash. Called whenever
+// the selected element changes so the rows in the panel reflect the
+// last persisted state.
+function hydrateOverlayFromChanges(elementId: string): void {
+  if (!elementId) return;
+  if (overlayEffectsByElement.has(elementId)) return; // already in memory
+  const persisted = styleChanges.find(c => c.elementId === elementId && c.property === '__effect_overlay');
+  if (!persisted) return;
+  const parsed = parseOverlayEntries(persisted.newValue);
+  if (parsed.length) overlayEffectsByElement.set(elementId, parsed);
 }
 
 function formatShadowEntry(p: ShadowParts): string {
@@ -3643,6 +3793,84 @@ function renderShadowEntryEditor(entry: EffectEntry & { shadow: ShadowParts }): 
       numField('Spread', 'spread', sh.spread)
     ) +
     showBehindCheckbox +
+    '</div>';
+}
+
+// ── Noise / Texture (overlay-chain) editors ──
+// These rows write into the in-memory overlayEffectsByElement stash and
+// dispatch the whole JSON array as one synthetic CSS prop. Each field
+// has a virtual prop name `__effd_overlay_<idx>_<field>` so it routes
+// through the same change handler as the other effect editors.
+function renderNoiseEntryEditor(entry: Extract<OverlayEntry, { kind: 'noise' }>): string {
+  const prefix = '__effd_overlay_' + entry.chainIdx + '_';
+  const modeTab = (m: NoiseMode, label: string): string => {
+    const active = entry.mode === m;
+    return '<button type="button" data-dm-prop="' + prefix + 'mode" data-dm-value="' + m + '" data-active="' + (active ? 'true' : 'false') + '" style="flex:1;padding:5px 8px;background:' + (active ? 'var(--dm-bg)' : 'none') + ';border:' + (active ? '1px solid var(--dm-separator)' : 'none') + ';border-radius:4px;color:' + (active ? 'var(--dm-text)' : 'var(--dm-text-dim)') + ';cursor:pointer;font-size:10px;font-family:inherit;">' + label + '</button>';
+  };
+  const modeTabs = '<div style="display:flex;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:2px;margin-bottom:8px;">' +
+    modeTab('mono', 'Mono') + modeTab('duo', 'Duo') + modeTab('multi', 'Multi') +
+    '</div>';
+  // Compact decimal input. Shares metrics with the X/Y inputs in other rows.
+  const decField = (label: string, field: string, val: number, step = '0.1', min = '0', max = '') => {
+    return '<div class="dm-field">' +
+      '<label class="dm-field-label">' + label + '</label>' +
+      '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
+      '<input type="number" data-dm-prop="' + prefix + field + '" step="' + step + '" min="' + min + '"' + (max ? ' max="' + max + '"' : '') + ' value="' + val + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
+      '</div></div>';
+  };
+  const sizeRow = grid(2,
+    decField('Size X', 'sizeX', entry.sizeX, '0.1', '0.1', '5'),
+    decField('Size Y', 'sizeY', entry.sizeY, '0.1', '0.1', '5'),
+  );
+  const densityRow = grid(1, decField('Density %', 'density', entry.density, '1', '0', '100'));
+  // Colour + opacity rows — Mono shows one, Duo shows two, Multi shows
+  // a single opacity (the noise itself is full-spectrum colour).
+  const colorRow = (label: string, colorField: string, opacityField: string, color: string, opacity: number) =>
+    '<div style="display:flex;gap:6px;align-items:center;">' +
+      '<div style="flex:1;">' + colorInp(label, prefix + colorField, color) + '</div>' +
+      '<div style="width:80px;">' + decField('Opacity %', opacityField, opacity, '1', '0', '100') + '</div>' +
+    '</div>';
+  let modeBody = '';
+  if (entry.mode === 'mono') {
+    modeBody = colorRow('Colour', 'color1', 'color1Opacity', entry.color1, entry.color1Opacity);
+  } else if (entry.mode === 'duo') {
+    modeBody =
+      colorRow('Colour 1', 'color1', 'color1Opacity', entry.color1, entry.color1Opacity) + sp() +
+      colorRow('Colour 2', 'color2', 'color2Opacity', entry.color2, entry.color2Opacity);
+  } else {
+    modeBody = grid(1, decField('Opacity %', 'opacity', entry.opacity, '1', '0', '100'));
+  }
+  return '<div style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:8px;">' +
+    modeTabs +
+    sizeRow + sp() +
+    densityRow + sp() +
+    modeBody +
+    '</div>';
+}
+
+function renderTextureEntryEditor(entry: Extract<OverlayEntry, { kind: 'texture' }>): string {
+  const prefix = '__effd_overlay_' + entry.chainIdx + '_';
+  const decField = (label: string, field: string, val: number, step = '0.1', min = '0', max = '') => {
+    return '<div class="dm-field">' +
+      '<label class="dm-field-label">' + label + '</label>' +
+      '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
+      '<input type="number" data-dm-prop="' + prefix + field + '" step="' + step + '" min="' + min + '"' + (max ? ' max="' + max + '"' : '') + ' value="' + val + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
+      '</div></div>';
+  };
+  const sizeRow = grid(2,
+    decField('Size X', 'sizeX', entry.sizeX, '0.1', '0.1', '5'),
+    decField('Size Y', 'sizeY', entry.sizeY, '0.1', '0.1', '5'),
+  );
+  const radiusRow = grid(1, decField('Radius', 'radius', entry.radius, '1', '0'));
+  const clipRow =
+    '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--dm-text-secondary);cursor:pointer;">' +
+      '<input type="checkbox" data-dm-prop="' + prefix + 'clipToShape"' + (entry.clipToShape ? ' checked' : '') + ' style="margin:0;"/>' +
+      '<span>Clip to shape</span>' +
+    '</label>';
+  return '<div style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:8px;">' +
+    sizeRow + sp() +
+    radiusRow +
+    clipRow +
     '</div>';
 }
 
@@ -5784,6 +6012,7 @@ function renderDesignTab(): string {
   // each blur, and the text-shadow each get their own row.
   const effectsElId = info?.id || '';
   const effectsIsText = kind === 'text';
+  if (effectsElId) hydrateOverlayFromChanges(effectsElId);
   const effectEntries: EffectEntry[] = effectsElId ? parseEffects(s, effectsElId, effectsIsText) : [];
   const labelFor = (e: EffectEntry): string => {
     if (e.kind === 'drop-shadow' || e.kind === 'inner-shadow') {
@@ -5793,6 +6022,8 @@ function renderDesignTab(): string {
         ? ' ' + sh.spread : '';
       return insetMark + sh.x + ' ' + sh.y + ' ' + sh.blur + spreadSeg + ' \u00b7 ' + sh.color;
     }
+    if (e.kind === 'noise') return e.mode + ' \u00b7 ' + e.density + '%';
+    if (e.kind === 'texture') return 'r' + e.radius + ' \u00b7 ' + e.sizeX + '\u00d7' + e.sizeY;
     return (e as any).radius + 'px';
   };
   const titleFor = (e: EffectEntry): string => ({
@@ -5800,15 +6031,21 @@ function renderDesignTab(): string {
     'inner-shadow':       'Inner shadow',
     'layer-blur':         'Layer blur',
     'backdrop-blur':      'Background blur',
+    'noise':              'Noise',
+    'texture':            'Texture',
   } as Record<string, string>)[e.kind];
   const iconFor = (e: EffectEntry): keyof typeof icons => ({
     'drop-shadow':        'sparkles',
     'inner-shadow':       'squareStack',
     'layer-blur':         'eye',
     'backdrop-blur':      'panelRight',
+    'noise':              'sparkles',
+    'texture':            'sparkles',
   } as Record<string, keyof typeof icons>)[e.kind];
   const bodyFor = (e: EffectEntry): string => {
     if (e.kind === 'layer-blur' || e.kind === 'backdrop-blur') return renderBlurEntryEditor(e as any);
+    if (e.kind === 'noise') return renderNoiseEntryEditor(e as any);
+    if (e.kind === 'texture') return renderTextureEntryEditor(e as any);
     return renderShadowEntryEditor(e as any);
   };
   const effectRows = effectEntries.map((entry, idx) => {
@@ -8306,6 +8543,9 @@ function setupDelegation() {
       // Drop the relevant entry from its CSS chain. We dispatch on
       // `chain` (not kind) because Drop shadow now spans three chains:
       // box-shadow ('box'), filter ('filter'), text-shadow ('text').
+      // The overlay chain ('overlay') drives a synthetic prop that
+      // round-trips through the change-tracker; we splice the typed
+      // entry out of the in-memory stash and re-dispatch the JSON.
       const t2chain = (target2 as any).chain;
       if (t2chain === 'box') {
         const entries = parseCssCommaList(cs.boxShadow || '');
@@ -8321,6 +8561,11 @@ function setupDelegation() {
         applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none');
       } else if (t2chain === 'text') {
         applyStyle('textShadow', 'none');
+      } else if (t2chain === 'overlay') {
+        const list3 = getOverlayEntries(id).slice();
+        list3.splice(target2.chainIdx, 1);
+        setOverlayEntries(id, list3);
+        dispatchOverlayEntries(id, list3);
       }
       // Clean up any stash for this id.
       const hidden = hiddenEffectsByElement.get(id);
@@ -8365,6 +8610,15 @@ function setupDelegation() {
             applyStyle('backdropFilter', list2.join(' '));
           } else if (t2chain2 === 'text') {
             applyStyle('textShadow', stashed);
+          } else if (t2chain2 === 'overlay') {
+            const list3 = getOverlayEntries(id).slice();
+            const entry3 = list3[target2.chainIdx];
+            if (entry3) {
+              (entry3 as any).visible = true;
+              list3[target2.chainIdx] = entry3;
+              setOverlayEntries(id, list3);
+              dispatchOverlayEntries(id, list3);
+            }
           }
         }
       } else {
@@ -8386,6 +8640,15 @@ function setupDelegation() {
           applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none');
         } else if (t2chain3 === 'text') {
           applyStyle('textShadow', 'none');
+        } else if (t2chain3 === 'overlay') {
+          const list3 = getOverlayEntries(id).slice();
+          const entry3 = list3[target2.chainIdx];
+          if (entry3) {
+            (entry3 as any).visible = false;
+            list3[target2.chainIdx] = entry3;
+            setOverlayEntries(id, list3);
+            dispatchOverlayEntries(id, list3);
+          }
         }
       }
       return;
@@ -8495,9 +8758,17 @@ function setupDelegation() {
       else if (kind === 'layer-blur') appendFilter('blur(4px)');
       else if (kind === 'backdrop-blur') appendBackdrop('blur(8px)');
       else if (kind === 'noise' || kind === 'texture') {
-        // Phase 2 — overlay pipeline not yet wired. Surface a toast so
-        // users know the menu items are coming.
-        showCaptureToast('success', kind === 'noise' ? 'Noise — coming soon' : 'Texture — coming soon');
+        // Push a new overlay entry onto the per-element list and
+        // dispatch the whole array as one synthetic CSS prop. The
+        // content-side translator (change-tracker.rebuildStyleSheet)
+        // picks it up and emits an `::after` pseudo-element rule.
+        const id = info?.id || '';
+        if (!id) return;
+        hydrateOverlayFromChanges(id);
+        const list = getOverlayEntries(id).slice();
+        list.push(kind === 'noise' ? defaultNoiseEntry() : defaultTextureEntry());
+        setOverlayEntries(id, list);
+        dispatchOverlayEntries(id, list);
       }
       else if (kind === 'transition') applyStyle('transition', 'all 0.2s ease');
       else if (kind === 'animation') applyStyle('animation', 'dm-fade-in 0.4s ease both');
@@ -8946,6 +9217,43 @@ function setupDelegation() {
           .trim();
         const next = (stripped ? stripped + ' ' : '') + fn;
         applyStyle('transform', next || 'none');
+        return;
+      }
+      // Overlay-chain per-field edits (Noise / Texture). Shape:
+      //   __effd_overlay_<chainIdx>_<field>
+      // The field set varies by kind — we look up the entry in the
+      // in-memory stash and apply the field, then dispatch the whole
+      // typed array. Mode tabs come in via data-dm-value on a button,
+      // which fires through the propBtn path; we also accept the value
+      // from the input when it's a regular field.
+      const overlayMatch = prop.match(/^__effd_overlay_(\d+)_(\w+)$/);
+      if (overlayMatch) {
+        const id = info?.id || '';
+        if (!id) return;
+        const idx = parseInt(overlayMatch[1], 10);
+        const field = overlayMatch[2];
+        const list = getOverlayEntries(id).slice();
+        const entry = list[idx];
+        if (!entry) return;
+        const cb = propInput as HTMLInputElement;
+        if (entry.kind === 'noise') {
+          if (field === 'mode') (entry as any).mode = raw as NoiseMode;
+          else if (field === 'color1' || field === 'color2') (entry as any)[field] = raw;
+          else if (field === 'sizeX' || field === 'sizeY' || field === 'density' ||
+                   field === 'color1Opacity' || field === 'color2Opacity' || field === 'opacity') {
+            const n = parseFloat(raw);
+            (entry as any)[field] = isFinite(n) ? n : 0;
+          }
+        } else if (entry.kind === 'texture') {
+          if (field === 'clipToShape') (entry as any).clipToShape = cb.type === 'checkbox' ? cb.checked : raw === 'true';
+          else if (field === 'sizeX' || field === 'sizeY' || field === 'radius') {
+            const n = parseFloat(raw);
+            (entry as any)[field] = isFinite(n) ? n : 0;
+          }
+        }
+        list[idx] = entry;
+        setOverlayEntries(id, list);
+        dispatchOverlayEntries(id, list);
         return;
       }
       // Drop shadow's "Show behind transparent areas" toggle. Moves the
@@ -10003,6 +10311,19 @@ function setupDelegation() {
       const [moved] = list2.splice(sci, 1);
       list2.splice(tci, 0, moved);
       applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none');
+    } else if (dragSrc.chain === 'overlay') {
+      // Overlay chain reorder — swap entries inside the in-memory
+      // stash and re-dispatch the JSON. Later entries paint on top,
+      // matching the rest of the layered editors.
+      const stash = getOverlayEntries(id).slice();
+      const sci = (srcEntry as any).chainIdx;
+      const tci = (tgtEntry as any).chainIdx;
+      if (sci >= 0 && tci >= 0 && sci < stash.length && tci < stash.length) {
+        const [moved] = stash.splice(sci, 1);
+        stash.splice(tci, 0, moved);
+        setOverlayEntries(id, stash);
+        dispatchOverlayEntries(id, stash);
+      }
     }
   });
 
