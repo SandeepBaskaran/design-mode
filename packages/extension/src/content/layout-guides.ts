@@ -26,6 +26,10 @@ interface LayoutGuideLayer {
 }
 
 const guideLayersByElement = new Map<string, LayoutGuideLayer[]>();
+// Per-element section-wide hide flag. Stored separately from the layer
+// array so the user's config survives a "section eye off" toggle: the
+// overlay clears but the rows stay intact when they toggle it back on.
+const guidesSectionHidden = new Set<string>();
 let guideStyleEl: HTMLStyleElement | null = null;
 
 function ensureGuideStyleEl(): HTMLStyleElement {
@@ -185,6 +189,7 @@ function rebuildSheet() {
   const el = ensureGuideStyleEl();
   const blocks: string[] = [];
   for (const [id, layers] of guideLayersByElement) {
+    if (guidesSectionHidden.has(id)) continue;
     const css = buildElementCss(id, layers);
     if (css) blocks.push(css);
   }
@@ -192,14 +197,29 @@ function rebuildSheet() {
 }
 
 // Public API — called from index.ts message handlers.
-export function setLayoutGuides(elementId: string, layers: unknown): void {
+// `layers` is the authoritative layer list (the side panel always
+// sends the full config). `sectionVisible` is the section-level eye:
+// when `false`, we stop painting but keep the layer data so the panel
+// can restore the overlay on toggle-back-on.
+export function setLayoutGuides(elementId: string, layers: unknown, sectionVisible?: boolean): void {
   const parsed = parseGuideLayers(layers);
   if (parsed.length === 0) guideLayersByElement.delete(elementId);
   else guideLayersByElement.set(elementId, parsed);
+  if (sectionVisible === false) guidesSectionHidden.add(elementId);
+  else if (sectionVisible === true) guidesSectionHidden.delete(elementId);
   rebuildSheet();
+}
+
+// Snapshot for the side panel — called from SELECT_ELEMENT / hover so
+// the panel can hydrate its own map after a close/reopen.
+export function getLayoutGuidesFor(elementId: string): { layers: LayoutGuideLayer[]; sectionVisible: boolean } | null {
+  const layers = guideLayersByElement.get(elementId);
+  if (!layers || !layers.length) return null;
+  return { layers, sectionVisible: !guidesSectionHidden.has(elementId) };
 }
 
 export function clearAllLayoutGuides(): void {
   guideLayersByElement.clear();
+  guidesSectionHidden.clear();
   rebuildSheet();
 }

@@ -951,14 +951,8 @@ async function domAction(action: string) { const res = await send({ type: 'SP_DO
 async function selectElement(elementId: string) {
   const res = await send({ type: 'SP_SELECT_ELEMENT', elementId });
   if (res.payload || res.info) info = res.payload || res.info;
+  hydrateLayoutGuidesFromPayload(info);
   hoverInfo = null; render();
-  // Re-push the panel's layout-guide config for this element. The
-  // content script's overlay sheet is session-only and loses state on
-  // page reload; this keeps the visible overlay in sync with the
-  // panel's authoritative map whenever the user lands on an element.
-  if (layoutGuidesByElement.has(elementId)) {
-    dispatchLayoutGuides(elementId, getLayoutGuides(elementId));
-  }
   setTimeout(() => {
     const layerEl = root.querySelector('[data-dm-layer="' + elementId + '"]');
     if (layerEl) layerEl.scrollIntoView({ block: 'nearest' });
@@ -1019,8 +1013,8 @@ async function handleLayerClick(id: string, e: MouseEvent) {
   if (multiSelectIds.length > 0) await pushMultiSelectIds([]);
   await selectElement(id);
 }
-async function selectParent() { const res = await send({ type: 'SP_SELECT_PARENT' }); if (res.payload || res.info) info = res.payload || res.info; render(); }
-async function selectChild() { const res = await send({ type: 'SP_SELECT_CHILD' }); if (res.payload || res.info) info = res.payload || res.info; render(); }
+async function selectParent() { const res = await send({ type: 'SP_SELECT_PARENT' }); if (res.payload || res.info) info = res.payload || res.info; hydrateLayoutGuidesFromPayload(info); render(); }
+async function selectChild() { const res = await send({ type: 'SP_SELECT_CHILD' }); if (res.payload || res.info) info = res.payload || res.info; hydrateLayoutGuidesFromPayload(info); render(); }
 async function undoAction() { const res = await send({ type: 'SP_UNDO' }); if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; if (res.info) info = res.info; undoCount = res.undoCount ?? Math.max(0, undoCount - 1); redoCount = res.redoCount ?? redoCount + 1; render(); await refreshDomTree(); await refreshChanges(); }
 async function redoAction() { const res = await send({ type: 'SP_REDO' }); if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; if (res.info) info = res.info; undoCount = res.undoCount ?? undoCount + 1; redoCount = res.redoCount ?? Math.max(0, redoCount - 1); render(); await refreshDomTree(); await refreshChanges(); }
 async function moveLayer(dir: 'up' | 'down') { const res = await send({ type: 'SP_DOM_ACTION', action: 'move-' + dir }); if (res.domChanges) domChanges = res.domChanges; await refreshDomTree(); }
@@ -1215,6 +1209,7 @@ function dropZoneAt(target: HTMLElement, clientY: number): 'before' | 'inside' |
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'ELEMENT_SELECTED') {
     info = msg.payload; hoverInfo = null; commentMode = false;
+    hydrateLayoutGuidesFromPayload(info);
     render();
     refreshMedia();
     setTimeout(() => {
@@ -2538,15 +2533,38 @@ function defaultLayoutGuide(): LayoutGuideLayer {
 // Push the per-element layer array to the content script's overlay
 // stylesheet. Bypasses the change-tracker entirely: layout guides are a
 // session-only visual aid, not a CSS edit. The side panel keeps the
-// authoritative map (`layoutGuidesByElement`); content keeps a parallel
-// rendering map and rebuilds the `<style id="dm-layout-guides">` sheet
-// on each push. When the section is hidden for this element we still
-// send a write, but with an empty array, so the overlay clears
-// immediately while the panel rows stay intact.
+// authoritative map (`layoutGuidesByElement`); content keeps the same
+// state for rendering and exposes it back to the panel on selection so
+// closing/reopening the panel doesn't drop the user's config.
 function dispatchLayoutGuides(elementId: string, layers: LayoutGuideLayer[]): void {
   if (!elementId) return;
-  const sectionHidden = layoutGuidesSectionHidden.has(elementId);
-  send({ type: 'SP_SET_LAYOUT_GUIDES', elementId, layers: sectionHidden ? [] : layers });
+  send({
+    type: 'SP_SET_LAYOUT_GUIDES',
+    elementId,
+    layers,
+    sectionVisible: !layoutGuidesSectionHidden.has(elementId),
+  });
+}
+
+// Absorb a content-side layout-guide snapshot back into the panel's
+// own map. The snapshot arrives on every ELEMENT_SELECTED / select
+// response so the panel re-hydrates after a close/reopen — content
+// outlives the panel, so it's the authoritative session memory.
+function hydrateLayoutGuidesFromPayload(payload: any): void {
+  if (!payload || !payload.id) return;
+  const snapshot = payload.layoutGuides;
+  if (!snapshot) {
+    // No snapshot in payload — leave the panel's map alone.
+    return;
+  }
+  if (Array.isArray(snapshot.layers) && snapshot.layers.length) {
+    layoutGuidesByElement.set(payload.id, snapshot.layers);
+    if (snapshot.sectionVisible === false) layoutGuidesSectionHidden.add(payload.id);
+    else layoutGuidesSectionHidden.delete(payload.id);
+  } else {
+    layoutGuidesByElement.delete(payload.id);
+    layoutGuidesSectionHidden.delete(payload.id);
+  }
 }
 function getLayoutGuides(id: string): LayoutGuideLayer[] {
   if (!id) return [];
@@ -4456,7 +4474,11 @@ function renderDesignTab(): string {
       pageContextInflight = true;
       send({ type: 'SP_INSPECT_PAGE' }).then(r => {
         pageContextInflight = false;
-        if (r?.payload && !info && !hoverInfo) { info = r.payload; render(); }
+        if (r?.payload && !info && !hoverInfo) {
+          info = r.payload;
+          hydrateLayoutGuidesFromPayload(info);
+          render();
+        }
       });
     }
     return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;"><div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('crosshair', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">Loading page context…</div><div style="font-size:11px;margin-top:4px;color:var(--dm-text-dim);">Hover any element to focus on it.</div></div>';
@@ -5824,7 +5846,7 @@ function renderDesignTab(): string {
   const addGuideBtn = atGuideLimit ? '' :
     '<button class="dm-btn" data-dm-guide-add title="Add layout guide" style="margin-top:8px;display:flex;align-items:center;gap:6px;padding:8px;width:100%;justify-content:center;">' +
     icon('plus', 12) + '<span>Add layout guide</span></button>';
-  const layoutGuideContent = (guideRowsHtml || '<div style="font-size:11px;color:var(--dm-text-dim);text-align:center;padding:14px 0;">No layout guides yet. Click + to add one.</div>') + addGuideBtn;
+  const layoutGuideContent = guideRowsHtml + addGuideBtn;
   // Section-level show/hide — drawn to the right of the section title,
   // before the chevron. Toggling clears or restores the overlay
   // immediately without touching the per-layer config in the panel.

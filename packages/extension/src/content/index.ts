@@ -6,7 +6,7 @@
 // ============================================================
 
 import { getElementById, getOrAssignId, generateSelector } from './helpers';
-import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides } from './layout-guides';
+import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLayoutGuidesFor } from './layout-guides';
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
@@ -293,6 +293,7 @@ function onElementSelected(info: ElementInfo) {
       imgSrc: el?.tagName === 'IMG' ? (el as HTMLImageElement).src : undefined,
       textContent: el?.textContent?.trim()?.slice(0, 500) || undefined,
       hasChildElements: el ? el.children.length > 0 : false,
+      layoutGuides: getLayoutGuidesFor(info.id),
     },
   });
 }
@@ -587,7 +588,8 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const info = buildElementInfo(body);
         setSelectedElementId(info.id);
         // Deliberately DO NOT call showSelect here.
-        sendResponse({ payload: { ...info, element: undefined } });
+        const guides = getLayoutGuidesFor(info.id);
+        sendResponse({ payload: { ...info, element: undefined, layoutGuides: guides } });
       } else sendResponse({ error: 'No body element' });
       break;
     }
@@ -622,7 +624,8 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         if (r.top < 0 || r.bottom > window.innerHeight) {
           el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
-        sendResponse({ payload: { ...info, element: undefined } });
+        const guides = getLayoutGuidesFor(info.id);
+        sendResponse({ payload: { ...info, element: undefined, layoutGuides: guides } });
       } else sendResponse({ error: 'Element not found' });
       break;
     }
@@ -635,7 +638,8 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         if (current?.parentElement && current.parentElement !== document.documentElement && current.parentElement !== document.body.parentElement) {
           const parent = current.parentElement;
           const info = selectAndNotify(parent);
-          sendResponse({ payload: { ...info, element: undefined } });
+          const guides = getLayoutGuidesFor(info.id);
+          sendResponse({ payload: { ...info, element: undefined, layoutGuides: guides } });
         } else sendResponse({ error: 'No parent available' });
       } else sendResponse({ error: 'No element selected' });
       break;
@@ -649,7 +653,8 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const firstChild = current?.children?.[0] as HTMLElement | undefined;
         if (firstChild) {
           const info = selectAndNotify(firstChild);
-          sendResponse({ payload: { ...info, element: undefined } });
+          const guides = getLayoutGuidesFor(info.id);
+          sendResponse({ payload: { ...info, element: undefined, layoutGuides: guides } });
         } else sendResponse({ error: 'No child elements' });
       } else sendResponse({ error: 'No element selected' });
       break;
@@ -1027,7 +1032,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     // removes the overlay.
     case 'SET_LAYOUT_GUIDES': {
       const elementId = msg.elementId as string;
-      if (elementId) setLayoutGuidesOverlay(elementId, msg.layers);
+      if (elementId) setLayoutGuidesOverlay(elementId, msg.layers, msg.sectionVisible);
       sendResponse({ ok: true });
       return true;
     }
