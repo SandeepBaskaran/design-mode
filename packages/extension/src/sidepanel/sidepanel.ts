@@ -5295,20 +5295,23 @@ function renderDesignTab(): string {
   // BELOW the entire stroke row (not inside the 4-col cell). Pass
   // omitPanel:true so colorInp produces just the swatch+input row.
   const strokeColorPanelOpen = activeColorPickerProp === '__stroke_color';
-  // Style dropdown is mode-aware. Outside and Inside both render via the
-  // box-shadow chain, which CSS only paints solid \u2014 exposing dash/dot
-  // there would be misleading. Center writes outline-style and supports
-  // the full set plus 'auto' (focus-ring default; picking it switches
-  // mode to Center).
-  const allStyleOptions = ['solid','dashed','dotted','double','groove','ridge','inset','outset','hidden','none'];
-  const styleOptions =
-    strokePos === 'center' ? [...allStyleOptions, 'auto']
-    : ['solid','none'];
-  const strokeRow = grid12([
-    { span: 4, content: colorInp('Color', '__stroke_color', strokeColor, true) },
-    { span: 2, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
-    { span: 6, content: sel('Style', '__stroke_style', strokeStyleCur, styleOptions) },
-  ]);
+  // Style is only meaningful for Center mode. Center writes outline-style
+  // which natively supports dashed / dotted / double / groove / ridge /
+  // inset / outset / hidden / auto. Outside and Inside render via the
+  // CSS box-shadow chain, and box-shadow has no style \u2014 shadows are
+  // always solid filled rectangles. So we surface the field only when
+  // it actually controls something.
+  const styleOptions = ['solid','dashed','dotted','double','groove','ridge','inset','outset','hidden','none','auto'];
+  const strokeRow = strokePos === 'center'
+    ? grid12([
+        { span: 4, content: colorInp('Color', '__stroke_color', strokeColor, true) },
+        { span: 2, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
+        { span: 6, content: sel('Style', '__stroke_style', strokeStyleCur, styleOptions) },
+      ])
+    : grid12([
+        { span: 8, content: colorInp('Color', '__stroke_color', strokeColor, true) },
+        { span: 4, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
+      ]);
 
   const colorPanel = strokeColorPanelOpen ? sp() + renderColorPanel('__stroke_color', strokeColor) : '';
 
