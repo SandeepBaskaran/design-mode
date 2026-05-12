@@ -4605,7 +4605,6 @@ function renderDesignTab(): string {
   const layoutAdvOpen = !!advancedOpen.layout;
   const appearanceAdvOpen = !!advancedOpen.appearance;
   const fillAdvOpen = !!advancedOpen.fill;
-  const strokeAdvOpen = !!advancedOpen.stroke;
 
   const strokePos = getStrokeActiveTab(info?.id || '', s);
   const strokeStyleOff = ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle']
@@ -4616,9 +4615,7 @@ function renderDesignTab(): string {
   // Section-header action clusters
   const layoutActionsHtml = advancedToggleBtn('layout', layoutAdvOpen);
   const fillActionsHtml = advancedToggleBtn('fill', fillAdvOpen);
-  // Stroke header carries the Advanced chevron + (auto) reset button.
-  const strokeActionsHtml = advancedToggleBtn('stroke', strokeAdvOpen);
-  void strokeStyleOff; void strokeAdvOpen; void sidesPopoverOpen;
+  void strokeStyleOff; void sidesPopoverOpen;
   const visEyeBtn = '<button class="dm-section-action" data-dm-prop="visibility" data-dm-value="' + (visibilityOff ? 'visible' : 'hidden') + '" title="' +
     (visibilityOff ? 'Show element' : 'Hide element') + '" data-active="' + (visibilityOff ? 'false' : 'true') + '">' +
     icon(visibilityOff ? 'eyeOff' : 'eye', 12) + '</button>';
@@ -5365,31 +5362,6 @@ function renderDesignTab(): string {
     { span: 12, content: inp('Outline offset (negative pulls inward)', 'outlineOffset', s.outlineOffset || '0px') },
   ]);
 
-  // Stroke Advanced — border-image suite. CSS lets you slice an image (or
-  // gradient) into 9 regions and use it as the border, which enables
-  // gradient strokes, ornate frames, and pixel-precise dash patterns
-  // that the native dashed/dotted styles can't render. Border-image
-  // applies to the box's border slot, so it composes with `border-width`
-  // (no per-side weight here — width fills the same slot for all sides).
-  const strokeAdvancedHtml = advancedDisclosure('stroke', strokeAdvOpen,
-    sub('Border image') +
-    grid12([
-      { span: 12, content: inp('Source', 'borderImageSource', (s as any).borderImageSource || 'none', '') },
-    ]) + sp() +
-    grid12([
-      { span: 6, content: inp('Slice', 'borderImageSlice', (s as any).borderImageSlice || '100%', '') },
-      { span: 6, content: inp('Width', 'borderImageWidth', (s as any).borderImageWidth || '1', '') },
-    ]) + sp() +
-    grid12([
-      { span: 6, content: inp('Outset', 'borderImageOutset', (s as any).borderImageOutset || '0', '') },
-      { span: 6, content: sel('Repeat', 'borderImageRepeat', (s as any).borderImageRepeat || 'stretch', ['stretch','repeat','round','space']) },
-    ]) + sp() +
-    grid12([
-      { span: 6, content: '<button class="dm-btn" data-dm-stroke-action="gradient-stroke" title="Quick preset: linear gradient as border-image-source. Edit Source above to customise." style="height:30px;font-size:11px;width:100%;">Gradient stroke</button>' },
-      { span: 6, content: '<button class="dm-btn" data-dm-stroke-action="clear-border-image" title="Reset border-image to none" style="height:30px;font-size:11px;width:100%;">Clear image</button>' },
-    ])
-  );
-
   // Outside / Inside render one row per stroke layer (mirrors the Fill
   // section's per-row pattern). Each row owns its swatch, colour-code,
   // weight input, eye toggle and trash; the swatch click reveals the
@@ -5434,12 +5406,10 @@ function renderDesignTab(): string {
     ? strokePositionRow(s, strokePos) + sp() +
       centerStrokeRow +
       offsetRow +
-      centerColorPanel +
-      strokeAdvancedHtml
+      centerColorPanel
     : strokePositionRow(s, strokePos) + sp() +
       strokeRowsHtml +
-      addStrokeBtn +
-      strokeAdvancedHtml;
+      addStrokeBtn;
 
   // Effects \u2014 Figma-style layered list. Each entry is a discrete effect:
   // drop shadow / inner shadow / layer blur / background blur. The header
@@ -5634,7 +5604,7 @@ function renderDesignTab(): string {
     (!vis.appearance ? '' : sec('Appearance', 'droplet', appearanceContent, true, appearanceActionsHtml)) +
     typographySection +
     (!vis.fill ? '' : sec('Fill', 'palette', fillContent, true, fillActionsHtml)) +
-    (!vis.stroke ? '' : sec('Stroke', 'squareDashed', strokeContent, true, strokeActionsHtml)) +
+    (!vis.stroke ? '' : sec('Stroke', 'squareDashed', strokeContent, true)) +
     (!vis.effects ? '' : sec('Effects', 'sparkles', effectsContent, true, effectsActionsHtml)) +
     '</div>';
 }
@@ -7689,37 +7659,6 @@ function setupDelegation() {
       if (idx < 0 || idx >= parts.length) return;
       parts.splice(idx, 1);
       applyStyle('clipPath', parts.length ? 'polygon(' + parts.join(', ') + ')' : 'none');
-      return;
-    }
-
-    // Stroke Advanced — one-click presets for the border-image suite.
-    const strokeActionBtn = target.closest<HTMLElement>('[data-dm-stroke-action]');
-    if (strokeActionBtn) {
-      e.stopPropagation();
-      const action = strokeActionBtn.dataset.dmStrokeAction;
-      if (action === 'gradient-stroke') {
-        // Need a non-zero border-width and any border-style for the
-        // image to render. Default to 4px solid + a vibrant gradient.
-        applyStyle('borderImageSource', 'linear-gradient(135deg, #ff0080, #7928ca)');
-        applyStyle('borderImageSlice', '1');
-        applyStyle('borderImageWidth', '1');
-        applyStyle('borderImageOutset', '0');
-        applyStyle('borderImageRepeat', 'stretch');
-        const w = parseFloat(info?.computedStyles?.borderTopWidth || '0') || 0;
-        if (w === 0) {
-          ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'].forEach(p => applyStyle(p, '4px'));
-        }
-        const st = info?.computedStyles?.borderTopStyle || 'none';
-        if (st === 'none') {
-          ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'].forEach(p => applyStyle(p, 'solid'));
-        }
-      } else if (action === 'clear-border-image') {
-        applyStyle('borderImageSource', 'none');
-        applyStyle('borderImageSlice', '100%');
-        applyStyle('borderImageWidth', '1');
-        applyStyle('borderImageOutset', '0');
-        applyStyle('borderImageRepeat', 'stretch');
-      }
       return;
     }
 
