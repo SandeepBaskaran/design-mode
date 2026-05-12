@@ -215,6 +215,13 @@ const strokeStyleByElement = new Map<string, 'solid' | 'dashed'>();
 // Figma-style Design tab state
 let cornerRadiusLinked = true;
 let cornerRadiusExpanded = false;
+const CORNER_RADIUS_PROPS = new Set([
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomLeftRadius',
+  'borderBottomRightRadius',
+]);
 const advancedOpen: Record<string, boolean> = {};   // keyed by section key
 let sidesPopoverOpen = false;
 let strokeStylePopoverOpen = false;
@@ -8299,6 +8306,16 @@ function setupDelegation() {
       const raw = propInput.value.trim();
       const isPureNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
       const val = isNumeric && unit && isPureNumber ? raw + unit : raw;
+      // Corner radius cannot be negative in CSS — clamp to 0 on commit
+      // whether the user typed a negative number, a non-numeric string,
+      // or pasted garbage. Covers shorthand + all four long-form props.
+      if (CORNER_RADIUS_PROPS.has(prop)) {
+        const n = parseFloat(raw);
+        const clamped = !isFinite(n) || n < 0 ? 0 : n;
+        propInput.value = String(clamped);
+        applyStyle(prop, clamped + (unit || 'px'));
+        return;
+      }
       // Opacity percent input — display 0-100 with a locked `%` chip,
       // write 0-1 decimal so the Changes tab shows canonical CSS.
       // Clamped to the 0-100 range on commit so users can't get the
@@ -9158,6 +9175,13 @@ function setupDelegation() {
         const raw = propInput.value.trim();
         if (propName === '__opacity_pct') { commitOpacityPct(raw); return; }
         if (fillOpacityMatch) { commitFillOpacityPct(raw); return; }
+        if (CORNER_RADIUS_PROPS.has(propName)) {
+          const n = parseFloat(raw);
+          const clamped = !isFinite(n) || n < 0 ? 0 : n;
+          propInput.value = String(clamped);
+          applyStyle(propName, clamped + (unit || 'px'));
+          return;
+        }
         const isPureNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
         const val = isNumeric && unit && isPureNumber ? raw + unit : raw;
         applyStyle(propName, val);
@@ -9181,7 +9205,10 @@ function setupDelegation() {
           ? (e.shiftKey ? 1 : 0.1)
           : (e.shiftKey ? 10 : 1);
         const current = parseFloat(propInput.value) || 0;
-        const newVal = e.key === 'ArrowUp' ? current + step : current - step;
+        let newVal = e.key === 'ArrowUp' ? current + step : current - step;
+        // Corner radius is non-negative in CSS — Arrow-stepping past 0
+        // floors at 0 so the field can never show -1px / -10px.
+        if (CORNER_RADIUS_PROPS.has(propName) && newVal < 0) newVal = 0;
         const rounded = Math.round(newVal * 100) / 100; // 2 decimals max
         if (propName === '__opacity_pct') { commitOpacityPct(String(rounded)); return; }
         if (fillOpacityMatch) { commitFillOpacityPct(String(rounded)); return; }
@@ -9191,16 +9218,21 @@ function setupDelegation() {
         return;
       }
 
-      // Strict numeric filter — only allow valid number characters
+      // Strict numeric filter — only allow valid number characters.
+      // Corner radius can never be negative in CSS, so block the minus
+      // sign for those fields too (regex below would otherwise accept it).
       if (isNumeric) {
         const allowedKeys = ['Backspace','Tab','Escape','ArrowLeft','ArrowRight','Delete','Home','End'];
         if (allowedKeys.includes(e.key) || e.ctrlKey || e.metaKey) return;
         if (e.key.length !== 1) return; // ignore other special keys
+        const nonNegative = CORNER_RADIUS_PROPS.has(propName);
+        if (nonNegative && e.key === '-') { e.preventDefault(); return; }
         const cur = propInput.value;
         const start = propInput.selectionStart ?? cur.length;
         const end = propInput.selectionEnd ?? cur.length;
         const next = cur.slice(0, start) + e.key + cur.slice(end);
-        if (!/^-?\d{0,}(\.\d{0,2})?$/.test(next)) {
+        const re = nonNegative ? /^\d{0,}(\.\d{0,2})?$/ : /^-?\d{0,}(\.\d{0,2})?$/;
+        if (!re.test(next)) {
           e.preventDefault();
         }
       }
