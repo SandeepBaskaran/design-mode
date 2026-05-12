@@ -147,6 +147,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     forwardToPinnedTab({ type: 'APPLY_STYLE', property: msg.property, value: msg.value }, sendResponse);
     return true;
   }
+  if (msg.type === 'SP_SET_LAYOUT_GUIDES') {
+    forwardToPinnedTab({ type: 'SET_LAYOUT_GUIDES', elementId: msg.elementId, layers: msg.layers }, sendResponse);
+    return true;
+  }
   if (msg.type === 'SP_SCROLL_TO_ELEMENT') {
     forwardToPinnedTab({ type: 'SCROLL_TO_ELEMENT', elementId: msg.elementId }, sendResponse);
     return true;

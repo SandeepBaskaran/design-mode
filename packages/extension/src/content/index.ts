@@ -6,6 +6,7 @@
 // ============================================================
 
 import { getElementById, getOrAssignId, generateSelector } from './helpers';
+import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides } from './layout-guides';
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
@@ -1017,6 +1018,20 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
+    // Layout Guide overlay write. Deliberately separate from the
+    // change-tracker / Changes-tab pipeline: layout guides are a
+    // session-only visual aid, not a CSS edit the user wants to ship.
+    // The side panel sends the full layer array for one element on
+    // every mutation; we rebuild that element's `::before` rule in a
+    // dedicated stylesheet. Sending `layers: 'none'` or an empty array
+    // removes the overlay.
+    case 'SET_LAYOUT_GUIDES': {
+      const elementId = msg.elementId as string;
+      if (elementId) setLayoutGuidesOverlay(elementId, msg.layers);
+      sendResponse({ ok: true });
+      return true;
+    }
+
     // Batched style writes. Used by the side panel when a single user
     // gesture has to fan out to many CSS properties at once — stroke
     // position switching writes ~12 border / outline / box-shadow
@@ -1146,6 +1161,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       getPageComments().then(async (pageComments) => {
         for (const c of pageComments) await deleteComment(c.id);
         clearAllChanges();
+        clearAllLayoutGuides();
         undoStack.length = 0;
         redoStack.length = 0;
         sendResponse({ ok: true });
