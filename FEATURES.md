@@ -139,16 +139,45 @@ hovered) element. Every field updates the page live.
   compose with the raw `Transform` field above.
 - **Interaction**: pointer-events, user-select.
 
-### 2.11 Effects
+### 2.11 Effects (Figma-aligned)
 
-- **Box Shadow** — visual editor with offset X/Y, blur, spread, color, opacity,
-  inset toggle. "Add shadow" / "Remove" buttons.
-- **Text Shadow** — structured: offset X, offset Y, blur, color.
-- **Filter** — labelled number fields per function: Blur (px), Brightness,
-  Contrast, Saturate, Hue rotate (deg), Grayscale. Pre-filled from the
-  element's current `filter` value.
-- **Backdrop Filter** — same six functions as Filter, applies to the
-  `backdrop-filter` property.
+Effects ships six layered-row kinds; each row reorders via drag, hides via
+the eye toggle, and removes via the trash. The `+` menu seeds a new entry
+of the picked kind with sensible defaults.
+
+- **Inner shadow** — `box-shadow` with `inset`. Position X/Y, blur, spread,
+  colour + opacity.
+- **Drop shadow** — one row, three underlying CSS chains. The
+  "Show behind transparent areas" checkbox swaps between them at write
+  time:
+  - Checked → `box-shadow` (rectangle, shows through transparent
+    pixels in the element).
+  - Unchecked + text-kind element → `text-shadow` (alpha-bound to
+    glyphs only, no spread).
+  - Unchecked + other element → `filter: drop-shadow(...)` (alpha-bound
+    to whole-element rendered shape, no spread).
+  Spread is preserved in the typed model when toggling off; toggling
+  back on re-emits with the original value.
+- **Layer blur** — `filter: blur(<radius>)`. Radius is inline in the
+  row (single field; Progressive blur is intentionally not supported
+  because CSS has no true gradient blur).
+- **Background blur** — `backdrop-filter: blur(<radius>)`, same shape.
+- **Noise** — Mono / Duo / Multi tabs. Renders via SVG-data-URI
+  background images (`feTurbulence` + `feColorMatrix` tinting) into
+  the element's `::after` pseudo-element. Mono and Duo tint to one
+  or two colours at chosen opacities; Multi keeps the noise's full-
+  spectrum colour and attenuates alpha.
+- **Texture** — `feTurbulence` + optional `feGaussianBlur` (radius)
+  for a paper / canvas grain. Size X/Y scale the pattern; the
+  "Clip to shape" checkbox sets `border-radius: inherit` +
+  `clip-path: inherit` on the `::after` so the texture matches the
+  element's mask / rounded corners.
+
+### 2.12 Motion section
+
+Split from Effects so the visual-decoration and time-based-motion
+controls don't compete for the same row list. Starts collapsed.
+
 - **Transition** — Property dropdown, Duration, Timing curve, Delay + a
   ▶ Preview button that flashes a contrast value so you can see the curve.
 - **Animation** — Name (12 built-in `dm-*` keyframes auto-injected into the
@@ -156,22 +185,49 @@ hovered) element. Every field updates the page live.
   `dm-shake`, `dm-spin`, `dm-wiggle`, `dm-ping`, `dm-fade-out`), Duration,
   Timing, Delay, Iterations (with ∞ toggle), Direction, Fill mode, Play state,
   + ▶ Preview button that re-triggers the animation cleanly.
+- **Transform** — structured X/Y/Z editor for `translate`, `rotate`,
+  `scale`, with combined `transform`-function support for shear /
+  perspective.
+- **Motion path** — `offset-path` + `offset-distance` + `offset-rotate`
+  + `offset-anchor` + `offset-position`. A "Motion path" preset in
+  the `+` menu seeds an oval to start from.
+- **View transition** — `view-transition-name` + `view-transition-class`,
+  paired with a note that the API only fires inside
+  `document.startViewTransition(...)`.
+- **Scroll-driven animation** — `animation-timeline`, `animation-range`,
+  `scroll-timeline`, `view-timeline` and their named variants.
 
-### 2.12 Custom curves
+### 2.13 Layout guide
+
+Figma-style design-aid overlay. Paints Columns / Rows / Grid bars over
+the selected element via a `::before` pseudo-element. Doesn't affect
+layout; per-element session memory; survives page reload while the
+side panel is open.
+
+- **Kind** — Grid · Columns · Rows.
+- **Primary row** — Kind dropdown + count (or cell size for Grid) +
+  settings expand + eye + trash.
+- **Expanded body (Columns / Rows)** — 3×2 grid of Colour + Opacity /
+  Align + Width or Height / Margin + Gutter.
+- **Expanded body (Grid)** — 1×2 of Colour + Opacity.
+- **Section eye** — top-right of the section header toggles every
+  guide on the current element without losing the row config.
+
+### 2.14 Custom curves
 
 - The transition / animation timing dropdown also opens a **cubic-bezier
   visualizer** with sliders for x1/y1/x2/y2 and a spring-physics mode (mass /
   damping / stiffness). Apply the result directly into the transition or
   animation timing field.
 
-### 2.13 Media (when an `<img>`, `<video>`, `<audio>`, or SVG is selected)
+### 2.15 Media (when an `<img>`, `<video>`, `<audio>`, or SVG is selected)
 
 - Preview thumbnail.
 - For images: src input, alt text, object-fit dropdown.
 - For SVG: **Copy SVG markup** button.
 - **Download** button to save the asset locally.
 
-### 2.14 Color picker — design-system tokens
+### 2.16 Color picker — design-system tokens
 
 - The color picker dropdown lists every `--var` declared on the page,
   grouped (Colors, Backgrounds, Buttons, Borders, etc.) and filtered by
@@ -318,15 +374,16 @@ Every edit you've made grouped by element.
 ## 6. Presets
 
 Reusable, user-saved styles — modelled after Figma's styles but extended
-across **all seven Design-tab sections**. Open the panel from the bookmark
-icon in the action row.
+across **all nine Design-tab sections**. Open the panel from the bookmark
+icon in the action row. A fresh install ships with one seeded preset per
+kind so the exported JSON shows the full structure.
 
 > **Site-colour tokens** (CSS custom properties on the page) used to live
 > in a "Built-in" tab here. They've been retired — those tokens are now
 > surfaced **inline on every colour input** via a focus-driven dropdown.
 > The presets panel is purely user-saved.
 
-### 6.1 Seven kinds — one per Design-tab section
+### 6.1 Nine kinds — one per Design-tab section
 
 When you save, pick a **Kind** from the dropdown. The kind drives which
 properties get captured from the selected element (NOT a 30-prop snapshot
@@ -340,12 +397,23 @@ of unrelated styles).
 | **Typography** | Primary + the entire Typography Advanced surface (decoration, wrapping, layout-in-text, direction, font features, rendering, list). |
 | **Fill** | `background-color` / `-image` / `-size` / `-repeat` / `-position` / `-attachment` / `-clip` / `-origin` / `-blend-mode`, `webkit-background-clip` / `webkit-text-fill-color`, `mask-*`, plus SVG paint properties. |
 | **Stroke** | `border-*-width` / `-style` / `-color` (per side), `outline-*`, `border-image-*`. |
-| **Effects** | `box-shadow`, `text-shadow`, `backdrop-filter`, `transition-*`, `animation-*`. |
+| **Effects** | `box-shadow`, `text-shadow`, `filter`, `backdrop-filter` — the four CSS chains that paint shadows + blurs. |
+| **Motion** | `transition-*`, `animation-*`, `transform` family (`translate`/`rotate`/`scale`/etc.), motion-path (`offset-*`), `view-transition-*`, scroll-driven timeline props. |
+| **Layout guide** | The synthetic `__layout_guides` prop carrying the per-element Columns / Rows / Grid JSON config. Stored for export visibility; the runtime overlay system is session-only and bypasses the change-tracker for paint. |
 
 The exact property list per kind is owned by the side panel
 (`SECTION_PROPS` in `sidepanel.ts`) and sent to the content script with
 each save — so widening a section's surface area automatically widens what
 its preset captures.
+
+### 6.1a Seeded presets
+
+A fresh install seeds one preset of every kind so the exported JSON
+shows the schema. The seven Effects recipes (Soft / Hard / Layered
+drop, Glow, Embossed, Frosted glass, Neon text) that used to live in
+the Effects `+` menu now ship as presets too. Once deleted they stay
+deleted — a versioned seed flag (`dm_presets_seeded_version`)
+prevents resurrection on the next read.
 
 ### 6.2 Save
 

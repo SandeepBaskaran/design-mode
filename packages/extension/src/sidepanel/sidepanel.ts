@@ -10,6 +10,86 @@
 import morphdom from 'morphdom';
 import { icon, icons } from '../content/icons';
 import { escapeAttr, rgbToHex } from '../content/helpers';
+
+/* ── Strict HTML sanitizer for the rich-text editor seed ──
+   The contenteditable in the Typography section is seeded with the
+   selected element's innerHTML so bold / italic / links round-trip.
+   Inspected pages are untrusted: raw HTML can carry `<img onerror=…>`,
+   `<svg onload=…>`, `<iframe srcdoc=…>` payloads that would execute
+   inside the side-panel context — handing a malicious site chrome.tabs
+   / chrome.scripting / chrome.storage. This sanitizer parses the input
+   in a sandboxed DOMParser (which does NOT fire scripts or events on
+   parse) and walks the tree keeping only structural formatting tags
+   and explicitly allow-listed attributes. Anything outside the
+   allow-list is replaced by its text content, so the visible copy
+   survives without the markup. */
+const RICH_TEXT_ALLOWED_TAGS = new Set([
+  'B','I','U','STRONG','EM','A','BR','P','SPAN','UL','OL','LI','CODE','DIV','H1','H2','H3','H4','H5','H6','BLOCKQUOTE','PRE','SMALL','MARK','SUB','SUP',
+]);
+const RICH_TEXT_ALLOWED_ATTRS_PER_TAG: Record<string, Set<string>> = {
+  A: new Set(['href', 'target', 'rel']),
+};
+/* ── Safe CSS-colour-value clamp ──
+   Page-derived colour values (computed styles read off the inspected
+   element, or layer.color stored from the picker) are interpolated
+   directly into inline `style="background:<v>;..."` attributes.
+   escapeAttr only blocks `& " < >` — a value like
+   `red; background-image: url(https://attacker/log)` would survive
+   and trigger an outbound request from the side-panel context.
+   This clamp returns the value when it matches a known-safe colour
+   syntax, or empty string otherwise. */
+function safeCssColor(v: string): string {
+  if (!v) return '';
+  const t = v.trim();
+  if (!t || t.length > 200) return '';
+  // Hex #rgb / #rgba / #rrggbb / #rrggbbaa
+  if (/^#[0-9a-f]{3,8}$/i.test(t)) return t;
+  // CSS named colours / global keywords
+  if (/^(transparent|currentcolor|inherit|initial|unset|revert|revert-layer|none)$/i.test(t)) return t;
+  if (/^[a-z]+$/i.test(t)) return t;
+  // Functional colour syntaxes — strict whole-string match, no
+  // semicolons allowed inside the args (CSS doesn't need ; in any
+  // colour function, so this is a tight exfil guard).
+  if (/^(rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix)\([^;{}]+\)$/i.test(t)) return t;
+  // var(--token, fallback) — token name + optional fallback (no ;).
+  if (/^var\(--[a-z0-9_-]+(\s*,\s*[^;{}]+)?\)$/i.test(t)) return t;
+  return '';
+}
+
+function sanitizeRichTextHtml(raw: string): string {
+  if (!raw) return '';
+  const doc = new DOMParser().parseFromString('<body><div id="r">' + raw + '</div></body>', 'text/html');
+  const root = doc.getElementById('r');
+  if (!root) return '';
+  const walk = (node: Element) => {
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      const child = node.children[i] as HTMLElement;
+      if (!RICH_TEXT_ALLOWED_TAGS.has(child.tagName)) {
+        const text = doc.createTextNode(child.textContent || '');
+        node.replaceChild(text, child);
+        continue;
+      }
+      const allowed = RICH_TEXT_ALLOWED_ATTRS_PER_TAG[child.tagName] || new Set<string>();
+      for (const attr of Array.from(child.attributes)) {
+        const name = attr.name.toLowerCase();
+        if (!allowed.has(name)) {
+          child.removeAttribute(attr.name);
+          continue;
+        }
+        if (name === 'href') {
+          // Only http(s) / fragments / relative paths survive — never
+          // javascript:, data:, vbscript:, blob:, filesystem:.
+          const v = attr.value.trim();
+          const safe = /^https?:\/\//i.test(v) || v.startsWith('#') || v.startsWith('/') || v.startsWith('.');
+          if (!safe) child.removeAttribute(attr.name);
+        }
+      }
+      walk(child);
+    }
+  };
+  walk(root);
+  return root.innerHTML;
+}
 import {
   ANIMATION_NAME_OPTIONS,
   ANIMATION_DIRECTION_OPTIONS,
@@ -2972,7 +3052,7 @@ function renderFillSolidRow(layer: FillLayer, idx: number): string {
   const swatchBg = resolveCssVarToColor(color) || color || '#000';
   // Swatch — clickable colour preview. Opening outline indicates the
   // active state so the user can tell which fill's panel is open.
-  const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + swatchProp + '" title="Pick a colour" style="background:' + escapeAttr(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
+  const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + swatchProp + '" title="Pick a colour" style="background:' + safeCssColor(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
   // Colour code — uses data-dm-tokens-trigger so focusing the field
   // opens the design-token dropdown the rest of the panel uses for
   // colour inputs. Writes through __fill_color__N (the existing handler
@@ -4829,7 +4909,7 @@ function renderLayersTab(): string {
       : '';
     // Color swatch — when the layer has a non-transparent background colour.
     const colorSwatch = n.backgroundColor
-      ? '<span title="background: ' + escapeAttr(n.backgroundColor) + '" style="width:10px;height:10px;border-radius:2px;background:' + escapeAttr(n.backgroundColor) + ';border:1px solid var(--dm-separator);flex-shrink:0;display:inline-block;"></span>'
+      ? '<span title="background: ' + escapeAttr(n.backgroundColor) + '" style="width:10px;height:10px;border-radius:2px;background:' + safeCssColor(n.backgroundColor) + ';border:1px solid var(--dm-separator);flex-shrink:0;display:inline-block;"></span>'
       : '';
     // Component subtitle — when source detection found a React/Vue/etc.
     // component, the row reads "ComponentName" with the html tag fading
@@ -4980,7 +5060,16 @@ function renderDesignTab(): string {
   // document.execCommand on the focused editor; native Cmd/Ctrl+B / Cmd+I /
   // Cmd+U also Just Work because contenteditable owns those shortcuts.
   // Save fires on blur so the user doesn't need a Save button.
-  const richHtml = (displayInfo as any).innerHTML || textVal;
+  //
+  // SECURITY: inspected pages are untrusted. The raw innerHTML they
+  // produce can contain `<img onerror=...>`, `<svg onload=...>`, etc. —
+  // executing inside the side-panel context would hand a malicious site
+  // chrome.tabs / chrome.scripting / chrome.storage. Strip every tag
+  // outside the structural-formatting allow-list and every attribute
+  // that isn't explicitly safe (href is the only allowed one, and only
+  // when it points to http(s) / fragment / relative path).
+  const rawInner = (displayInfo as any).innerHTML;
+  const richHtml = rawInner ? sanitizeRichTextHtml(rawInner) : escapeAttr(textVal);
   const tbBtn = (cmd: string, label: string, title: string) =>
     '<button data-dm-richtext-cmd="' + cmd + '" title="' + title + '" style="padding:3px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;min-width:22px;">' + label + '</button>';
   const richToolbar =
@@ -6000,7 +6089,7 @@ function renderDesignTab(): string {
     const swatchOpen = activeColorPickerProp === colorProp;
     const swatchBg = resolveCssVarToColor(layer.color) || layer.color || '#000';
     const codeDisplay = formatColorForDisplay(layer.color);
-    const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + colorProp + '" title="Pick a colour" style="background:' + escapeAttr(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
+    const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + colorProp + '" title="Pick a colour" style="background:' + safeCssColor(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
     const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + colorProp + '" data-dm-tokens-trigger="' + colorProp + '" value="' + escapeAttr(codeDisplay) + '" spellcheck="false" autocomplete="off"/>';
     // Weight input — replaces the fill-row Opacity cell. Locked-`px`
     // suffix mirrors Opacity's locked-`%` so the row reads as one unit.
@@ -6278,7 +6367,7 @@ function renderDesignTab(): string {
     // Colour swatch + hex inline cell, used in the expanded body. Reuses
     // the fill row's solid pattern so the swatch / picker behaviour is
     // identical to the rest of the panel.
-    const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + colorProp + '" title="Pick a colour" style="background:' + escapeAttr(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
+    const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + colorProp + '" title="Pick a colour" style="background:' + safeCssColor(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
     const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + colorProp + '" data-dm-tokens-trigger="' + colorProp + '" value="' + escapeAttr(codeDisplay) + '" spellcheck="false" autocomplete="off"/>';
     // Both cells share an explicit 32px min-height so the swatch row and
     // the opacity input land at exactly the same vertical extent in the

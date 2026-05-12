@@ -16,10 +16,24 @@ A free, open-source Chromium extension that turns any website into a live design
   keyed by saved CSS selectors (think DevTools "Local Overrides"). Survives full page reloads,
   back/forward navigation, and SPA re-renders without inline-style stamping. Per-URL session
   storage via `chrome.storage.session`.
-- **Animation & motion** — Structured editor with 12 built-in `dm-*` keyframes (`dm-fade-in`,
-  `dm-slide-up`, `dm-pulse`, `dm-bounce`, …) auto-injected on use, full longhand controls
-  (duration, timing, delay, iterations, direction, fill, play state), and a ▶ Preview button
-  that re-triggers the animation cleanly.
+- **Effects (Figma-aligned)** — Inner shadow · Drop shadow (with the
+  "Show behind transparent areas" toggle that swaps between
+  `box-shadow`, `text-shadow`, and `filter: drop-shadow` on the fly) ·
+  Layer blur · Background blur · Noise (Mono / Duo / Multi modes) ·
+  Texture (with optional clip-to-shape). Noise and Texture render as
+  SVG-data-URI overlays via a `::after` pseudo-element so they don't
+  disturb layout.
+- **Motion section** — Split out from Effects: Transition · Animation ·
+  Transform · Motion path · View transition · Scroll-driven animation,
+  each as its own editor. Structured editor with 12 built-in `dm-*`
+  keyframes (`dm-fade-in`, `dm-slide-up`, `dm-pulse`, `dm-bounce`, …)
+  auto-injected on use, full longhand controls (duration, timing,
+  delay, iterations, direction, fill, play state), and a ▶ Preview
+  button that re-triggers the animation cleanly.
+- **Layout guide** — Figma-style overlay of Columns / Rows / Grid bars
+  on the selected element via a `::before` pseudo-element. Doesn't
+  affect layout; per-element session memory; survives page reload
+  while the side panel is open.
 - **Transition editor** — Per-property breakdown (property / duration / timing / delay) plus
   ▶ Preview that flashes a contrast value for the configured duration so you can see the curve.
 - **Changes log** — Every edit grouped by element. View Original / View Changes toggle,
@@ -29,8 +43,12 @@ A free, open-source Chromium extension that turns any website into a live design
 - **Capture modes** — Camera-button setting: `clipboard` / `download` / `both`, persisted
   across captures with an inline confirmation toast.
 - **Comments** — Yellow pin sticky notes anchored to elements; export with the prompt.
-- **Presets** — Save current element styles as named presets; site-token presets surfaced as
-  searchable dropdowns; cross-site sync via `chrome.storage.sync`.
+- **Presets** — Save current element styles as named presets across
+  9 kinds (Position / Layout / Appearance / Typography / Fill / Stroke /
+  Effects / Motion / Layout guide). One seeded preset per kind ships
+  out of the box so you can see the structure; site-token presets
+  surfaced as searchable dropdowns; cross-site sync via
+  `chrome.storage.sync`.
 - **Compact prompt format** — `Copy Prompt` produces an LLM-optimised, ~8× smaller markdown
   format with framework + styling-system detection, source-file hints, and grep-ready selectors.
 - **MCP server** — Real-time WebSocket bridge between extension and 6 MCP tools your agent

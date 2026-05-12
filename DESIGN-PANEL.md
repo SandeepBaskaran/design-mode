@@ -4,7 +4,7 @@ User-facing reference for every property surfaced in Design Mode's Design tab. F
 
 For implementation status (At parity / Planned / Skipped) and CSS-spec coverage tracking, see **PARITY.md**. This document is for **understanding what each control does**.
 
-Last updated: 2026-05-06.
+Last updated: 2026-05-12 (release 1.0.2).
 
 ---
 
@@ -14,13 +14,13 @@ The **Indicator row** is always rendered at the top of the Design tab (regardles
 
 | Layer kind | Always shown | Conditional | Property sections |
 |---|---|---|---|
-| `text` (h1–h6, p, span, a, button, label, …) | Indicator | Icon (when an `<i>` is a detected FontAwesome icon) | Position, Layout, Appearance, **Typography**, Fill, Stroke, Effects |
-| `container` (div, section, main, ul, ol, nav, header, footer, article) | Indicator | — | Position, Layout, Appearance, Fill, Stroke, Effects |
-| `media` (img, picture, video, canvas, iframe, audio) | Indicator | **Media** | Position, Appearance, Fill, Stroke, Effects |
-| `svg` (svg, path, circle, rect, …) | Indicator | **Media**, Icon (when a detected Lucide / FontAwesome SVG) | Position, Appearance, Fill, Stroke, Effects |
-| `form` (input, textarea, select, button[type]) | Indicator | — | Position, Appearance, Typography, Fill, Stroke, Effects |
+| `text` (h1–h6, p, span, a, button, label, …) | Indicator | Icon (when an `<i>` is a detected FontAwesome icon) | Position, Layout, Appearance, **Typography**, Fill, Stroke, Effects, Motion, Layout guide |
+| `container` (div, section, main, ul, ol, nav, header, footer, article) | Indicator | — | Position, Layout, Appearance, Fill, Stroke, Effects, Motion, Layout guide |
+| `media` (img, picture, video, canvas, iframe, audio) | Indicator | **Media** | Position, Appearance, Fill, Stroke, Effects, Motion |
+| `svg` (svg, path, circle, rect, …) | Indicator | **Media**, Icon (when a detected Lucide / FontAwesome SVG) | Position, Appearance, Fill, Stroke, Effects, Motion |
+| `form` (input, textarea, select, button[type]) | Indicator | — | Position, Appearance, Typography, Fill, Stroke, Effects, Motion |
 | `void` (br, hr, meta) | Indicator | — | Position, Appearance |
-| `page` (html, body) | Indicator | — | Layout, Appearance, Fill |
+| `page` (html, body) | Indicator | — | Layout, Appearance, Fill, Layout guide |
 
 **Conditional sections** (Icon, Media) appear above Position when their detection conditions are met. Their visibility is independent of the property-section gating — e.g. a `<svg>` layer can have *both* Icon (if class = `lucide-*`) and Media (because it's an SVG element) at the same time.
 

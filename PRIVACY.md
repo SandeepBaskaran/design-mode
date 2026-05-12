@@ -19,7 +19,11 @@ actively inspect.
 
 ## What leaves your machine
 
-The extension talks to **`localhost`** only. Specifically:
+By default the extension talks to **`localhost`** only. There is one
+optional cloud mode the user explicitly turns on; otherwise nothing
+leaves the machine.
+
+Default (no opt-in needed):
 
 - A WebSocket connection to `ws://localhost:9960` if you've opted in by
   starting the companion MCP server (`npm start`). The server runs on your
@@ -30,6 +34,16 @@ The extension talks to **`localhost`** only. Specifically:
 - `fetch(media.src)` when you click "Download" on an inspected `<img>` /
   `<video>` / `<audio>` / SVG — this is a normal browser request to whatever
   URL the page already references; nothing is added by the extension.
+
+Optional cloud mode (you turn it on explicitly in Settings):
+
+- An HTTPS connection to `https://www.mcp.designmode.app` (or any
+  Vercel deployment URL you configure) authenticated with a bearer
+  token stored in `chrome.storage.local`. The cloud server (open
+  source at `packages/mcp-cloud`) acts as a relay between the
+  extension and a remote MCP agent — it doesn't store your edits;
+  messages flow through and are dropped when the connection closes.
+  Disable cloud mode in Settings to revert to localhost-only.
 
 There are **no analytics, no telemetry, and no error reporting** in the
 extension or the MCP server. There is no remote update channel beyond the

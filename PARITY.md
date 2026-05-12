@@ -10,7 +10,14 @@ Each entry is bucketed:
 
 When CSS and Figma diverge, the section calls it out.
 
-Last updated: 2026-05-06.
+Last updated: 2026-05-12 (release 1.0.2).
+
+Release 1.0.2 highlights: **Layout guide** section added (Columns /
+Rows / Grid overlay via `::before`), **Motion** split out of Effects
+into its own section, **Effects** refactored to the Figma-aligned
+six-kind shape (Inner shadow · Drop shadow with chain-switching
+checkbox · Layer blur · Background blur · Noise · Texture). See
+CHANGELOG.md for the full list.
 
 ---
 

@@ -4,7 +4,7 @@
 
 Please **do not** file public GitHub issues for security problems.
 
-Email the maintainer privately and include:
+Email the maintainer privately at `hello@sandeepbaskaran.com` and include:
 
 - A description of the issue and the impact you observed.
 - Steps to reproduce (a minimal HTML page or extension trigger is best).
@@ -30,9 +30,18 @@ Out of scope:
 
 ## Hardening notes for contributors
 
-- The extension only ships data to `ws://localhost:<port>`. Don't introduce
-  outbound network calls without an explicit, opt-in setting and a note in
-  [PRIVACY.md](./PRIVACY.md).
+- The extension's default transport is `ws://localhost:<port>` (the
+  MCP-local server). When the user opts into cloud mode it talks to
+  `https://www.mcp.designmode.app` (or any user-configured Vercel
+  deployment) over HTTPS with a bearer token stored in
+  `chrome.storage.local`. Don't introduce new outbound calls without
+  an explicit, opt-in setting and a note in [PRIVACY.md](./PRIVACY.md).
+- Treat the side panel context as privileged. The contenteditable
+  rich-text editor sanitises the inspected page's `innerHTML` via a
+  strict tag/attribute allow-list (see `sanitizeRichTextHtml` in
+  `packages/extension/src/sidepanel/sidepanel.ts`) before rendering.
+  Any code path that interpolates page-derived values into HTML or
+  CSS contexts must use `escapeAttr` / `safeCssColor` accordingly.
 - Don't commit secrets — `.env*` is gitignored. The website's `NEXT_PUBLIC_*`
   vars ship in HTML and are not secrets, but treat anything else as sensitive.
 - Never add `eval`, `new Function`, or inline event-handler injection in the

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Design Mode",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Visual DOM editor for browsers — edit styles, add comments, and send changes to coding agents via MCP",
   "permissions": [
     "activeTab",
@@ -13,6 +13,9 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self'"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

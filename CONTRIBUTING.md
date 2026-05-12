@@ -51,7 +51,8 @@ npm start          # from repo root — boots ws://localhost:9960 + MCP stdio
 - **CSS-property coverage gaps** — missing things in DevTools' Styles panel that
   the side panel doesn't expose yet (e.g. multi-shadow array UI, gradient builder,
   per-component animation triggers, drag-to-scrub on numeric inputs, EyeDropper
-  API on color inputs). The plan file at `/.claude/plans/` lists known gaps.
+  API on color inputs). See **PARITY.md** for the Figma-feature parity
+  map and known gaps.
 - **Lucide-icon swaps** — anywhere we still ship a serif-text glyph (B/I/U/S
   used to be one; the typography toggles now use lucide). Same kind of swap is
   welcome elsewhere.
