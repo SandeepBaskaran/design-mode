@@ -22,7 +22,7 @@
 
 import { getElementById } from './helpers';
 
-export type PresetKind = 'position' | 'layout' | 'appearance' | 'typography' | 'fill' | 'stroke' | 'effects';
+export type PresetKind = 'position' | 'layout' | 'appearance' | 'typography' | 'fill' | 'stroke' | 'effects' | 'motion' | 'layoutGuide';
 
 export interface Preset {
   id: string;
@@ -170,12 +170,20 @@ function quotaError(): string {
   return 'Storage full — chrome.storage.sync caps at 100 KB total. Delete an old preset and try again.';
 }
 
-// Built-in effect recipes that ship with the extension. Seeded once on
-// first read of presets per browser profile (chrome.storage.sync is
-// shared across machines) and tagged so the user can rename, edit, or
-// delete them like any saved preset. The seed marker prevents
-// re-injection if the user deletes them — once gone, they stay gone.
-const BUILTIN_EFFECTS_SEEDS: Preset[] = [
+// Built-in seed presets. We ship one of every kind so a user who
+// exports the JSON sees the full structure — kind names, style-prop
+// shapes, naming convention — and can hand-author or import their own
+// presets confidently. Each is tagged isCustom so the user can rename,
+// edit, or delete it like any saved preset. The seed-version marker
+// prevents re-injection: once a seed is deleted, it stays gone.
+//
+// Version is bumped (PRESETS_SEED_VERSION) whenever new seeds are
+// added in a release. Older users who already have v1 seeds get the
+// new entries merged in without losing their saved presets or
+// resurrecting ones they'd deleted.
+const PRESETS_SEED_VERSION = 2;
+const BUILTIN_SEEDS: Preset[] = [
+  // ── Effects (visual) ──────────────────────────────────────────────
   {
     id: 'builtin-soft-drop',
     name: 'Soft drop',
@@ -232,29 +240,171 @@ const BUILTIN_EFFECTS_SEEDS: Preset[] = [
     isCustom: true,
     createdAt: 0,
   },
+  // ── Position ──────────────────────────────────────────────────────
+  {
+    id: 'builtin-position-centred-absolute',
+    name: 'Centred absolute',
+    kind: 'position',
+    styles: {
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      translate: '-50% -50%',
+    },
+    isCustom: true,
+    createdAt: 0,
+  },
+  // ── Layout ────────────────────────────────────────────────────────
+  {
+    id: 'builtin-layout-flex-row-16',
+    name: 'Flex row · 16 gap',
+    kind: 'layout',
+    styles: {
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: '16px',
+    },
+    isCustom: true,
+    createdAt: 0,
+  },
+  // ── Appearance ────────────────────────────────────────────────────
+  {
+    id: 'builtin-appearance-rounded-glass',
+    name: 'Rounded glass',
+    kind: 'appearance',
+    styles: {
+      borderRadius: '12px',
+      backdropFilter: 'blur(12px) saturate(1.4)',
+      opacity: '0.95',
+    },
+    isCustom: true,
+    createdAt: 0,
+  },
+  // ── Typography ────────────────────────────────────────────────────
+  {
+    id: 'builtin-typography-headline-1',
+    name: 'Headline 1',
+    kind: 'typography',
+    styles: {
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      fontSize: '32px',
+      fontWeight: '700',
+      lineHeight: '1.2',
+      letterSpacing: '-0.02em',
+    },
+    isCustom: true,
+    createdAt: 0,
+  },
+  // ── Fill ──────────────────────────────────────────────────────────
+  {
+    id: 'builtin-fill-brand',
+    name: 'Brand fill',
+    kind: 'fill',
+    styles: {
+      backgroundColor: '#3b82f6',
+    },
+    isCustom: true,
+    createdAt: 0,
+  },
+  // ── Stroke ────────────────────────────────────────────────────────
+  {
+    id: 'builtin-stroke-subtle-1',
+    name: 'Subtle border',
+    kind: 'stroke',
+    styles: {
+      borderTopWidth: '1px',
+      borderRightWidth: '1px',
+      borderBottomWidth: '1px',
+      borderLeftWidth: '1px',
+      borderTopStyle: 'solid',
+      borderRightStyle: 'solid',
+      borderBottomStyle: 'solid',
+      borderLeftStyle: 'solid',
+      borderTopColor: '#e5e7eb',
+      borderRightColor: '#e5e7eb',
+      borderBottomColor: '#e5e7eb',
+      borderLeftColor: '#e5e7eb',
+    },
+    isCustom: true,
+    createdAt: 0,
+  },
+  // ── Motion ────────────────────────────────────────────────────────
+  {
+    id: 'builtin-motion-smooth-200',
+    name: 'Smooth 200ms',
+    kind: 'motion',
+    styles: {
+      transitionProperty: 'all',
+      transitionDuration: '0.2s',
+      transitionTimingFunction: 'ease',
+      transitionDelay: '0s',
+    },
+    isCustom: true,
+    createdAt: 0,
+  },
+  // ── Layout guide ──────────────────────────────────────────────────
+  // The "styles" object carries the synthetic __layout_guides JSON
+  // so the export shows the structure. Applying it currently does not
+  // restore overlays on the page (layout guides are session-only and
+  // bypass the change-tracker by design), but the shape is here for
+  // people authoring presets by hand or sharing config snapshots.
+  {
+    id: 'builtin-layoutguide-cols-12',
+    name: 'Columns · 12',
+    kind: 'layoutGuide',
+    styles: {
+      __layout_guides: JSON.stringify([{
+        kind: 'columns',
+        count: 12,
+        color: '#ff3366',
+        opacity: 10,
+        visible: true,
+        align: 'stretch',
+        size: 'auto',
+        margin: '0',
+        gutter: '20',
+      }]),
+    },
+    isCustom: true,
+    createdAt: 0,
+  },
 ];
 
-// One-shot seed guard: in-process promise prevents racing parallel
-// getCustomPresets() callers from both writing the seeded list. Once
-// chrome.storage.sync has the `dm_presets_seeded` flag, every future
-// call skips the merge entirely — so a user who deletes a built-in
-// preset never sees it come back.
+// Migration-safe seeding. `dm_presets_seeded_version` records which
+// version of the seed list ran last. On bump (PRESETS_SEED_VERSION)
+// we merge any seeds whose name/id aren't already present — old seeds
+// the user deleted stay deleted, new ones get added. The in-process
+// promise guard prevents parallel getCustomPresets() callers from
+// double-writing.
 let seedPromise: Promise<void> | null = null;
 function seedBuiltinPresetsIfNeeded(): Promise<void> {
   if (seedPromise) return seedPromise;
   seedPromise = new Promise<void>((resolve) => {
-    chrome.storage.sync.get(['dm_presets_seeded', 'dm_custom_presets'], (data) => {
-      if (data.dm_presets_seeded) { resolve(); return; }
-      const existing: Preset[] = data.dm_custom_presets || [];
-      // Skip any seed whose name (or id) is already present — covers
-      // the case where a user imported an identically-named preset
-      // before we shipped the seeding logic.
-      const takenNames = new Set(existing.map(p => p.name));
-      const takenIds = new Set(existing.map(p => p.id));
-      const toAdd = BUILTIN_EFFECTS_SEEDS.filter(p => !takenNames.has(p.name) && !takenIds.has(p.id));
-      const merged = [...existing, ...toAdd];
-      chrome.storage.sync.set({ dm_custom_presets: merged, dm_presets_seeded: true }, () => resolve());
-    });
+    chrome.storage.sync.get(
+      ['dm_presets_seeded', 'dm_presets_seeded_version', 'dm_custom_presets'],
+      (data) => {
+        // Legacy flag (v1) → treat as version 1 if set; new code uses
+        // numeric version so future bumps cleanly add new seeds without
+        // touching the user's existing ones.
+        const currentVer = typeof data.dm_presets_seeded_version === 'number'
+          ? data.dm_presets_seeded_version
+          : (data.dm_presets_seeded ? 1 : 0);
+        if (currentVer >= PRESETS_SEED_VERSION) { resolve(); return; }
+        const existing: Preset[] = data.dm_custom_presets || [];
+        const takenNames = new Set(existing.map(p => p.name));
+        const takenIds = new Set(existing.map(p => p.id));
+        const toAdd = BUILTIN_SEEDS.filter(p => !takenNames.has(p.name) && !takenIds.has(p.id));
+        const merged = [...existing, ...toAdd];
+        chrome.storage.sync.set({
+          dm_custom_presets: merged,
+          dm_presets_seeded_version: PRESETS_SEED_VERSION,
+          // Keep the legacy flag set so older builds don't try to re-seed
+          // v1 if they ever run again.
+          dm_presets_seeded: true,
+        }, () => resolve());
+      },
+    );
   });
   return seedPromise;
 }
@@ -279,7 +429,7 @@ export async function getCustomPresets(): Promise<Preset[]> {
 //   • 'typography' → 'typography' (unchanged)
 // Anything missing or unrecognised falls through inferKindFromProps.
 function normalizeKind(p: Preset): Preset {
-  const valid: ReadonlyArray<PresetKind> = ['position', 'layout', 'appearance', 'typography', 'fill', 'stroke', 'effects'];
+  const valid: ReadonlyArray<PresetKind> = ['position', 'layout', 'appearance', 'typography', 'fill', 'stroke', 'effects', 'motion', 'layoutGuide'];
   const k = (p as any).kind as string | undefined;
   if (k && (valid as readonly string[]).includes(k)) return p as Preset;
   if (k === 'color') return { ...p, kind: 'fill' };
@@ -289,13 +439,19 @@ function normalizeKind(p: Preset): Preset {
 
 function inferKindFromProps(keys: string[]): PresetKind {
   const has = (re: RegExp) => keys.some(k => re.test(k));
+  // Synthetic prop checks first — these are unambiguous.
+  if (keys.includes('__layout_guides')) return 'layoutGuide';
+  // Motion comes before position / effects: transition / animation /
+  // motion-path props alone signal a motion preset, even when transform
+  // is co-present (transform also appears in position).
+  if (has(/^(transition|animation|offsetPath|offsetDistance|offsetRotate|offsetAnchor|offsetPosition|viewTransitionName|viewTransitionClass|animationTimeline|animationRange|scrollTimeline|viewTimeline|timelineScope)/)) return 'motion';
   if (has(/^(position|top|right|bottom|left|zIndex|transform|translate|rotate|scale|perspective)/)) return 'position';
   if (has(/^(display|flex|grid|justifyContent|alignItems|alignSelf|gap|rowGap|columnGap|gridTemplate|gridArea|width|height|minWidth|maxWidth|minHeight|maxHeight|padding|margin|boxSizing|overflow)/)) return 'layout';
   if (has(/^(font|text|lineHeight|letterSpacing|wordSpacing|textTransform|listStyle|whiteSpace|textWrap|textIndent|tabSize|verticalAlign|hyphens|writingMode|direction|unicodeBidi|color)$/)) return 'typography';
   if (has(/^(opacity|mixBlendMode|isolation|borderRadius|borderTopLeftRadius|borderTopRightRadius|borderBottomRightRadius|borderBottomLeftRadius|filter|backdropFilter|cursor|visibility|pointerEvents|userSelect|appearance|accentColor|caretColor|colorScheme|clipPath|scrollbarWidth|scrollbarColor|scrollbarGutter|forcedColorAdjust|contain|contentVisibility|willChange)$/)) return 'appearance';
   if (has(/^(backgroundColor|backgroundImage|backgroundSize|backgroundRepeat|backgroundPosition|backgroundAttachment|backgroundClip|backgroundOrigin|backgroundBlendMode|webkitBackgroundClip|webkitTextFillColor|mask)/)) return 'fill';
   if (has(/^(border(Top|Right|Bottom|Left)?(Width|Style|Color)|borderImage|outline)/)) return 'stroke';
-  if (has(/^(boxShadow|textShadow|transition|animation)/)) return 'effects';
+  if (has(/^(boxShadow|textShadow)/)) return 'effects';
   // Safe fallback: typography (single `color` + nothing else used to be
   // `color` kind under the old system; under the new system `color` lives
   // in typography for text colours and Fill section for backgrounds — text

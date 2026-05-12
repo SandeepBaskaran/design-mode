@@ -167,7 +167,7 @@ let pageFonts: Array<{ value: string; label: string }> = [];
 let dragLayerId: string | null = null;
 
 // v1.2: Presets
-type PresetKind = 'position' | 'layout' | 'appearance' | 'typography' | 'fill' | 'stroke' | 'effects';
+type PresetKind = 'position' | 'layout' | 'appearance' | 'typography' | 'fill' | 'stroke' | 'effects' | 'motion' | 'layoutGuide';
 const PRESET_KIND_LABELS: Record<PresetKind, string> = {
   position: 'Position',
   layout: 'Layout',
@@ -176,8 +176,10 @@ const PRESET_KIND_LABELS: Record<PresetKind, string> = {
   fill: 'Fill',
   stroke: 'Stroke',
   effects: 'Effects',
+  motion: 'Motion',
+  layoutGuide: 'Layout guide',
 };
-const PRESET_KIND_ORDER: PresetKind[] = ['position', 'layout', 'appearance', 'typography', 'fill', 'stroke', 'effects'];
+const PRESET_KIND_ORDER: PresetKind[] = ['position', 'layout', 'appearance', 'typography', 'fill', 'stroke', 'effects', 'motion', 'layoutGuide'];
 let presetsOpen = false;
 let customPresetsList: any[] = [];
 let editingPresetData: { id: string; name: string; kind?: PresetKind; styles: Record<string, string> } | null = null;
@@ -680,6 +682,46 @@ async function applyStyle(property: string, value: string) {
   // change-tracker so it never lands in the Changes tab).
   if (property.startsWith('__guide_')) {
     applyLayoutGuideProperty(property, value);
+    return;
+  }
+  // Shadow-row colour picker drag. The shadow editor's swatch dispatches
+  // `applyStyle('__effd_box_0_color', '#…')` directly during HSV drag
+  // (no DOM input fires a change event). Without an intercept the value
+  // would be sent to the content script as a CSS property — that fails
+  // silently and the picker appears dead. Splice into the right chain
+  // entry and apply the colour back via the chain's CSS property.
+  const effdColorMatch = property.match(/^__effd_(box|fx|text)_(\d+)_color$/);
+  if (effdColorMatch) {
+    const chain = effdColorMatch[1] as 'box' | 'fx' | 'text';
+    const idx = parseInt(effdColorMatch[2], 10);
+    const cs = info?.computedStyles || {};
+    if (chain === 'box') {
+      const entries = parseCssCommaList(cs.boxShadow || '');
+      const cur = entries[idx];
+      if (cur) {
+        const parsed = parseShadowEntry(cur);
+        if (parsed) {
+          entries[idx] = formatShadowEntry({ ...parsed, color: value });
+          applyStyle('boxShadow', entries.join(', '));
+        }
+      }
+    } else if (chain === 'fx') {
+      const list = splitFilterFunctions(cs.filter || '');
+      const cur = list[idx];
+      if (cur) {
+        const inner = cur.match(/^drop-shadow\((.*)\)\s*$/i)?.[1] || '';
+        const parsed = parseShadowEntry(inner);
+        if (parsed) {
+          list[idx] = formatFilterDropShadow({ ...parsed, color: value });
+          applyStyle('filter', list.join(' '));
+        }
+      }
+    } else if (chain === 'text') {
+      const parsed = parseShadowEntry(cs.textShadow || '');
+      if (parsed) {
+        applyStyle('textShadow', formatTextShadow({ ...parsed, color: value }));
+      }
+    }
     return;
   }
   // Overlay-chain per-field edits dispatched from buttons (Noise mode
@@ -1470,14 +1512,21 @@ const SECTION_PROPS: Record<string, string[]> = {
     'borderImageSource','borderImageSlice','borderImageWidth','borderImageOutset','borderImageRepeat',
   ],
   effects: [
+    // Visual effects only — shadows + blurs. Motion was split out into
+    // its own section / SECTION_PROPS bucket below.
     'boxShadow','textShadow','filter','backdropFilter',
+  ],
+  motion: [
     'transition','transitionProperty','transitionDuration','transitionTimingFunction','transitionDelay',
     'animation','animationName','animationDuration','animationTimingFunction','animationDelay',
     'animationIterationCount','animationDirection','animationFillMode','animationPlayState',
+    // Transform (also in Position, but Motion is where the animated-
+    // transform recipes live, so keep them here as save targets too).
+    'translate','rotate','scale','transform','transformOrigin','transformBox',
+    'perspective','perspectiveOrigin','transformStyle','backfaceVisibility',
     // Motion path
     'offsetPath','offsetDistance','offsetRotate','offsetAnchor','offsetPosition',
-    // View Transitions (Position section also exposes view-transition-name —
-    // both sections are valid contexts for it)
+    // View Transitions
     'viewTransitionName','viewTransitionClass',
     // Scroll-driven animations (animation-timeline + named timelines)
     'animationTimeline','animationRange','animationRangeStart','animationRangeEnd',
@@ -3256,6 +3305,8 @@ function layeredRow(opts: {
   swatch: string;        // HTML for the leading swatch / type icon
   label: string;         // primary value text (hex / url / gradient / 'Drop shadow')
   meta?: string;         // secondary text (e.g. '100%')
+  metaHtml?: string;     // raw HTML for the meta slot (overrides `meta`); caller escapes
+  hideExpand?: boolean;  // skip the settings/expand button (single-field rows)
   visible: boolean;
   expanded: boolean;
   body?: string;         // expanded body
@@ -3265,13 +3316,19 @@ function layeredRow(opts: {
   // focus and the drag often fails to initiate. The Layers tab's working
   // grip uses the same span pattern. The data attr is decorative; drag
   // identifies the row via the outer wrapper's data-dm-<prefix>-row.
+  const metaPart = opts.metaHtml
+    ? opts.metaHtml
+    : (opts.meta ? '<span style="font-size:10px;color:var(--dm-text-muted);">' + escapeAttr(opts.meta) + '</span>' : '');
+  const expandBtn = opts.hideExpand
+    ? ''
+    : '<button class="dm-section-action" data-dm-' + opts.prefix + '-expand="' + opts.idx + '" title="' + (opts.expanded ? 'Collapse' : 'Settings') + '" data-active="' + (opts.expanded ? 'true' : 'false') + '">' + icon('slidersHorizontal', 12) + '</button>';
   const headRow = '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:5px;">' +
     '<span class="dm-section-action" data-dm-' + opts.prefix + '-drag="' + opts.idx + '" title="Drag to reorder" aria-label="Drag" style="cursor:grab;">' + icon('gripVertical', 12) + '</span>' +
     opts.swatch +
     '<span style="flex:1;min-width:0;font-size:11px;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(opts.label) + '</span>' +
-    (opts.meta ? '<span style="font-size:10px;color:var(--dm-text-muted);">' + escapeAttr(opts.meta) + '</span>' : '') +
+    metaPart +
     '<button class="dm-section-action" data-dm-' + opts.prefix + '-toggle="' + opts.idx + '" title="' + (opts.visible ? 'Hide' : 'Show') + '" data-active="' + (opts.visible ? 'true' : 'false') + '">' + icon(opts.visible ? 'eye' : 'eyeOff', 12) + '</button>' +
-    '<button class="dm-section-action" data-dm-' + opts.prefix + '-expand="' + opts.idx + '" title="' + (opts.expanded ? 'Collapse' : 'Settings') + '" data-active="' + (opts.expanded ? 'true' : 'false') + '">' + icon('slidersHorizontal', 12) + '</button>' +
+    expandBtn +
     '<button class="dm-section-action" data-dm-' + opts.prefix + '-remove="' + opts.idx + '" title="Remove" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>' +
     '</div>';
   const bodyRow = (opts.expanded && opts.body)
@@ -6051,15 +6108,30 @@ function renderDesignTab(): string {
   const effectRows = effectEntries.map((entry, idx) => {
     const swatch = '<span style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;color:' + (entry.visible ? 'var(--dm-text-muted)' : 'var(--dm-text-dim)') + ';">' + icon(iconFor(entry), 14) + '</span>';
     const expanded = expandedEffectIdx === idx;
+    // Layer blur / Background blur have just one knob (radius). Surface
+    // it inline in the row instead of behind the settings expand, so
+    // the row mirrors fill / stroke rows that show their primary value
+    // up front. No expanded body needed since Progressive blur is
+    // intentionally not supported.
+    const isBlurRow = entry.kind === 'layer-blur' || entry.kind === 'backdrop-blur';
+    const blurPrefix = entry.kind === 'layer-blur' ? '__effd_lblur_' : '__effd_bblur_';
+    const blurMetaHtml = isBlurRow
+      ? '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;padding:2px 4px;">' +
+          '<input type="number" min="0" data-dm-prop="' + blurPrefix + entry.chainIdx + '_radius" value="' + (entry as any).radius + '" style="background:none;border:none;color:var(--dm-text);font-family:inherit;font-size:10px;width:36px;text-align:right;padding:2px;"/>' +
+          '<span style="font-size:9px;color:var(--dm-text-dim);padding-left:2px;opacity:0.6;">px</span>' +
+        '</div>'
+      : undefined;
     const head = layeredRow({
       idx,
       prefix: 'effect',
       swatch,
       label: titleFor(entry),
-      meta: labelFor(entry),
+      meta: isBlurRow ? undefined : labelFor(entry),
+      metaHtml: blurMetaHtml,
+      hideExpand: isBlurRow,
       visible: entry.visible,
       expanded,
-      body: expanded ? bodyFor(entry) : '',
+      body: !isBlurRow && expanded ? bodyFor(entry) : '',
     });
     // Wrap with a draggable wrapper. `data-dm-effect-row` carries the row
     // index; drag-reorder is constrained to within the same chain so
@@ -6280,7 +6352,7 @@ function renderDesignTab(): string {
     (!vis.fill ? '' : sec('Fill', 'palette', fillContent, true, fillActionsHtml)) +
     (!vis.stroke ? '' : sec('Stroke', 'squareDashed', strokeContent, true)) +
     (!vis.effects ? '' : sec('Effects', 'sparkles', effectsContent, true, effectsActionsHtml)) +
-    (!vis.motion ? '' : sec('Motion', 'play', motionContent, true, motionActionsHtml)) +
+    (!vis.motion ? '' : sec('Motion', 'play', motionContent, false, motionActionsHtml)) +
     (!vis.layoutGuide ? '' : sec('Layout guide', 'layoutGrid', layoutGuideContent, true, layoutGuideSectionActions)) +
     '</div>';
 }
