@@ -170,7 +170,97 @@ function quotaError(): string {
   return 'Storage full — chrome.storage.sync caps at 100 KB total. Delete an old preset and try again.';
 }
 
+// Built-in effect recipes that ship with the extension. Seeded once on
+// first read of presets per browser profile (chrome.storage.sync is
+// shared across machines) and tagged so the user can rename, edit, or
+// delete them like any saved preset. The seed marker prevents
+// re-injection if the user deletes them — once gone, they stay gone.
+const BUILTIN_EFFECTS_SEEDS: Preset[] = [
+  {
+    id: 'builtin-soft-drop',
+    name: 'Soft drop',
+    kind: 'effects',
+    styles: { boxShadow: '0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.08)' },
+    isCustom: true,
+    createdAt: 0,
+  },
+  {
+    id: 'builtin-hard-drop',
+    name: 'Hard drop',
+    kind: 'effects',
+    styles: { boxShadow: '0 2px 0 rgba(0, 0, 0, 0.85)' },
+    isCustom: true,
+    createdAt: 0,
+  },
+  {
+    id: 'builtin-layered-drop',
+    name: 'Layered drop',
+    kind: 'effects',
+    styles: { boxShadow: '0 1px 2px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.06), 0 4px 8px rgba(0,0,0,0.06), 0 8px 16px rgba(0,0,0,0.06), 0 16px 32px rgba(0,0,0,0.06)' },
+    isCustom: true,
+    createdAt: 0,
+  },
+  {
+    id: 'builtin-glow',
+    name: 'Glow',
+    kind: 'effects',
+    styles: { boxShadow: '0 0 0 2px rgba(79,158,255,0.45), 0 0 20px rgba(79,158,255,0.55)' },
+    isCustom: true,
+    createdAt: 0,
+  },
+  {
+    id: 'builtin-embossed',
+    name: 'Embossed',
+    kind: 'effects',
+    styles: { boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.12)' },
+    isCustom: true,
+    createdAt: 0,
+  },
+  {
+    id: 'builtin-frosted-glass',
+    name: 'Frosted glass',
+    kind: 'effects',
+    styles: { backdropFilter: 'blur(12px) saturate(1.4)' },
+    isCustom: true,
+    createdAt: 0,
+  },
+  {
+    id: 'builtin-neon-text',
+    name: 'Neon text',
+    kind: 'effects',
+    styles: { textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 14px #ff00de, 0 0 20px #ff00de, 0 0 30px #ff00de' },
+    isCustom: true,
+    createdAt: 0,
+  },
+];
+
+// One-shot seed guard: in-process promise prevents racing parallel
+// getCustomPresets() callers from both writing the seeded list. Once
+// chrome.storage.sync has the `dm_presets_seeded` flag, every future
+// call skips the merge entirely — so a user who deletes a built-in
+// preset never sees it come back.
+let seedPromise: Promise<void> | null = null;
+function seedBuiltinPresetsIfNeeded(): Promise<void> {
+  if (seedPromise) return seedPromise;
+  seedPromise = new Promise<void>((resolve) => {
+    chrome.storage.sync.get(['dm_presets_seeded', 'dm_custom_presets'], (data) => {
+      if (data.dm_presets_seeded) { resolve(); return; }
+      const existing: Preset[] = data.dm_custom_presets || [];
+      // Skip any seed whose name (or id) is already present — covers
+      // the case where a user imported an identically-named preset
+      // before we shipped the seeding logic.
+      const takenNames = new Set(existing.map(p => p.name));
+      const takenIds = new Set(existing.map(p => p.id));
+      const toAdd = BUILTIN_EFFECTS_SEEDS.filter(p => !takenNames.has(p.name) && !takenIds.has(p.id));
+      const merged = [...existing, ...toAdd];
+      chrome.storage.sync.set({ dm_custom_presets: merged, dm_presets_seeded: true }, () => resolve());
+    });
+  });
+  return seedPromise;
+}
+
 export async function getCustomPresets(): Promise<Preset[]> {
+  await seedBuiltinPresetsIfNeeded();
   return new Promise((resolve) => {
     chrome.storage.sync.get('dm_custom_presets', (data) => {
       const list: Preset[] = data.dm_custom_presets || [];

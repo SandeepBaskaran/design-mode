@@ -2387,16 +2387,6 @@ function effectsAddMenuTrigger(isOpen: boolean): string {
     { icon: 'eye', label: 'Layer blur', attr: 'data-dm-add-effect="layer-blur"' },
     { icon: 'panelRight', label: 'Background blur', attr: 'data-dm-add-effect="backdrop-blur"' },
     { divider: true, label: '', attr: '' },
-    // Composed presets — multi-property recipes the user can apply with
-    // one click. Each writes a small bundle of CSS.
-    { icon: 'sparkles', label: 'Preset · Soft drop', attr: 'data-dm-add-effect="preset-soft-drop"' },
-    { icon: 'sparkles', label: 'Preset · Hard drop', attr: 'data-dm-add-effect="preset-hard-drop"' },
-    { icon: 'sparkles', label: 'Preset · Layered drop', attr: 'data-dm-add-effect="preset-layered-drop"' },
-    { icon: 'sparkles', label: 'Preset · Glow', attr: 'data-dm-add-effect="preset-glow"' },
-    { icon: 'sparkles', label: 'Preset · Embossed', attr: 'data-dm-add-effect="preset-embossed"' },
-    { icon: 'sparkles', label: 'Preset · Frosted glass', attr: 'data-dm-add-effect="preset-frosted-glass"' },
-    { icon: 'sparkles', label: 'Preset · Neon text', attr: 'data-dm-add-effect="preset-neon-text"' },
-    { divider: true, label: '', attr: '' },
     { icon: 'play', label: 'Transition', attr: 'data-dm-add-effect="transition"' },
     { icon: 'activity', label: 'Animation', attr: 'data-dm-add-effect="animation"' },
     { icon: 'move', label: 'Transform', attr: 'data-dm-add-effect="transform"' },
@@ -8381,33 +8371,6 @@ function setupDelegation() {
         if (cur === 'none' || !cur) {
           applyStyle('animation', 'dm-fade-in 1s linear both');
         }
-      }
-      // Multi-effect presets — each writes a curated bundle of properties.
-      else if (kind === 'preset-soft-drop') {
-        appendBoxShadow('0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.08)');
-      }
-      else if (kind === 'preset-hard-drop') {
-        appendBoxShadow('0 2px 0 rgba(0, 0, 0, 0.85)');
-      }
-      else if (kind === 'preset-layered-drop') {
-        appendBoxShadow('0 1px 2px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.06), 0 4px 8px rgba(0,0,0,0.06), 0 8px 16px rgba(0,0,0,0.06), 0 16px 32px rgba(0,0,0,0.06)');
-      }
-      else if (kind === 'preset-glow') {
-        appendBoxShadow('0 0 0 2px rgba(79,158,255,0.45), 0 0 20px rgba(79,158,255,0.55)');
-      }
-      else if (kind === 'preset-embossed') {
-        appendBoxShadow('inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.12)');
-      }
-      else if (kind === 'preset-frosted-glass') {
-        // Background blur + a small saturate so the frost doesn't go grey.
-        appendBackdrop('blur(12px)');
-        appendBackdrop('saturate(1.4)');
-      }
-      else if (kind === 'preset-neon-text') {
-        // Stack of coloured text-shadows for a neon glow. text-shadow
-        // accepts a comma-separated chain (unlike single-applyStyle
-        // patterns we use for box-shadow).
-        applyStyle('textShadow', '0 0 4px #fff, 0 0 8px #fff, 0 0 14px #ff00de, 0 0 20px #ff00de, 0 0 30px #ff00de');
       }
       effectsMenuOpen = false;
       return;
