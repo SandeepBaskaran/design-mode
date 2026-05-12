@@ -647,6 +647,14 @@ async function applyStyle(property: string, value: string) {
     applyFillColorProperty(property, value);
     return;
   }
+  // Per-layer stroke colour / weight. Same intercept reason as fill: the
+  // inline picker's drag dispatches applyStyle directly without going
+  // through the change handler. Route to the in-memory stash + chain
+  // re-dispatch so each row's swatch / weight input edits its own layer.
+  if (property.startsWith('__stroke_color__') || property.startsWith('__stroke_weight__')) {
+    applyStrokeLayerProperty(property, value);
+    return;
+  }
   const res = await send({ type: 'SP_APPLY_STYLE', property, value });
   if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
 }
@@ -705,6 +713,37 @@ function applyFillColorProperty(prop: string, value: string) {
     }
     return;
   }
+}
+
+// Per-layer stroke edits (`__stroke_color__N` / `__stroke_weight__N`).
+// Each row in the Outside / Inside layered list owns one virtual-prop
+// pair scoped to its layer index; this routes through the in-memory
+// stash so the picker drag, the colour-code input, and the weight
+// stepper all converge on the same dispatch.
+function applyStrokeLayerProperty(prop: string, value: string) {
+  const id = info?.id || '';
+  if (!id) return;
+  const s = info?.computedStyles || {};
+  const pos = getStrokeActiveTab(id, s);
+  if (pos === 'center') return; // center is single-stroke; primary row handles it
+  const m = prop.match(/^__stroke_(color|weight)__(\d+)$/);
+  if (!m) return;
+  const field = m[1] as 'color' | 'weight';
+  const idx = parseInt(m[2], 10);
+  const layers = getStrokeLayers(id, s, pos);
+  if (idx < 0 || idx >= layers.length) return;
+  if (field === 'color') {
+    layers[idx].color = value;
+  } else {
+    const num = parseFloat(value);
+    layers[idx].weight = !isFinite(num) || num < 0 ? 0 : num;
+  }
+  setStrokeLayers(id, pos, layers);
+  const intent = strokeStyleByElement.get(id);
+  const styleNow = intent || (s.borderTopStyle && s.borderTopStyle !== 'none' ? s.borderTopStyle : 'solid');
+  const batch: Array<{ property: string; value: string }> = [];
+  dispatchStrokeLayers(layers, pos, s, (p, v) => batch.push({ property: p, value: v }), styleNow);
+  applyStylesBatch(batch, field === 'color' ? 'Stroke colour' : 'Stroke weight');
 }
 
 // Map the stroke section's virtual props to actual CSS targets. With the
@@ -5309,26 +5348,22 @@ function renderDesignTab(): string {
   // always solid filled rectangles. So we surface the field only when
   // it actually controls something.
   const styleOptions = ['solid','dashed','dotted','double','groove','ridge','inset','outset','hidden','none','auto'];
-  const strokeRow = strokePos === 'center'
-    ? grid12([
-        { span: 4, content: colorInp('Color', '__stroke_color', strokeColor, true) },
-        { span: 2, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
-        { span: 6, content: sel('Style', '__stroke_style', strokeStyleCur, styleOptions) },
-      ])
-    : grid12([
-        { span: 8, content: colorInp('Color', '__stroke_color', strokeColor, true) },
-        { span: 4, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
-      ]);
-
-  const colorPanel = strokeColorPanelOpen ? sp() + renderColorPanel('__stroke_color', strokeColor) : '';
+  // Center is single-stroke (CSS outline can't stack). Keep the original
+  // Color + Weight + Style row + outline-offset.
+  const centerStrokeRow = grid12([
+    { span: 4, content: colorInp('Color', '__stroke_color', strokeColor, true) },
+    { span: 2, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
+    { span: 6, content: sel('Style', '__stroke_style', strokeStyleCur, styleOptions) },
+  ]);
+  const centerColorPanel = strokeColorPanelOpen ? sp() + renderColorPanel('__stroke_color', strokeColor) : '';
 
   // Outline-offset control — only meaningful in Center mode. Negative
   // values pull the outline inward (toward the box edge); positive push
   // it outward. Helper text lives inside the label parens so the field
   // can use the full 12-column row instead of stealing half for a chip.
-  const offsetRow = strokePos === 'center' ? sp() + grid12([
+  const offsetRow = sp() + grid12([
     { span: 12, content: inp('Outline offset (negative pulls inward)', 'outlineOffset', s.outlineOffset || '0px') },
-  ]) : '';
+  ]);
 
   // Stroke Advanced — border-image suite. CSS lets you slice an image (or
   // gradient) into 9 regions and use it as the border, which enables
@@ -5355,53 +5390,56 @@ function renderDesignTab(): string {
     ])
   );
 
-  // Layered list of strokes. Renders only when 2+ layers exist (single
-  // stroke is fully represented by the primary controls below). Each row
-  // shows a swatch + "Wpx <color>" label + eye + trash. Clicking the row
-  // makes that layer active for the primary controls.
-  const strokeListHtml = isMultiStroke ? (() => {
-    const rows = strokeLayers.map((layer, idx) => {
-      const visible = layer.visible !== false;
-      const isActive = idx === safeActiveIdx;
-      const swatch = '<span style="width:18px;height:18px;border-radius:3px;border:1px solid var(--dm-separator);background:' + escapeAttr(layer.color) + ';flex-shrink:0;display:inline-block;"></span>';
-      const label = (Math.round(layer.weight * 10) / 10) + 'px · ' + layer.color;
-      const eye = '<button class="dm-section-action" data-dm-stroke-toggle="' + idx + '" data-active="' + (visible ? 'true' : 'false') + '" title="' + (visible ? 'Hide' : 'Show') + '">' + icon(visible ? 'eye' : 'eyeOff', 12) + '</button>';
-      const trash = '<button class="dm-section-action" data-dm-stroke-remove="' + idx + '" title="Remove stroke" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>';
-      const grip = '<span class="dm-section-action" data-dm-stroke-drag="' + idx + '" title="Drag to reorder" aria-label="Drag" style="cursor:grab;">' + icon('gripVertical', 12) + '</span>';
-      const activeBg = isActive ? 'var(--dm-accent-bg)' : 'var(--dm-bg-secondary)';
-      const activeBorder = isActive ? 'var(--dm-accent-border)' : 'var(--dm-separator)';
-      const head = '<div data-dm-stroke-select="' + idx + '" style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:' + activeBg + ';border:1px solid ' + activeBorder + ';border-radius:5px;cursor:pointer;">' +
-        grip + swatch +
-        '<span style="flex:1;min-width:0;font-size:11px;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(label) + '</span>' +
-        eye + trash +
+  // Outside / Inside render one row per stroke layer (mirrors the Fill
+  // section's per-row pattern). Each row owns its swatch, colour-code,
+  // weight input, eye toggle and trash; the swatch click reveals the
+  // colour panel inline beneath that specific row. Center bypasses the
+  // list entirely — its single outline pair stays in the primary row.
+  const renderStrokeLayerRow = (layer: StrokeLayer, idx: number): string => {
+    const visible = layer.visible !== false;
+    const colorProp = '__stroke_color__' + idx;
+    const swatchOpen = activeColorPickerProp === colorProp;
+    const swatchBg = resolveCssVarToColor(layer.color) || layer.color || '#000';
+    const codeDisplay = formatColorForDisplay(layer.color);
+    const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + colorProp + '" title="Pick a colour" style="background:' + escapeAttr(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
+    const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + colorProp + '" data-dm-tokens-trigger="' + colorProp + '" value="' + escapeAttr(codeDisplay) + '" spellcheck="false" autocomplete="off"/>';
+    // Weight input — replaces the fill-row Opacity cell. Locked-`px`
+    // suffix mirrors Opacity's locked-`%` so the row reads as one unit.
+    const weightProp = '__stroke_weight__' + idx;
+    const weightCell =
+      '<div class="dm-fill-opacity">' +
+      '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + weightProp + '" data-dm-numeric="1" data-dm-unit="px" inputmode="decimal" value="' + (Math.round(layer.weight * 10) / 10) + '"/>' +
+      '<span class="dm-input-unit">px</span>' +
       '</div>';
-      return '<div data-dm-stroke-row="' + idx + '" draggable="true" style="margin-bottom:6px;">' + head + '</div>';
-    }).join('');
-    return rows + sp();
-  })() : '';
+    const eyeBtn = '<button class="dm-fill-action dm-fill-action-hover" data-dm-stroke-toggle="' + idx + '" title="' + (visible ? 'Hide stroke' : 'Show stroke') + '" data-active="' + (visible ? 'true' : 'false') + '">' + icon(visible ? 'eye' : 'eyeOff', 12) + '</button>';
+    const trashBtn = '<button class="dm-fill-action dm-fill-action-hover" data-dm-stroke-remove="' + idx + '" title="Remove stroke" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>';
+    const grip = '<span class="dm-section-action" data-dm-stroke-drag="' + idx + '" title="Drag to reorder" style="cursor:grab;flex-shrink:0;">' + icon('gripVertical', 12) + '</span>';
+    const row = '<div class="dm-fill-row-solid">' + grip + swatchBtn + codeInput + weightCell + eyeBtn + trashBtn + '</div>';
+    const colorPanel = swatchOpen ? renderColorPanel(colorProp, layer.color) : '';
+    return '<div data-dm-stroke-row="' + idx + '" draggable="true" style="margin-bottom:6px;">' + row + colorPanel + '</div>';
+  };
+  const strokeRowsHtml = strokeLayers.map(renderStrokeLayerRow).join('');
 
-  // + Add stroke button. Disabled in Center mode (CSS outline can't
-  // stack) AND when the user has already reached STROKE_LIMIT.
+  // Add-stroke button is Outside / Inside only — Center is single-stroke
+  // (CSS outline can't stack), so hiding the button there is more honest
+  // than showing it disabled. Hide also at STROKE_LIMIT.
   const atStrokeLimit = strokeLayers.length >= STROKE_LIMIT;
-  const addDisabled = strokePos === 'center' || atStrokeLimit;
-  const addTitle = strokePos === 'center'
-    ? 'Multi-stroke is not available in Center mode (CSS outline can’t stack)'
-    : atStrokeLimit
-      ? 'Stroke limit reached (' + STROKE_LIMIT + ' layers)'
-      : 'Add another stroke on top';
-  const addStrokeBtn = '<button class="dm-btn" data-dm-stroke-add' + (addDisabled ? ' disabled' : '') +
-    ' title="' + escapeAttr(addTitle) + '"' +
-    ' style="margin-top:8px;display:flex;align-items:center;gap:6px;padding:8px;width:100%;justify-content:center;' + (addDisabled ? 'opacity:0.4;cursor:not-allowed;' : '') + '">' +
-    icon('plus', 12) + '<span>Add stroke</span></button>';
+  const showAddStroke = strokePos !== 'center' && !atStrokeLimit;
+  const addStrokeBtn = showAddStroke
+    ? '<button class="dm-btn" data-dm-stroke-add title="Add another stroke on top" style="margin-top:8px;display:flex;align-items:center;gap:6px;padding:8px;width:100%;justify-content:center;">' +
+        icon('plus', 12) + '<span>Add stroke</span></button>'
+    : '';
 
-  const strokeContent =
-    strokePositionRow(s, strokePos) + sp() +
-    strokeListHtml +
-    strokeRow +
-    offsetRow +
-    colorPanel +
-    addStrokeBtn +
-    strokeAdvancedHtml;
+  const strokeContent = strokePos === 'center'
+    ? strokePositionRow(s, strokePos) + sp() +
+      centerStrokeRow +
+      offsetRow +
+      centerColorPanel +
+      strokeAdvancedHtml
+    : strokePositionRow(s, strokePos) + sp() +
+      strokeRowsHtml +
+      addStrokeBtn +
+      strokeAdvancedHtml;
 
   // Effects \u2014 Figma-style layered list. Each entry is a discrete effect:
   // drop shadow / inner shadow / layer blur / background blur. The header
@@ -7705,8 +7743,11 @@ function setupDelegation() {
         showCaptureToast('error', 'Stroke limit reached (' + STROKE_LIMIT + ' layers).');
         return;
       }
-      // Default new stroke: 1px white on top of the stack.
-      layers.unshift({ weight: 1, color: '#ffffff', visible: true });
+      // Default new stroke: 1px black on top of the stack. Matches the
+      // empty-state default the panel surfaces when no stroke is set
+      // (Color #000000, Weight 0) — adding a stroke just bumps the
+      // weight to a visible 1px.
+      layers.unshift({ weight: 1, color: '#000000', visible: true });
       activeStrokeIdx = 0;
       setStrokeLayers(id, pos, layers);
       const intent = strokeStyleByElement.get(id);
@@ -7750,14 +7791,6 @@ function setupDelegation() {
       const intent = strokeStyleByElement.get(id);
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
       dispatchStrokeLayers(layers, pos, cs, applyStyle, styleNow);
-      return;
-    }
-
-    const strokeSelectBtn = target.closest<HTMLElement>('[data-dm-stroke-select]');
-    if (strokeSelectBtn) {
-      e.stopPropagation();
-      const idx = parseInt(strokeSelectBtn.dataset.dmStrokeSelect || '-1', 10);
-      if (idx >= 0) { activeStrokeIdx = idx; render(); }
       return;
     }
 
@@ -8610,23 +8643,11 @@ function setupDelegation() {
         }
         return;
       }
-      // Per-layer stroke edits via virtual prop names from the expanded body.
+      // Per-layer stroke edits via virtual prop names from each row.
+      // Delegates to the shared helper so the change-handler path and
+      // the picker-drag path stay in sync.
       if (prop.startsWith('__stroke_color__') || prop.startsWith('__stroke_weight__')) {
-        const m = prop.match(/^__stroke_(color|weight)__(\d+)$/);
-        if (m) {
-          const field = m[1] as 'color' | 'weight';
-          const idx = parseInt(m[2], 10);
-          const s2 = info?.computedStyles || {};
-          const pos = getStrokeActiveTab(info?.id || '', s2);
-          if (pos !== 'center') {
-            const layers = parseStrokeLayers(s2, pos);
-            if (idx >= 0 && idx < layers.length) {
-              if (field === 'color') layers[idx].color = raw;
-              else layers[idx].weight = parseFloat(raw) || 0;
-              applyStyle('boxShadow', serializeStrokeLayers(layers, pos, s2.boxShadow || ''));
-            }
-          }
-        }
+        applyStrokeLayerProperty(prop, raw);
         return;
       }
       const borderWidths = ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'];
