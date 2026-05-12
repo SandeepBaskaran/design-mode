@@ -2380,13 +2380,17 @@ function effectsAddMenuTrigger(isOpen: boolean): string {
   const trigger = '<button class="dm-section-action" data-dm-effects-menu title="Add effect" data-active="' + (isOpen ? 'true' : 'false') + '">' +
     icon('plus', 12) + '</button>';
   if (!isOpen) return '<div style="position:relative;display:inline-flex;">' + trigger + '</div>';
+  // Figma-aligned 6-effect set. Drop shadow alone covers what used to
+  // be three siblings (Drop / Text / Filter drop-shadow); the row's
+  // "Show behind transparent areas" checkbox switches between the
+  // three underlying CSS paths.
   const items: PopoverItem[] = [
-    { icon: 'sparkles', label: 'Drop shadow', attr: 'data-dm-add-effect="drop-shadow"' },
     { icon: 'squareStack', label: 'Inner shadow', attr: 'data-dm-add-effect="inner-shadow"' },
-    { icon: 'type', label: 'Text shadow', attr: 'data-dm-add-effect="text-shadow"' },
-    { icon: 'sparkles', label: 'Filter drop-shadow', attr: 'data-dm-add-effect="filter-drop-shadow"' },
+    { icon: 'sparkles', label: 'Drop shadow', attr: 'data-dm-add-effect="drop-shadow"' },
     { icon: 'eye', label: 'Layer blur', attr: 'data-dm-add-effect="layer-blur"' },
     { icon: 'panelRight', label: 'Background blur', attr: 'data-dm-add-effect="backdrop-blur"' },
+    { icon: 'sparkles', label: 'Noise', attr: 'data-dm-add-effect="noise"' },
+    { icon: 'sparkles', label: 'Texture', attr: 'data-dm-add-effect="texture"' },
   ];
   return '<div style="position:relative;display:inline-flex;">' + trigger + popover(items) + '</div>';
 }
@@ -3353,10 +3357,18 @@ const hiddenEffectsByElement = new Map<string, Set<string>>();
 const stashedEffectByKey = new Map<string, string>(); // `${elementId}::${effectId}` → original CSS entry
 
 type ShadowParts = { inset: boolean; x: number; y: number; blur: number; spread: number; color: string };
+// Figma-aligned model:
+//   • Inner shadow → inset box-shadow (chain: 'box', supports spread).
+//   • Drop shadow → one row that swaps between three CSS chains via the
+//     "Show behind transparent areas" checkbox:
+//       - checkbox ON  → box-shadow (rectangle, spread supported).
+//       - checkbox OFF + text element → text-shadow (no spread).
+//       - checkbox OFF + other element → filter:drop-shadow (no spread).
+//     `chain` discriminates which slot the entry currently lives in;
+//     `showBehindTransparent` mirrors that (chain === 'box').
 type EffectEntry =
-  | { id: string; kind: 'drop-shadow' | 'inner-shadow'; chain: 'box'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean }
-  | { id: string; kind: 'filter-drop-shadow'; chain: 'filter'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean }
-  | { id: string; kind: 'text-shadow'; raw: string; shadow: ShadowParts; visible: boolean }
+  | { id: string; kind: 'inner-shadow'; chain: 'box'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean }
+  | { id: string; kind: 'drop-shadow'; chain: 'box' | 'filter' | 'text'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean; showBehindTransparent: boolean }
   | { id: string; kind: 'layer-blur'; chain: 'filter'; chainIdx: number; raw: string; radius: number; visible: boolean }
   | { id: string; kind: 'backdrop-blur'; chain: 'backdrop'; chainIdx: number; raw: string; radius: number; visible: boolean };
 
@@ -3385,26 +3397,40 @@ function parseEffects(s: Record<string, string>, elementId: string, isText: bool
   const hidden = hiddenEffectsByElement.get(elementId) ?? new Set<string>();
   const out: EffectEntry[] = [];
 
-  // box-shadow chain — drop + inner. Stroke-shaped entries belong to Stroke.
+  // box-shadow chain — inner (inset) + drop (non-inset).
+  // Stroke-shaped entries belong to Stroke and are skipped here.
   const bsRaw = parseCssCommaList(s.boxShadow || '');
   bsRaw.forEach((raw, i) => {
     if (shadowEntryIsStroke(raw)) return;
     const p = parseShadowEntry(raw);
     if (!p) return;
     const id = 'box:' + i;
-    out.push({
-      id,
-      kind: p.inset ? 'inner-shadow' : 'drop-shadow',
-      chain: 'box',
-      chainIdx: i,
-      raw,
-      shadow: { inset: p.inset, x: p.x, y: p.y, blur: p.blur, spread: p.spread, color: p.color },
-      visible: !hidden.has(id),
-    });
+    if (p.inset) {
+      out.push({
+        id,
+        kind: 'inner-shadow',
+        chain: 'box',
+        chainIdx: i,
+        raw,
+        shadow: { inset: true, x: p.x, y: p.y, blur: p.blur, spread: p.spread, color: p.color },
+        visible: !hidden.has(id),
+      });
+    } else {
+      out.push({
+        id,
+        kind: 'drop-shadow',
+        chain: 'box',
+        chainIdx: i,
+        raw,
+        shadow: { inset: false, x: p.x, y: p.y, blur: p.blur, spread: p.spread, color: p.color },
+        visible: !hidden.has(id),
+        showBehindTransparent: true,
+      });
+    }
   });
 
-  // filter drop-shadow() calls — distinct from box-shadow because they
-  // follow the alpha edge of the layer (great for SVG icons / non-rect).
+  // filter chain — drop-shadow() calls fold into the same "Drop shadow"
+  // row kind with checkbox OFF (alpha-bound). blur() stays as Layer blur.
   const fnList = splitFilterFunctions(s.filter || '');
   fnList.forEach((fn, i) => {
     const ds = fn.match(/^drop-shadow\((.*)\)\s*$/i);
@@ -3415,12 +3441,13 @@ function parseEffects(s: Record<string, string>, elementId: string, isText: bool
       const id = 'filter-drop:' + i;
       out.push({
         id,
-        kind: 'filter-drop-shadow',
+        kind: 'drop-shadow',
         chain: 'filter',
         chainIdx: i,
         raw: fn,
         shadow: { inset: false, x: p.x, y: p.y, blur: p.blur, spread: 0, color: p.color },
         visible: !hidden.has(id),
+        showBehindTransparent: false,
       });
     } else if (/^blur\(/i.test(fn)) {
       const m = fn.match(/^blur\(([^)]+)\)\s*$/i);
@@ -3437,22 +3464,26 @@ function parseEffects(s: Record<string, string>, elementId: string, isText: bool
     }
   });
 
-  // text-shadow — only on text-bearing layers. CSS has just one chain,
-  // so we parse one entry (multiple text-shadows are valid CSS but rare;
-  // we surface only the first to keep the panel honest).
-  if (isText && s.textShadow && s.textShadow !== 'none') {
+  // text-shadow chain — folds into Drop shadow row with checkbox OFF
+  // (alpha-bound, glyph-only). Surfaced even on non-text elements when
+  // present, so the row can be removed if it was set accidentally.
+  if (s.textShadow && s.textShadow !== 'none') {
     const p = parseShadowEntry(s.textShadow);
     if (p) {
       const id = 'text-shadow';
       out.push({
         id,
-        kind: 'text-shadow',
+        kind: 'drop-shadow',
+        chain: 'text',
+        chainIdx: 0,
         raw: s.textShadow,
         shadow: { inset: false, x: p.x, y: p.y, blur: p.blur, spread: 0, color: p.color },
         visible: !hidden.has(id),
+        showBehindTransparent: false,
       });
     }
   }
+  void isText;
 
   // backdrop blur — same pattern, on `backdrop-filter`.
   const bdList = splitFilterFunctions((s as any).backdropFilter || '');
@@ -3483,63 +3514,156 @@ function formatShadowEntry(p: ShadowParts): string {
 function formatFilterDropShadow(p: ShadowParts): string {
   return 'drop-shadow(' + p.x + 'px ' + p.y + 'px ' + p.blur + 'px ' + p.color + ')';
 }
+// text-shadow has no spread, no inset, no comma chaining surfaced in
+// our UI — emit the single entry in the canonical "x y blur color" form.
+function formatTextShadow(p: ShadowParts): string {
+  return p.x + 'px ' + p.y + 'px ' + p.blur + 'px ' + p.color;
+}
 
-// Per-shadow editor. Writes via virtual props that encode (chain, chainIdx,
-// field) so the input handler can splice exactly the right entry in the
-// right shorthand chain. `kind` selects the editor variant: filter-drop /
-// text-shadow lack `spread` and `inset`; box-shadow has both.
+// Move a Drop shadow entry between three CSS chains when the user
+// toggles "Show behind transparent areas" on its row. Reads the entry
+// out of the source chain, re-writes it into the target chain, and
+// dispatches both edits as a batch so the panel sees one re-render.
+//
+// Target chain on toggle ON  → 'boxShadow'
+// Target chain on toggle OFF → 'textShadow' (when the element is text
+//                              with no painted background) or
+//                              'filter' otherwise.
+//
+// Spread is preserved in the typed model when toggling OFF — text-
+// shadow / filter:drop-shadow don't support it, but toggling back ON
+// re-emits the original spread.
+function flipDropShadowChain(srcChain: 'box' | 'fx' | 'text', srcIdx: number, checked: boolean): void {
+  const cs = info?.computedStyles || {};
+  // Pull the entry's ShadowParts out of its current chain.
+  let parts: ShadowParts | null = null;
+  let boxEntries = parseCssCommaList(cs.boxShadow || '');
+  let filterEntries = splitFilterFunctions(cs.filter || '');
+  let textShadowVal: string = cs.textShadow || 'none';
+  if (srcChain === 'box') {
+    const raw = boxEntries[srcIdx];
+    if (!raw) return;
+    const p = parseShadowEntry(raw);
+    if (!p) return;
+    parts = { inset: p.inset, x: p.x, y: p.y, blur: p.blur, spread: p.spread, color: p.color };
+    boxEntries.splice(srcIdx, 1);
+  } else if (srcChain === 'fx') {
+    const raw = filterEntries[srcIdx];
+    if (!raw) return;
+    const inner = raw.match(/^drop-shadow\((.*)\)\s*$/i)?.[1] || '';
+    const p = parseShadowEntry(inner);
+    if (!p) return;
+    parts = { inset: false, x: p.x, y: p.y, blur: p.blur, spread: 0, color: p.color };
+    filterEntries.splice(srcIdx, 1);
+  } else {
+    const p = parseShadowEntry(textShadowVal);
+    if (!p) return;
+    parts = { inset: false, x: p.x, y: p.y, blur: p.blur, spread: 0, color: p.color };
+    textShadowVal = 'none';
+  }
+  if (!parts) return;
+  // Decide target chain.
+  let targetChain: 'box' | 'fx' | 'text';
+  if (checked) {
+    targetChain = 'box';
+  } else {
+    // Prefer text-shadow when the selected element is a text-kind
+    // layer with no painted background — text-shadow only shadows
+    // the glyph alpha. Otherwise filter:drop-shadow follows the
+    // whole-element alpha, which is what users want on anything
+    // that paints a background / image / SVG.
+    const isTextKind = info ? classifyTag((info.tagName || '').toLowerCase()) === 'text' : false;
+    targetChain = isTextKind ? 'text' : 'fx';
+  }
+  // Format + insert into target chain.
+  if (targetChain === 'box') {
+    parts.inset = false;
+    boxEntries.push(formatShadowEntry(parts));
+  } else if (targetChain === 'fx') {
+    filterEntries.push(formatFilterDropShadow(parts));
+  } else {
+    textShadowVal = formatTextShadow(parts);
+  }
+  // Batch the writes so the panel only re-renders once.
+  const batch: Array<{ property: string; value: string }> = [];
+  batch.push({ property: 'boxShadow', value: boxEntries.length ? boxEntries.join(', ') : 'none' });
+  batch.push({ property: 'filter', value: filterEntries.length ? filterEntries.join(' ') : 'none' });
+  batch.push({ property: 'textShadow', value: textShadowVal || 'none' });
+  applyStylesBatch(batch, 'Show behind transparent areas');
+}
+
+// Per-shadow editor. Writes via virtual props that encode (chain,
+// chainIdx, field) so the input handler can splice exactly the right
+// entry in the right CSS shorthand chain.
+//
+// Spread only paints when the underlying chain is `box-shadow` — text-
+// shadow and filter:drop-shadow don't support it. The field is rendered
+// but disabled for chain !== 'box' with a tooltip explaining why.
+//
+// For drop-shadow rows we also render the "Show behind transparent
+// areas" checkbox: when ON the entry lives in `box-shadow` (rectangle,
+// shows through transparent areas); when OFF it lives in `text-shadow`
+// (text elements) or `filter:drop-shadow` (others), clipped to alpha.
 function renderShadowEntryEditor(entry: EffectEntry & { shadow: ShadowParts }): string {
   const sh = entry.shadow;
-  // Pick the prop prefix for the field-level edits below. We use one
-  // prefix per chain to keep the regex match in the input handler tidy.
+  // Prefix per chain — keeps the regex match in the change handler tidy.
   const prefix =
-    entry.kind === 'filter-drop-shadow' ? '__effd_fx_' + entry.chainIdx + '_' :
-    entry.kind === 'text-shadow' ? '__effd_text_0_' :
+    entry.kind === 'drop-shadow' && entry.chain === 'filter' ? '__effd_fx_' + entry.chainIdx + '_' :
+    entry.kind === 'drop-shadow' && entry.chain === 'text' ? '__effd_text_0_' :
     '__effd_box_' + (entry as any).chainIdx + '_';
-  const numField = (label: string, field: 'x' | 'y' | 'blur' | 'spread', val: number, withSpread = true) =>
-    (!withSpread && field === 'spread') ? '' :
-    '<div class="dm-field">' +
-    '<label class="dm-field-label">' + label + '</label>' +
-    '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
-    '<input type="number" data-dm-prop="' + prefix + field + '" value="' + val + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
-    '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;opacity:0.6;flex-shrink:0;">px</span>' +
-    '</div></div>';
+  const isDropShadow = entry.kind === 'drop-shadow';
+  const supportsSpread = entry.kind === 'inner-shadow' || (isDropShadow && entry.chain === 'box');
+  const spreadDisabled = isDropShadow && entry.chain !== 'box';
+  const numField = (label: string, field: 'x' | 'y' | 'blur' | 'spread', val: number) => {
+    const disabled = field === 'spread' && spreadDisabled;
+    const title = disabled ? 'Spread requires "Show behind transparent areas" — text-shadow and filter:drop-shadow don\'t support spread' : '';
+    return '<div class="dm-field">' +
+      '<label class="dm-field-label" style="' + (disabled ? 'opacity:0.5;' : '') + '">' + label + '</label>' +
+      '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;' + (disabled ? 'opacity:0.5;' : '') + '" title="' + escapeAttr(title) + '">' +
+      '<input type="number" data-dm-prop="' + prefix + field + '"' + (disabled ? ' disabled' : '') + ' value="' + val + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
+      '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;opacity:0.6;flex-shrink:0;">px</span>' +
+      '</div></div>';
+  };
 
-  const supportsSpread = entry.kind === 'drop-shadow' || entry.kind === 'inner-shadow';
-  const supportsInset = entry.kind === 'drop-shadow' || entry.kind === 'inner-shadow';
-
-  // Inset toggle (box-shadow only — flips a drop into an inner and back).
-  const insetRow = supportsInset
-    ? '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">' +
-        '<select data-dm-prop="' + prefix + 'inset" class="dm-select" style="flex:1;">' +
-          '<option value="outer"' + (!sh.inset ? ' selected' : '') + '>Outer (drop)</option>' +
-          '<option value="inset"' + (sh.inset ? ' selected' : '') + '>Inner</option>' +
-        '</select>' +
-      '</div>'
+  const showBehindCheckbox = isDropShadow
+    ? '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--dm-text-secondary);cursor:pointer;">' +
+        '<input type="checkbox" data-dm-prop="' + prefix + 'show_behind"' + (entry.chain === 'box' ? ' checked' : '') + ' style="margin:0;"/>' +
+        '<span>Show behind transparent areas</span>' +
+      '</label>'
     : '';
 
   return '<div style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:8px;">' +
-    insetRow +
     sub('Colour') +
     '<div style="margin-bottom:8px;">' +
       colorInp('', prefix + 'color', sh.color || '#000000') +
     '</div>' +
     grid(2, numField('Offset X', 'x', sh.x), numField('Offset Y', 'y', sh.y)) + sp() +
-    grid(supportsSpread ? 2 : 1,
+    grid(2,
       numField('Blur', 'blur', sh.blur),
-      numField('Spread', 'spread', sh.spread, supportsSpread)
+      numField('Spread', 'spread', sh.spread)
     ) +
+    showBehindCheckbox +
     '</div>';
 }
 
-// Per-blur editor — single radius input for `filter: blur` / `backdrop-filter: blur`.
+// Per-blur editor — single radius input for `filter: blur` /
+// `backdrop-filter: blur`. The Uniform / Progressive segmented control
+// renders for parity with Figma, but Progressive is intentionally
+// disabled: CSS has no true gradient blur and the closest hack
+// (mask-image fade over a uniform blur) would mislead users into
+// thinking they'd shipped Figma-equivalent CSS.
 function renderBlurEntryEditor(entry: { kind: 'layer-blur' | 'backdrop-blur'; chainIdx: number; radius: number }): string {
   const prefix = entry.kind === 'layer-blur'
     ? '__effd_lblur_' + entry.chainIdx + '_'
     : '__effd_bblur_' + entry.chainIdx + '_';
+  const modeTabs = '<div style="display:flex;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:2px;margin-bottom:8px;">' +
+    '<button type="button" data-dm-blur-mode="uniform" data-active="true" style="flex:1;padding:5px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text);cursor:pointer;font-size:10px;font-family:inherit;">Uniform</button>' +
+    '<button type="button" data-dm-blur-mode="progressive" data-active="false" disabled title="Progressive blur isn\'t available — CSS doesn\'t support a true gradient blur" style="flex:1;padding:5px 8px;background:none;border:none;color:var(--dm-text-dim);cursor:not-allowed;font-size:10px;font-family:inherit;opacity:0.5;">Progressive</button>' +
+    '</div>';
   return '<div style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:8px;">' +
+    modeTabs +
     '<div class="dm-field">' +
-    '<label class="dm-field-label">Radius</label>' +
+    '<label class="dm-field-label">Blur</label>' +
     '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
     '<input type="number" data-dm-prop="' + prefix + 'radius" min="0" value="' + entry.radius + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
     '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;opacity:0.6;flex-shrink:0;">px</span>' +
@@ -5662,27 +5786,25 @@ function renderDesignTab(): string {
   const effectsIsText = kind === 'text';
   const effectEntries: EffectEntry[] = effectsElId ? parseEffects(s, effectsElId, effectsIsText) : [];
   const labelFor = (e: EffectEntry): string => {
-    if (e.kind === 'drop-shadow' || e.kind === 'inner-shadow' || e.kind === 'filter-drop-shadow' || e.kind === 'text-shadow') {
+    if (e.kind === 'drop-shadow' || e.kind === 'inner-shadow') {
       const sh = e.shadow;
-      const insetMark = sh.inset ? 'inset ' : '';
-      return insetMark + sh.x + ' ' + sh.y + ' ' + sh.blur + (sh.spread ? ' ' + sh.spread : '') + ' \u00b7 ' + sh.color;
+      const insetMark = e.kind === 'inner-shadow' ? 'inset ' : '';
+      const spreadSeg = (e.kind === 'inner-shadow' || (e.kind === 'drop-shadow' && e.chain === 'box')) && sh.spread
+        ? ' ' + sh.spread : '';
+      return insetMark + sh.x + ' ' + sh.y + ' ' + sh.blur + spreadSeg + ' \u00b7 ' + sh.color;
     }
     return (e as any).radius + 'px';
   };
   const titleFor = (e: EffectEntry): string => ({
     'drop-shadow':        'Drop shadow',
     'inner-shadow':       'Inner shadow',
-    'filter-drop-shadow': 'Drop shadow (filter)',
-    'text-shadow':        'Text shadow',
     'layer-blur':         'Layer blur',
     'backdrop-blur':      'Background blur',
   } as Record<string, string>)[e.kind];
   const iconFor = (e: EffectEntry): keyof typeof icons => ({
-    'drop-shadow':        'squareStack',
+    'drop-shadow':        'sparkles',
     'inner-shadow':       'squareStack',
-    'filter-drop-shadow': 'squareStack',
-    'text-shadow':        'type',
-    'layer-blur':         'circleFadingArrowUp',
+    'layer-blur':         'eye',
     'backdrop-blur':      'panelRight',
   } as Record<string, keyof typeof icons>)[e.kind];
   const bodyFor = (e: EffectEntry): string => {
@@ -8181,20 +8303,23 @@ function setupDelegation() {
       const list = parseEffects(cs, id, isText || (info && (info.tagName || '').match(/^(p|h[1-6]|span|a|li|button|label)$/i)) ? true : false);
       const target2 = list[idx];
       if (!target2) return;
-      // Drop the relevant entry from its CSS chain.
-      if (target2.kind === 'drop-shadow' || target2.kind === 'inner-shadow') {
+      // Drop the relevant entry from its CSS chain. We dispatch on
+      // `chain` (not kind) because Drop shadow now spans three chains:
+      // box-shadow ('box'), filter ('filter'), text-shadow ('text').
+      const t2chain = (target2 as any).chain;
+      if (t2chain === 'box') {
         const entries = parseCssCommaList(cs.boxShadow || '');
         entries.splice(target2.chainIdx, 1);
         applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none');
-      } else if (target2.kind === 'filter-drop-shadow' || target2.kind === 'layer-blur') {
+      } else if (t2chain === 'filter') {
         const list2 = splitFilterFunctions(cs.filter || '');
         list2.splice((target2 as any).chainIdx, 1);
         applyStyle('filter', list2.length ? list2.join(' ') : 'none');
-      } else if (target2.kind === 'backdrop-blur') {
+      } else if (t2chain === 'backdrop') {
         const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
         list2.splice(target2.chainIdx, 1);
         applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none');
-      } else if (target2.kind === 'text-shadow') {
+      } else if (t2chain === 'text') {
         applyStyle('textShadow', 'none');
       }
       // Clean up any stash for this id.
@@ -8225,19 +8350,20 @@ function setupDelegation() {
         hidden.delete(target2.id);
         stashedEffectByKey.delete(stashKey);
         if (stashed) {
-          if (target2.kind === 'drop-shadow' || target2.kind === 'inner-shadow') {
+          const t2chain2 = (target2 as any).chain;
+          if (t2chain2 === 'box') {
             const entries = parseCssCommaList(cs.boxShadow || '');
             entries.splice(target2.chainIdx, 0, stashed);
             applyStyle('boxShadow', entries.join(', '));
-          } else if (target2.kind === 'filter-drop-shadow' || target2.kind === 'layer-blur') {
+          } else if (t2chain2 === 'filter') {
             const list2 = splitFilterFunctions(cs.filter || '');
             list2.splice((target2 as any).chainIdx, 0, stashed);
             applyStyle('filter', list2.join(' '));
-          } else if (target2.kind === 'backdrop-blur') {
+          } else if (t2chain2 === 'backdrop') {
             const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
             list2.splice(target2.chainIdx, 0, stashed);
             applyStyle('backdropFilter', list2.join(' '));
-          } else if (target2.kind === 'text-shadow') {
+          } else if (t2chain2 === 'text') {
             applyStyle('textShadow', stashed);
           }
         }
@@ -8245,19 +8371,20 @@ function setupDelegation() {
         // Hide — stash the raw entry and remove from CSS.
         hidden.add(target2.id);
         stashedEffectByKey.set(stashKey, target2.raw);
-        if (target2.kind === 'drop-shadow' || target2.kind === 'inner-shadow') {
+        const t2chain3 = (target2 as any).chain;
+        if (t2chain3 === 'box') {
           const entries = parseCssCommaList(cs.boxShadow || '');
           entries.splice(target2.chainIdx, 1);
           applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none');
-        } else if (target2.kind === 'filter-drop-shadow' || target2.kind === 'layer-blur') {
+        } else if (t2chain3 === 'filter') {
           const list2 = splitFilterFunctions(cs.filter || '');
           list2.splice((target2 as any).chainIdx, 1);
           applyStyle('filter', list2.length ? list2.join(' ') : 'none');
-        } else if (target2.kind === 'backdrop-blur') {
+        } else if (t2chain3 === 'backdrop') {
           const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
           list2.splice(target2.chainIdx, 1);
           applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none');
-        } else if (target2.kind === 'text-shadow') {
+        } else if (t2chain3 === 'text') {
           applyStyle('textShadow', 'none');
         }
       }
@@ -8360,12 +8487,18 @@ function setupDelegation() {
       };
       // Single-effect adds — always APPEND so multi-shadow / multi-filter
       // stacks naturally instead of overwriting an existing effect.
+      // Drop shadow defaults to a non-inset box-shadow (checkbox ON in
+      // the row UI). The user toggles the row's checkbox OFF to switch
+      // to text-shadow (text element) or filter:drop-shadow (others).
       if (kind === 'drop-shadow') appendBoxShadow('0px 4px 12px 0px rgba(0, 0, 0, 0.12)');
       else if (kind === 'inner-shadow') appendBoxShadow('inset 0px 2px 6px 0px rgba(0, 0, 0, 0.18)');
-      else if (kind === 'text-shadow') applyStyle('textShadow', '0px 1px 2px rgba(0, 0, 0, 0.25)');
-      else if (kind === 'filter-drop-shadow') appendFilter('drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2))');
       else if (kind === 'layer-blur') appendFilter('blur(4px)');
       else if (kind === 'backdrop-blur') appendBackdrop('blur(8px)');
+      else if (kind === 'noise' || kind === 'texture') {
+        // Phase 2 — overlay pipeline not yet wired. Surface a toast so
+        // users know the menu items are coming.
+        showCaptureToast('success', kind === 'noise' ? 'Noise — coming soon' : 'Texture — coming soon');
+      }
       else if (kind === 'transition') applyStyle('transition', 'all 0.2s ease');
       else if (kind === 'animation') applyStyle('animation', 'dm-fade-in 0.4s ease both');
       else if (kind === 'transform') applyStyle('translate', '0px 0px');
@@ -8813,6 +8946,24 @@ function setupDelegation() {
           .trim();
         const next = (stripped ? stripped + ' ' : '') + fn;
         applyStyle('transform', next || 'none');
+        return;
+      }
+      // Drop shadow's "Show behind transparent areas" toggle. Moves the
+      // entry between three CSS chains depending on the checkbox state
+      // (and, when toggling OFF, the element's kind):
+      //   ON  → box-shadow (rectangle, shows through transparent areas)
+      //   OFF + text element → text-shadow (alpha-bound to glyphs)
+      //   OFF + other        → filter:drop-shadow (alpha-bound to shape)
+      // Spread is preserved in the typed model but not written to text-
+      // shadow / filter:drop-shadow (those chains don't support it).
+      // Toggling back ON re-emits the entry with its preserved spread.
+      const showBehindMatch = prop.match(/^__effd_(box|fx|text)_(\d+)_show_behind$/);
+      if (showBehindMatch) {
+        const srcChain = showBehindMatch[1] as 'box' | 'fx' | 'text';
+        const srcIdx = parseInt(showBehindMatch[2], 10);
+        const checkbox = propInput as HTMLInputElement;
+        const checked = checkbox.type === 'checkbox' ? checkbox.checked : raw === 'true' || raw === 'on';
+        flipDropShadowChain(srcChain, srcIdx, checked);
         return;
       }
       // Per-effect edits via virtual prop names. The shape is
