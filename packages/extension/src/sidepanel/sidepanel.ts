@@ -2994,12 +2994,19 @@ function serializeStrokeLayers(layers: StrokeLayer[], position: 'inside' | 'outs
   if (position === 'center') return existingShadow || 'none';
   const entries = parseCssCommaList(existingShadow);
   const wantInset = position === 'inside';
-  // Preserve non-stroke shadows in the chain (drop shadows, custom shadows).
+  // Preserve non-stroke shadows in the chain (drop shadows, custom
+  // shadows). The threshold for "this is a stroke-shape entry"
+  // matches inferStrokePosition's detector: zero offset / blur with
+  // any non-negative spread (including 0). The old `spread > 0` test
+  // diverged from the detector — a zero-spread inset slipped through
+  // the filter but still triggered the inside-position check, so tab
+  // swaps left a residual entry behind that pinned the panel on
+  // Inside forever.
   const preserved = entries.filter(e => {
     const p = parseShadowEntry(e);
     if (!p) return true;
     if (p.inset !== wantInset) return true;     // different mode → preserve
-    return !(p.x === 0 && p.y === 0 && p.blur === 0 && p.spread > 0);
+    return !(p.x === 0 && p.y === 0 && p.blur === 0 && p.spread >= 0);
   });
   const visible = layers.filter(l => l.visible !== false);
   const newEntries = visible.map(l => {
