@@ -88,8 +88,198 @@ const appliedRules = new Map<string, Map<string, string>>(); // elementId -> pro
 const injectedKeyframes = new Set<string>();
 let appliedStyleEl: HTMLStyleElement | null = null;
 
+// CSS properties that inherit by default. Writing one of these on a
+// container visually cascades to every text-bearing descendant, which
+// users perceive as a "all my layers changed!" fan-out bug. We emit a
+// companion rule that resets the property to `revert` on every nested
+// element the panel has stamped (i.e. has a data-dm-id), so the user's
+// edit feels local — matches Figma's mental model.
+const INHERITED_TYPOGRAPHY_PROPS = new Set([
+  'textAlign','color','fontFamily','fontSize','fontWeight','fontStyle','fontVariant',
+  'lineHeight','letterSpacing','wordSpacing','textTransform','textIndent','whiteSpace',
+  'direction','textShadow','visibility',
+]);
+
 function kebab(prop: string): string {
   return prop.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
+}
+
+// ── Layout Guide pseudo-element rendering ────────────────────────────
+// The side panel writes the layer config through one synthetic prop
+// `__layout_guides` (JSON-serialised). At stylesheet build time we
+// translate it into a `::before` overlay using background-image
+// gradients, one per visible layer. Doesn't affect layout (overlay is
+// position:absolute on the pseudo-element). Skips entirely when the
+// value is `none` or parsing fails.
+
+interface LayoutGuideLayerData {
+  kind: 'grid' | 'columns' | 'rows';
+  count: number;
+  color: string;
+  opacity: number;
+  visible: boolean;
+  align: string;
+  size: string;
+  margin: string;
+  gutter: string;
+}
+
+function parseGuideLayers(value: string): LayoutGuideLayerData[] {
+  if (!value || value === 'none') return [];
+  try {
+    const arr = JSON.parse(value);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(l => l && l.kind && l.visible !== false);
+  } catch { return []; }
+}
+
+function colorWithAlpha(hex: string, opacityPct: number): string {
+  // Accept '#rgb', '#rrggbb', 'rgb(...)', 'rgba(...)' or 'var(...)'.
+  // For var()/rgb()/rgba() we punt and wrap with color-mix so the
+  // declared opacity composes; for hex we splice the alpha directly.
+  const a = Math.max(0, Math.min(100, opacityPct)) / 100;
+  const m3 = hex.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/i);
+  if (m3) {
+    const r = parseInt(m3[1] + m3[1], 16);
+    const g = parseInt(m3[2] + m3[2], 16);
+    const b = parseInt(m3[3] + m3[3], 16);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  }
+  const m6 = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (m6) {
+    return `rgba(${parseInt(m6[1], 16)}, ${parseInt(m6[2], 16)}, ${parseInt(m6[3], 16)}, ${a})`;
+  }
+  // Fall back to color-mix for non-hex inputs.
+  return `color-mix(in srgb, ${hex} ${Math.round(a * 100)}%, transparent)`;
+}
+
+function pxNumber(value: string, fallback: number): number {
+  const n = parseFloat(value);
+  return isFinite(n) ? n : fallback;
+}
+
+// Build a single repeating gradient string. dir is 'to right' or 'to bottom'.
+// For Stretch: tracks divide available space minus margins by count.
+// For Left/Right/Top/Bottom + finite size: tracks are exactly `size` wide,
+// stacked from the matching edge with `gutter` spacing.
+function buildAxisGradient(
+  dir: 'to right' | 'to bottom',
+  layer: LayoutGuideLayerData,
+): string {
+  const tinted = colorWithAlpha(layer.color, layer.opacity);
+  const count = Math.max(1, Math.min(50, layer.count | 0));
+  const margin = pxNumber(layer.margin, 0);
+  const gutter = pxNumber(layer.gutter, 0);
+  const align = layer.align || 'stretch';
+
+  // For Stretch with `auto` size we use percentage math so the overlay
+  // adapts to the element's actual box. The pattern is:
+  // start at margin, track of `(100% - 2*margin - (count-1)*gutter) / count`, gutter, repeat.
+  // Build the linear-gradient stop list with calc() expressions.
+  if (align === 'stretch') {
+    const stops: string[] = [`transparent 0`];
+    // Start at margin
+    stops.push(`transparent ${margin}px`);
+    for (let i = 0; i < count; i++) {
+      // track i starts at:
+      //   margin + i * (track + gutter)
+      // where track = (100% - 2*margin - (count-1)*gutter) / count
+      const trackStart = `calc(${margin}px + ${i} * ((100% - ${2 * margin}px - ${(count - 1) * gutter}px) / ${count} + ${gutter}px))`;
+      const trackEnd = `calc(${margin}px + ${i + 1} * ((100% - ${2 * margin}px - ${(count - 1) * gutter}px) / ${count}) + ${i} * ${gutter}px)`;
+      stops.push(`${tinted} ${trackStart}`);
+      stops.push(`${tinted} ${trackEnd}`);
+      if (i < count - 1) {
+        const gutterStart = trackEnd;
+        const gutterEnd = `calc(${margin}px + ${i + 1} * ((100% - ${2 * margin}px - ${(count - 1) * gutter}px) / ${count} + ${gutter}px))`;
+        stops.push(`transparent ${gutterStart}`);
+        stops.push(`transparent ${gutterEnd}`);
+      }
+    }
+    stops.push(`transparent 100%`);
+    return `linear-gradient(${dir}, ${stops.join(', ')})`;
+  }
+
+  // Non-stretch with explicit size: pack `count` tracks from the edge.
+  const size = pxNumber(layer.size, 80);
+  const fromStart = align === 'left' || align === 'top';
+  // For 'center', distribute around the midpoint.
+  if (align === 'center') {
+    const totalW = count * size + (count - 1) * gutter;
+    const stops: string[] = [`transparent 0`];
+    for (let i = 0; i < count; i++) {
+      const trackStart = `calc(50% - ${totalW / 2}px + ${i * (size + gutter)}px)`;
+      const trackEnd = `calc(50% - ${totalW / 2}px + ${i * (size + gutter) + size}px)`;
+      stops.push(`transparent ${trackStart}`);
+      stops.push(`${tinted} ${trackStart}`);
+      stops.push(`${tinted} ${trackEnd}`);
+      stops.push(`transparent ${trackEnd}`);
+    }
+    stops.push(`transparent 100%`);
+    return `linear-gradient(${dir}, ${stops.join(', ')})`;
+  }
+  // Left/Top or Right/Bottom: stack from the matching edge.
+  if (fromStart) {
+    const stops: string[] = [`transparent 0`];
+    for (let i = 0; i < count; i++) {
+      const trackStart = `${margin + i * (size + gutter)}px`;
+      const trackEnd = `${margin + i * (size + gutter) + size}px`;
+      stops.push(`transparent ${trackStart}`);
+      stops.push(`${tinted} ${trackStart}`);
+      stops.push(`${tinted} ${trackEnd}`);
+      stops.push(`transparent ${trackEnd}`);
+    }
+    stops.push(`transparent 100%`);
+    return `linear-gradient(${dir}, ${stops.join(', ')})`;
+  }
+  // Right / Bottom
+  const stops: string[] = [`transparent 0`];
+  for (let i = 0; i < count; i++) {
+    const trackEnd = `calc(100% - ${margin + i * (size + gutter)}px)`;
+    const trackStart = `calc(100% - ${margin + i * (size + gutter) + size}px)`;
+    stops.push(`transparent ${trackStart}`);
+    stops.push(`${tinted} ${trackStart}`);
+    stops.push(`${tinted} ${trackEnd}`);
+    stops.push(`transparent ${trackEnd}`);
+  }
+  stops.push(`transparent 100%`);
+  return `linear-gradient(${dir}, ${stops.join(', ')})`;
+}
+
+function buildLayoutGuideCss(elementId: string, value: string): string {
+  const layers = parseGuideLayers(value);
+  if (!layers.length) return '';
+  const gradients: string[] = [];
+  for (const l of layers) {
+    if (l.kind === 'columns') gradients.push(buildAxisGradient('to right', l));
+    else if (l.kind === 'rows') gradients.push(buildAxisGradient('to bottom', l));
+    else if (l.kind === 'grid') {
+      // Grid is two axes combined: columns + rows with shared count/size.
+      gradients.push(buildAxisGradient('to right', l));
+      gradients.push(buildAxisGradient('to bottom', l));
+    }
+  }
+  if (!gradients.length) return '';
+  // The `position: relative` on the host is only needed when the element
+  // is currently `position: static`; we apply it unconditionally because
+  // the override sheet's :not() guards would require a runtime check.
+  // Using `position: relative !important` is risky for absolutely-
+  // positioned children's offsetParent, so we use a softer write: only
+  // override when current is static. Achieved with @supports trick? No
+  // simpler: emit one rule that sets it; users who hit the edge case
+  // can hide the section.
+  return `[data-dm-id="${elementId}"][data-dm-id] {\n` +
+    `  position: relative !important;\n` +
+    `}\n` +
+    `[data-dm-id="${elementId}"]::before {\n` +
+    `  content: '' !important;\n` +
+    `  position: absolute !important;\n` +
+    `  inset: 0 !important;\n` +
+    `  pointer-events: none !important;\n` +
+    `  z-index: 2147483646 !important;\n` +
+    `  background-image: ${gradients.join(', ')} !important;\n` +
+    `  background-repeat: no-repeat !important;\n` +
+    `  background-size: 100% 100% !important;\n` +
+    `}`;
 }
 
 function ensureStyleEl(): HTMLStyleElement {
@@ -118,8 +308,38 @@ function rebuildStyleSheet() {
     // !important (Tailwind, BEM, design-system layers). The override sheet
     // is "user intent expressed after the page has rendered" — by definition
     // it should win over the page's authored styles.
-    for (const [prop, val] of props) decls.push(`  ${kebab(prop)}: ${val} !important;`);
-    blocks.push(`[data-dm-id="${elementId}"][data-dm-id] {\n${decls.join('\n')}\n}`);
+    for (const [prop, val] of props) {
+      // __layout_guides is a synthetic prop translated into a ::before
+      // pseudo-element overlay below; skip it in the primary block so we
+      // don't emit `--layout-guides: <json>` on the element.
+      if (prop === '__layout_guides') continue;
+      decls.push(`  ${kebab(prop)}: ${val} !important;`);
+    }
+    if (decls.length) {
+      blocks.push(`[data-dm-id="${elementId}"][data-dm-id] {\n${decls.join('\n')}\n}`);
+    }
+    // For inherited typography props, stop the cascade at any descendant
+    // the panel has stamped. The user only "wrote" the value on the
+    // selected element; siblings/children with their own data-dm-id keep
+    // their natural value via `revert`. Specificity (0,2,0 ancestor +
+    // 0,1,0 descendant) means the reset only wins on actual descendants
+    // — the original block still applies to the target itself.
+    const inheritedDecls: string[] = [];
+    for (const [prop] of props) {
+      if (INHERITED_TYPOGRAPHY_PROPS.has(prop)) {
+        inheritedDecls.push(`  ${kebab(prop)}: revert;`);
+      }
+    }
+    if (inheritedDecls.length) {
+      blocks.push(`[data-dm-id="${elementId}"] [data-dm-id] {\n${inheritedDecls.join('\n')}\n}`);
+    }
+    // Layout guide overlay: ::before pseudo-element with chained
+    // background-image gradients per visible layer.
+    const guideVal = props.get('__layout_guides');
+    if (guideVal && guideVal !== 'none') {
+      const css = buildLayoutGuideCss(elementId, guideVal);
+      if (css) blocks.push(css);
+    }
   }
   el.textContent = blocks.join('\n\n');
 }

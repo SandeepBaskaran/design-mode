@@ -225,9 +225,19 @@ const CORNER_RADIUS_PROPS = new Set([
 // Numeric fields that CSS will reject (or silently zero) when given a
 // negative value. Same UX as CORNER_RADIUS_PROPS: floor at 0 on commit,
 // block the `-` keystroke, and clamp Arrow-stepping past zero.
+// Skipped here on purpose: width/height (legitimately accept `auto`),
+// lineHeight (unitless decimals + percentages are normal), outlineOffset
+// (negative is meaningful — pulls outline inward).
+const NON_NEGATIVE_NUMERIC_PROPS = new Set([
+  'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
+  'paddingTop','paddingRight','paddingBottom','paddingLeft','padding',
+  'fontSize',
+  'outlineWidth',
+  '__stroke_weight',
+]);
 function isNonNegativeNumericProp(prop: string): boolean {
   if (CORNER_RADIUS_PROPS.has(prop)) return true;
-  if (prop === 'outlineWidth' || prop === '__stroke_weight') return true;
+  if (NON_NEGATIVE_NUMERIC_PROPS.has(prop)) return true;
   if (prop.startsWith('__stroke_weight__')) return true;
   return false;
 }
@@ -236,7 +246,6 @@ let sidesPopoverOpen = false;
 let strokeStylePopoverOpen = false;
 let effectsMenuOpen = false;
 let fillAddOpen = false;
-let strokeAddOpen = false;
 let expandedFillIdx: number | null = null;
 let expandedStrokeIdx: number | null = null;
 let expandedEffectIdx: number | null = null;
@@ -664,6 +673,13 @@ async function applyStyle(property: string, value: string) {
     applyStrokeLayerProperty(property, value);
     return;
   }
+  // Layout guide per-layer edits. Same intercept reason — picker drag
+  // bypasses the change handler. Route to the stash; the layer-array
+  // serialiser then writes one synthetic `__layout_guides` CSS prop.
+  if (property.startsWith('__guide_')) {
+    applyLayoutGuideProperty(property, value);
+    return;
+  }
   const res = await send({ type: 'SP_APPLY_STYLE', property, value });
   if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
 }
@@ -753,6 +769,57 @@ function applyStrokeLayerProperty(prop: string, value: string) {
   const batch: Array<{ property: string; value: string }> = [];
   dispatchStrokeLayers(layers, pos, s, (p, v) => batch.push({ property: p, value: v }), styleNow);
   applyStylesBatch(batch, field === 'color' ? 'Stroke colour' : 'Stroke weight');
+}
+
+// Per-layer Layout Guide edit. Routes virtual `__guide_<field>__N`
+// props through the in-memory stash and then dispatches a single
+// synthetic CSS prop `__layout_guides` whose value is the serialized
+// layer array. The change-tracker translates that into the `::before`
+// pseudo-element rule that paints the overlay.
+function applyLayoutGuideProperty(prop: string, value: string) {
+  const id = info?.id || '';
+  if (!id) return;
+  const m = prop.match(/^__guide_(kind|count|color|opacity|align|size|margin|gutter)__(\d+)$/);
+  if (!m) return;
+  const field = m[1];
+  const idx = parseInt(m[2], 10);
+  const layers = getLayoutGuides(id).slice();
+  if (idx < 0 || idx >= layers.length) return;
+  const layer = { ...layers[idx] };
+  switch (field) {
+    case 'kind':
+      layer.kind = (value as LayoutGuideKind);
+      // Reset align to a kind-appropriate default if the current value
+      // no longer makes sense (e.g. 'top' was selected, user flipped to
+      // columns — drop back to 'stretch').
+      if (layer.kind === 'columns' && !['stretch','left','center','right'].includes(layer.align)) layer.align = 'stretch';
+      if (layer.kind === 'rows' && !['stretch','top','center','bottom'].includes(layer.align)) layer.align = 'stretch';
+      break;
+    case 'count': {
+      const n = parseInt(value, 10);
+      layer.count = !isFinite(n) || n < 1 ? 1 : Math.min(50, n);
+      break;
+    }
+    case 'color':
+      layer.color = value;
+      break;
+    case 'opacity': {
+      const n = parseFloat(value);
+      layer.opacity = !isFinite(n) ? 10 : Math.max(0, Math.min(100, n));
+      break;
+    }
+    case 'align':
+      layer.align = (value as LayoutGuideAlign);
+      break;
+    case 'size':
+    case 'margin':
+    case 'gutter':
+      (layer as any)[field] = value;
+      break;
+  }
+  layers[idx] = layer;
+  setLayoutGuides(id, layers);
+  applyStyle('__layout_guides', serializeLayoutGuides(layers));
 }
 
 // Map the stroke section's virtual props to actual CSS targets. With the
@@ -1180,7 +1247,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
   if (msg.type === 'MULTI_SELECT_UPDATE') {
     multiSelectIds = msg.payload?.ids || [];
-    multiSelectActive = multiSelectIds.length > 0 || multiSelectActive;
+    multiSelectActive = multiSelectIds.length > 0;
     render();
   }
   if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; render(); }
@@ -2416,6 +2483,69 @@ const FILL_LIMIT = 32;
 // read, and the bookkeeping for per-layer weight / colour gets noisy
 // in the panel.
 const STROKE_LIMIT = 5;
+
+// ── Layout Guide ─────────────────────────────────────────────────────
+// Figma-style non-intrusive design overlay: vertical / horizontal /
+// grid bars painted over the selected element via a `::before`
+// pseudo-element. Doesn't affect layout; lives in its own background
+// chain so it composes with the rest of the page's CSS.
+type LayoutGuideKind = 'grid' | 'columns' | 'rows';
+type LayoutGuideAlign = 'stretch' | 'left' | 'center' | 'right' | 'top' | 'bottom';
+interface LayoutGuideLayer {
+  kind: LayoutGuideKind;
+  count: number;
+  color: string;         // hex or rgb(); opacity stored separately, baked in at serialize time
+  opacity: number;       // 0..100
+  visible: boolean;
+  align: LayoutGuideAlign;
+  size: string;          // 'auto' | 'Npx' — track width for columns, height for rows, cell for grid
+  margin: string;        // 'Npx' — outer offset (columns/rows only)
+  gutter: string;        // 'Npx' — spacing between tracks (columns/rows) / cells (grid)
+}
+
+const LAYOUT_GUIDE_LIMIT = 5;
+const layoutGuidesByElement = new Map<string, LayoutGuideLayer[]>();
+let expandedGuideIdx: number | null = null;
+let draggingGuideIdx: number | null = null;
+
+function defaultLayoutGuide(): LayoutGuideLayer {
+  return {
+    kind: 'columns',
+    count: 12,
+    color: '#ff3366',
+    opacity: 10,
+    visible: true,
+    align: 'stretch',
+    size: 'auto',
+    margin: '0',
+    gutter: '20',
+  };
+}
+
+// JSON serialise / parse, used so a single synthetic CSS prop
+// `__layout_guides` can flow through the change-tracker like any other
+// edit — undo/redo, persistence, and codegen all come for free.
+function serializeLayoutGuides(layers: LayoutGuideLayer[]): string {
+  if (!layers.length) return 'none';
+  return JSON.stringify(layers);
+}
+function parseLayoutGuides(value: string): LayoutGuideLayer[] {
+  if (!value || value === 'none') return [];
+  try {
+    const arr = JSON.parse(value);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(l => l && typeof l === 'object' && l.kind);
+  } catch { return []; }
+}
+function getLayoutGuides(id: string): LayoutGuideLayer[] {
+  if (!id) return [];
+  const cached = layoutGuidesByElement.get(id);
+  if (cached) return cached;
+  return [];
+}
+function setLayoutGuides(id: string, layers: LayoutGuideLayer[]): void {
+  layoutGuidesByElement.set(id, layers);
+}
 
 // Split a color into its base (no alpha) + opacity 0-1. Solid fills in
 // the panel store opacity as the alpha channel of the CSS color so the
@@ -4275,26 +4405,29 @@ interface SectionVisibility {
   fill: boolean;
   stroke: boolean;
   effects: boolean;
+  layoutGuide: boolean;
 }
 function visibleSections(kind: LayerKind): SectionVisibility {
   // Mirrors Figma: each kind exposes only the sections that make sense.
+  // Layout Guide is shown on anything that has a box you'd lay things
+  // inside — containers, pages, and the permissive `unknown` default.
   if (kind === 'void') {
-    return { position: true, layout: false, appearance: true, typography: false, fill: false, stroke: false, effects: false };
+    return { position: true, layout: false, appearance: true, typography: false, fill: false, stroke: false, effects: false, layoutGuide: false };
   }
   if (kind === 'media' || kind === 'svg') {
-    return { position: true, layout: false, appearance: true, typography: false, fill: true, stroke: true, effects: true };
+    return { position: true, layout: false, appearance: true, typography: false, fill: true, stroke: true, effects: true, layoutGuide: false };
   }
   if (kind === 'form') {
-    return { position: true, layout: false, appearance: true, typography: true, fill: true, stroke: true, effects: true };
+    return { position: true, layout: false, appearance: true, typography: true, fill: true, stroke: true, effects: true, layoutGuide: false };
   }
   if (kind === 'page') {
-    return { position: false, layout: true, appearance: true, typography: false, fill: true, stroke: false, effects: false };
+    return { position: false, layout: true, appearance: true, typography: false, fill: true, stroke: false, effects: false, layoutGuide: true };
   }
   if (kind === 'container') {
-    return { position: true, layout: true, appearance: true, typography: false, fill: true, stroke: true, effects: true };
+    return { position: true, layout: true, appearance: true, typography: false, fill: true, stroke: true, effects: true, layoutGuide: true };
   }
   // 'text' (and 'unknown' as a permissive default) — full kit including Typography.
-  return { position: true, layout: true, appearance: true, typography: true, fill: true, stroke: true, effects: true };
+  return { position: true, layout: true, appearance: true, typography: true, fill: true, stroke: true, effects: true, layoutGuide: true };
 }
 
 /* ── Phase 3: Design Tab ── */
@@ -5597,6 +5730,87 @@ function renderDesignTab(): string {
     ? effectRows + motionSection
     : '<div style="font-size:11px;color:var(--dm-text-dim);text-align:center;padding:14px 0;">Click + to add an effect.</div>';
 
+  // ── Layout guide ────────────────────────────────────────────────
+  // Figma-style overlay of column / row / grid bars on the selected
+  // element. Rows mirror Fill / Stroke: draggable rearrangeable with a
+  // primary row (kind, count, swatch, hex, opacity, eye, trash) and an
+  // optional expanded body for columns/rows-specific fields (align,
+  // size, margin, gutter). Paints via a `::before` pseudo-element so
+  // layout is never affected.
+  const guideElId = info?.id || '';
+  // First-visit hydration: if the element already has a recorded
+  // __layout_guides change (e.g. from a restored session) but the
+  // in-memory map doesn't know about it yet, parse the value back into
+  // the typed layer array.
+  if (guideElId && !layoutGuidesByElement.has(guideElId)) {
+    const persisted = styleChanges.find(c => c.elementId === guideElId && c.property === '__layout_guides');
+    if (persisted) {
+      const parsed = parseLayoutGuides(persisted.newValue);
+      if (parsed.length) setLayoutGuides(guideElId, parsed);
+    }
+  }
+  const guideLayers = getLayoutGuides(guideElId);
+  const renderLayoutGuideRow = (layer: LayoutGuideLayer, idx: number): string => {
+    const visible = layer.visible !== false;
+    const colorProp = '__guide_color__' + idx;
+    const swatchOpen = activeColorPickerProp === colorProp;
+    const swatchBg = resolveCssVarToColor(layer.color) || layer.color || '#000';
+    const codeDisplay = formatColorForDisplay(layer.color);
+    const expanded = expandedGuideIdx === idx;
+    // Primary row (8 controls). Mirrors .dm-fill-row-solid metrics.
+    const grip = '<span class="dm-section-action" data-dm-guide-drag="' + idx + '" title="Drag to reorder" style="cursor:grab;flex-shrink:0;">' + icon('gripVertical', 12) + '</span>';
+    const kindSel = '<select class="dm-select" data-dm-prop="__guide_kind__' + idx + '" style="height:24px;padding:2px 4px;font-size:11px;flex:0 0 auto;min-width:80px;">' +
+      ['grid','columns','rows'].map(k => '<option value="' + k + '"' + (layer.kind === k ? ' selected' : '') + '>' + k.charAt(0).toUpperCase() + k.slice(1) + '</option>').join('') +
+      '</select>';
+    const countInput = '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__guide_count__' + idx + '" data-dm-numeric="1" data-dm-unit="" inputmode="numeric" value="' + layer.count + '" style="width:32px;text-align:center;font-size:11px;padding:4px 4px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/>';
+    const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + colorProp + '" title="Pick a colour" style="background:' + escapeAttr(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
+    const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + colorProp + '" data-dm-tokens-trigger="' + colorProp + '" value="' + escapeAttr(codeDisplay) + '" spellcheck="false" autocomplete="off"/>';
+    const opacityCell =
+      '<div class="dm-fill-opacity">' +
+      '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__guide_opacity__' + idx + '" data-dm-numeric="1" data-dm-unit="" inputmode="decimal" value="' + Math.round(layer.opacity) + '"/>' +
+      '<span class="dm-input-unit">%</span>' +
+      '</div>';
+    const expandBtn = '<button class="dm-fill-action dm-fill-action-hover" data-dm-guide-expand="' + idx + '" title="' + (expanded ? 'Collapse' : 'Settings') + '" data-active="' + (expanded ? 'true' : 'false') + '">' + icon('slidersHorizontal', 12) + '</button>';
+    const eyeBtn = '<button class="dm-fill-action dm-fill-action-hover" data-dm-guide-toggle="' + idx + '" title="' + (visible ? 'Hide guide' : 'Show guide') + '" data-active="' + (visible ? 'true' : 'false') + '">' + icon(visible ? 'eye' : 'eyeOff', 12) + '</button>';
+    const trashBtn = '<button class="dm-fill-action dm-fill-action-hover" data-dm-guide-remove="' + idx + '" title="Remove guide" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>';
+    const primaryRow = '<div class="dm-fill-row-solid">' + grip + kindSel + countInput + swatchBtn + codeInput + opacityCell + expandBtn + eyeBtn + trashBtn + '</div>';
+    const colorPanel = swatchOpen ? renderColorPanel(colorProp, layer.color) : '';
+    // Expanded body — kind-specific. Columns / Rows show alignment +
+    // size + margin + gutter in a 2×2 grid. Grid only needs size +
+    // gutter (no alignment, no margin — it tiles uniformly).
+    let body = '';
+    if (expanded) {
+      const alignOpts = layer.kind === 'columns'
+        ? ['stretch','left','center','right']
+        : layer.kind === 'rows'
+          ? ['stretch','top','center','bottom']
+          : [];
+      const sizeLabel = layer.kind === 'columns' ? 'Width' : layer.kind === 'rows' ? 'Height' : 'Size';
+      if (layer.kind === 'grid') {
+        body = sp() + grid12([
+          { span: 6, content: inp(sizeLabel, '__guide_size__' + idx, layer.size || 'auto') },
+          { span: 6, content: inp('Gutter', '__guide_gutter__' + idx, layer.gutter || '20px') },
+        ]);
+      } else {
+        body = sp() + grid12([
+          { span: 6, content: sel('Type', '__guide_align__' + idx, layer.align, alignOpts) },
+          { span: 6, content: inp(sizeLabel, '__guide_size__' + idx, layer.size || 'auto') },
+        ]) + sp() + grid12([
+          { span: 6, content: inp('Margin', '__guide_margin__' + idx, layer.margin || '0px') },
+          { span: 6, content: inp('Gutter', '__guide_gutter__' + idx, layer.gutter || '20px') },
+        ]);
+      }
+      body = '<div style="margin-top:6px;padding:8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:5px;">' + body + '</div>';
+    }
+    return '<div data-dm-guide-row="' + idx + '" draggable="true" style="margin-bottom:6px;">' + primaryRow + colorPanel + body + '</div>';
+  };
+  const guideRowsHtml = guideLayers.map(renderLayoutGuideRow).join('');
+  const atGuideLimit = guideLayers.length >= LAYOUT_GUIDE_LIMIT;
+  const addGuideBtn = atGuideLimit ? '' :
+    '<button class="dm-btn" data-dm-guide-add title="Add layout guide" style="margin-top:8px;display:flex;align-items:center;gap:6px;padding:8px;width:100%;justify-content:center;">' +
+    icon('plus', 12) + '<span>Add layout guide</span></button>';
+  const layoutGuideContent = guideRowsHtml + addGuideBtn;
+
   // Suppress unused (smart-defaults from old layout)
   void positionDefault; void hasEffects;
 
@@ -5615,6 +5829,7 @@ function renderDesignTab(): string {
     (!vis.fill ? '' : sec('Fill', 'palette', fillContent, true, fillActionsHtml)) +
     (!vis.stroke ? '' : sec('Stroke', 'squareDashed', strokeContent, true)) +
     (!vis.effects ? '' : sec('Effects', 'sparkles', effectsContent, true, effectsActionsHtml)) +
+    (!vis.layoutGuide ? '' : sec('Layout guide', 'layoutGrid', layoutGuideContent, true)) +
     '</div>';
 }
 
@@ -6321,6 +6536,15 @@ function captureTabScroll(): void {
 }
 
 function render() {
+  // Capture scroll for the current tab before morphdom runs. morphdom's
+  // diff temporarily drops scrollHeight while adding/removing children,
+  // which makes the browser clamp scrollTop downward — usually to 0 if a
+  // chunk above the viewport detaches. The user-visible symptom: every
+  // numeric Arrow keypress (or any applyStyle that triggers render)
+  // snaps the design panel to the top. Restoring at the end keeps the
+  // view exactly where the user left it.
+  captureTabScroll();
+
   let html: string;
 
   if (settingsOpen) {
@@ -6375,15 +6599,24 @@ function render() {
     if (ta && document.activeElement !== ta) ta.focus();
   }
 
-  // Bind the per-tab scroll listener once the tab body exists, and apply
-  // any pending scroll restore queued by the tab-switch handler. Done
-  // after morphdom so the destination element is in place.
+  // Bind the per-tab scroll listener once the tab body exists, then
+  // restore scroll. Tab switches stash the destination tab's value in
+  // pendingTabScrollRestore; normal renders fall back to the value we
+  // captured at the top of this function. Either way we set
+  // pendingTabScrollRestore before assigning scrollTop so the scroll
+  // listener's guard (line ~6313) ignores the programmatic write.
   ensureTabScrollListener();
-  if (pendingTabScrollRestore !== null) {
+  const restoreTo = pendingTabScrollRestore !== null
+    ? pendingTabScrollRestore
+    : tabScrollPositions[tab];
+  if (restoreTo != null) {
     const el = document.getElementById('dm-tab-body');
-    if (el) el.scrollTop = pendingTabScrollRestore;
-    pendingTabScrollRestore = null;
+    if (el) {
+      pendingTabScrollRestore = restoreTo;
+      el.scrollTop = restoreTo;
+    }
   }
+  pendingTabScrollRestore = null;
 }
 
 /* ── Phase 1: Event Delegation (bound once, never re-bound) ── */
@@ -7671,6 +7904,60 @@ function setupDelegation() {
       return;
     }
 
+    // ─── Layout guide layered list ───
+    const guideAddBtn = target.closest<HTMLElement>('[data-dm-guide-add]');
+    if (guideAddBtn) {
+      e.stopPropagation();
+      const id = info?.id || '';
+      if (!id) return;
+      const layers = getLayoutGuides(id).slice();
+      if (layers.length >= LAYOUT_GUIDE_LIMIT) {
+        showCaptureToast('error', 'Layout guide limit reached (' + LAYOUT_GUIDE_LIMIT + ' layers).');
+        return;
+      }
+      layers.unshift(defaultLayoutGuide());
+      expandedGuideIdx = 0;
+      setLayoutGuides(id, layers);
+      applyStyle('__layout_guides', serializeLayoutGuides(layers));
+      return;
+    }
+    const guideRemoveBtn = target.closest<HTMLElement>('[data-dm-guide-remove]');
+    if (guideRemoveBtn) {
+      e.stopPropagation();
+      const id = info?.id || '';
+      if (!id) return;
+      const idx = parseInt(guideRemoveBtn.dataset.dmGuideRemove || '-1', 10);
+      const layers = getLayoutGuides(id).slice();
+      if (idx < 0 || idx >= layers.length) return;
+      layers.splice(idx, 1);
+      if (expandedGuideIdx === idx) expandedGuideIdx = null;
+      else if (expandedGuideIdx !== null && expandedGuideIdx > idx) expandedGuideIdx -= 1;
+      setLayoutGuides(id, layers);
+      applyStyle('__layout_guides', serializeLayoutGuides(layers));
+      return;
+    }
+    const guideToggleBtn = target.closest<HTMLElement>('[data-dm-guide-toggle]');
+    if (guideToggleBtn) {
+      e.stopPropagation();
+      const id = info?.id || '';
+      if (!id) return;
+      const idx = parseInt(guideToggleBtn.dataset.dmGuideToggle || '-1', 10);
+      const layers = getLayoutGuides(id).slice();
+      if (idx < 0 || idx >= layers.length) return;
+      layers[idx] = { ...layers[idx], visible: layers[idx].visible === false ? true : false };
+      setLayoutGuides(id, layers);
+      applyStyle('__layout_guides', serializeLayoutGuides(layers));
+      return;
+    }
+    const guideExpandBtn = target.closest<HTMLElement>('[data-dm-guide-expand]');
+    if (guideExpandBtn) {
+      e.stopPropagation();
+      const idx = parseInt(guideExpandBtn.dataset.dmGuideExpand || '-1', 10);
+      expandedGuideIdx = expandedGuideIdx === idx ? null : idx;
+      render();
+      return;
+    }
+
     // ─── Stroke layered list (multi-stroke) ───
     const strokeAddBtn = target.closest<HTMLElement>('[data-dm-stroke-add]');
     if (strokeAddBtn) {
@@ -7700,7 +7987,9 @@ function setupDelegation() {
       setStrokeLayers(id, pos, layers);
       const intent = strokeStyleByElement.get(id);
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
-      dispatchStrokeLayers(layers, pos, cs, applyStyle, styleNow);
+      const batch: Array<{ property: string; value: string }> = [];
+      dispatchStrokeLayers(layers, pos, cs, (p, v) => batch.push({ property: p, value: v }), styleNow);
+      applyStylesBatch(batch, 'Add stroke');
       return;
     }
 
@@ -7720,7 +8009,9 @@ function setupDelegation() {
       setStrokeLayers(id, pos, layers);
       const intent = strokeStyleByElement.get(id);
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
-      dispatchStrokeLayers(layers, pos, cs, applyStyle, styleNow);
+      const batch: Array<{ property: string; value: string }> = [];
+      dispatchStrokeLayers(layers, pos, cs, (p, v) => batch.push({ property: p, value: v }), styleNow);
+      applyStylesBatch(batch, 'Remove stroke');
       return;
     }
 
@@ -7738,7 +8029,9 @@ function setupDelegation() {
       setStrokeLayers(id, pos, layers);
       const intent = strokeStyleByElement.get(id);
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
-      dispatchStrokeLayers(layers, pos, cs, applyStyle, styleNow);
+      const batch: Array<{ property: string; value: string }> = [];
+      dispatchStrokeLayers(layers, pos, cs, (p, v) => batch.push({ property: p, value: v }), styleNow);
+      applyStylesBatch(batch, 'Toggle stroke');
       return;
     }
 
@@ -8244,6 +8537,11 @@ function setupDelegation() {
         applyStyle('boxShadow', entries.join(', '));
         return;
       }
+      // Per-layer Layout Guide <select> changes (kind / align).
+      if (prop.startsWith('__guide_kind__') || prop.startsWith('__guide_align__')) {
+        applyLayoutGuideProperty(prop, val);
+        return;
+      }
       // Per-layer fill <select> changes (size / repeat / position / blend).
       // Mutates the per-element layer state then re-dispatches all four
       // comma-positional CSS properties at once.
@@ -8597,6 +8895,13 @@ function setupDelegation() {
       // the picker-drag path stay in sync.
       if (prop.startsWith('__stroke_color__') || prop.startsWith('__stroke_weight__')) {
         applyStrokeLayerProperty(prop, raw);
+        return;
+      }
+      // Layout guide per-layer text inputs (count, hex, opacity %, size,
+      // margin, gutter). Picker drag for swatch hits applyStyle() directly
+      // via the intercept above; this catches text-input commits.
+      if (prop.startsWith('__guide_')) {
+        applyLayoutGuideProperty(prop, raw);
         return;
       }
       const borderWidths = ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'];
@@ -9337,7 +9642,59 @@ function setupDelegation() {
     const intent = strokeStyleByElement.get(id);
     const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
     render();
-    dispatchStrokeLayers(layers, pos, cs, applyStyle, styleNow);
+    const batch: Array<{ property: string; value: string }> = [];
+    dispatchStrokeLayers(layers, pos, cs, (p, v) => batch.push({ property: p, value: v }), styleNow);
+    applyStylesBatch(batch, 'Reorder stroke');
+  });
+
+  // ─── HTML5 drag-and-drop for Layout Guide layer reordering ─────────────
+  // Same pattern as Stroke/Fill: dragstart records the source idx,
+  // dragover allows the drop, drop splices the array and re-dispatches.
+  root.addEventListener('dragstart', (e) => {
+    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-guide-row]');
+    if (!rowEl) return;
+    draggingGuideIdx = parseInt(rowEl.dataset.dmGuideRow || '-1', 10);
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(draggingGuideIdx));
+    }
+    rowEl.style.opacity = '0.5';
+  });
+  root.addEventListener('dragend', (e) => {
+    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-guide-row]');
+    if (rowEl) rowEl.style.opacity = '';
+    draggingGuideIdx = null;
+  });
+  root.addEventListener('dragover', (e) => {
+    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-guide-row]');
+    if (!rowEl) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  });
+  root.addEventListener('drop', (e) => {
+    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-guide-row]');
+    if (!rowEl) return;
+    e.preventDefault();
+    const tgt = parseInt(rowEl.dataset.dmGuideRow || '-1', 10);
+    const src = draggingGuideIdx ?? parseInt(e.dataTransfer?.getData('text/plain') || '-1', 10);
+    draggingGuideIdx = null;
+    rowEl.style.opacity = '';
+    if (src < 0 || tgt < 0 || src === tgt) return;
+    const id = info?.id || '';
+    if (!id) return;
+    const layers = getLayoutGuides(id).slice();
+    if (src >= layers.length || tgt >= layers.length) return;
+    const [moved] = layers.splice(src, 1);
+    layers.splice(tgt, 0, moved);
+    setLayoutGuides(id, layers);
+    // Keep expandedGuideIdx pointing at the same logical row.
+    if (expandedGuideIdx === src) expandedGuideIdx = tgt;
+    else if (expandedGuideIdx !== null) {
+      if (src < expandedGuideIdx && tgt >= expandedGuideIdx) expandedGuideIdx -= 1;
+      else if (src > expandedGuideIdx && tgt <= expandedGuideIdx) expandedGuideIdx += 1;
+    }
+    render();
+    applyStyle('__layout_guides', serializeLayoutGuides(layers));
   });
 
   // ─── HTML5 drag-and-drop for Effects layer reordering ─────────────────
