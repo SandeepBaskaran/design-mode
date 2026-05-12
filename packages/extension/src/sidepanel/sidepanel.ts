@@ -5321,16 +5321,11 @@ function renderDesignTab(): string {
   const safeActiveIdx = Math.min(Math.max(0, activeStrokeIdx), Math.max(0, strokeLayers.length - 1));
   const activeLayer = strokeLayers[safeActiveIdx];
 
-  // Primary controls read from the active layer when in layered mode,
-  // otherwise from CSS (preserves single-stroke behaviour).
-  const strokeWeight = activeLayer
-    ? activeLayer.weight
-    : (parseFloat(s.borderTopWidth || '0') || 0);
-  const strokeColor = activeLayer
-    ? activeLayer.color
-    : (strokePos === 'center'
-        ? (s.outlineColor || s.borderTopColor || '#000000')
-        : (s.borderTopColor || '#000000'));
+  // Primary controls read from the active layer. When the layer list is
+  // empty (no stroke set in this position), default to black at 0 so the
+  // user starts from a neutral state rather than the page's currentColor.
+  const strokeWeight = activeLayer ? activeLayer.weight : 0;
+  const strokeColor = activeLayer ? activeLayer.color : '#000000';
   // Read user's chosen style from the in-memory map first, fall back to
   // the active mode's CSS. The map keeps the dashed panel correct even
   // in Inside mode (which can't render dashed visually).
