@@ -222,6 +222,15 @@ const CORNER_RADIUS_PROPS = new Set([
   'borderBottomLeftRadius',
   'borderBottomRightRadius',
 ]);
+// Numeric fields that CSS will reject (or silently zero) when given a
+// negative value. Same UX as CORNER_RADIUS_PROPS: floor at 0 on commit,
+// block the `-` keystroke, and clamp Arrow-stepping past zero.
+function isNonNegativeNumericProp(prop: string): boolean {
+  if (CORNER_RADIUS_PROPS.has(prop)) return true;
+  if (prop === 'outlineWidth' || prop === '__stroke_weight') return true;
+  if (prop.startsWith('__stroke_weight__')) return true;
+  return false;
+}
 const advancedOpen: Record<string, boolean> = {};   // keyed by section key
 let sidesPopoverOpen = false;
 let strokeStylePopoverOpen = false;
@@ -777,8 +786,8 @@ function applyStrokeProperty(prop: string, value: string) {
     if (prop === '__stroke_color') {
       layers[idx].color = value;
     } else {
-      const num = parseFloat(value) || 0;
-      layers[idx].weight = num;
+      const num = parseFloat(value);
+      layers[idx].weight = !isFinite(num) || num < 0 ? 0 : num;
     }
     setStrokeLayers(id, pos, layers);
     // Collect dispatchStrokeLayers' fan-out into a batch instead of
@@ -8278,10 +8287,11 @@ function setupDelegation() {
       const raw = propInput.value.trim();
       const isPureNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
       const val = isNumeric && unit && isPureNumber ? raw + unit : raw;
-      // Corner radius cannot be negative in CSS — clamp to 0 on commit
-      // whether the user typed a negative number, a non-numeric string,
-      // or pasted garbage. Covers shorthand + all four long-form props.
-      if (CORNER_RADIUS_PROPS.has(prop)) {
+      // Non-negative numeric guard — corner radius and stroke weight
+      // both fail silently in CSS when handed a negative value. Same
+      // UX either way: floor to 0 whether the user typed a negative,
+      // non-numeric, or pasted garbage.
+      if (isNonNegativeNumericProp(prop)) {
         const n = parseFloat(raw);
         const clamped = !isFinite(n) || n < 0 ? 0 : n;
         propInput.value = String(clamped);
@@ -9135,7 +9145,7 @@ function setupDelegation() {
         const raw = propInput.value.trim();
         if (propName === '__opacity_pct') { commitOpacityPct(raw); return; }
         if (fillOpacityMatch) { commitFillOpacityPct(raw); return; }
-        if (CORNER_RADIUS_PROPS.has(propName)) {
+        if (isNonNegativeNumericProp(propName)) {
           const n = parseFloat(raw);
           const clamped = !isFinite(n) || n < 0 ? 0 : n;
           propInput.value = String(clamped);
@@ -9166,9 +9176,9 @@ function setupDelegation() {
           : (e.shiftKey ? 10 : 1);
         const current = parseFloat(propInput.value) || 0;
         let newVal = e.key === 'ArrowUp' ? current + step : current - step;
-        // Corner radius is non-negative in CSS — Arrow-stepping past 0
-        // floors at 0 so the field can never show -1px / -10px.
-        if (CORNER_RADIUS_PROPS.has(propName) && newVal < 0) newVal = 0;
+        // Non-negative numerics (corner radius, stroke weight) floor at
+        // 0 so Arrow-stepping past zero never shows -1px / -10px.
+        if (isNonNegativeNumericProp(propName) && newVal < 0) newVal = 0;
         const rounded = Math.round(newVal * 100) / 100; // 2 decimals max
         if (propName === '__opacity_pct') { commitOpacityPct(String(rounded)); return; }
         if (fillOpacityMatch) { commitFillOpacityPct(String(rounded)); return; }
@@ -9179,13 +9189,14 @@ function setupDelegation() {
       }
 
       // Strict numeric filter — only allow valid number characters.
-      // Corner radius can never be negative in CSS, so block the minus
-      // sign for those fields too (regex below would otherwise accept it).
+      // Non-negative props (corner radius, stroke weight) also block the
+      // minus sign so the field never accepts a value CSS will silently
+      // discard.
       if (isNumeric) {
         const allowedKeys = ['Backspace','Tab','Escape','ArrowLeft','ArrowRight','Delete','Home','End'];
         if (allowedKeys.includes(e.key) || e.ctrlKey || e.metaKey) return;
         if (e.key.length !== 1) return; // ignore other special keys
-        const nonNegative = CORNER_RADIUS_PROPS.has(propName);
+        const nonNegative = isNonNegativeNumericProp(propName);
         if (nonNegative && e.key === '-') { e.preventDefault(); return; }
         const cur = propInput.value;
         const start = propInput.selectionStart ?? cur.length;
