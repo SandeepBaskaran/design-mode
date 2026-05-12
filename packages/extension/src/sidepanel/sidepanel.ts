@@ -1247,6 +1247,12 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (msg.multiSelect !== undefined) multiSelectActive = !!msg.multiSelect;
     if (msg.multiSelectIds) multiSelectIds = msg.multiSelectIds;
     if (msg.frozen !== undefined) animationsFrozen = !!msg.frozen;
+    // STATE_UPDATE fires ~1s after the content script's enable() —
+    // including after every page reload while the panel is open.
+    // Re-push the panel's session-memory guides so the overlay paints
+    // again on the fresh page. If the panel was closed during the
+    // reload, this branch never runs and the page stays clean.
+    restoreLayoutGuidesAfterReload();
     render();
   }
   if (msg.type === 'MULTI_SELECT_UPDATE') {
@@ -2509,6 +2515,13 @@ interface LayoutGuideLayer {
 
 const LAYOUT_GUIDE_LIMIT = 5;
 const layoutGuidesByElement = new Map<string, LayoutGuideLayer[]>();
+// Per-element CSS selector at the time the guide was last touched.
+// Used to re-resolve the element on page reload — the content script
+// loses its data-dm-id stamps on reload, so on STATE_UPDATE we re-push
+// every guide with its selector and content stamps the matching node
+// back with its original dm-id. Lets page reloads preserve guides as
+// long as the side panel is still open.
+const guideSelectorsByElement = new Map<string, string>();
 // Per-element section-wide hide flag — when set, the overlay is
 // suppressed on the page while the panel's row state is preserved, so
 // toggling the section eye on/off restores exactly what was there.
@@ -2538,12 +2551,32 @@ function defaultLayoutGuide(): LayoutGuideLayer {
 // closing/reopening the panel doesn't drop the user's config.
 function dispatchLayoutGuides(elementId: string, layers: LayoutGuideLayer[]): void {
   if (!elementId) return;
+  // Stamp the selector at write time so a later restore (after page
+  // reload while panel is open) can resolve the element by selector
+  // when data-dm-id stamps reset. We pull the selector from the
+  // currently-focused info if it matches; otherwise fall back to any
+  // previously stored one.
+  if (info?.id === elementId && (info as any).selector) {
+    guideSelectorsByElement.set(elementId, (info as any).selector);
+  }
   send({
     type: 'SP_SET_LAYOUT_GUIDES',
     elementId,
+    selector: guideSelectorsByElement.get(elementId) || '',
     layers,
     sectionVisible: !layoutGuidesSectionHidden.has(elementId),
   });
+}
+
+// Re-push every known guide to content after a page reload. STATE_UPDATE
+// fires from the content script ~1s after enable(), which is exactly
+// when content is fresh and has no guides yet. The panel's
+// layoutGuidesByElement survives the reload (the panel is a separate
+// document), so we just walk it and dispatch each entry.
+function restoreLayoutGuidesAfterReload(): void {
+  for (const [id, layers] of layoutGuidesByElement) {
+    dispatchLayoutGuides(id, layers);
+  }
 }
 
 // Absorb a content-side layout-guide snapshot back into the panel's
@@ -2552,6 +2585,9 @@ function dispatchLayoutGuides(elementId: string, layers: LayoutGuideLayer[]): vo
 // outlives the panel, so it's the authoritative session memory.
 function hydrateLayoutGuidesFromPayload(payload: any): void {
   if (!payload || !payload.id) return;
+  // Always record the selector for the focused element so future
+  // restores have it, even when the snapshot is empty.
+  if (payload.selector) guideSelectorsByElement.set(payload.id, payload.selector);
   const snapshot = payload.layoutGuides;
   if (!snapshot) {
     // No snapshot in payload — leave the panel's map alone.

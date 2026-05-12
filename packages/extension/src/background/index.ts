@@ -148,7 +148,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'SP_SET_LAYOUT_GUIDES') {
-    forwardToPinnedTab({ type: 'SET_LAYOUT_GUIDES', elementId: msg.elementId, layers: msg.layers }, sendResponse);
+    forwardToPinnedTab({
+      type: 'SET_LAYOUT_GUIDES',
+      elementId: msg.elementId,
+      selector: msg.selector,
+      layers: msg.layers,
+      sectionVisible: msg.sectionVisible,
+    }, sendResponse);
     return true;
   }
   if (msg.type === 'SP_SCROLL_TO_ELEMENT') {

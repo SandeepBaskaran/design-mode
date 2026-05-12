@@ -5,7 +5,7 @@
 // Phases 1-9 integrated + new: parent/child, undo/redo, dom tree, comments
 // ============================================================
 
-import { getElementById, getOrAssignId, generateSelector } from './helpers';
+import { getElementById, getOrAssignId, generateSelector, reserveIdsAtLeast } from './helpers';
 import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLayoutGuidesFor } from './layout-guides';
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
@@ -1032,7 +1032,23 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     // removes the overlay.
     case 'SET_LAYOUT_GUIDES': {
       const elementId = msg.elementId as string;
-      if (elementId) setLayoutGuidesOverlay(elementId, msg.layers, msg.sectionVisible);
+      if (elementId) {
+        // After a page reload, the element with the original
+        // data-dm-id may not exist yet (the inspector hasn't stamped
+        // anything). If the panel sent a selector, resolve it and
+        // re-stamp the matched element with the original dm-id so the
+        // overlay's `[data-dm-id="X"]::before` selector hits.
+        if (msg.selector && !getElementById(elementId)) {
+          try {
+            const target = document.querySelector(msg.selector) as HTMLElement | null;
+            if (target) {
+              target.setAttribute('data-dm-id', elementId);
+              reserveIdsAtLeast([elementId]);
+            }
+          } catch {}
+        }
+        setLayoutGuidesOverlay(elementId, msg.layers, msg.sectionVisible);
+      }
       sendResponse({ ok: true });
       return true;
     }
