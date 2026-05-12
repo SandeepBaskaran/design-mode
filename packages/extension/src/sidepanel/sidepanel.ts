@@ -2780,50 +2780,6 @@ function renderFillLayerBody(layer: FillLayer, idx: number): string {
 
 type StrokeLayer = { weight: number; color: string; visible?: boolean };
 
-// Corner-aware dashed-stroke SVG generator. Returns a `url("data:...")`
-// suitable for `border-image-source`, plus the `slice` value to use with
-// `border-image-slice` so the 9-region split lands cleanly.
-//
-// How it works:
-//   • SVG canvas is `(weight + tile + weight)` square, where `tile = dash + gap`.
-//   • Four single-tile-long lines are drawn — one per side, each oriented
-//     correctly (horizontal on top/bottom, vertical on left/right) so the
-//     border-image slicer maps each edge region to the right pattern.
-//   • The corner regions (`weight × weight`) are left transparent so dashes
-//     stop short of the actual box corners.
-//   • Pair with `border-image-repeat: round` so the browser tiles each
-//     middle region with a whole number of dashes (auto-aligning at corners).
-//
-// The SVG does NOT depend on the element's box dimensions — `round` handles
-// scaling per side, so the same source works for any sized element.
-function buildCornerAwareDashSvg(opts: {
-  weight: number;
-  dash: number;
-  gap: number;
-  cap: 'square' | 'round';
-  color: string;
-}): { dataUri: string; slice: number } {
-  const w = Math.max(0.5, opts.weight);
-  const dash = Math.max(1, opts.dash);
-  const gap = Math.max(1, opts.gap);
-  const tile = dash + gap;
-  const corner = w;
-  const span = corner + tile + corner;
-  const stroke = `stroke="${opts.color}" stroke-width="${w}" stroke-dasharray="${dash} ${gap}" stroke-linecap="${opts.cap}" fill="none"`;
-  const top    = `<line x1="${corner}" y1="${w/2}" x2="${corner + tile}" y2="${w/2}" ${stroke}/>`;
-  const right  = `<line x1="${span - w/2}" y1="${corner}" x2="${span - w/2}" y2="${corner + tile}" ${stroke}/>`;
-  const bottom = `<line x1="${corner}" y1="${span - w/2}" x2="${corner + tile}" y2="${span - w/2}" ${stroke}/>`;
-  const left   = `<line x1="${w/2}" y1="${corner}" x2="${w/2}" y2="${corner + tile}" ${stroke}/>`;
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${span}" height="${span}" viewBox="0 0 ${span} ${span}">` +
-    top + right + bottom + left +
-    `</svg>`;
-  return {
-    dataUri: 'url("data:image/svg+xml;utf8,' + encodeURIComponent(svg) + '")',
-    slice: corner,
-  };
-}
-
 // Per-element multi-stroke state. Once a 2nd stroke is added (or the user
 // otherwise mutates layers through the panel) this map becomes the source
 // of truth for that element. The dispatcher knows when to fall back to the
@@ -5356,33 +5312,6 @@ function renderDesignTab(): string {
 
   const colorPanel = strokeColorPanelOpen ? sp() + renderColorPanel('__stroke_color', strokeColor) : '';
 
-  // Dashed panel — only visible when style is 'dashed'. CSS borders don't
-  // expose dash/gap/cap natively (browser-defined pattern), so we store
-  // the user's intent on the element via CSS custom properties so design
-  // tokens / codegen can pick them up.
-  const dashedActive = strokeStyleCur === 'dashed';
-  const dashCur = ((s as any)['--dm-stroke-dash'] || '').replace('px','') || '4';
-  const gapCur = ((s as any)['--dm-stroke-gap'] || '').replace('px','') || '4';
-  const capCur = ((s as any)['--dm-stroke-cap'] || 'square').trim();
-  const capBtn = (iconName: keyof typeof icons, val: string, active: boolean, title: string): string =>
-    '<button data-dm-prop="--dm-stroke-cap" data-dm-value="' + val + '" title="' + escapeAttr(title) + '" data-active="' + (active ? 'true' : 'false') + '" style="width:100%;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:5px;border:1px solid ' + (active ? 'var(--dm-accent-border)' : 'var(--dm-btn-border)') + ';background:' + (active ? 'var(--dm-accent-bg)' : 'var(--dm-btn-bg)') + ';color:' + (active ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';cursor:pointer;">' + icon(iconName, 14) + '</button>';
-  // Detect whether a user-synthesised dash pattern is currently active —
-  // any non-`none` `border-image-source` qualifies. The "Custom dashes"
-  // button reflects this state.
-  const customDashActive = (() => {
-    const src = ((s as any).borderImageSource || 'none').trim();
-    return src !== 'none' && src !== '' && src.includes('data:image/svg');
-  })();
-  const dashedPanel = dashedActive ? sp() + grid12([
-    { span: 4, content: '<div class="dm-field"><label class="dm-field-label">Dash</label><input type="number" class="dm-input" data-dm-prop="--dm-stroke-dash" data-dm-numeric="1" data-dm-unit="px" min="1" step="1" value="' + escapeAttr(dashCur) + '" placeholder="1" style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;"/></div>' },
-    { span: 4, content: '<div class="dm-field"><label class="dm-field-label">Gap</label><input type="number" class="dm-input" data-dm-prop="--dm-stroke-gap" data-dm-numeric="1" data-dm-unit="px" min="1" step="1" value="' + escapeAttr(gapCur) + '" placeholder="1" style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;"/></div>' },
-    { span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">·</label>' + capBtn('square', 'square', capCur === 'square', 'Square cap') + '</div>' },
-    { span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">·</label>' + capBtn('squareRoundCorner', 'round', capCur === 'round', 'Round cap') + '</div>' },
-  ]) + sp() + grid12([
-    { span: 6, content: '<button class="dm-btn" data-dm-stroke-action="custom-dashes" data-active="' + (customDashActive ? 'true' : 'false') + '" title="Render the typed dash / gap exactly. Synthesises an SVG into border-image-source with corner-aware tiling." style="height:30px;font-size:11px;width:100%;">Custom dashes</button>' },
-    { span: 6, content: '<button class="dm-btn" data-dm-stroke-action="native-dashes" title="Drop back to the browser-default CSS dashed pattern (clears border-image)." style="height:30px;font-size:11px;width:100%;">Native pattern</button>' },
-  ]) : '';
-
   // Outline-offset control — only meaningful in Center mode. Negative
   // values pull the outline inward (toward the box edge); positive push
   // it outward. Helper text lives inside the label parens so the field
@@ -5460,7 +5389,6 @@ function renderDesignTab(): string {
     strokeListHtml +
     strokeRow +
     offsetRow +
-    dashedPanel +
     colorPanel +
     addStrokeBtn +
     strokeAdvancedHtml;
@@ -7737,39 +7665,12 @@ function setupDelegation() {
         if (st === 'none') {
           ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'].forEach(p => applyStyle(p, 'solid'));
         }
-      } else if (action === 'clear-border-image' || action === 'native-dashes') {
+      } else if (action === 'clear-border-image') {
         applyStyle('borderImageSource', 'none');
         applyStyle('borderImageSlice', '100%');
         applyStyle('borderImageWidth', '1');
         applyStyle('borderImageOutset', '0');
         applyStyle('borderImageRepeat', 'stretch');
-      } else if (action === 'custom-dashes') {
-        // Synthesise a corner-aware SVG with the current dash/gap/cap/colour
-        // settings and use it as `border-image-source`. Pair with `repeat:
-        // round` so the browser auto-aligns dashes at every edge.
-        const cs = info?.computedStyles || {};
-        const dash = parseFloat(((cs as any)['--dm-stroke-dash'] || '4').replace('px','')) || 4;
-        const gap  = parseFloat(((cs as any)['--dm-stroke-gap']  || '4').replace('px','')) || 4;
-        const cap  = (((cs as any)['--dm-stroke-cap'] || 'square').trim() === 'round' ? 'round' : 'square') as 'square'|'round';
-        const weight = parseFloat(cs.borderTopWidth || '0') || 0;
-        const color = cs.borderTopColor || '#000000';
-        if (weight <= 0) {
-          // Border-image only renders with non-zero width and a non-none style.
-          ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'].forEach(p => applyStyle(p, '2px'));
-        }
-        const stCur = cs.borderTopStyle || 'none';
-        if (stCur === 'none') {
-          ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'].forEach(p => applyStyle(p, 'solid'));
-        }
-        const built = buildCornerAwareDashSvg({
-          weight: weight > 0 ? weight : 2,
-          dash, gap, cap, color,
-        });
-        applyStyle('borderImageSource', built.dataUri);
-        applyStyle('borderImageSlice', String(built.slice));
-        applyStyle('borderImageWidth', '1');
-        applyStyle('borderImageOutset', '0');
-        applyStyle('borderImageRepeat', 'round');
       }
       return;
     }
@@ -8406,16 +8307,6 @@ function setupDelegation() {
           propInput.value = String(clamped);
           applyStyle('opacity', String(Math.round(clamped) / 100));
         }
-        return;
-      }
-      // Dash / gap inputs in the dashed-stroke panel — clamp to >= 1px
-      // (positive integers only; CSS doesn't accept 0 here, matching
-      // Figma's dash/gap UX).
-      if (prop === '--dm-stroke-dash' || prop === '--dm-stroke-gap') {
-        const num = parseFloat(raw);
-        const clamped = (isNaN(num) || num < 1) ? 1 : num;
-        propInput.value = String(clamped);
-        applyStyle(prop, clamped + 'px');
         return;
       }
       // Line clamp composer — virtual __line_clamp from the Typography
