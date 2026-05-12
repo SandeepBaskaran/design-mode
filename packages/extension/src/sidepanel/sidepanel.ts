@@ -5804,9 +5804,13 @@ function renderDesignTab(): string {
     // identical to the rest of the panel.
     const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + colorProp + '" title="Pick a colour" style="background:' + escapeAttr(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
     const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + colorProp + '" data-dm-tokens-trigger="' + colorProp + '" value="' + escapeAttr(codeDisplay) + '" spellcheck="false" autocomplete="off"/>';
-    const colorCellInner = '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;">' + swatchBtn + codeInput + '</div>';
+    // Both cells share an explicit 32px min-height so the swatch row and
+    // the opacity input land at exactly the same vertical extent in the
+    // 3×2 / 1×2 expanded grids.
+    const cellHeight = 'min-height:32px;box-sizing:border-box;';
+    const colorCellInner = '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;' + cellHeight + '">' + swatchBtn + codeInput + '</div>';
     const opacityCell =
-      '<div class="dm-fill-opacity" style="width:100%;">' +
+      '<div class="dm-fill-opacity" style="width:100%;' + cellHeight + '">' +
       '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__guide_opacity__' + idx + '" data-dm-numeric="1" data-dm-unit="" inputmode="decimal" value="' + Math.round(layer.opacity) + '"/>' +
       '<span class="dm-input-unit">%</span>' +
       '</div>';
