@@ -822,9 +822,25 @@ function applyStrokePosition(pos: 'inside' | 'outside' | 'center') {
   const oldPos = inferStrokePosition(s);
   if (oldPos === pos) return;
 
-  // Read current stroke params from whichever mode was active.
+  // Read current stroke params from whichever mode was active. Prefer
+  // the cached layer (which holds the user's most-recent edits) over
+  // raw computed CSS — if the user just edited weight / colour /
+  // style in the old mode, the cache has it, but the new mode's CSS
+  // doesn't yet.
+  const elementId = info?.id || '';
+  const cachedLayers = elementId ? strokeLayersByElement.get(elementId) : undefined;
+  const activeCached = cachedLayers && cachedLayers.length > 0
+    ? cachedLayers.find(l => l.visible !== false) || cachedLayers[0]
+    : null;
   let weight: number; let color: string; let style: string;
-  if (oldPos === 'center') {
+  if (activeCached) {
+    weight = activeCached.weight;
+    color = activeCached.color;
+    style = (elementId && strokeStyleByElement.get(elementId)) ||
+      (oldPos === 'center'
+        ? (s.outlineStyle && s.outlineStyle !== 'none' ? s.outlineStyle : 'solid')
+        : (s.borderTopStyle && s.borderTopStyle !== 'none' ? s.borderTopStyle : 'solid'));
+  } else if (oldPos === 'center') {
     weight = parseFloat(s.outlineWidth || '0') || 0;
     color = s.outlineColor || s.borderTopColor || '#000000';
     style = (s.outlineStyle && s.outlineStyle !== 'none') ? s.outlineStyle : 'solid';
@@ -840,6 +856,19 @@ function applyStrokePosition(pos: 'inside' | 'outside' | 'center') {
     weight === 0 &&
     (s.borderTopStyle || 'none') === 'none';
   if (noVisibleStroke) weight = 1;
+
+  // Reset the cached layer list to a single entry matching the new
+  // mode's stroke. Without this, switching from a 5-layer Inside
+  // stack to Outside / Center would leave the cache populated with 5
+  // phantom layers; the panel would render them even though the
+  // page only paints one new stroke. Center is hard single-layer
+  // (CSS outline can't stack); Outside / Inside *could* stack, but
+  // mode switching is a "fresh start" — the user can Add Stroke
+  // again if they want layered effects in the new mode.
+  if (elementId) {
+    strokeLayersByElement.set(elementId, [{ weight, color, visible: true }]);
+    activeStrokeIdx = 0;
+  }
 
   const sides = ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'];
   const styles = ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'];
@@ -3019,7 +3048,12 @@ function dispatchStrokeLayers(
     applyStyleFn('outlineWidth', layer.weight + 'px');
     applyStyleFn('outlineColor', layer.color);
     applyStyleFn('outlineStyle', styleKeyword || 'solid');
-    applyStyleFn('outlineOffset', (-Math.round(layer.weight / 2)) + 'px');
+    // Note: deliberately NOT writing outline-offset here. The user's
+    // own offset edits would get clobbered by the -weight/2 seed every
+    // time they touched Weight, which made the two fields feel
+    // permanently linked. The seed only runs once on Center-mode
+    // entry (in applyStrokePosition); after that, outline-offset is
+    // an independent input the user controls.
     return;
   }
   if (position === 'outside' && visibleCount <= 1 && layers.length === 1) {
