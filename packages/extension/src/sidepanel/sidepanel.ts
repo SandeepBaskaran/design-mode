@@ -707,8 +707,8 @@ function applyFillColorProperty(prop: string, value: string) {
 // for Center). Style stays uniform across the chain (CSS limitation).
 function applyStrokeProperty(prop: string, value: string) {
   const s = info?.computedStyles || {};
-  const pos = inferStrokePosition(s);
   const id = info?.id || '';
+  const pos = getStrokeActiveTab(id, s);
 
   // Determine the current style keyword (used by the dispatcher to write
   // border-*-style / outline-style / etc.). Reads the in-memory intent map
@@ -758,24 +758,14 @@ function applyStrokeProperty(prop: string, value: string) {
       return;
     }
     // Track user's intent regardless of mode so the dashed panel toggles
-    // correctly even in Inside mode (where CSS can't render the dashed
-    // visual). The actual border-style / outline-style is only written
-    // when the active mode supports it. Outside writes to 4 sides at
-    // once — batch them so the 4 border-*-style longhands land in one
-    // round-trip.
+    // correctly. Only Center mode writes a CSS style (outline-style);
+    // Outside and Inside both render via box-shadow which CSS only
+    // paints solid, so the keyword is captured for codegen / tokens but
+    // not pushed to CSS.
     if (id) strokeStyleByElement.set(id, value as 'solid' | 'dashed');
-    if (pos === 'outside') {
-      applyStylesBatch([
-        { property: 'borderTopStyle', value },
-        { property: 'borderRightStyle', value },
-        { property: 'borderBottomStyle', value },
-        { property: 'borderLeftStyle', value },
-      ], 'Stroke style');
-    } else if (pos === 'center') {
+    if (pos === 'center') {
       applyStyle('outlineStyle', value);
     } else {
-      // Inside: CSS can't dash an inset shadow. Re-render so the dashed
-      // config panel toggles based on the new intent.
       render();
     }
     return;
@@ -817,73 +807,19 @@ function applyPositionAlign(which: string, ctx: { isFlex: boolean; isGrid: boole
 // per-side widths, style) regardless of mode; Inside/Center add a
 // synthesized visual (inset shadow / outline) on top, hiding the border
 // itself. Outside leaves the native border visible.
+// Tab switching is now a pure panel-state toggle. We don't write CSS —
+// each position is an independent CSS family (border-* / box-shadow
+// non-inset / box-shadow inset / outline-*) and they coexist on the
+// page. Switching tabs just changes which one the editor surfaces.
+// The strokes you set in other tabs keep painting; come back and the
+// stash + CSS are exactly where you left them.
 function applyStrokePosition(pos: StrokePos) {
-  const s = info?.computedStyles || {};
-  const oldPos = inferStrokePosition(s);
-  if (oldPos === pos) return;
   const elementId = info?.id || '';
   if (!elementId) return;
-
-  // Per-tab independence: each position owns its layer stash. Switching
-  // doesn't carry weight / colour from the old mode. The new mode reads
-  // its OWN cached list (or parses fresh from CSS on first visit; the
-  // page's natural border / inset / outline is honoured for the
-  // appropriate tab). When the new tab has nothing stashed and the
-  // page CSS has no stroke in that position, the panel surfaces
-  // weight = 0 + black + solid — same as Figma's empty-fill default,
-  // adapted for strokes.
-  const newLayers = getStrokeLayers(elementId, s, pos);
-  const activeLayer = newLayers.find(l => l.visible !== false) || newLayers[0];
-  const weight = activeLayer ? activeLayer.weight : 0;
-  const color = activeLayer ? activeLayer.color : '#000000';
-  const style = strokeStyleByElement.get(elementId) || 'solid';
+  if (strokeActiveTab.get(elementId) === pos) return;
+  strokeActiveTab.set(elementId, pos);
   activeStrokeIdx = 0;
-
-  const sides = ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'];
-  const styleProps = ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'];
-  const colorProps = ['borderTopColor','borderRightColor','borderBottomColor','borderLeftColor'];
-
-  // One batch, one re-render. The build splits into two passes:
-  //   1. Clear the OLD mode's CSS so the previous stroke goes away.
-  //   2. Apply the NEW mode's stashed values to its CSS slot.
-  // Each mode owns only its CSS family (border-* vs box-shadow vs
-  // outline-*) so the writes don't trample neighbouring state.
-  const batch: Array<{ property: string; value: string }> = [];
-
-  // ── Clear the old mode's CSS ────────────────────────────────────
-  if (oldPos === 'outside') {
-    sides.forEach(p => batch.push({ property: p, value: '0px' }));
-    styleProps.forEach(p => batch.push({ property: p, value: 'none' }));
-  } else if (oldPos === 'inside') {
-    batch.push({ property: 'boxShadow', value: serializeStrokeLayers([], 'inside', s.boxShadow || '') });
-  } else if (oldPos === 'center') {
-    batch.push({ property: 'outlineStyle', value: 'none' });
-    batch.push({ property: 'outlineWidth', value: '0px' });
-    batch.push({ property: 'outlineOffset', value: '0px' });
-  }
-
-  // ── Apply the new mode's stashed values ─────────────────────────
-  if (pos === 'outside') {
-    sides.forEach(p => batch.push({ property: p, value: weight + 'px' }));
-    colorProps.forEach(p => batch.push({ property: p, value: color }));
-    styleProps.forEach(p => batch.push({ property: p, value: style }));
-  } else if (pos === 'inside') {
-    // Re-serialise from the position-specific stash so a previously
-    // multi-layer Inside session restores its full chain on return.
-    batch.push({ property: 'boxShadow', value: serializeStrokeLayers(newLayers, 'inside', s.boxShadow || '') });
-  } else { // center
-    batch.push({ property: 'outlineStyle', value: style });
-    batch.push({ property: 'outlineWidth', value: weight + 'px' });
-    batch.push({ property: 'outlineColor', value: color });
-    // Outline-offset seed: negative so the outline straddles the box
-    // edge. Floor at -1px even when weight is 0 so the
-    // inferStrokePosition detector reliably classifies as Center
-    // (otherwise outline-offset 0 + outline-width 0 looks like Outside
-    // and the tab bounces). Subsequent edits leave the offset alone
-    // — dispatchStrokeLayers no longer rewrites it on every change.
-    batch.push({ property: 'outlineOffset', value: Math.min(-1, -Math.round(weight / 2)) + 'px' });
-  }
-  applyStylesBatch(batch, 'Stroke position: ' + pos);
+  render();
 }
 async function applyText(text: string) { const res = await send({ type: 'SP_SET_TEXT', text }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
 async function applyHtml(html: string) { const res = await send({ type: 'SP_SET_HTML', html }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
@@ -2252,28 +2188,24 @@ function cornerRadius2x2(s: Record<string, string>): string {
 }
 
 function inferStrokePosition(s: Record<string, string>): 'inside' | 'outside' | 'center' {
-  // Inside takes priority — a 0-spread inset box-shadow is unique to our
-  // Inside-mode emitter; nothing else in the panel produces that pattern.
-  // Browsers normalize box-shadow computed values to color-first format
-  // (`rgb(0,0,0) 0px 0px 0px 1px inset`), so we use the unified parser.
+  // First-visit-only heuristic: pick the position that has actual paint
+  // on the element so the editor opens to a useful tab. After the first
+  // visit, `strokeActiveTab` overrides this — see `getStrokeActiveTab`.
   const entries = parseCssCommaList(s.boxShadow || '');
+  let hasInside = false;
+  let hasOutside = false;
   for (const e of entries) {
     const p = parseShadowEntry(e);
-    if (p && p.inset && p.x === 0 && p.y === 0 && p.blur === 0 && p.spread >= 0) {
-      return 'inside';
-    }
+    if (!p) continue;
+    if (p.x !== 0 || p.y !== 0 || p.blur !== 0 || p.spread < 0) continue;
+    if (p.inset) hasInside = true;
+    else hasOutside = true;
   }
-  // Center mode used to require outline-offset < 0, but applying Center
-  // with weight=0 (the user just arrived from Inside before picking a
-  // weight) leaves offset at 0 — the next render then mis-classifies as
-  // Outside, which is the "click Center → it goes Outside, click again →
-  // it goes Center" bug. The reliable signal is "outline-style is set
-  // AND no border-style is set." `auto` is the focus-ring default and
-  // doesn't count as user intent.
+  if (hasInside) return 'inside';
+  if (hasOutside) return 'outside';
   const ol = (s.outlineStyle || '').trim();
   const olActive = ol && ol !== 'none' && ol !== 'auto';
-  const bs = (s.borderTopStyle || '').trim();
-  if (olActive && (bs === '' || bs === 'none')) return 'center';
+  if (olActive) return 'center';
   return 'outside';
 }
 
@@ -2914,6 +2846,19 @@ function setStrokeLayers(id: string, position: StrokePos, layers: StrokeLayer[])
   }
   elementMap.set(position, layers);
 }
+
+// Which tab the user is currently editing for each element. Not derived
+// from CSS — tabs coexist (Outside / Center / Inside all paint at the
+// same time when set), so we can't infer "the position" from looking at
+// the resolved styles. inferStrokePosition is only used as the first-
+// visit fallback so an element with a natural border / inset / outline
+// lands on the right tab when initially selected.
+const strokeActiveTab = new Map<string, StrokePos>();
+function getStrokeActiveTab(id: string, s: Record<string, string>): StrokePos {
+  const cached = id ? strokeActiveTab.get(id) : undefined;
+  if (cached) return cached;
+  return inferStrokePosition(s);
+}
 let activeStrokeIdx = 0;
 
 // Parse a single box-shadow entry into structured form. Browsers normalize
@@ -3024,11 +2969,12 @@ function getStrokeLayers(id: string, s: Record<string, string>, position: Stroke
   return layers;
 }
 
-// Dispatch the layered model to CSS. Three position cases × single/multi:
-//   Inside  → always box-shadow chain (existing).
-//   Outside × 1 layer → border-*-width / -color / -style (preserves per-side).
-//   Outside × 2+      → box-shadow chain; clear border-*-width to 0 so the
-//                        chain is the only visible stroke.
+// Dispatch the layered model to CSS. Each position writes to a distinct
+// CSS property family, so all three can coexist on the page at once:
+//   Inside  → box-shadow chain with `inset` (any count).
+//   Outside → box-shadow chain without `inset` (any count). Paints OUTSIDE
+//             the element's box without growing it, regardless of
+//             box-sizing. We never write border-* for strokes anymore.
 //   Center  → outline-* (single only; UI prevents multi).
 function dispatchStrokeLayers(
   layers: StrokeLayer[],
@@ -3037,54 +2983,21 @@ function dispatchStrokeLayers(
   applyStyleFn: (p: string, v: string) => void,
   styleKeyword: string,
 ): void {
-  const visibleCount = layers.filter(l => l.visible !== false).length;
   if (position === 'center') {
     const layer = layers.find(l => l.visible !== false) || layers[0];
     if (!layer) return;
     applyStyleFn('outlineWidth', layer.weight + 'px');
     applyStyleFn('outlineColor', layer.color);
     applyStyleFn('outlineStyle', styleKeyword || 'solid');
-    // Note: deliberately NOT writing outline-offset here. The user's
-    // own offset edits would get clobbered by the -weight/2 seed every
-    // time they touched Weight, which made the two fields feel
-    // permanently linked. The seed only runs once on Center-mode
-    // entry (in applyStrokePosition); after that, outline-offset is
-    // an independent input the user controls.
     return;
   }
-  if (position === 'outside' && visibleCount <= 1 && layers.length === 1) {
-    // Outside, single layer → border-* path. Clear any stroke-shaped
-    // box-shadow entries we might have written previously.
-    const layer = layers[0];
-    if (!layer) return;
-    const w = layer.visible !== false ? layer.weight : 0;
-    ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'].forEach(p => applyStyleFn(p, w + 'px'));
-    ['borderTopColor','borderRightColor','borderBottomColor','borderLeftColor'].forEach(p => applyStyleFn(p, layer.color));
-    if (styleKeyword) {
-      ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'].forEach(p => applyStyleFn(p, styleKeyword));
-    }
-    // Strip any stroke-shaped non-inset entries from box-shadow.
-    applyStyleFn('boxShadow', serializeStrokeLayers([], 'outside', s.boxShadow || ''));
-    return;
-  }
-  // Inside (any count) OR Outside multi-stroke → box-shadow chain.
   const css = serializeStrokeLayers(layers, position, s.boxShadow || '');
   applyStyleFn('boxShadow', css);
   if (position === 'outside') {
-    // Clear border-*-width so the chain is the visible stroke. Leave
-    // border-*-color/-style alone so dropping back to single restores
-    // them (we re-write them in the single-layer branch above).
+    // Outside is now a pure box-shadow paint; clear any border-* width
+    // so it doesn't add to the box. Keep color/style untouched so the
+    // user's existing `border` declarations (if any) survive untouched.
     ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'].forEach(p => applyStyleFn(p, '0px'));
-  }
-  // Inside: also reflect color/weight back to border-* so the existing
-  // single-stroke readback (used by primary controls) stays in sync with
-  // layer 0. Without this the primary Color picker reads the wrong value
-  // after a multi-stroke edit.
-  if (position === 'inside') {
-    const top = layers[0];
-    if (top) {
-      ['borderTopColor','borderRightColor','borderBottomColor','borderLeftColor'].forEach(p => applyStyleFn(p, top.color));
-    }
   }
 }
 
@@ -4692,7 +4605,7 @@ function renderDesignTab(): string {
   const fillAdvOpen = !!advancedOpen.fill;
   const strokeAdvOpen = !!advancedOpen.stroke;
 
-  const strokePos = inferStrokePosition(s);
+  const strokePos = getStrokeActiveTab(info?.id || '', s);
   const strokeStyleOff = ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle']
     .every(p => (s[p] || 'none') === 'none');
   const fillOff = (s.backgroundColor || '').replace(/\s+/g,'') === 'rgba(0,0,0,0)';
@@ -5426,84 +5339,27 @@ function renderDesignTab(): string {
     ? (s.outlineStyle && s.outlineStyle !== 'none' ? s.outlineStyle : 'solid')
     : (s.borderTopStyle && s.borderTopStyle !== 'none' ? s.borderTopStyle : 'solid');
   const strokeStyleCur = intentStyle || cssStyle;
-  const sidesExpanded = !!advancedOpen.strokeSides;
-  // Per-side widths require Outside mode AND a single-stroke (CSS box-shadow
-  // chains are uniform per stroke; once we migrate to multi-stroke we lose
-  // per-side support).
-  const sidesAvailable = strokePos === 'outside' && !isMultiStroke;
-  const sidesBtn = sidesAvailable ? '<button class="dm-section-action" data-dm-advanced-toggle="strokeSides" data-active="' + (sidesExpanded ? 'true' : 'false') + '" title="' + (sidesExpanded ? 'Collapse per-side panel' : 'Edit per side (width / colour / style)') + '" style="width:100%;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:5px;border:1px solid ' + (sidesExpanded ? 'var(--dm-accent-border)' : 'var(--dm-btn-border)') + ';background:' + (sidesExpanded ? 'var(--dm-accent-bg)' : 'var(--dm-btn-bg)') + ';color:' + (sidesExpanded ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';">' + icon('settings2', 14) + '</button>' : '';
 
   // Stroke color picker: clicking the swatch toggles a panel that renders
   // BELOW the entire stroke row (not inside the 4-col cell). Pass
   // omitPanel:true so colorInp produces just the swatch+input row.
   const strokeColorPanelOpen = activeColorPickerProp === '__stroke_color';
-  // Style dropdown is mode-aware. Outside writes border-*-style which
-  // supports the full CSS set. Center writes outline-style which adds
-  // 'auto' (the browser focus-ring default \u2014 picking it auto-switches
-  // mode to Center). Inside synthesises the stroke via a 0-spread inset
-  // box-shadow; CSS shadows can't dash/dot themselves so only 'solid'
-  // visibly renders. Surface only the choices that actually paint \u2014
-  // listing dashed in Inside mode is misleading because the value gets
-  // recorded in `strokeStyleByElement` but the visual stays solid.
+  // Style dropdown is mode-aware. Outside and Inside both render via the
+  // box-shadow chain, which CSS only paints solid \u2014 exposing dash/dot
+  // there would be misleading. Center writes outline-style and supports
+  // the full set plus 'auto' (focus-ring default; picking it switches
+  // mode to Center).
   const allStyleOptions = ['solid','dashed','dotted','double','groove','ridge','inset','outset','hidden','none'];
   const styleOptions =
-    strokePos === 'inside' ? ['solid','none']
-    : strokePos === 'center' ? [...allStyleOptions, 'auto']
-    : allStyleOptions; // outside
+    strokePos === 'center' ? [...allStyleOptions, 'auto']
+    : ['solid','none'];
   const strokeRow = grid12([
     { span: 4, content: colorInp('Color', '__stroke_color', strokeColor, true) },
     { span: 2, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
-    { span: sidesAvailable ? 4 : 6, content: sel('Style', '__stroke_style', strokeStyleCur, styleOptions) },
-    ...(sidesAvailable ? [{ span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00B7</label>' + sidesBtn + '</div>' }] : []),
+    { span: 6, content: sel('Style', '__stroke_style', strokeStyleCur, styleOptions) },
   ]);
 
   const colorPanel = strokeColorPanelOpen ? sp() + renderColorPanel('__stroke_color', strokeColor) : '';
-
-  // Per-side panel \u2014 only when Outside mode (other modes are uniform-only
-  // in CSS). Header row labels each column once; per-side rows below are
-  // anonymous inputs with a hardcoded side name in the first cell. Keeps
-  // the panel from repeating "Width / Colour / Style" four times.
-  const SIDE_COLOR_PROPS = ['borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor'] as const;
-  const sideHeaderRow = grid12([
-    { span: 2, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">Side</label></div>' },
-    { span: 3, content: '<div class="dm-field"><label class="dm-field-label">Width</label></div>' },
-    { span: 4, content: '<div class="dm-field"><label class="dm-field-label">Colour</label></div>' },
-    { span: 3, content: '<div class="dm-field"><label class="dm-field-label">Style</label></div>' },
-  ]);
-  const sideRow = (key: 'Top' | 'Right' | 'Bottom' | 'Left'): string => {
-    const wProp = 'border' + key + 'Width';
-    const cProp = 'border' + key + 'Color';
-    const stProp = 'border' + key + 'Style';
-    const wVal = (s as any)[wProp] || '0px';
-    const cVal = (s as any)[cProp] || s.borderTopColor || '#000000';
-    const stVal = (s as any)[stProp] || s.borderTopStyle || 'solid';
-    // Hardcoded side label cell \u2014 same vertical metrics as the inputs so
-    // the row reads as one strip rather than a label-floating-above mess.
-    const sideLabelCell = '<div class="dm-field"><div style="height:30px;display:flex;align-items:center;font-size:11px;font-weight:500;color:var(--dm-text);">' + key + '</div></div>';
-    return grid12([
-      { span: 2, content: sideLabelCell },
-      { span: 3, content: inp('', wProp, wVal) },
-      { span: 4, content: colorInp('', cProp, cVal, true) },
-      { span: 3, content: sel('', stProp, stVal, styleOptions) },
-    ]);
-  };
-  // When the user clicks a per-side colour swatch, the picker for that
-  // specific prop opens \u2014 but the per-side rows pass `omitPanel: true`
-  // to keep the row compact. Render the active panel detached below the
-  // sides grid so the picker actually shows up.
-  const activeSideColorProp = SIDE_COLOR_PROPS.find(p => p === activeColorPickerProp) || '';
-  const sideColorPanel = activeSideColorProp
-    ? sp() + renderColorPanel(activeSideColorProp, (s as any)[activeSideColorProp] || s.borderTopColor || '#000000')
-    : '';
-  const sidesGrid = (sidesAvailable && sidesExpanded) ? sp() +
-    sub('Per-side (Outside mode only \u2014 Inside / Center are CSS-uniform)') +
-    sideHeaderRow + sp() +
-    sideRow('Top') + sp() +
-    sideRow('Right') + sp() +
-    sideRow('Bottom') + sp() +
-    sideRow('Left') +
-    sideColorPanel
-  : '';
 
   // Dashed panel — only visible when style is 'dashed'. CSS borders don't
   // expose dash/gap/cap natively (browser-defined pattern), so we store
@@ -5587,9 +5443,7 @@ function renderDesignTab(): string {
       '</div>';
       return '<div data-dm-stroke-row="' + idx + '" draggable="true" style="margin-bottom:6px;">' + head + '</div>';
     }).join('');
-    return rows + sp() +
-      '<div style="font-size:10px;color:var(--dm-text-dim);font-style:italic;margin-top:-2px;margin-bottom:6px;">Top of list paints closest to the element. Per-side widths are unavailable while strokes are stacked.</div>' +
-      sp();
+    return rows + sp();
   })() : '';
 
   // + Add stroke button. Disabled in Center mode (CSS outline can't
@@ -5613,7 +5467,6 @@ function renderDesignTab(): string {
     offsetRow +
     dashedPanel +
     colorPanel +
-    sidesGrid +
     addStrokeBtn +
     strokeAdvancedHtml;
 
@@ -7934,7 +7787,7 @@ function setupDelegation() {
       const id = info?.id || '';
       if (!id) return;
       const cs = info?.computedStyles || {};
-      const pos = inferStrokePosition(cs);
+      const pos = getStrokeActiveTab(id, cs);
       if (pos === 'center') return; // multi not supported on outline
       const layers = getStrokeLayers(id, cs, pos);
       // Cap at STROKE_LIMIT layers. Outside-multi and Inside use the
@@ -7963,7 +7816,7 @@ function setupDelegation() {
       if (!id) return;
       const idx = parseInt(strokeRemoveBtn.dataset.dmStrokeRemove || '-1', 10);
       const cs = info?.computedStyles || {};
-      const pos = inferStrokePosition(cs);
+      const pos = getStrokeActiveTab(id, cs);
       const layers = getStrokeLayers(id, cs, pos);
       if (idx < 0 || idx >= layers.length) return;
       layers.splice(idx, 1);
@@ -7983,7 +7836,7 @@ function setupDelegation() {
       if (!id) return;
       const idx = parseInt(strokeToggleBtn.dataset.dmStrokeToggle || '-1', 10);
       const cs = info?.computedStyles || {};
-      const pos = inferStrokePosition(cs);
+      const pos = getStrokeActiveTab(id, cs);
       const layers = getStrokeLayers(id, cs, pos);
       if (idx < 0 || idx >= layers.length) return;
       layers[idx].visible = layers[idx].visible === false ? true : false;
@@ -8858,7 +8711,7 @@ function setupDelegation() {
           const field = m[1] as 'color' | 'weight';
           const idx = parseInt(m[2], 10);
           const s2 = info?.computedStyles || {};
-          const pos = inferStrokePosition(s2);
+          const pos = getStrokeActiveTab(info?.id || '', s2);
           if (pos !== 'center') {
             const layers = parseStrokeLayers(s2, pos);
             if (idx >= 0 && idx < layers.length) {
@@ -8885,27 +8738,7 @@ function setupDelegation() {
           const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();
         }); return;
       }
-      // Fan-out is disabled when the Stroke per-side panel is open — each
-      // side edits independently. Same idea as Figma's "edit per side"
-      // mode: opening the panel implicitly unlinks.
-      const strokePerSideOpen = !!advancedOpen.strokeSides;
-      // Border-style auto-promote: a fresh element has border-style:none,
-      // so writing border-*-width alone produces no visible change. When
-      // the user edits any border-*-width in Outside mode and the style
-      // is currently 'none', promote to the user's chosen style (solid by
-      // default) so the change shows on the page.
-      if (borderWidths.includes(prop)) {
-        const elId = info?.id || '';
-        const curPos = inferStrokePosition(info?.computedStyles || {});
-        const curBorderStyle = info?.computedStyles?.borderTopStyle || 'none';
-        if (curPos === 'outside' && (curBorderStyle === 'none' || !curBorderStyle)) {
-          const intent = elId ? (strokeStyleByElement.get(elId) || 'solid') : 'solid';
-          ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'].forEach(p2 => {
-            send({ type: 'SP_APPLY_STYLE', property: p2, value: intent });
-          });
-        }
-      }
-      if (borderWidthLinked && !strokePerSideOpen && borderWidths.includes(prop)) {
+      if (borderWidthLinked && borderWidths.includes(prop)) {
         Promise.all(borderWidths.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
           const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();
         }); return;
@@ -9599,7 +9432,7 @@ function setupDelegation() {
     const id = info?.id || '';
     if (!id) return;
     const cs = info?.computedStyles || {};
-    const pos = inferStrokePosition(cs);
+    const pos = getStrokeActiveTab(id, cs);
     const layers = getStrokeLayers(id, cs, pos);
     if (src >= layers.length || tgt >= layers.length) return;
     const [moved] = layers.splice(src, 1);
