@@ -393,6 +393,90 @@ strong {
   }
 }
 
+// ── Article sections (used by /mcp and other docs pages) ────────────────
+// Multi-section pages need consistent vertical rhythm + readable lists,
+// code blocks, and tables. The home and demo pages bring their own
+// layouts; these rules only kick in on pages that render plain
+// `.article > section` blocks.
+.article > section {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 0 0.5rem;
+
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.75rem;
+  }
+
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    margin-bottom: 0.75rem;
+    color: rgba(0, 0, 0, 0.82);
+  }
+
+  ul, ol {
+    margin: 0 0 0.875rem 1.25rem;
+    color: rgba(0, 0, 0, 0.82);
+
+    li {
+      font-size: 0.9375rem;
+      line-height: 1.65;
+      margin-bottom: 0.35rem;
+    }
+  }
+
+  pre {
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 0.4rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.8125rem;
+    overflow-x: auto;
+    margin: 0.5rem 0 1rem;
+
+    code {
+      background: none;
+      padding: 0;
+      border-radius: 0;
+      font-size: inherit;
+    }
+  }
+}
+
+.modes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+
+  th, td {
+    text-align: left;
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    vertical-align: top;
+  }
+
+  th {
+    font-weight: 600;
+    color: #111;
+    background: rgba(0, 0, 0, 0.025);
+  }
+
+  tr:last-child td {
+    border-bottom: 0;
+  }
+}
+
 // ── Mobile notice (≤980px viewport) ──────────────────────────────────────
 .mobile-notice {
   display: none;

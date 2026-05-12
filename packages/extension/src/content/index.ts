@@ -503,6 +503,22 @@ function registerAllShortcuts() {
     if (!sid) return;
     notifyPanel('OPEN_COMMENT_FOR_SELECTED', { elementId: sid });
   });
+  // Alt+1 / Alt+2 / Alt+3 — jump to a side-panel tab without reaching
+  // for the mouse. The panel owns its own `tab` state; we just emit
+  // an inbound SWITCH_TAB message and the panel handler updates +
+  // re-renders. The shortcut layer already suppresses while a page
+  // input / textarea / contenteditable is focused (see
+  // keyboard-shortcuts.ts), so users typing in a form field don't
+  // accidentally tab-jump.
+  registerShortcut('tab-layers', () => {
+    notifyPanel('SWITCH_TAB', { tab: 'layers' });
+  });
+  registerShortcut('tab-design', () => {
+    notifyPanel('SWITCH_TAB', { tab: 'design' });
+  });
+  registerShortcut('tab-changes', () => {
+    notifyPanel('SWITCH_TAB', { tab: 'changes' });
+  });
 }
 
 /* —— Message handler —— */

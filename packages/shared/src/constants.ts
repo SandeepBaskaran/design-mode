@@ -113,9 +113,9 @@ export const DEFAULT_SHORTCUTS = [
   { key: 'z', modifiers: ['ctrl', 'shift'], action: 'redo', label: 'Redo', category: 'Editing' },
   { key: 's', modifiers: ['alt'], action: 'screenshot', label: 'Screenshot', category: 'Export' },
   { key: 'e', modifiers: ['alt'], action: 'export-css', label: 'Export CSS', category: 'Export' },
-  { key: '1', modifiers: ['alt'], action: 'tab-edit', label: 'Edit Tab', category: 'Navigation' },
-  { key: '2', modifiers: ['alt'], action: 'tab-annotate', label: 'Annotate Tab', category: 'Navigation' },
-  { key: '3', modifiers: ['alt'], action: 'tab-design', label: 'Design Tab', category: 'Navigation' },
+  { key: '1', modifiers: ['alt'], action: 'tab-layers', label: 'Layers Tab', category: 'Navigation' },
+  { key: '2', modifiers: ['alt'], action: 'tab-design', label: 'Design Tab', category: 'Navigation' },
+  { key: '3', modifiers: ['alt'], action: 'tab-changes', label: 'Changes Tab', category: 'Navigation' },
 ] as const;
 
 // Display options

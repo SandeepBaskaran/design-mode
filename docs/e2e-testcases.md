@@ -76,6 +76,19 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 0.10.6 | Esc — Deselect / cancel | While selected | Multi-select tears down first if active, then inspect, then plain selection |
 | 0.10.7 | Delete — Remove selected element | Select element → press | Element removed; "delete" entry in Changes tab |
 | 0.10.8 | Ctrl/⌘+Z, Ctrl/⌘+⇧+Z — Undo/Redo | Make change → undo → redo | Style/text/DOM/visibility all reversible; works from anywhere except a focused input |
+| 0.10.9 | Alt+1 — Layers tab | Press Alt+1 from anywhere on the page (no input focused) | Side panel jumps to Layers tab; that tab's saved scroll position is restored |
+| 0.10.10 | Alt+2 — Design tab | Press Alt+2 | Side panel jumps to Design tab; saved scroll restored |
+| 0.10.11 | Alt+3 — Changes tab | Press Alt+3 | Side panel jumps to Changes tab; saved scroll restored |
+| 0.10.12 | Shortcut suppression in inputs | Focus a page `<input>` / `<textarea>` / contenteditable, then press Alt+1/2/3 (or any other shortcut except Escape) | The page input receives the keystroke as normal; the side-panel action does NOT fire |
+| 0.10.13 | Cmd/Ctrl+click on a Layers row | In Layers tab, Cmd-click 3 layer rows in turn | Each toggles into the multi-select set; the "N selected" chip in the action row updates; page-side overlay outlines all 3 |
+| 0.10.14 | Shift+click on a Layers row (range) | Click layer A with no modifier → Shift+click layer C three rows down | All visible rows from A to C are selected; the multi-select badge reflects the count |
+| 0.10.15 | Arrow Up/Down in Layers | Switch to Layers tab → press ↓ several times | Selection moves down one visible row per press, wraps at the end; the row stays in view (`scrollIntoView` keeps it visible) |
+| 0.10.16 | Enter to collapse/expand a container row | In Layers tab, select a container row with children → Enter | Children collapse; press Enter again → re-expand |
+| 0.10.17 | Numeric Arrow stepping (px props) | Click any pixel input (e.g. font-size) → ↑ | Value increments by 1; Shift+↑ by 10 |
+| 0.10.18 | Numeric Arrow stepping (unitless props) | Click a unitless input (e.g. line-height) → ↑ | Value increments by 0.1; Shift+↑ by 1 |
+| 0.10.19 | Esc priority | With multi-select active AND inspect on AND something selected, press Esc three times | First press tears down multi-select; second turns inspect off; third clears the selection |
+| 0.10.20 | Ctrl/⌘+Enter on comment textarea | Focus a comment textarea → Ctrl/⌘+Enter | Comment submits |
+| 0.10.21 | Enter on colour-picker hex input | Type a hex value (e.g. `#abc123`) in the picker → Enter | Value applied; picker dropdown closes |
 
 ---
 

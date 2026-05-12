@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Footer } from "./Footer";
 import { TopNav } from "./TopNav";
 
@@ -36,7 +37,11 @@ export default function OverviewPage() {
             <ul className="feature-list">
               <li>Stop describing UI changes in chat. Drag, click, type — your agent reads your edits as a real diff, not a screenshot.</li>
               <li>One click sends the selected element, computed styles, and your changes to Claude Code or Cursor as a ready-to-run prompt.</li>
-              <li>Bring your agent inside the page via the built-in MCP server &mdash; it inspects styles and applies changes while you watch.</li>
+              <li>
+                Bring your agent inside the page via the built-in MCP server &mdash; pick from three
+                connection modes (Local, Cloud, Self-hosted).{" "}
+                <Link href="/mcp">See setup →</Link>
+              </li>
               <li>Works on the URL already in your tab: localhost, staging, or production. No Storybook, no mock files.</li>
               <li>Tighten a layout in seconds, then commit the patch. The vibe-coding loop, minus the back-and-forth.</li>
             </ul>

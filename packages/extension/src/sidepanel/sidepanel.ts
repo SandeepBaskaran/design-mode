@@ -1397,6 +1397,19 @@ chrome.runtime.onMessage.addListener((msg) => {
       if (ta) ta.focus();
     }, 30);
   }
+  // Alt+1 / Alt+2 / Alt+3 from the page-side shortcut layer. We mirror
+  // the tab-click handler's side effects (scroll restore for the
+  // destination tab) by setting `pendingTabScrollRestore` before the
+  // re-render — same pattern the user's mouse-click tab switch uses.
+  if (msg.type === 'SWITCH_TAB') {
+    const requested = msg.tab as Tab | undefined;
+    if (requested && (requested === 'layers' || requested === 'design' || requested === 'changes') && tab !== requested) {
+      captureTabScroll();
+      pendingTabScrollRestore = tabScrollPositions[requested] ?? 0;
+      tab = requested;
+      render();
+    }
+  }
   if (msg.type === 'STATE_UPDATE') {
     enabled = msg.enabled ?? enabled;
     inspecting = msg.inspecting ?? inspecting;

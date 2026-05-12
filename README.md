@@ -4,6 +4,44 @@
 
 A free, open-source Chromium extension that turns any website into a live design surface. Edit layout, type, colour, spacing and structure with visual controls — then ship the result straight to Claude Code, Cursor, or any AI coding agent over MCP. No mock files, no copy-paste.
 
+---
+
+## 🎨 Install in 60 seconds
+
+**1. Add it to Chrome:** **[Get Design Mode from the Chrome Web Store →](https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih)**
+
+**2. Try it without installing:** [walk the interactive demo at designmode.app/demo](https://designmode.app/demo)
+
+**3. Connect your AI agent (optional):** [pick one of the three modes at designmode.app/mcp](https://designmode.app/mcp)
+
+That's it. Pin the extension to your toolbar, open any website, click the toolbar icon to open the side panel. Hover any element to highlight it; click to edit. Everything you change is tracked in the Changes tab and can be sent to your AI coding agent with one click.
+
+---
+
+## What is it?
+
+Design Mode is a visual editor that lives in your browser. Instead of describing UI changes in chat ("make the button rounder, add more spacing, change the blue"), you just **drag, click, and type** on the live site — and your AI coding agent reads those edits as a real diff. It works on any URL already in your tab: localhost, staging, or production. No Storybook, no mock files, no copy-paste.
+
+**Why people use it:**
+
+- Restyle any website without writing a single line of CSS.
+- Show your AI agent *exactly* what you want — visually — instead of describing it.
+- Drop sticky-note comments on elements and ship them with the prompt.
+- Export your changes as ready-to-paste CSS, Tailwind, SCSS, or JSX.
+- Tighten a layout in seconds, then commit the patch. The vibe-coding loop, minus the back-and-forth.
+
+## Three ways to connect your AI agent
+
+Design Mode brings a coding agent inside the page through a small bridge called MCP. There are three connection modes — pick whichever fits how you work:
+
+- **Local** — Run a tiny companion server on your laptop with one `npm` command. Free, fastest path, nothing leaves your machine.
+- **Cloud** — Use the hosted relay at `mcp.designmode.app`. Great for remote agents like hosted Claude or shared sessions. Free with a per-tenant daily quota.
+- **Self-hosted** — Same code as Cloud (open source in `packages/mcp-cloud`) on your own Vercel deployment. You own the relay and the privacy posture.
+
+**[Full setup guide for all three modes — Claude Desktop, Cursor, Claude Code →](https://designmode.app/mcp)**
+
+---
+
 ## Highlights
 
 - **Visual design controls** — Typography (named weights, lucide bold/italic/underline/
@@ -58,6 +96,12 @@ A free, open-source Chromium extension that turns any website into a live design
   easing curves come through inside the underlying CSS values, so they ship in the regular
   change stream.
 - **Keyboard-first** — Strict numeric inputs, arrow stepping (+1 / +10 with Shift), Ctrl+Z / Ctrl+Shift+Z.
+
+---
+
+# For contributors & developers
+
+The rest of this README is for people who want to build the project from source, run the MCP server locally, or hack on the codebase. If you just want to use Design Mode, the [60-second install path](#-install-in-60-seconds) above is all you need.
 
 ## Repo layout
 
@@ -162,13 +206,27 @@ Run `npm start` for the full ASCII banner.
 | Shortcut | Action |
 |---|---|
 | `Alt+D` | Toggle the side panel |
+| `Alt+I` | Toggle inspect mode |
+| `Alt+1` / `Alt+2` / `Alt+3` | Jump to Layers / Design / Changes tab |
+| `Alt+A` | Add a comment on the selected element |
+| `Alt+F` | Freeze / resume animations on the page |
+| `Alt+S` | Screenshot the selected element |
+| `Alt+E` | Copy generated CSS to clipboard |
+| `Delete` | Remove the selected element |
 | `Ctrl+Z` / `Cmd+Z` | Undo last change |
 | `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |
-| `↑` / `↓` on numeric field | Increment / decrement by 1 |
-| `Shift+↑` / `Shift+↓` | Step by 10 |
+| `Cmd/Ctrl+click` on a layer | Toggle that layer into the multi-select set |
+| `Shift+click` on a layer | Range-select between the previous click and this one |
+| `↑` / `↓` on numeric field | Increment / decrement by 1 (or 0.1 for unitless props) |
+| `Shift+↑` / `Shift+↓` | Step by 10 (or by 1 for unitless props) |
 | `Tab` in Design tab | Cycle inputs |
 | `Ctrl+Enter` in comment | Submit |
-| `Escape` | Cancel comment / deselect |
+| `Enter` on a Layers row | Toggle collapse / expand |
+| `Escape` | Cancel comment → tear down multi-select → exit inspect → deselect |
+
+Shortcuts are suppressed while a page-side `<input>` / `<textarea>` /
+`contenteditable` is focused, so typing in a form field never
+accidentally triggers a panel action. `Escape` is the only exception.
 
 ## Development
 

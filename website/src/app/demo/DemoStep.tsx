@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Step } from "./steps";
 import styles from "./demo.module.scss";
 
@@ -42,6 +43,11 @@ export function DemoStep({ step, index, childLetter, children }: Props) {
         </div>
       )}
       {children && <div className={styles.stepTarget}>{children}</div>}
+      {step.nextLink && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <Link href={step.nextLink.href}>{step.nextLink.label}</Link>
+        </div>
+      )}
     </section>
   );
 }

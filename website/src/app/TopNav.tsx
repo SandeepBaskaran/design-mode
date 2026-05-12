@@ -44,6 +44,22 @@ function TryDemoButton() {
   );
 }
 
+// "MCP" nav button — appears on home + demo so users can jump straight
+// to the connection-setup tour from anywhere in the marketing surface.
+// The /mcp page itself renders the home variant of TopNav, so the
+// button is implicitly skipped there (we don't want a self-link).
+function McpButton() {
+  return (
+    <Link
+      href="/mcp"
+      className="secondary-btn"
+      onClick={() => track("cta_click", { cta: "mcp", location: "top_nav" })}
+    >
+      <span>MCP</span>
+    </Link>
+  );
+}
+
 // Back-home button used in the demo nav in place of the wordmark on /demo,
 // where pushing users back to the marketing page is more useful than a
 // home link they already came from.
@@ -93,14 +109,16 @@ function GitHubIconButton() {
 }
 
 // `variant` swaps the left-side widget and the secondary CTA:
-//   - "home" (default): wordmark on the left, "Try the Demo" in the actions.
+//   - "home" (default): wordmark on the left, "Try the Demo" + "MCP" in the actions.
 //   - "demo": "Back home" button replaces the wordmark; the Try-Demo CTA
-//     is dropped because the user is already on the demo page.
-export function TopNav({ variant = "home" }: { variant?: "home" | "demo" } = {}) {
+//     is dropped because the user is already on the demo page. MCP stays.
+//   - "mcp": "Back home" left + Try Demo right; MCP button skipped (self-link).
+export function TopNav({ variant = "home" }: { variant?: "home" | "demo" | "mcp" } = {}) {
   const isDemo = variant === "demo";
+  const isMcp = variant === "mcp";
   return (
     <div className="page-title-row">
-      {isDemo ? (
+      {(isDemo || isMcp) ? (
         <BackHomeButton />
       ) : (
         <Link href="/" className="page-title">
@@ -111,7 +129,9 @@ export function TopNav({ variant = "home" }: { variant?: "home" | "demo" } = {})
       )}
       <div className="title-actions">
         <GitHubIconButton />
-        {!isDemo && <TryDemoButton />}
+        {!isDemo && !isMcp && <TryDemoButton />}
+        {isMcp && <TryDemoButton />}
+        {!isMcp && <McpButton />}
         <AddToChromeButton />
       </div>
     </div>

@@ -9,6 +9,9 @@ export type Step = {
   tryIt?: string;        // copy for the "Try it" callout
   targetId?: string;     // matches a key in DemoTargets if this step has an interactive demo block
   parentId?: string;     // for nested nav (Design sub-sections)
+  // Optional follow-on link rendered at the bottom of the step card —
+  // used to bridge the demo into the /mcp setup tour.
+  nextLink?: { label: string; href: string };
 };
 
 export const STEPS: Step[] = [
@@ -138,19 +141,55 @@ export const STEPS: Step[] = [
     id: "design-effects",
     title: "Effects",
     body: [
-      "Effects are layered: drop shadow, inner shadow, layer blur, background blur. Each entry is independent. Below the effect list, a Motion subsection holds transition, animation, and transform components.",
+      "Effects is a Figma-aligned six-kind layered list: Inner shadow, Drop shadow, Layer blur, Background blur, Noise (Mono / Duo / Multi), and Texture. Each row drags to reorder, hides via the eye, and removes via the trash.",
+      "Drop shadow is one row spanning three CSS chains — the 'Show behind transparent areas' checkbox swaps between box-shadow (rectangle), text-shadow (alpha-bound to glyphs on text elements), and filter:drop-shadow (alpha-bound to the whole element shape). Spread is preserved when toggled off and re-emitted when toggled back on.",
+      "Noise renders via SVG-data-URI background overlays on a ::after pseudo-element so it doesn't disturb layout; Texture works the same with an optional 'Clip to shape' that inherits the element's border-radius and clip-path.",
     ],
     tryIt:
-      "Select the floating card below. Click the + in the Effects header, then 'Drop shadow'. Tweak the X/Y/blur/spread to taste.",
+      "Select the floating card below. Click the + in the Effects header, then 'Drop shadow'. Toggle the 'Show behind transparent areas' checkbox to see how the shadow swaps between rectangle and alpha-bound rendering. Then add Noise → Mono and watch the grain land.",
     targetId: "design-effects",
     parentId: "design",
+  },
+  {
+    id: "design-motion",
+    title: "Motion",
+    body: [
+      "Split out from Effects into its own section — Transition, Animation, Transform, Motion path, View transition, Scroll-driven animation. Each editor surfaces every CSS longhand the relevant property exposes, plus a Preview button for transitions and animations.",
+      "The section starts collapsed by default so the design tab stays compact; expand the chevron next to 'Motion' in the side panel to use it.",
+    ],
+    tryIt:
+      "Select the floating card. Expand Motion. Click + → 'Transition', set duration 0.3s, then change the card's background colour — watch it ease into the new value. Click + → 'Animation' and pick a built-in dm-fade-in keyframe to preview a one-shot animation.",
+    targetId: "design-motion",
+    parentId: "design",
+  },
+  {
+    id: "design-layout-guide",
+    title: "Layout guide",
+    body: [
+      "Figma-style overlay of Columns / Rows / Grid bars on the selected element. Renders as a ::before pseudo-element so it doesn't touch layout; per-element session memory means the bars stay configured when you reselect the element.",
+      "Each row carries a kind dropdown, count (or cell size for Grid), settings expand, eye, and trash. Settings opens a 3×2 grid for Columns/Rows (Colour + Opacity / Align + Size / Margin + Gutter) or 1×2 for Grid (Colour + Opacity). The section header's eye toggles every guide on the element without losing the row config.",
+    ],
+    tryIt:
+      "Select the full-width container below. Open Layout guide → click Add → keep Columns kind, count 12, default 10% red. Toggle the section eye to hide and re-show the overlay. Drag to add a second guide row for Rows.",
+    targetId: "design-layout-guide",
+    parentId: "design",
+  },
+  {
+    id: "presets",
+    title: "Presets",
+    body: [
+      "Open with the bookmark icon in the action row. Presets covers all nine Design-tab sections (Position / Layout / Appearance / Typography / Fill / Stroke / Effects / Motion / Layout guide), with one preset seeded per kind so the JSON export shows the full schema.",
+      "Save the currently-selected element's relevant CSS properties under a name + kind. Apply any saved preset back to a different element with one click. Edit a preset to rename / change properties / drop fields. Delete (with confirmation) to remove. Import / Export bring presets to a JSON file for sharing.",
+    ],
+    tryIt:
+      "Open the bookmark icon. Browse the seeded presets — apply 'Headline 1' to a heading on the page, then save the current card's styles as a new 'Card · Soft' preset under the Effects kind.",
   },
   {
     id: "changes",
     title: "Changes panel",
     body: [
-      "Every edit you make is tracked in the Changes tab — grouped by element. The 'View Original' / 'View Changes' toggle lets you preview the page with or without your edits. Per-change actions: Revert (trash icon), Batch apply (zap icon, applies the change to all matching elements with a count badge ×N).",
-      "Clear All wipes everything in one click.",
+      "Every edit is tracked in the Changes tab — grouped by element with friendly group labels (preset / multi-select / visibility) when one action touched many properties at once. The 'View Original' / 'View Changes' toggle previews the page with or without your edits.",
+      "Per-change actions: Revert (trash icon, actually reverses the change on the page), Batch apply (zap icon, applies the change to all matching elements with a count badge ×N). Clear All wipes everything in one click.",
     ],
     tryIt:
       "Switch to the Changes tab after making edits in the previous sections. Click 'View Original' to flip back. Try Batch apply (zap) on a style change.",
@@ -210,8 +249,10 @@ export const STEPS: Step[] = [
     body: [
       "Send to Agent pushes the same Copy Prompt payload directly to a connected coding agent over MCP — no clipboard round-trip. Enabled when MCP is running AND an agent is connected. The button's tooltip names the specific blocker if either is missing.",
       "This is the fastest path from 'I just designed it in the browser' to 'the source code is now updated'.",
+      "Haven't set up an agent yet? The MCP tour walks you through all three connection modes (Local, Cloud, Self-hosted) with copy-paste config snippets for Claude Desktop, Cursor, and Claude Code — `Set up your agent →` link below.",
     ],
     tryIt:
       "With MCP running and your agent attached, click Send to Agent. The agent receives a structured message with every change in this demo session.",
+    nextLink: { label: "Set up your agent →", href: "/mcp" },
   },
 ];
