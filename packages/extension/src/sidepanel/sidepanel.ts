@@ -734,7 +734,7 @@ function applyStrokeProperty(prop: string, value: string) {
       const num = parseFloat(value) || 0;
       layers[idx].weight = num;
     }
-    strokeLayersByElement.set(id, layers);
+    setStrokeLayers(id, pos, layers);
     // Collect dispatchStrokeLayers' fan-out into a batch instead of
     // firing N individual SP_APPLY_STYLE messages. Changing one Weight
     // value fans out to 4 border-*-width + 4 colour + 4 style + 1 box-
@@ -817,97 +817,70 @@ function applyPositionAlign(which: string, ctx: { isFlex: boolean; isGrid: boole
 // per-side widths, style) regardless of mode; Inside/Center add a
 // synthesized visual (inset shadow / outline) on top, hiding the border
 // itself. Outside leaves the native border visible.
-function applyStrokePosition(pos: 'inside' | 'outside' | 'center') {
+function applyStrokePosition(pos: StrokePos) {
   const s = info?.computedStyles || {};
   const oldPos = inferStrokePosition(s);
   if (oldPos === pos) return;
-
-  // Read current stroke params from whichever mode was active. Prefer
-  // the cached layer (which holds the user's most-recent edits) over
-  // raw computed CSS — if the user just edited weight / colour /
-  // style in the old mode, the cache has it, but the new mode's CSS
-  // doesn't yet.
   const elementId = info?.id || '';
-  const cachedLayers = elementId ? strokeLayersByElement.get(elementId) : undefined;
-  const activeCached = cachedLayers && cachedLayers.length > 0
-    ? cachedLayers.find(l => l.visible !== false) || cachedLayers[0]
-    : null;
-  let weight: number; let color: string; let style: string;
-  if (activeCached) {
-    weight = activeCached.weight;
-    color = activeCached.color;
-    style = (elementId && strokeStyleByElement.get(elementId)) ||
-      (oldPos === 'center'
-        ? (s.outlineStyle && s.outlineStyle !== 'none' ? s.outlineStyle : 'solid')
-        : (s.borderTopStyle && s.borderTopStyle !== 'none' ? s.borderTopStyle : 'solid'));
-  } else if (oldPos === 'center') {
-    weight = parseFloat(s.outlineWidth || '0') || 0;
-    color = s.outlineColor || s.borderTopColor || '#000000';
-    style = (s.outlineStyle && s.outlineStyle !== 'none') ? s.outlineStyle : 'solid';
-  } else {
-    weight = parseFloat(s.borderTopWidth || '0') || 0;
-    color = s.borderTopColor || '#000000';
-    style = (s.borderTopStyle && s.borderTopStyle !== 'none') ? s.borderTopStyle : 'solid';
-  }
-  // Bootstrap a visible 1px stroke ONLY on truly pristine elements (no
-  // border / no inset shadow / no outline). If the user has explicitly
-  // set weight to 0 in the previous mode, preserve that intent.
-  const noVisibleStroke = oldPos === 'outside' &&
-    weight === 0 &&
-    (s.borderTopStyle || 'none') === 'none';
-  if (noVisibleStroke) weight = 1;
+  if (!elementId) return;
 
-  // Reset the cached layer list to a single entry matching the new
-  // mode's stroke. Without this, switching from a 5-layer Inside
-  // stack to Outside / Center would leave the cache populated with 5
-  // phantom layers; the panel would render them even though the
-  // page only paints one new stroke. Center is hard single-layer
-  // (CSS outline can't stack); Outside / Inside *could* stack, but
-  // mode switching is a "fresh start" — the user can Add Stroke
-  // again if they want layered effects in the new mode.
-  if (elementId) {
-    strokeLayersByElement.set(elementId, [{ weight, color, visible: true }]);
-    activeStrokeIdx = 0;
-  }
+  // Per-tab independence: each position owns its layer stash. Switching
+  // doesn't carry weight / colour from the old mode. The new mode reads
+  // its OWN cached list (or parses fresh from CSS on first visit; the
+  // page's natural border / inset / outline is honoured for the
+  // appropriate tab). When the new tab has nothing stashed and the
+  // page CSS has no stroke in that position, the panel surfaces
+  // weight = 0 + black + solid — same as Figma's empty-fill default,
+  // adapted for strokes.
+  const newLayers = getStrokeLayers(elementId, s, pos);
+  const activeLayer = newLayers.find(l => l.visible !== false) || newLayers[0];
+  const weight = activeLayer ? activeLayer.weight : 0;
+  const color = activeLayer ? activeLayer.color : '#000000';
+  const style = strokeStyleByElement.get(elementId) || 'solid';
+  activeStrokeIdx = 0;
 
   const sides = ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'];
-  const styles = ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'];
-  const colors = ['borderTopColor','borderRightColor','borderBottomColor','borderLeftColor'];
+  const styleProps = ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'];
+  const colorProps = ['borderTopColor','borderRightColor','borderBottomColor','borderLeftColor'];
 
-  // Collect every write into one batch so the tab swap is a single
-  // round-trip + single re-render. Without batching, each applyStyle
-  // dispatched its own SP_APPLY_STYLE message and the panel rendered
-  // after every response — the tab visibly walked through each
-  // intermediate state instead of snapping to the destination.
+  // One batch, one re-render. The build splits into two passes:
+  //   1. Clear the OLD mode's CSS so the previous stroke goes away.
+  //   2. Apply the NEW mode's stashed values to its CSS slot.
+  // Each mode owns only its CSS family (border-* vs box-shadow vs
+  // outline-*) so the writes don't trample neighbouring state.
   const batch: Array<{ property: string; value: string }> = [];
-  // Always sync per-side storage so switching back to Outside restores intent.
-  sides.forEach(p => batch.push({ property: p, value: weight + 'px' }));
-  colors.forEach(p => batch.push({ property: p, value: color }));
 
+  // ── Clear the old mode's CSS ────────────────────────────────────
+  if (oldPos === 'outside') {
+    sides.forEach(p => batch.push({ property: p, value: '0px' }));
+    styleProps.forEach(p => batch.push({ property: p, value: 'none' }));
+  } else if (oldPos === 'inside') {
+    batch.push({ property: 'boxShadow', value: serializeStrokeLayers([], 'inside', s.boxShadow || '') });
+  } else if (oldPos === 'center') {
+    batch.push({ property: 'outlineStyle', value: 'none' });
+    batch.push({ property: 'outlineWidth', value: '0px' });
+    batch.push({ property: 'outlineOffset', value: '0px' });
+  }
+
+  // ── Apply the new mode's stashed values ─────────────────────────
   if (pos === 'outside') {
-    styles.forEach(p => batch.push({ property: p, value: style }));
-    batch.push({ property: 'boxShadow', value: serializeStrokeLayers([], oldPos === 'center' ? 'inside' : oldPos, s.boxShadow || '') });
-    batch.push({ property: 'outlineStyle', value: 'none' });
-    batch.push({ property: 'outlineWidth', value: '0px' });
-    batch.push({ property: 'outlineOffset', value: '0px' });
+    sides.forEach(p => batch.push({ property: p, value: weight + 'px' }));
+    colorProps.forEach(p => batch.push({ property: p, value: color }));
+    styleProps.forEach(p => batch.push({ property: p, value: style }));
   } else if (pos === 'inside') {
-    styles.forEach(p => batch.push({ property: p, value: 'none' }));
-    batch.push({ property: 'boxShadow', value: serializeStrokeLayers([{ weight, color }], 'inside', s.boxShadow || '') });
-    batch.push({ property: 'outlineStyle', value: 'none' });
-    batch.push({ property: 'outlineWidth', value: '0px' });
-    batch.push({ property: 'outlineOffset', value: '0px' });
+    // Re-serialise from the position-specific stash so a previously
+    // multi-layer Inside session restores its full chain on return.
+    batch.push({ property: 'boxShadow', value: serializeStrokeLayers(newLayers, 'inside', s.boxShadow || '') });
   } else { // center
-    styles.forEach(p => batch.push({ property: p, value: 'none' }));
-    batch.push({ property: 'boxShadow', value: serializeStrokeLayers([], oldPos === 'inside' ? 'inside' : oldPos, s.boxShadow || '') });
     batch.push({ property: 'outlineStyle', value: style });
     batch.push({ property: 'outlineWidth', value: weight + 'px' });
     batch.push({ property: 'outlineColor', value: color });
-    // Outline-offset has to stay negative for the visual to read as
-    // "centered on the edge" (the outline straddles the border box).
-    // With weight 0, -weight/2 is also 0, which makes the next
-    // inferStrokePosition fall back to 'outside' — looks like the tab
-    // bounced. Floor at -1px so Center is unambiguous even before the
-    // user picks a weight.
+    // Outline-offset seed: negative so the outline straddles the box
+    // edge. Floor at -1px even when weight is 0 so the
+    // inferStrokePosition detector reliably classifies as Center
+    // (otherwise outline-offset 0 + outline-width 0 looks like Outside
+    // and the tab bounces). Subsequent edits leave the offset alone
+    // — dispatchStrokeLayers no longer rewrites it on every change.
     batch.push({ property: 'outlineOffset', value: Math.min(-1, -Math.round(weight / 2)) + 'px' });
   }
   applyStylesBatch(batch, 'Stroke position: ' + pos);
@@ -2925,7 +2898,22 @@ function buildCornerAwareDashSvg(opts: {
 // single-stroke `border-*` path (1 layer, Outside) vs. the chained
 // `box-shadow` path (multi-stroke). `activeStrokeIdx` and the previously
 // declared `expandedStrokeIdx` (top of file) live elsewhere.
-const strokeLayersByElement = new Map<string, StrokeLayer[]>();
+// Per-element-per-position stroke stash. Each tab (Outside / Center /
+// Inside) holds its own layer list so switching tabs doesn't bleed
+// weight / colour / style between modes — a stroke set in Inside stays
+// in Inside even after the user visits Outside, and Outside reads
+// fresh from its own state instead of inheriting from Inside.
+type StrokePos = 'inside' | 'outside' | 'center';
+const strokeLayersByElement = new Map<string, Map<StrokePos, StrokeLayer[]>>();
+
+function setStrokeLayers(id: string, position: StrokePos, layers: StrokeLayer[]): void {
+  let elementMap = strokeLayersByElement.get(id);
+  if (!elementMap) {
+    elementMap = new Map();
+    strokeLayersByElement.set(id, elementMap);
+  }
+  elementMap.set(position, layers);
+}
 let activeStrokeIdx = 0;
 
 // Parse a single box-shadow entry into structured form. Browsers normalize
@@ -3017,12 +3005,13 @@ function serializeStrokeLayers(layers: StrokeLayer[], position: 'inside' | 'outs
   return all.length ? all.join(', ') : 'none';
 }
 
-// Get-or-seed the per-element stroke-layer state. If the map is empty for
-// this element, parse from CSS. For Outside mode where strokes live in
-// `border-*-width/-color` (not box-shadow), synthesise a single primary
-// layer so the layered-list UI shows the existing stroke.
-function getStrokeLayers(id: string, s: Record<string, string>, position: 'inside' | 'outside' | 'center'): StrokeLayer[] {
-  const cached = strokeLayersByElement.get(id);
+// Get-or-seed the per-element-per-position stroke-layer state. Each tab
+// keeps its own list — switching tabs doesn't carry weight / colour
+// across modes. First visit parses from CSS so the user sees the
+// page's natural stroke (if any) in the position-appropriate slot;
+// after that, the stash holds their edits per tab.
+function getStrokeLayers(id: string, s: Record<string, string>, position: StrokePos): StrokeLayer[] {
+  const cached = strokeLayersByElement.get(id)?.get(position);
   if (cached) return cached;
   let layers = parseStrokeLayers(s, position);
   if (layers.length === 0 && position === 'outside') {
@@ -3031,7 +3020,7 @@ function getStrokeLayers(id: string, s: Record<string, string>, position: 'insid
     if (w > 0) layers = [{ weight: w, color: s.borderTopColor || '#000000', visible: true }];
   }
   layers = layers.map(l => ({ ...l, visible: l.visible !== false }));
-  strokeLayersByElement.set(id, layers);
+  setStrokeLayers(id, position, layers);
   return layers;
 }
 
@@ -7960,7 +7949,7 @@ function setupDelegation() {
       // Default new stroke: 1px white on top of the stack.
       layers.unshift({ weight: 1, color: '#ffffff', visible: true });
       activeStrokeIdx = 0;
-      strokeLayersByElement.set(id, layers);
+      setStrokeLayers(id, pos, layers);
       const intent = strokeStyleByElement.get(id);
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
       dispatchStrokeLayers(layers, pos, cs, applyStyle, styleNow);
@@ -7980,7 +7969,7 @@ function setupDelegation() {
       layers.splice(idx, 1);
       // Re-point activeStrokeIdx so it stays valid.
       if (activeStrokeIdx >= layers.length) activeStrokeIdx = Math.max(0, layers.length - 1);
-      strokeLayersByElement.set(id, layers);
+      setStrokeLayers(id, pos, layers);
       const intent = strokeStyleByElement.get(id);
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
       dispatchStrokeLayers(layers, pos, cs, applyStyle, styleNow);
@@ -7998,7 +7987,7 @@ function setupDelegation() {
       const layers = getStrokeLayers(id, cs, pos);
       if (idx < 0 || idx >= layers.length) return;
       layers[idx].visible = layers[idx].visible === false ? true : false;
-      strokeLayersByElement.set(id, layers);
+      setStrokeLayers(id, pos, layers);
       const intent = strokeStyleByElement.get(id);
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
       dispatchStrokeLayers(layers, pos, cs, applyStyle, styleNow);
@@ -9615,7 +9604,7 @@ function setupDelegation() {
     if (src >= layers.length || tgt >= layers.length) return;
     const [moved] = layers.splice(src, 1);
     layers.splice(tgt, 0, moved);
-    strokeLayersByElement.set(id, layers);
+    setStrokeLayers(id, pos, layers);
     // Keep activeStrokeIdx pointing at the same logical layer.
     if (activeStrokeIdx === src) activeStrokeIdx = tgt;
     else if (src < activeStrokeIdx && tgt >= activeStrokeIdx) activeStrokeIdx -= 1;
