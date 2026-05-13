@@ -1,0 +1,86 @@
+name: Bug report
+description: Something in the extension, MCP server, or website is broken or doing the wrong thing.
+title: "[Bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. A reproducible report gets fixed
+        faster — please fill in as much as you can.
+
+        **Security issues:** Do NOT file them here. Email
+        `hello@sandeepbaskaran.com` — see [SECURITY.md](../blob/main/SECURITY.md).
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which part of Design Mode?
+      options:
+        - Chrome extension (side panel / inspector / content script)
+        - MCP local server (packages/mcp-local)
+        - MCP cloud relay (packages/mcp-cloud)
+        - Website (design-mode.dev)
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Open the Design Mode side panel → click the **?** icon in the
+        header → click **Copy diagnostics** → paste the result here.
+        (If the panel won't open, paste your Chrome version from
+        `chrome://version`, your OS, and the Design Mode version from
+        `chrome://extensions`.)
+      placeholder: |
+        Design Mode: 1.1.0
+        Chrome:      131.0.6778.86
+        Platform:    macOS (arm64), en-US
+        Theme:       light
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Numbered list. If possible, repro against the test fixture at
+        `packages/extension/test-fixtures/index.html` or a public URL
+        we can open.
+      placeholder: |
+        1. Open https://example.com
+        2. Click the extension icon
+        3. Select the <h1>
+        4. Change font-size to 32px
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened?
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: DevTools console output
+      description: |
+        Open DevTools on the inspected page AND on the side panel
+        (right-click panel → Inspect). Paste any red errors / warnings.
+        Optionally run `__dm.dump()` and `__dm.applied()` in the page
+        console and include the output.
+      render: shell
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot or screen recording (optional)
+      description: Drag images / video directly into this box.

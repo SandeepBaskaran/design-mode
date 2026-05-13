@@ -1,0 +1,37 @@
+name: Stale
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-issue-stale: 45
+          days-before-issue-close: 7
+          stale-issue-label: stale
+          exempt-issue-labels: 'pinned,security,help wanted,good first issue,regression'
+          stale-issue-message: |
+            This issue has been quiet for 45 days. If it's still relevant, please drop a comment with any new info — otherwise it'll close in 7 days. Reopen anytime.
+
+          days-before-pr-stale: 14
+          days-before-pr-close: 16
+          stale-pr-label: stale
+          exempt-pr-labels: 'pinned,wip'
+          stale-pr-message: |
+            This PR has been quiet for 14 days. I've marked it as a draft so the review queue stays clear — convert it back to "Ready for review" when you're ready. It'll close in 16 days if there's no further activity. Ping anytime.
+
+      - name: Convert stale PRs to draft
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr list --label stale --state open --json number --jq '.[].number' \
+            | xargs -I {} gh pr ready --undo {} || true

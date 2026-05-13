@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose a new feature or an improvement to an existing one.
+title: "[Feature] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please skim
+        [FEATURES.md](../blob/main/FEATURES.md) and
+        [PARITY.md](../blob/main/PARITY.md) — your idea may already
+        be tracked or intentionally out of scope.
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which part of Design Mode?
+      options:
+        - Chrome extension — Design tab (Position, Layout, Typography, Fill, Stroke, Effects, Motion, Layout Guide)
+        - Chrome extension — Layers tab
+        - Chrome extension — Changes tab
+        - Chrome extension — Comments
+        - Chrome extension — MCP integration
+        - Chrome extension — Other
+        - MCP server (local or cloud)
+        - Website / docs
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the use case. "I'd like a button for X" is less useful than "When I'm doing Y, I have to do Z manually every time."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you thought about and why they don't fit.
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Are you willing to contribute this?
+      options:
+        - label: I'd like to send a PR for this
+        - label: I can help test a PR for this

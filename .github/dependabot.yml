@@ -1,0 +1,54 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types: ['patch', 'minor']
+
+  - package-ecosystem: npm
+    directory: /packages/extension
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types: ['patch', 'minor']
+
+  - package-ecosystem: npm
+    directory: /packages/mcp-local
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types: ['patch', 'minor']
+
+  - package-ecosystem: npm
+    directory: /packages/mcp-cloud
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types: ['patch', 'minor']
+
+  - package-ecosystem: npm
+    directory: /packages/shared
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types: ['patch', 'minor']
+
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+    groups:
+      patch-and-minor:
+        update-types: ['patch', 'minor']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

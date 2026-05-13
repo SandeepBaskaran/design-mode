@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/SandeepBaskaran/design-mode/blob/main/SECURITY.md
+    about: Please report security issues privately — see SECURITY.md.
+  - name: Question or discussion
+    url: https://github.com/SandeepBaskaran/design-mode/discussions
+    about: Open a discussion if you have a question, idea, or want to share something.
