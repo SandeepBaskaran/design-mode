@@ -157,6 +157,7 @@ type Theme = 'dark' | 'light' | 'system';
 type ColorFormat = 'hex' | 'rgba' | 'hsl';
 let tab: Tab = 'design';
 let settingsOpen = false;
+let helpOpen = false;
 let enabled = false;
 let inspecting = true;
 let mcpState: McpState = 'offline';
@@ -687,21 +688,44 @@ async function applyStyle(property: string, value: string) {
   // it's only set when the user explicitly engaged the lock button. We
   // dispatch the partner FIRST so when the user's own edit's repaint
   // arrives, both dimensions are already coherent.
+  //
+  // Media elements (<img>, <video>, <svg>, <canvas>, <picture>) get an
+  // implicit lock derived from their current W:H so resizing keeps the
+  // natural proportions by default — users don't have to remember to
+  // toggle the link button on first.
   if (property === 'width' || property === 'height') {
     const arRaw = (info?.computedStyles?.aspectRatio || '').trim();
-    if (arRaw && arRaw !== 'auto') {
-      let ratio = NaN;
-      const slashM = arRaw.match(/^(-?[\d.]+)\s*\/\s*(-?[\d.]+)$/);
-      if (slashM) {
-        const a = parseFloat(slashM[1]);
-        const b = parseFloat(slashM[2]);
-        if (a > 0 && b > 0) ratio = a / b;
-      } else {
-        const n = parseFloat(arRaw);
-        if (!isNaN(n) && n > 0) ratio = n;
+    let ratio = NaN;
+    // Browsers serialise computed aspect-ratio in three shapes:
+    //   "16 / 9"   — explicit user value
+    //   "1.7777"   — single number
+    //   "auto 800 / 600" — element's intrinsic ratio (img / svg / video)
+    // The user-set `<W>/<H>` is the canonical "lock on" signal; the
+    // `auto <W> / <H>` form is what `<img>` reports by default and is
+    // treated as the implicit-lock branch below.
+    const userSlash = arRaw.match(/^(-?[\d.]+)\s*\/\s*(-?[\d.]+)$/);
+    if (userSlash) {
+      const a = parseFloat(userSlash[1]);
+      const b = parseFloat(userSlash[2]);
+      if (a > 0 && b > 0) ratio = a / b;
+    } else if (arRaw && arRaw !== 'auto') {
+      const n = parseFloat(arRaw);
+      if (!isNaN(n) && n > 0) ratio = n;
+    }
+    // Media-kind implicit lock — derive ratio from current rendered
+    // width / height when no explicit aspect-ratio is set.
+    if (isNaN(ratio) && info) {
+      const tag = (info.tagName || '').toLowerCase();
+      const isMedia = tag === 'img' || tag === 'video' || tag === 'svg' || tag === 'canvas' || tag === 'picture';
+      if (isMedia) {
+        const cw = parseFloat(info.computedStyles?.width || '0') || 0;
+        const ch = parseFloat(info.computedStyles?.height || '0') || 0;
+        if (cw > 0 && ch > 0) ratio = cw / ch;
       }
+    }
+    if (!isNaN(ratio) && ratio > 0) {
       const parsedVal = (value || '').trim().match(/^(-?[\d.]+)\s*([a-z%]*)$/i);
-      if (!isNaN(ratio) && ratio > 0 && parsedVal) {
+      if (parsedVal) {
         const num = parseFloat(parsedVal[1]);
         const unit = (parsedVal[2] || 'px').trim() || 'px';
         if (!isNaN(num) && num > 0) {
@@ -4688,6 +4712,7 @@ function renderHeader(): string {
   return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;top:0;z-index:10;">' +
     domain + '<div style="flex:1;"></div>' + renderMcpStatus() +
     '<button data-dm-action="toggle-theme" title="Toggle theme" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon(themeIcon as keyof typeof icons, 15) + '</button>' +
+    '<button data-dm-action="help" title="Help" aria-label="Open help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('helpCircle', 15) + '</button>' +
     '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button></div>';
 }
 
@@ -4988,7 +5013,7 @@ function visibleSections(kind: LayerKind): SectionVisibility {
     return { position: true, layout: false, appearance: true, typography: false, fill: false, stroke: false, effects: false, motion: false, layoutGuide: false };
   }
   if (kind === 'media' || kind === 'svg') {
-    return { position: true, layout: false, appearance: true, typography: false, fill: true, stroke: true, effects: true, motion: true, layoutGuide: false };
+    return { position: true, layout: true, appearance: true, typography: false, fill: true, stroke: true, effects: true, motion: true, layoutGuide: true };
   }
   if (kind === 'form') {
     return { position: true, layout: false, appearance: true, typography: true, fill: true, stroke: true, effects: true, motion: true, layoutGuide: false };
@@ -7127,6 +7152,61 @@ function extensionVersion(): string {
   }
 }
 
+// Pad each label so values line up in the resulting block — the bug template
+// placeholder renders this verbatim, so column alignment matters visually.
+function pad(label: string): string {
+  return (label + ':').padEnd(12, ' ');
+}
+
+function detectBrowser(): string {
+  type UAData = { brand: string; version: string };
+  const nav = navigator as Navigator & { userAgentData?: { brands?: UAData[] } };
+  const brands = nav.userAgentData?.brands;
+  if (brands && brands.length) {
+    const main = brands.find(b => /chrome|chromium|edge|brave/i.test(b.brand) && !/not.*brand/i.test(b.brand)) || brands[0];
+    return main.brand + ' ' + main.version;
+  }
+  const m = navigator.userAgent.match(/(Chrome|Firefox|Safari|Edg)\/([\d.]+)/);
+  return m ? m[1] + ' ' + m[2] : navigator.userAgent;
+}
+
+function buildDiagnostics(): string {
+  const lines = [
+    pad('Design Mode') + (extensionVersion() || 'dev'),
+    pad('Chrome') + detectBrowser(),
+    pad('Platform') + (navigator.platform || 'unknown') + ', ' + (navigator.language || 'unknown'),
+    pad('Theme') + resolvedTheme,
+  ];
+  return lines.join('\n');
+}
+
+function renderHelpView(): string {
+  const card = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:14px;';
+  const primaryBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px 12px;background:var(--dm-text);border:1px solid var(--dm-text);border-radius:6px;color:var(--dm-bg);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;text-decoration:none;';
+  const secondaryBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:9px 12px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:12px;font-weight:500;font-family:inherit;';
+  const linkStyle = 'color:var(--dm-text-secondary);text-decoration:none;font-size:11px;';
+
+  return '<div style="padding:16px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
+    '<button data-dm-action="back-from-help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
+    '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Help</span></div>' +
+    '<div style="display:flex;flex-direction:column;gap:12px;">' +
+    '<div style="' + card + '">' +
+    '<p style="margin:0 0 12px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">Found a bug or want to request a feature? File it on GitHub — please include your Chrome version and repro steps.</p>' +
+    '<a href="https://github.com/SandeepBaskaran/design-mode/issues/new/choose" target="_blank" rel="noopener noreferrer" style="' + primaryBtn + '">Report an issue ' + icon('externalLink', 12) + '</a>' +
+    '<div style="height:8px;"></div>' +
+    '<button data-dm-action="copy-diagnostics" style="' + secondaryBtn + '">' + icon('copy', 12) + ' <span data-dm-copy-label>Copy diagnostics</span></button>' +
+    '</div>' +
+    '<div style="' + card + '"><div style="display:flex;flex-direction:column;gap:8px;">' +
+    '<a href="https://github.com/SandeepBaskaran/design-mode#readme" target="_blank" rel="noopener noreferrer" style="' + linkStyle + '">Read the docs ↗</a>' +
+    '<a href="https://github.com/SandeepBaskaran/design-mode/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" style="' + linkStyle + '">Privacy ↗</a>' +
+    '<a href="mailto:hello@sandeepbaskaran.com" style="' + linkStyle + '">Security disclosure ↗</a>' +
+    '</div></div>' +
+    '</div>' +
+    '<div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v' + extensionVersion() + '</div></div>' +
+    '</div>';
+}
+
 /* ── Phase 1: Render with morphdom ── */
 function renderCaptureToast(): string {
   if (!captureToast) return '';
@@ -7175,6 +7255,8 @@ function render() {
 
   if (settingsOpen) {
     html = renderHeader() + renderSettingsView() + renderCaptureToast();
+  } else if (helpOpen) {
+    html = renderHeader() + renderHelpView() + renderCaptureToast();
   } else if (presetsOpen) {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
       renderHeader() + renderPresetsView() + renderCaptureToast() + '</div>';
@@ -7396,7 +7478,24 @@ function setupDelegation() {
         case 'clear-changes-search': changesSearch = ''; render(); break;
         case 'reset-changes-filter': changesFilter = 'all'; changesSearch = ''; render(); break;
         case 'back-from-settings': settingsOpen = false; render(); break;
-        case 'settings': settingsOpen = !settingsOpen; render(); break;
+        case 'settings': helpOpen = false; settingsOpen = !settingsOpen; render(); break;
+        case 'back-from-help': helpOpen = false; render(); break;
+        case 'help': settingsOpen = false; helpOpen = !helpOpen; render(); break;
+        case 'copy-diagnostics': {
+          const payload = buildDiagnostics();
+          const flash = (msg: string) => {
+            const lbl = document.querySelector('[data-dm-copy-label]') as HTMLElement | null;
+            if (!lbl) return;
+            const prev = lbl.textContent || 'Copy diagnostics';
+            lbl.textContent = msg;
+            setTimeout(() => { lbl.textContent = prev; }, 1500);
+          };
+          navigator.clipboard.writeText(payload).then(
+            () => flash('Copied ✓'),
+            () => flash('Copy failed'),
+          );
+          break;
+        }
         case 'show-shortcuts': showCaptureToast('success', 'Alt+D toggle · Ctrl/⌘+Z undo · Ctrl/⌘+⇧Z redo · Esc deselect / cancel'); break;
         // Cloud-mode auth flow. Register mints a fresh device token via
         // the cloud server's /auth/register endpoint and stores it locally.
