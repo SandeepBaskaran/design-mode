@@ -7,7 +7,7 @@
 .demoLayout {
   max-width: 1024px;
   margin: 0 auto;
-  padding: 1rem 1.5rem 3rem;
+  padding: 1.25rem 1.5rem 3rem;
   display: grid;
   grid-template-columns: 240px 1fr;
   gap: 2.5rem;
@@ -484,6 +484,64 @@
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;
+}
+
+.targetMotionStage {
+  width: 100%;
+  max-width: 360px;
+  padding: 1.25rem;
+  background: #f3f4f6;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.targetMotionCard {
+  padding: 1rem 1.25rem;
+  background: #ffffff;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  text-align: center;
+  // Default transition + transform so the demo target already shows a
+  // hover state — the user adds / tweaks via the Motion section.
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  }
+
+  strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+  }
+
+  p {
+    font-size: 0.8125rem;
+    color: rgba(0, 0, 0, 0.65);
+    margin: 0;
+  }
+}
+
+.targetLayoutGuideContainer {
+  width: 100%;
+  max-width: 520px;
+  height: 200px;
+  padding: 1rem;
+  background: #fafafa;
+  border: 1px dashed rgba(0, 0, 0, 0.15);
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.targetLayoutGuideHint {
+  font-size: 0.8125rem;
+  color: rgba(0, 0, 0, 0.55);
+  text-align: center;
 }
 
 .targetActionStage {

@@ -100,7 +100,34 @@ strong {
   gap: 0.875rem;
   max-width: 1024px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 1.5rem;
+  // No horizontal padding on desktop so header / hero / footer span
+  // the full 1024px article width. Narrow-screen breathing room is
+  // restored by the @media (max-width: 980px) rule below.
+  padding: 1.25rem 0 1.5rem;
+}
+
+// Homepage variant — capped at one viewport so the marketing page
+// fits without scrolling. The other routes (/demo, /mcp, /privacy)
+// legitimately scroll, so this opt-in class keeps the cap scoped.
+// The Footer is intentionally NOT special-cased here; it renders
+// at its shared 1024-px-centered width on every route so the brand
+// chrome stays consistent.
+.home-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  width: 100%;
+  max-width: 1024px;
+  margin: 0 auto;
+}
+
+.home-shell .article {
+  flex: 1;
+  min-height: 0;
+  padding: 1.25rem 0 0.5rem;
+  gap: 0.5rem;
+  justify-content: flex-start;
 }
 
 // Header spans the full article width so the top nav stretches edge-to-edge
@@ -278,36 +305,38 @@ strong {
   justify-content: center;
   align-items: center;
   align-self: center;
-  width: 720px;
-  max-width: 100%;
+  width: 840px;
+  max-width: 840px;
+  height: 25rem;
+  overflow: hidden;
   gap: 2.5rem;
-  margin-top: 0.5rem;
 }
 
 // ── Hero cover image ─────────────────────────────────────────────────────
-// Constrained by max-height (instead of width) since the screenshot is
-// portrait. Capping the height is what makes the whole page fit inside
-// a typical desktop viewport without scrolling.
+// Height-pinned (400px) with width derived from the image's natural
+// 269×600 aspect ratio — keeps the screenshot uncropped so the full
+// side-panel composition reads correctly. The bottom fade is anchored
+// to the cover's own bottom edge so the dissolve always lines up with
+// where the image ends.
 .hero-cover {
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
   border-radius: 8px;
-  // Cap at a height that, combined with nav + hero + footer, fits inside
-  // a typical desktop viewport (~937px usable on 1080p). Width follows.
-  max-height: 52vh;
   margin: 0;
+  line-height: 0;
 
   img {
     display: block;
-    height: 52vh;
-    max-height: 52vh;
+    height: 25rem;
     width: auto;
     border-radius: 8px;
   }
 
   // Soft fade at the bottom — colour-matched to --body-bg so the image
-  // dissolves into the page rather than ending in a hard edge.
+  // dissolves into the page rather than ending in a hard edge. Because
+  // the cover now stretches to match the right-column's height, the
+  // fade starts where the right-column content ends.
   &::after {
     content: '';
     position: absolute;
@@ -373,7 +402,13 @@ strong {
 }
 
 // ── Footer ───────────────────────────────────────────────────────────────
+// Mirrors the header's `width: 100%; max-width: 1024px` shape so the
+// footer reads identically on every route — regardless of whether the
+// page renders it inside the article wrapper (/mcp, /privacy) or
+// outside it (/, /demo). 100% fills the available column up to the
+// 1024-px cap; `margin: 0 auto` centres it when the viewport is wider.
 .footer {
+  width: 100%;
   max-width: 1024px;
   margin: 0 auto;
   padding: 1rem 1.5rem 3rem;
@@ -397,8 +432,10 @@ strong {
 // Multi-section pages need consistent vertical rhythm + readable lists,
 // code blocks, and tables. The home and demo pages bring their own
 // layouts; these rules only kick in on pages that render plain
-// `.article > section` blocks.
-.article > section {
+// `.article > section` blocks. `.overview-row` is excluded because it
+// owns its own width (840px) — without the :not() it would inherit
+// the 720px cap and the two-column composition would feel cramped.
+.article > section:not(.overview-row) {
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
@@ -507,7 +544,20 @@ strong {
   }
 
   .article {
-    padding: 2rem 1.25rem 2rem;
+    padding: 1.25rem 1.25rem 2rem;
+  }
+
+  // Release the homepage's 100vh cap on tablet / mobile — stacking the
+  // overview into a column produces more vertical content than fits in
+  // a phone viewport, and clipping it via `overflow:hidden` would lose
+  // the install bullets. Let the page scroll on smaller screens.
+  .home-shell {
+    height: auto;
+    overflow: visible;
+  }
+
+  .home-shell .article {
+    padding: 1.25rem 1.25rem 2rem;
   }
 
   // Stack image above content on narrower viewports — flex-row collapses
@@ -516,17 +566,14 @@ strong {
     flex-direction: column;
     align-items: center;
     gap: 1.5rem;
+    width: 100%;
+    max-width: 100%;
   }
 
-  .hero-cover {
-    max-height: none;
-    width: 60%;
-
-    img {
-      height: auto;
-      max-height: none;
-      width: 100%;
-    }
+  // Cover scales down on smaller viewports — the img dictates dimensions,
+  // so reducing its height keeps everything proportional.
+  .hero-cover img {
+    height: 320px;
   }
 
   .overview-content {
@@ -543,7 +590,7 @@ strong {
 
 @media (max-width: 640px) {
   .article {
-    padding: 2.5rem 1rem 2rem;
+    padding: 1.25rem 1rem 2rem;
     gap: 0.5rem;
   }
 
@@ -609,11 +656,8 @@ strong {
     line-height: 1.55;
   }
 
-  // Cover image — 60% (from the 980px breakpoint) is still a little
-  // narrow at phone widths; bump it up so the side-panel detail stays
-  // legible while the fade still does its job.
-  .hero-cover {
-    width: 75%;
+  .hero-cover img {
+    height: 280px;
   }
 
   // Hide the secondary "Try the Demo" CTA on phones — the top nav is
@@ -638,7 +682,7 @@ strong {
 
 @media (max-width: 400px) {
   .article {
-    padding: 2rem 0.875rem 1.5rem;
+    padding: 1.25rem 0.875rem 1.5rem;
   }
 
   .page-title {
@@ -675,8 +719,7 @@ strong {
     }
   }
 
-  // Use the full column width at the smallest breakpoint
-  .hero-cover {
-    width: 90%;
+  .hero-cover img {
+    height: 240px;
   }
 }

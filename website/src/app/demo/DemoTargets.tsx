@@ -119,6 +119,26 @@ export const DEMO_TARGETS: Record<string, () => JSX.Element> = {
     </div>
   ),
 
+  "design-motion": () => (
+    <div id="demo-motion-stage" className={styles.targetMotionStage}>
+      <div id="demo-motion-card" className={styles.targetMotionCard}>
+        <strong>Animate me</strong>
+        <p>
+          Pick me, expand Motion, add a Transition on background-color or
+          transform, then hover this card.
+        </p>
+      </div>
+    </div>
+  ),
+
+  "design-layout-guide": () => (
+    <div id="demo-layout-guide-container" className={styles.targetLayoutGuideContainer}>
+      <span className={styles.targetLayoutGuideHint}>
+        Wide container — apply a Columns × 12 layout guide on me.
+      </span>
+    </div>
+  ),
+
   "action-row": () => (
     <div id="demo-action-stage" className={styles.targetActionStage}>
       <div
