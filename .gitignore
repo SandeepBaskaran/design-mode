@@ -98,9 +98,6 @@ secrets/
 # ── Claude / agent session state ─────────────────────────────────────────
 .claude/
 .claude
-# Personal working-agreement notes for Claude — keeps standing rules out
-# of conversation history without exposing them in the public repo.
-CLAUDE.md
 .aider*
 
 # ── macOS ────────────────────────────────────────────────────────────────
