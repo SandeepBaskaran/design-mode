@@ -6,6 +6,80 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-05-14
+
+### Added
+
+- **In-panel Help view.** New `?` icon in the side panel header
+  opens a full-panel Help overlay with a "Report an issue" link
+  straight to GitHub Issues, a "Copy diagnostics" button that
+  captures Design Mode version + Chrome + OS + theme to the
+  clipboard, plus quick links to README, PRIVACY.md, and the
+  security disclosure email. No new permissions — clipboard write
+  only, environment metadata only.
+- **Alt+1 / Alt+2 / Alt+3 tab navigation** — keyboard shortcuts to
+  jump straight to Layers / Design / Changes from anywhere in the
+  side panel. Documented in `docs/e2e-testcases.md` Phase 0.10.
+
+### Changed
+
+- **Versioning policy: `mcp-cloud` synced to the extension's
+  version line.** Was on an independent `0.x` track; from this
+  release on, all four packages (extension, mcp-local, mcp-cloud,
+  shared) plus the website ship at the same number. One-time jump
+  from `0.1.0` → `1.1.0` for mcp-cloud. No protocol changes.
+- **CLAUDE.md is now a public project guide.** Captures build
+  commands, security baseline, monorepo patterns, documentation
+  conventions, label taxonomy, CI / dependency hygiene, GitHub
+  Discussions, and the full release-readiness checklist.
+  Maintainer-specific workflow rules moved out of the repo entirely.
+- **Website homepage and `/mcp` route refresh.** Homepage hero +
+  overview row resized and aligned with the footer; `/mcp`
+  rewritten as a three-mode tour (Local / Cloud / Self-hosted) with
+  copy-ready config snippets for Claude Desktop, Cursor, and Claude
+  Code.
+- **README rework.** 60-second install path at the top, "What is
+  it" intro, three-ways-to-connect summary, technical content gated
+  behind "For contributors & developers".
+
+### Fixed
+
+- **`mcp-local` TypeScript build.** npm had hoisted `zod 4.3.6` to
+  the project root while the MCP SDK's `server.tool()` overloads
+  only compile cleanly against Zod 3.x. Pinned `zod` to `3.25.76`
+  via a root direct dep + `"overrides": { "zod": "$zod" }` so every
+  transitive consumer (the MCP SDK included) resolves the same 3.x.
+
+### Internal
+
+- **`.github/` directory added:**
+  - Issue forms — `bug_report.yml`, `feature_request.yml`,
+    `config.yml` (disables blank issues, routes security to
+    SECURITY.md, routes Q&A to /discussions).
+  - `pull_request_template.md` with scope / test-plan / security
+    checklists.
+  - `FUNDING.yml` for the repo Sponsor button.
+  - `workflows/ci.yml` — runs `npm run verify` on every PR + push
+    to main.
+  - `workflows/codeql.yml` — JS/TS static security analysis on PRs +
+    weekly cron.
+  - `workflows/stale.yml` — labels inactive issues at 45 days / PRs
+    at 14 days, converts stale PRs to draft, closes after the
+    respective windows. Exempts `pinned` / `security` /
+    `help wanted` / `good first issue` / `regression` / `wip`.
+  - `workflows/release.yml` — fires on `v*.*.*` tag push, builds
+    the extension, attaches `design-mode-extension.zip` to a new
+    GitHub Release, uses the matching `CHANGELOG.md` section as the
+    release body.
+  - `dependabot.yml` — weekly grouped patch/minor PRs across all 6
+    npm directories + `github-actions`.
+- **Label taxonomy created** via `gh label create`: `triage`,
+  `needs-info`, `needs-repro`, `stale`, `scope:{extension,
+  mcp-local, mcp-cloud, shared, website, docs, build}`, `security`,
+  `regression`, `breaking-change`, `pinned`, `wip`.
+- **GitHub Discussions enabled** with the default category set;
+  welcome post pinned.
+
 ## [1.0.2] — 2026-05-12
 
 ### Added

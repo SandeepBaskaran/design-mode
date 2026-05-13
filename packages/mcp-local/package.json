@@ -1,6 +1,6 @@
 {
   "name": "@design-mode/mcp-local",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Local MCP companion server — bridges the Design Mode extension to coding agents over a localhost WebSocket.",
   "license": "MIT",
   "bin": {
@@ -14,14 +14,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@design-mode/shared": "*",
     "@modelcontextprotocol/sdk": "^1.12.0",
-    "zod": "^3.23.0",
     "ws": "^8.18.0",
-    "@design-mode/shared": "*"
+    "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.13",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.13",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

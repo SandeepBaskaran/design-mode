@@ -4,7 +4,7 @@ User-facing reference for every property surfaced in Design Mode's Design tab. F
 
 For implementation status (At parity / Planned / Skipped) and CSS-spec coverage tracking, see **PARITY.md**. This document is for **understanding what each control does**.
 
-Last updated: 2026-05-12 (release 1.0.2).
+Last updated: 2026-05-14 (release 1.1.0).
 
 ---
 

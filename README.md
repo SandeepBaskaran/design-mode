@@ -1,4 +1,4 @@
-# Design Mode ◆
+# Design Mode ✦
 
 > Design directly in your browser. Your agent writes the code.
 

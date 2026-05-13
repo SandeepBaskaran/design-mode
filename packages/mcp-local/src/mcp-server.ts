@@ -92,7 +92,7 @@ function renderExport(format: ExportFormat): string {
 }
 
 export function createMcpServer(): McpServer {
-  const server = new McpServer({ name: 'design-mode', version: '1.0.2' });
+  const server = new McpServer({ name: 'design-mode', version: '1.1.0' });
 
   // ── 1. get_changes ────────────────────────────────────────────────
   server.tool(

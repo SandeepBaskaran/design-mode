@@ -34,7 +34,7 @@ export async function GET(req: Request): Promise<Response> {
       const send = (event: string, data: string) => {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`));
       };
-      send('hello', JSON.stringify({ tenantId, version: '0.1.0' }));
+      send('hello', JSON.stringify({ tenantId, version: '1.1.0' }));
 
       const heartbeat = setInterval(() => {
         try { controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`)); }

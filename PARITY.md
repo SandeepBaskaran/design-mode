@@ -10,7 +10,11 @@ Each entry is bucketed:
 
 When CSS and Figma diverge, the section calls it out.
 
-Last updated: 2026-05-12 (release 1.0.2).
+Last updated: 2026-05-14 (release 1.1.0).
+
+Release 1.1.0 highlights: **In-panel Help view** added (Report an
+issue + Copy diagnostics), **Alt+1/2/3 tab shortcuts** wired,
+package versions synced across the monorepo.
 
 Release 1.0.2 highlights: **Layout guide** section added (Columns /
 Rows / Grid overlay via `::before`), **Motion** split out of Effects
