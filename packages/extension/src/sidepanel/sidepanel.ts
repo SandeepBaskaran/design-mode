@@ -8949,7 +8949,7 @@ function setupDelegation() {
       };
       const cssProp = isBackdrop ? 'backdropFilter' : 'filter';
       const cur = (info?.computedStyles?.[cssProp] || 'none').toLowerCase();
-      const fnRe = new RegExp('\\b' + which.replace(/[-]/g, '-') + '\\([^)]*\\)\\s*', 'gi');
+      const fnRe = new RegExp('\\b' + which + '\\([^)]*\\)\\s*', 'gi');
       const hasFn = fnRe.test(cur);
       // Reset the lastIndex on the global regex so the replace below starts fresh.
       fnRe.lastIndex = 0;
