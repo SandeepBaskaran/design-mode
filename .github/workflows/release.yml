@@ -30,7 +30,7 @@ jobs:
             in_section { print }
           ' CHANGELOG.md > release-notes.md
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: packages/extension/design-mode-extension.zip
           body_path: release-notes.md
