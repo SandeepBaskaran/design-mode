@@ -7155,7 +7155,7 @@ function extensionVersion(): string {
 // Pad each label so values line up in the resulting block — the bug template
 // placeholder renders this verbatim, so column alignment matters visually.
 function pad(label: string): string {
-  return (label + ':').padEnd(12, ' ');
+  return (label + ':').padEnd(13, ' ');
 }
 
 function detectBrowser(): string {
