@@ -1,54 +1,118 @@
 version: 2
 updates:
+  # ── root ────────────────────────────────────────────────────────────────
+  # Direct deps at root: zod (pinned for MCP SDK compat — never auto-bump).
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
     groups:
       patch-and-minor:
         update-types: ['patch', 'minor']
+    ignore:
+      - dependency-name: zod
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
 
+  # ── packages/extension ──────────────────────────────────────────────────
   - package-ecosystem: npm
     directory: /packages/extension
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
     groups:
       patch-and-minor:
         update-types: ['patch', 'minor']
+    ignore:
+      - dependency-name: vite
+        update-types: ['version-update:semver-major']
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
+  # ── packages/mcp-local ──────────────────────────────────────────────────
   - package-ecosystem: npm
     directory: /packages/mcp-local
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
     groups:
       patch-and-minor:
         update-types: ['patch', 'minor']
+    ignore:
+      - dependency-name: zod
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
+  # ── packages/mcp-cloud ──────────────────────────────────────────────────
   - package-ecosystem: npm
     directory: /packages/mcp-cloud
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
     groups:
       patch-and-minor:
         update-types: ['patch', 'minor']
+    ignore:
+      - dependency-name: zod
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: redis
+        update-types: ['version-update:semver-major']
+      - dependency-name: vercel
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
+  # ── packages/shared ─────────────────────────────────────────────────────
   - package-ecosystem: npm
     directory: /packages/shared
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
     groups:
       patch-and-minor:
         update-types: ['patch', 'minor']
+    ignore:
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
 
+  # ── website (Next.js) ───────────────────────────────────────────────────
+  # React + Next majors land as deliberate coordinated upgrades, not
+  # auto-bumps. Same for the type packages tracking React/React-DOM.
   - package-ecosystem: npm
     directory: /website
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
     groups:
       patch-and-minor:
         update-types: ['patch', 'minor']
+    ignore:
+      - dependency-name: react
+        update-types: ['version-update:semver-major']
+      - dependency-name: react-dom
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: next
+        update-types: ['version-update:semver-major']
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: eslint
+        update-types: ['version-update:semver-major']
 
+  # ── GitHub Actions ──────────────────────────────────────────────────────
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
