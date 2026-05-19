@@ -403,7 +403,7 @@ async function openConfiguredTransport() {
     const mode = (conf['dm-mcp-mode'] as 'local' | 'cloud' | 'self-hosted' | undefined) || 'local';
     if (mode === 'local') { connectToServer({ mode: 'local' }); return; }
     const cloudToken = conf['dm-mcp-cloud-token'];
-    const cloudUrl = conf['dm-mcp-cloud-url'] || (mode === 'cloud' ? 'https://www.mcp.designmode.app' : '');
+    const cloudUrl = conf['dm-mcp-cloud-url'] || (mode === 'cloud' ? 'https://mcp.designmode.app' : '');
     // No token yet (user picked Cloud mode but hasn't registered) — leave
     // every transport closed instead of dialing localhost. The MCP status
     // dot stays "offline" and the panel's tooltip points the user to

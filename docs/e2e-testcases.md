@@ -53,7 +53,7 @@ unless noted otherwise.
 | 0.5.6 | Inspector selection colour | Pick a custom colour | Selection overlay renders in the new colour |
 | 0.5.7 | MCP — port | Change to e.g. `9970` | Persists; affects the WebSocket URL the extension dials on next connect |
 | 0.5.8 | MCP — auto-connect | Toggle off | Side panel doesn't auto-dial on open; the indicator stays grey until manually connected |
-| 0.5.9 | MCP — mode (Local / Cloud / Self-hosted) | Switch each | Local uses `ws://localhost:<port>`; Cloud uses `https://www.mcp.designmode.app` (or the configured URL); Self-hosted exposes a URL field |
+| 0.5.9 | MCP — mode (Local / Cloud / Self-hosted) | Switch each | Local uses `ws://localhost:<port>`; Cloud uses `https://mcp.designmode.app` (or the configured URL); Self-hosted exposes a URL field |
 | 0.5.10| MCP — cloud token & tenant | Enter a registered token + tenant ID | Stored in `chrome.storage.local`; shown masked; clearing re-disconnects |
 | 0.5.11| Reset to defaults | Click Reset | Theme back to system, colour format to HEX, hover/select colours to defaults, MCP port to default |
 
@@ -321,7 +321,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 ## Phase 11 — MCP server (local + cloud)
 
 The local server lives in `packages/mcp-local`; the cloud relay in `packages/mcp-cloud` (deployed
-at `https://www.mcp.designmode.app`). Both expose the **same six MCP tools**.
+at `https://mcp.designmode.app`). Both expose the **same six MCP tools**.
 
 ### 11.A — Local mode (`npm start` in `packages/mcp-local`)
 
@@ -343,7 +343,7 @@ at `https://www.mcp.designmode.app`). Both expose the **same six MCP tools**.
 
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
-| 11.20 | Mode switch | Settings → MCP → mode "Cloud" | URL field defaults to `https://www.mcp.designmode.app`; tenant + token fields appear |
+| 11.20 | Mode switch | Settings → MCP → mode "Cloud" | URL field defaults to `https://mcp.designmode.app`; tenant + token fields appear |
 | 11.21 | Register token | Open the cloud landing page → register → copy token + tenant ID | Token + tenant ID stored locally; indicator turns green when both present |
 | 11.22 | Send to Agent | With agent connected to the cloud relay → click Send to Agent | Agent receives changes via the cloud bridge |
 | 11.23 | Self-hosted | Mode "Self-hosted" → enter your Vercel URL | Same protocol as Cloud; works against any deployment of the `mcp-cloud` package |
