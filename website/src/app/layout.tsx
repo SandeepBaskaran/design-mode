@@ -8,7 +8,6 @@ import { Navbar } from "@/components/blocks/navbar";
 import { Analytics } from "@/components/site/analytics";
 import { LinkTracker } from "@/components/site/link-tracker";
 import { MobileNotice } from "@/components/site/mobile-notice";
-import { ThemeProvider } from "@/components/theme-provider";
 import "@/styles/globals.css";
 
 const dmSans = localFont({
@@ -74,21 +73,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={`${dmSans.variable} ${inter.variable} antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <MobileNotice />
-          <Navbar />
-          <main>{children}</main>
-          <Footer />
-          <Analytics />
-          <LinkTracker />
-        </ThemeProvider>
+        <MobileNotice />
+        <Navbar />
+        <main className="mx-auto w-full max-w-[1080px]">{children}</main>
+        <Footer />
+        <Analytics />
+        <LinkTracker />
       </body>
     </html>
   );

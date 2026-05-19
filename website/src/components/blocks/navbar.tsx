@@ -8,7 +8,6 @@ import { usePathname } from "next/navigation";
 
 import { Github } from "lucide-react";
 
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
@@ -86,7 +85,7 @@ export const Navbar = () => {
   return (
     <section
       className={cn(
-        "bg-background/70 absolute left-1/2 z-50 w-[min(90%,880px)] -translate-x-1/2 rounded-4xl border backdrop-blur-md transition-all duration-300",
+        "bg-background/70 absolute left-1/2 z-50 w-[min(95%,1024px)] max-w-[1024px] -translate-x-1/2 rounded-4xl border backdrop-blur-md transition-all duration-300",
         "top-5 lg:top-12",
       )}
     >
@@ -117,9 +116,8 @@ export const Navbar = () => {
           </NavigationMenuList>
         </NavigationMenu>
 
-        {/* CTA cluster: theme → github → Add to Chrome */}
+        {/* CTA cluster: github → Add to Chrome */}
         <div className="flex items-center gap-2.5">
-          <ThemeToggle />
           <a
             href={REPO_URL}
             target="_blank"
