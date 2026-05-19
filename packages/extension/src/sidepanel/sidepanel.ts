@@ -158,6 +158,7 @@ type ColorFormat = 'hex' | 'rgba' | 'hsl';
 let tab: Tab = 'design';
 let settingsOpen = false;
 let helpOpen = false;
+let contributeOpen = false;
 let enabled = false;
 let inspecting = true;
 let mcpState: McpState = 'offline';
@@ -4712,6 +4713,7 @@ function renderHeader(): string {
   return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;top:0;z-index:10;">' +
     domain + '<div style="flex:1;"></div>' + renderMcpStatus() +
     '<button data-dm-action="toggle-theme" title="Toggle theme" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon(themeIcon as keyof typeof icons, 15) + '</button>' +
+    '<button data-dm-action="contribute" title="Contribute" aria-label="Open contribute panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('heartHandshake', 15) + '</button>' +
     '<button data-dm-action="help" title="Help" aria-label="Open help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('helpCircle', 15) + '</button>' +
     '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button></div>';
 }
@@ -7207,6 +7209,66 @@ function renderHelpView(): string {
     '</div>';
 }
 
+function renderContributeView(): string {
+  const card = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:14px;';
+  const primaryBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px 12px;background:var(--dm-text);border:1px solid var(--dm-text);border-radius:6px;color:var(--dm-bg);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;text-decoration:none;';
+  const rowBtn = 'display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text);cursor:pointer;font-size:12px;font-weight:500;font-family:inherit;text-decoration:none;text-align:left;';
+  const rowIcon = 'display:flex;align-items:center;justify-content:center;color:var(--dm-text-secondary);flex-shrink:0;';
+  const rowText = 'flex:1;';
+  const rowExt = 'color:var(--dm-text-dimmer);display:flex;align-items:center;flex-shrink:0;';
+  const sectionLabel = 'font-size:10px;font-weight:600;letter-spacing:0.6px;color:var(--dm-text-dimmer);text-transform:uppercase;margin:0 0 8px 2px;';
+
+  const row = (iconName: keyof typeof icons, label: string, href: string) =>
+    '<a href="' + href + '" target="_blank" rel="noopener noreferrer" style="' + rowBtn + '">' +
+      '<span style="' + rowIcon + '">' + icon(iconName, 14) + '</span>' +
+      '<span style="' + rowText + '">' + label + '</span>' +
+      '<span style="' + rowExt + '">' + icon('externalLink', 11) + '</span>' +
+    '</a>';
+
+  const shareRow =
+    '<button data-dm-action="copy-share-text" style="' + rowBtn + '">' +
+      '<span style="' + rowIcon + '">' + icon('share2', 14) + '</span>' +
+      '<span style="' + rowText + '" data-dm-share-label>Share with your network</span>' +
+      '<span style="' + rowExt + '">' + icon('copy', 11) + '</span>' +
+    '</button>';
+
+  const sponsorBtn =
+    '<a href="https://github.com/sponsors/SandeepBaskaran" target="_blank" rel="noopener noreferrer" style="' + primaryBtn + '">' +
+      icon('heartHandshake', 14) + ' Sponsor on GitHub ' + icon('externalLink', 12) +
+    '</a>';
+
+  return '<div style="padding:16px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
+    '<button data-dm-action="back-from-contribute" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
+    '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Contribute</span></div>' +
+    '<p style="margin:0 0 18px 2px;font-size:12px;line-height:1.55;color:var(--dm-text-secondary);">Design Mode is free, forever — and open source. If it’s useful to you, here are a few ways to help.</p>' +
+    '<div style="display:flex;flex-direction:column;gap:16px;">' +
+
+    '<div><div style="' + sectionLabel + '">Spread the word</div>' +
+    '<div style="' + card + '"><div style="display:flex;flex-direction:column;gap:8px;">' +
+    row('star', 'Star the repo on GitHub', 'https://github.com/SandeepBaskaran/design-mode') +
+    row('messageSquare', 'Review on the Chrome Web Store', 'https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih') +
+    shareRow +
+    '</div></div></div>' +
+
+    '<div><div style="' + sectionLabel + '">Help improve it</div>' +
+    '<div style="' + card + '"><div style="display:flex;flex-direction:column;gap:8px;">' +
+    row('alertTriangle', 'Report an issue', 'https://github.com/SandeepBaskaran/design-mode/issues/new/choose') +
+    row('messageCircle', 'Start a discussion', 'https://github.com/SandeepBaskaran/design-mode/discussions') +
+    row('gitPullRequest', 'Open a pull request', 'https://github.com/SandeepBaskaran/design-mode/compare') +
+    '</div></div></div>' +
+
+    '<div><div style="' + sectionLabel + '">Support the project</div>' +
+    '<div style="' + card + '">' +
+    sponsorBtn +
+    '<p style="margin:10px 0 0 0;font-size:11px;line-height:1.5;color:var(--dm-text-secondary);">Helps cover Cloud MCP costs (tool-call limits, infra) so those stay generous for everyone.</p>' +
+    '</div></div>' +
+
+    '</div>' +
+    '<div style="margin-top:18px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v' + extensionVersion() + '</div></div>' +
+    '</div>';
+}
+
 /* ── Phase 1: Render with morphdom ── */
 function renderCaptureToast(): string {
   if (!captureToast) return '';
@@ -7257,6 +7319,8 @@ function render() {
     html = renderHeader() + renderSettingsView() + renderCaptureToast();
   } else if (helpOpen) {
     html = renderHeader() + renderHelpView() + renderCaptureToast();
+  } else if (contributeOpen) {
+    html = renderHeader() + renderContributeView() + renderCaptureToast();
   } else if (presetsOpen) {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
       renderHeader() + renderPresetsView() + renderCaptureToast() + '</div>';
@@ -7478,9 +7542,11 @@ function setupDelegation() {
         case 'clear-changes-search': changesSearch = ''; render(); break;
         case 'reset-changes-filter': changesFilter = 'all'; changesSearch = ''; render(); break;
         case 'back-from-settings': settingsOpen = false; render(); break;
-        case 'settings': helpOpen = false; settingsOpen = !settingsOpen; render(); break;
+        case 'settings': helpOpen = false; contributeOpen = false; settingsOpen = !settingsOpen; render(); break;
         case 'back-from-help': helpOpen = false; render(); break;
-        case 'help': settingsOpen = false; helpOpen = !helpOpen; render(); break;
+        case 'help': settingsOpen = false; contributeOpen = false; helpOpen = !helpOpen; render(); break;
+        case 'back-from-contribute': contributeOpen = false; render(); break;
+        case 'contribute': settingsOpen = false; helpOpen = false; contributeOpen = !contributeOpen; render(); break;
         case 'copy-diagnostics': {
           const payload = buildDiagnostics();
           const flash = (msg: string) => {
@@ -7492,6 +7558,21 @@ function setupDelegation() {
           };
           navigator.clipboard.writeText(payload).then(
             () => flash('Copied ✓'),
+            () => flash('Copy failed'),
+          );
+          break;
+        }
+        case 'copy-share-text': {
+          const payload = 'I’ve been using Design Mode — a Chrome side-panel extension that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih';
+          const flash = (msg: string) => {
+            const lbl = document.querySelector('[data-dm-share-label]') as HTMLElement | null;
+            if (!lbl) return;
+            const prev = lbl.textContent || 'Share with your network';
+            lbl.textContent = msg;
+            setTimeout(() => { lbl.textContent = prev; }, 1500);
+          };
+          navigator.clipboard.writeText(payload).then(
+            () => flash('Copied ✓ — paste anywhere'),
             () => flash('Copy failed'),
           );
           break;
