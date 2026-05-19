@@ -52,36 +52,18 @@ export const metadata: Metadata = {
   creator: "Sandeep Baskaran",
   publisher: "Sandeep Baskaran",
   robots: { index: true, follow: true },
-  icons: {
-    icon: [
-      { url: "/favicon/favicon.ico", sizes: "48x48" },
-      { url: "/favicon/favicon.svg", type: "image/svg+xml" },
-      { url: "/favicon/favicon-96x96.png", sizes: "96x96", type: "image/png" },
-    ],
-    apple: [{ url: "/favicon/apple-touch-icon.png", sizes: "180x180" }],
-    shortcut: [{ url: "/favicon/favicon.ico" }],
-  },
   openGraph: {
     title: "Design Mode — Live design editing for developers and agents",
     description:
       "Edit any live website with visual controls, then ship the result to Claude Code, Cursor, or any AI coding agent over MCP. Free + open source.",
     siteName: "Design Mode",
     url: "https://designmode.app",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Design Mode — Live design editing for developers and agents",
-      },
-    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Design Mode — Live design editing for developers and agents",
     description:
       "Edit any live website with visual controls, then ship the result to Claude Code, Cursor, or any AI coding agent over MCP.",
-    images: ["/og-image.png"],
     creator: "@sandeep_baskaran",
   },
 };
