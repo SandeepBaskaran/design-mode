@@ -35,6 +35,7 @@
     "react-fast-marquee": "^1.6.5",
     "react-hook-form": "^7.65.0",
     "react-icons": "^5.5.0",
+    "remark-gfm": "^4.0.0",
     "tailwind-merge": "^3.3.1",
     "zod": "^4.1.12"
   },

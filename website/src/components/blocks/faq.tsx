@@ -6,17 +6,11 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { cn } from "@/lib/utils";
 
 const categories = [
   {
     title: "Getting started",
     questions: [
-      {
-        question: "What is Design Mode?",
-        answer:
-          "A free, open-source Chrome extension that turns any website into a live design surface. You inspect any element on any page, change its CSS visually (type, colour, layout, spacing, structure), and ship the resulting diff straight to a coding agent like Claude Code or Cursor over MCP. No mock files, no copy-paste.",
-      },
       {
         question: "Is it really free?",
         answer:
@@ -55,7 +49,7 @@ const categories = [
       {
         question: "Can I self-host the relay?",
         answer:
-          "Yes — packages/mcp-cloud in the repo is Vercel-deployable. Self-hosted mode is one of the three connection modes on the Modes page.",
+          "Yes — packages/mcp-cloud in the repo is Vercel-deployable. Self-hosted mode is one of the three connection modes on the /mcp page.",
       },
     ],
   },
@@ -76,57 +70,41 @@ const categories = [
   },
 ];
 
-export const FAQ = ({
-  headerTag = "h2",
-  className,
-  className2,
-}: {
-  headerTag?: "h1" | "h2";
-  className?: string;
-  className2?: string;
-}) => {
+export const FAQ = () => {
   return (
-    <section className={cn("py-28 lg:py-32", className)}>
-      <div className="container max-w-5xl">
-        <div className={cn("mx-auto grid gap-16 lg:grid-cols-2", className2)}>
-          <div className="space-y-4">
-            {headerTag === "h1" ? (
-              <h1 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
-                Frequently asked questions
-              </h1>
-            ) : (
-              <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
-                Frequently asked questions
-              </h2>
-            )}
-            <p className="text-muted-foreground max-w-md leading-snug lg:mx-auto">
-              If you can't find what you're looking for,{" "}
-              <Link href="/contact" className="underline underline-offset-4">
-                get in touch
-              </Link>
-              .
-            </p>
-          </div>
+    <section className="py-28 lg:py-32">
+      <div className="container max-w-6xl">
+        <div className="mb-12 space-y-4 text-center lg:mb-16">
+          <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
+            Frequently asked questions
+          </h2>
+          <p className="text-muted-foreground mx-auto max-w-md leading-snug">
+            If you can't find what you're looking for,{" "}
+            <Link href="/contact" className="underline underline-offset-4">
+              get in touch
+            </Link>
+            .
+          </p>
+        </div>
 
-          <div className="grid gap-6 text-start">
-            {categories.map((category, categoryIndex) => (
-              <div key={category.title}>
-                <h3 className="text-muted-foreground border-b py-4">
-                  {category.title}
-                </h3>
-                <Accordion type="single" collapsible className="w-full">
-                  {category.questions.map((item, i) => (
-                    <AccordionItem key={i} value={`${categoryIndex}-${i}`}>
-                      <AccordionTrigger>{item.question}</AccordionTrigger>
-                      <AccordionContent className="text-muted-foreground">
-                        {item.answer}
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-2">
+          {categories.map((category, categoryIndex) => (
+            <div key={category.title}>
+              <h3 className="text-muted-foreground border-b py-4">
+                {category.title}
+              </h3>
+              <Accordion type="single" collapsible className="w-full">
+                {category.questions.map((item, i) => (
+                  <AccordionItem key={i} value={`${categoryIndex}-${i}`}>
+                    <AccordionTrigger>{item.question}</AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      {item.answer}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </div>
+          ))}
         </div>
       </div>
     </section>

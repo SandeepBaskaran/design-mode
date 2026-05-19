@@ -7,7 +7,7 @@ import { Github, Heart, Mail, MessageCircle, Twitter } from "lucide-react";
 import { DashedLine } from "@/components/dashed-line";
 
 const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
-const X_URL = "https://x.com/sandeep_baskaran";
+const X_URL = "https://x.com/sandeepbaskaran";
 const SPONSORS_URL = "https://github.com/sponsors/SandeepBaskaran";
 const EMAIL = "hello@sandeepbaskaran.com";
 

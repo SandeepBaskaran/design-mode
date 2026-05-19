@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Background } from "@/components/background";
+import { ModesComparison } from "@/components/blocks/modes-comparison";
 import { DashedLine } from "@/components/dashed-line";
 import {
   Accordion,
@@ -20,7 +21,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = {
@@ -177,11 +177,6 @@ export default function McpPage() {
             MCP-aware agent. Pick one of three connection modes, paste the
             snippet, restart your agent.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/pricing">
-              <Button variant="outline">Compare the three modes →</Button>
-            </Link>
-          </div>
         </div>
 
         <DashedLine className="container mt-16 max-w-5xl" />
@@ -215,6 +210,19 @@ export default function McpPage() {
         </div>
 
         <DashedLine className="container mt-20 max-w-5xl" />
+
+        <div className="container mt-16 max-w-5xl">
+          <h2 className="text-2xl tracking-tight md:text-3xl">
+            Mode comparison
+          </h2>
+          <p className="text-muted-foreground mt-2 max-w-2xl">
+            Setup steps, privacy posture, agent compatibility, and cost
+            across the three modes.
+          </p>
+        </div>
+        <ModesComparison />
+
+        <DashedLine className="container mt-4 max-w-5xl" />
 
         <div className="container mt-16 max-w-5xl">
           <h2 className="text-2xl tracking-tight md:text-3xl">

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Github } from "lucide-react";
 
+import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
@@ -18,16 +18,13 @@ import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { label: "MCP", href: "/mcp" },
-  { label: "Modes", href: "/pricing" },
+  { label: "Features", href: "/features" },
   { label: "Demo", href: "/demo" },
   { label: "About", href: "/about" },
-  { label: "FAQ", href: "/faq" },
   { label: "Contact", href: "/contact" },
   { label: "Privacy", href: "/privacy" },
 ];
 
-const CWS_URL =
-  "https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih";
 const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
 
 type GtagFn = (
@@ -65,19 +62,6 @@ function DesignModeMark({ size = 22 }: { size?: number }) {
   );
 }
 
-function ChromeGlyph({ size = 16 }: { size?: number }) {
-  return (
-    <Image
-      src="/chrome.svg"
-      width={size}
-      height={size}
-      alt=""
-      aria-hidden="true"
-      className="shrink-0"
-    />
-  );
-}
-
 export const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const pathname = usePathname();
@@ -85,12 +69,12 @@ export const Navbar = () => {
   return (
     <section
       className={cn(
-        "bg-background/70 absolute left-1/2 z-50 w-[min(95%,1024px)] max-w-[1024px] -translate-x-1/2 rounded-4xl border backdrop-blur-md transition-all duration-300",
-        "top-5 lg:top-12",
+        "bg-background/70 absolute left-1/2 z-50 w-[min(95%,1024px)] max-w-[1024px] -translate-x-1/2 rounded-[18px] border backdrop-blur-md transition-all duration-300",
+        "top-3",
       )}
     >
-      <div className="flex items-center justify-between px-6 py-3">
-        <Link href="/" className="flex shrink-0 items-center gap-2">
+      <div className="flex items-center justify-between px-3 py-3">
+        <Link href="/" className="flex shrink-0 items-center gap-2 pl-1">
           <DesignModeMark size={22} />
           <span className="font-display text-sm font-semibold tracking-tight">
             Design Mode
@@ -117,7 +101,7 @@ export const Navbar = () => {
         </NavigationMenu>
 
         {/* CTA cluster: github → Add to Chrome */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <a
             href={REPO_URL}
             target="_blank"
@@ -133,18 +117,9 @@ export const Navbar = () => {
               <Github className="size-4" />
             </Button>
           </a>
-          <a
-            href={CWS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => trackCtaClick("add_to_chrome")}
-            className="max-lg:hidden"
-          >
-            <Button variant="default" className="gap-2">
-              <ChromeGlyph size={16} />
-              <span className="relative z-10">Add to Chrome</span>
-            </Button>
-          </a>
+          <div className="max-lg:hidden">
+            <AddToChromeCta />
+          </div>
 
           {/* Hamburger (mobile only) */}
           <button
@@ -193,19 +168,9 @@ export const Navbar = () => {
               {link.label}
             </Link>
           ))}
-          <a
-            href={CWS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => {
-              trackCtaClick("add_to_chrome");
-              setIsMenuOpen(false);
-            }}
-            className="text-primary hover:text-primary/80 flex items-center gap-2 py-4 text-base font-medium transition-colors last:pb-0"
-          >
-            <ChromeGlyph size={18} />
-            Add to Chrome ↗
-          </a>
+          <div className="pt-4">
+            <AddToChromeCta />
+          </div>
         </nav>
       </div>
     </section>

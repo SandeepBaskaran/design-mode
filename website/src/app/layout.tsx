@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     title: "Design Mode — Live design editing for developers and agents",
     description:
       "Edit any live website with visual controls, then ship the result to Claude Code, Cursor, or any AI coding agent over MCP.",
-    creator: "@sandeep_baskaran",
+    creator: "@sandeepbaskaran",
   },
 };
 

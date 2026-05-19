@@ -3,10 +3,9 @@ import Image from "next/image";
 import { ArrowRight, Heart, MousePointer2, Palette, Wand2 } from "lucide-react";
 
 import { DashedLine } from "@/components/dashed-line";
+import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 import { Button } from "@/components/ui/button";
 
-const CWS_URL =
-  "https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih";
 const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
 
 const features = [
@@ -51,19 +50,7 @@ export const Hero = () => {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-4 lg:flex-nowrap">
-            <Button asChild className="gap-2">
-              <a href={CWS_URL} target="_blank" rel="noopener noreferrer">
-                <Image
-                  src="/chrome.svg"
-                  width={18}
-                  height={18}
-                  alt=""
-                  aria-hidden="true"
-                  className="shrink-0"
-                />
-                Add to Chrome
-              </a>
-            </Button>
+            <AddToChromeCta />
             <Button
               variant="outline"
               className="from-background h-auto gap-2 bg-linear-to-r to-transparent shadow-md"

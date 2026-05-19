@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
 };
 const withMDX = createMDX({
   options: {
-    remarkPlugins: [],
+    remarkPlugins: [["remark-gfm"]],
     rehypePlugins: [],
   },
 });

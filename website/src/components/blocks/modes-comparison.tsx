@@ -158,7 +158,7 @@ const renderFeatureValue = (value: true | false | null | string) => {
   );
 };
 
-export const PricingTable = () => {
+export const ModesComparison = () => {
   const [selectedPlan, setSelectedPlan] = useState(0); // Default to Local mode
 
   return (

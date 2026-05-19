@@ -1,23 +1,19 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 
-const CWS_URL =
-  "https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih";
 const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
-const X_URL = "https://x.com/sandeep_baskaran";
+const X_URL = "https://x.com/sandeepbaskaran";
 const SPONSORS_URL = "https://github.com/sponsors/SandeepBaskaran";
 
 export function Footer() {
   const navigation = [
     { name: "MCP", href: "/mcp" },
-    { name: "Modes", href: "/pricing" },
+    { name: "Features", href: "/features" },
     { name: "Demo", href: "/demo" },
     { name: "About", href: "/about" },
-    { name: "FAQ", href: "/faq" },
     { name: "Contact", href: "/contact" },
     { name: "Privacy", href: "/privacy" },
   ];
@@ -38,20 +34,8 @@ export function Footer() {
           Free forever, open source. Edit any live site with visual
           controls and ship the changes to your coding agent over MCP.
         </p>
-        <div>
-          <Button size="lg" className="mt-4 gap-2" asChild>
-            <a href={CWS_URL} target="_blank" rel="noopener noreferrer">
-              <Image
-                src="/chrome.svg"
-                width={20}
-                height={20}
-                alt=""
-                aria-hidden="true"
-                className="shrink-0"
-              />
-              Add to Chrome
-            </a>
-          </Button>
+        <div className="mt-4">
+          <AddToChromeCta />
         </div>
       </div>
 
