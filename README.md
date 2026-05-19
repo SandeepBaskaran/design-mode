@@ -36,7 +36,7 @@ Design Mode brings a coding agent inside the page through a small bridge called 
 
 - **Cloud (default)** — Use the hosted relay at `mcp.designmode.app`. Paste a bearer token into your agent's config and you're done — no install, no terminal. Free with a per-tenant daily quota.
 - **Local** — Run a tiny companion server on your laptop with one `npm` command. Fastest path, nothing leaves your machine — power-user mode with a terminal.
-- **Self-hosted** — Same code as Cloud (open source in `packages/mcp-cloud`) on your own Vercel deployment. You own the relay and the privacy posture.
+- **Self-hosted** — Same code as Cloud (open source in `packages/mcp-cloud`). Deploy on any Node.js host with Redis — Vercel, Railway, Fly, your own VM. You own the relay and the privacy posture.
 
 **[Full setup guide for all three modes — Claude Desktop, Cursor, Claude Code →](https://designmode.app/mcp)**
 
@@ -110,7 +110,7 @@ design-mode/
 ├── packages/
 │   ├── extension/    Chrome extension (Manifest V3 side panel, Vite, TypeScript)
 │   ├── mcp-local/    MCP companion + WebSocket bridge (Node.js, TypeScript)
-│   ├── mcp-cloud/    Hosted MCP relay (Vercel-deployable)
+│   ├── mcp-cloud/    Hosted MCP relay (Node.js + Redis; Vercel is our dev/prod target — anywhere works)
 │   └── shared/       Shared types, message schemas, constants
 ├── website/          Marketing + docs + interactive demo (Next.js 14)
 ├── docs/             Project docs (e2e-testcases.md)

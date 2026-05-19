@@ -49,7 +49,7 @@ const categories = [
       {
         question: "Can I self-host the relay?",
         answer:
-          "Yes — packages/mcp-cloud in the repo is Vercel-deployable. Self-hosted mode is one of the three connection modes on the /mcp page.",
+          "Yes — packages/mcp-cloud in the repo deploys to any Node.js host with Redis (Vercel, Railway, Fly, your own VM — your call). Self-hosted mode is one of the three connection modes on the /mcp page.",
       },
     ],
   },

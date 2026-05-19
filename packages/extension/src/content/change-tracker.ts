@@ -842,7 +842,13 @@ export function recordDomChange(
     for (let i = domChanges.length - 1; i >= 0; i--) {
       const prev = domChanges[i];
       if (prev.action === 'move' && prev.elementId === elementId) {
-        if (!inheritedOrigin && prev.origin) inheritedOrigin = prev.origin;
+        // Always prefer the existing record's origin over this call's
+        // — callers compute `origin` from the element's *current*
+        // parent, which after a first move is no longer the true
+        // original. Iterating newest→oldest with overwrites here lands
+        // the OLDEST origin (the actual starting position) in
+        // `inheritedOrigin`, which is what the comment above promises.
+        if (prev.origin) inheritedOrigin = prev.origin;
         domChanges.splice(i, 1);
       }
     }

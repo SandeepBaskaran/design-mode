@@ -66,7 +66,7 @@ const selfClaude = `{
   "mcpServers": {
     "design-mode": {
       "type": "http",
-      "url": "https://<your-deploy>.vercel.app/mcp",
+      "url": "https://<your-deploy>/mcp",
       "headers": { "Authorization": "Bearer dm_<your-token>" }
     }
   }
@@ -74,7 +74,7 @@ const selfClaude = `{
 
 const selfCursor = `{
   "design-mode": {
-    "url": "https://<your-deploy>.vercel.app/mcp",
+    "url": "https://<your-deploy>/mcp",
     "headers": { "Authorization": "Bearer dm_<your-token>" }
   }
 }`;
@@ -124,7 +124,7 @@ const modes: Mode[] = [
     icon: Server,
     tagline: "Same protocol, your own infra.",
     description:
-      "Fork packages/mcp-cloud and deploy to your own Vercel project. Point the extension at your URL and issue your own bearer tokens.",
+      "Fork packages/mcp-cloud and deploy on any Node.js host with Redis — Vercel, Railway, Fly, your own VM. Point the extension at your URL and issue your own bearer tokens.",
     bestFor:
       "Best for: teams that want the Cloud-mode ergonomics but on infrastructure they operate.",
     configs: { claudeDesktop: selfClaude, cursor: selfCursor },

@@ -53,7 +53,7 @@ const comparisonFeatures: FeatureSection[] = [
         name: "Install command",
         local: "npx @design-mode/mcp-local",
         cloud: "no install",
-        selfHosted: "deploy to Vercel",
+        selfHosted: "deploy anywhere",
       },
       {
         name: "Bearer token required",
@@ -134,7 +134,7 @@ const comparisonFeatures: FeatureSection[] = [
         name: "Price",
         local: "Free",
         cloud: "Free",
-        selfHosted: "Free + your Vercel bill",
+        selfHosted: "Free + your host's bill",
       },
     ],
   },

@@ -38,7 +38,7 @@ Default (no opt-in needed):
 Optional cloud mode (you turn it on explicitly in Settings):
 
 - An HTTPS connection to `https://mcp.designmode.app` (or any
-  Vercel deployment URL you configure) authenticated with a bearer
+  self-hosted deployment URL you configure) authenticated with a bearer
   token stored in `chrome.storage.local`. The cloud server (open
   source at `packages/mcp-cloud`) acts as a relay between the
   extension and a remote MCP agent — it doesn't store your edits;

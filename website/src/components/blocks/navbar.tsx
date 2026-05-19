@@ -17,9 +17,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
-  { label: "MCP", href: "/mcp" },
   { label: "Features", href: "/features" },
   { label: "Demo", href: "/demo" },
+  { label: "MCP", href: "/mcp" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
   { label: "Privacy", href: "/privacy" },

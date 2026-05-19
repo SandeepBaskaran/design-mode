@@ -32,7 +32,7 @@ Out of scope:
 
 - The extension's default transport is `ws://localhost:<port>` (the
   MCP-local server). When the user opts into cloud mode it talks to
-  `https://mcp.designmode.app` (or any user-configured Vercel
+  `https://mcp.designmode.app` (or any user-configured self-hosted
   deployment) over HTTPS with a bearer token stored in
   `chrome.storage.local`. Don't introduce new outbound calls without
   an explicit, opt-in setting and a note in [PRIVACY.md](./PRIVACY.md).

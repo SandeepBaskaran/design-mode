@@ -10,9 +10,9 @@ const SPONSORS_URL = "https://github.com/sponsors/SandeepBaskaran";
 
 export function Footer() {
   const navigation = [
-    { name: "MCP", href: "/mcp" },
     { name: "Features", href: "/features" },
     { name: "Demo", href: "/demo" },
+    { name: "MCP", href: "/mcp" },
     { name: "About", href: "/about" },
     { name: "Contact", href: "/contact" },
     { name: "Privacy", href: "/privacy" },
