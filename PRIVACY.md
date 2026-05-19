@@ -49,7 +49,7 @@ There are **no analytics, no telemetry, and no error reporting** in the
 extension or the MCP server. There is no remote update channel beyond the
 Chrome Web Store's standard mechanism.
 
-## What the website (design-mode.dev) does
+## What the website (designmode.app) does
 
 The marketing/docs site is a separate concern from the extension. The site:
 

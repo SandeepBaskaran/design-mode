@@ -19,7 +19,7 @@ body:
         - Chrome extension (side panel / inspector / content script)
         - MCP local server (packages/mcp-local)
         - MCP cloud relay (packages/mcp-cloud)
-        - Website (design-mode.dev)
+        - Website (designmode.app)
         - Documentation
         - Not sure
     validations:

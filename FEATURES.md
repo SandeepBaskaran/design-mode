@@ -591,7 +591,7 @@ bridge on `ws://localhost:9960` and exposes 6 MCP tools over stdio.
 - The extension is **local-only**. No telemetry, no analytics, no remote
   logging. All data lives in `chrome.storage` on your machine.
 - The optional MCP server runs on `localhost:9960`. Nothing is uploaded.
-- The marketing site at `design-mode.dev` ships Google Analytics if the
+- The marketing site at `designmode.app` ships Google Analytics if the
   deployment sets `NEXT_PUBLIC_GA_ID`. Forks ship without analytics by
   default.
 - Full disclosure: see [PRIVACY.md](./PRIVACY.md).

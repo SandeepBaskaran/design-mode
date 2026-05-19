@@ -292,7 +292,7 @@ reminder. The manual checklist covers:
 - The extension is local-only — no telemetry, no analytics, no remote logging.
   Edits live in `chrome.storage` on your machine; the optional MCP server runs
   on `localhost`. Full details: [PRIVACY.md](./PRIVACY.md).
-- The marketing site at `design-mode.dev` loads Google Fonts and (when configured
+- The marketing site at `designmode.app` loads Google Fonts and (when configured
   via `NEXT_PUBLIC_GA_ID`) Google Analytics. CTA clicks and outbound links on the
   site emit anonymous GA events; forks ship without analytics by default
   (events safely no-op when `NEXT_PUBLIC_GA_ID` is unset).

@@ -5,7 +5,7 @@ import { Analytics } from "./Analytics";
 import { LinkTracker } from "./LinkTracker";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://design-mode.dev"),
+  metadataBase: new URL("https://designmode.app"),
   title: "Design Mode",
   description: "The live design editing tool for developers and agents.",
   openGraph: {
