@@ -9,40 +9,44 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const items = [
   {
-    title: "Purpose-built for product development",
+    title: "Inspect any element on any site",
     image: "/features/triage-card.svg",
+    href: "/mcp",
   },
   {
-    title: "Manage projects end-to-end",
+    title: "Edit type, colour, layout, structure",
     image: "/features/cycle-card.svg",
+    href: "/demo",
   },
   {
-    title: "Build momentum and healthy habits",
+    title: "Ship the diff straight to your agent",
     image: "/features/overview-card.svg",
+    href: "/mcp",
   },
 ];
 
 export const Features = () => {
   return (
-    <section id="feature-modern-teams" className="pb-28 lg:pb-32">
+    <section id="features" className="pb-28 lg:pb-32">
       <div className="container">
         {/* Top dashed line with text */}
         <div className="relative flex items-center justify-center">
           <DashedLine className="text-muted-foreground" />
           <span className="bg-muted text-muted-foreground absolute px-3 font-mono text-sm font-medium tracking-wide max-md:hidden">
-            MEASURE TWICE. CUT ONCE.
+            DESIGN ON THE LIVE PAGE.
           </span>
         </div>
 
         {/* Content */}
         <div className="mx-auto mt-10 grid max-w-4xl items-center gap-3 md:gap-0 lg:mt-24 lg:grid-cols-2">
           <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
-            Made for modern product teams
+            Made for the vibe-coding loop
           </h2>
           <p className="text-muted-foreground leading-snug">
-            Mainline is built on the habits that make the best product teams
-            successful: staying focused, moving quickly, and always aiming for
-            high-quality work.
+            Most design-to-code workflows force you to mock the change, paste a
+            screenshot, and hope your agent guesses your CSS. Design Mode skips
+            the mocking step entirely — edit the real page, capture the diff,
+            send it on.
           </p>
         </div>
 
@@ -63,10 +67,8 @@ export const Features = () => {
                   </div>
 
                   <Link
-                    href="#"
-                    className={
-                      "group flex items-center justify-between gap-4 pe-4 pt-4 md:pe-6 md:pt-6"
-                    }
+                    href={item.href}
+                    className="group flex items-center justify-between gap-4 pe-4 pt-4 md:pe-6 md:pt-6"
                   >
                     <h3 className="font-display max-w-60 text-2xl leading-tight font-bold tracking-tight">
                       {item.title}

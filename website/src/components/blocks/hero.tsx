@@ -1,36 +1,34 @@
 import Image from "next/image";
 
-import {
-  ArrowRight,
-  Blend,
-  ChartNoAxesColumn,
-  CircleDot,
-  Diamond,
-} from "lucide-react";
+import { ArrowRight, Heart, MousePointer2, Palette, Wand2 } from "lucide-react";
 
 import { DashedLine } from "@/components/dashed-line";
 import { Button } from "@/components/ui/button";
 
+const CWS_URL =
+  "https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih";
+const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
+
 const features = [
   {
-    title: "Tailored workflows",
-    description: "Track progress across custom issue flows for your team.",
-    icon: CircleDot,
+    title: "Inspect anything",
+    description: "Click any element on any live site and edit its CSS visually.",
+    icon: MousePointer2,
   },
   {
-    title: "Cross-team projects",
-    description: "Collaborate across teams and departments.",
-    icon: Blend,
+    title: "Layout, type, colour",
+    description: "A full design surface in the side panel — not a devtools fork.",
+    icon: Palette,
   },
   {
-    title: "Milestones",
-    description: "Break projects down into concrete phases.",
-    icon: Diamond,
+    title: "Ship to your agent",
+    description: "Send the diff to Claude Code, Cursor, or any MCP-aware tool.",
+    icon: Wand2,
   },
   {
-    title: "Progress insights",
-    description: "Track scope, velocity, and progress over time.",
-    icon: ChartNoAxesColumn,
+    title: "Free, forever",
+    description: "Open source under MIT. No accounts, no telemetry by default.",
+    icon: Heart,
   },
 ];
 
@@ -40,19 +38,22 @@ export const Hero = () => {
       <div className="container flex flex-col justify-between gap-8 md:gap-14 lg:flex-row lg:gap-20">
         {/* Left side - Main content */}
         <div className="flex-1">
-          <h1 className="text-foreground max-w-160 text-3xl tracking-tight md:text-4xl lg:text-5xl xl:whitespace-nowrap">
-            Mainline Next.js template
+          <h1 className="text-foreground max-w-160 text-3xl tracking-tight md:text-4xl lg:text-5xl">
+            Design directly in your browser.
+            <br className="hidden md:block" /> Your agent writes the code.
           </h1>
 
-          <p className="text-muted-foreground text-1xl mt-5 md:text-3xl">
-            Mainline is an open-source website template built with shadcn/ui,
-            Tailwind 4 & Next.js
+          <p className="text-muted-foreground mt-5 text-lg md:text-xl">
+            A free, open-source Chrome extension that turns any website into a
+            live design surface. Edit layout, type, colour, spacing and
+            structure, then ship the result straight to Claude Code, Cursor, or
+            any AI coding agent over MCP.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-4 lg:flex-nowrap">
             <Button asChild>
-              <a href="https://github.com/shadcnblocks/mainline-nextjs-template">
-                Get template
+              <a href={CWS_URL} target="_blank" rel="noopener noreferrer">
+                Add to Chrome
               </a>
             </Button>
             <Button
@@ -60,11 +61,8 @@ export const Hero = () => {
               className="from-background h-auto gap-2 bg-linear-to-r to-transparent shadow-md"
               asChild
             >
-              <a
-                href="https://shadcnblocks.com"
-                className="max-w-56 truncate text-start md:max-w-none"
-              >
-                Built by shadcnblocks.com
+              <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+                Read the docs on GitHub
                 <ArrowRight className="stroke-3" />
               </a>
             </Button>
@@ -101,12 +99,13 @@ export const Hero = () => {
       </div>
 
       <div className="mt-12 max-lg:ml-6 max-lg:h-[550px] max-lg:overflow-hidden md:mt-20 lg:container lg:mt-24">
-        <div className="relative h-[793px] w-full">
+        <div className="relative mx-auto h-[793px] w-full max-w-3xl">
           <Image
-            src="/hero.webp"
-            alt="hero"
+            src="/cover.png"
+            alt="The Design Mode side panel on a live website"
             fill
-            className="rounded-2xl object-cover object-left-top shadow-lg max-lg:rounded-tr-none"
+            className="rounded-2xl object-contain object-top shadow-lg"
+            priority
           />
         </div>
       </div>

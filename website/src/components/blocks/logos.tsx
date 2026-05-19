@@ -14,20 +14,51 @@ type Company = {
 };
 
 export const Logos = () => {
-  const topRowCompanies = [
+  const topRowCompanies: Company[] = [
     {
-      name: "Mercury",
-      logo: "/logos/mercury.svg",
-      width: 143,
-      height: 26,
-      href: "https://mercury.com",
+      name: "Claude",
+      logo: "/logos/claude.svg",
+      width: 120,
+      height: 30,
+      href: "https://www.anthropic.com/claude",
     },
     {
-      name: "Watershed",
-      logo: "/logos/watershed.svg",
-      width: 154,
-      height: 31,
-      href: "https://watershed.com",
+      name: "OpenAI",
+      logo: "/logos/openai.svg",
+      width: 100,
+      height: 26,
+      href: "https://openai.com",
+    },
+    {
+      name: "Perplexity",
+      logo: "/logos/perplexity.svg",
+      width: 141,
+      height: 32,
+      href: "https://perplexity.ai",
+    },
+    {
+      name: "Notion",
+      logo: "/logos/notion.svg",
+      width: 110,
+      height: 24,
+      href: "https://notion.so",
+    },
+  ];
+
+  const bottomRowCompanies: Company[] = [
+    {
+      name: "Raycast",
+      logo: "/logos/raycast.svg",
+      width: 128,
+      height: 33,
+      href: "https://raycast.com",
+    },
+    {
+      name: "Arc",
+      logo: "/logos/arc.svg",
+      width: 90,
+      height: 28,
+      href: "https://arc.net",
     },
     {
       name: "Retool",
@@ -45,65 +76,25 @@ export const Logos = () => {
     },
   ];
 
-  const bottomRowCompanies = [
-    {
-      name: "Perplexity",
-      logo: "/logos/perplexity.svg",
-      width: 141,
-      height: 32,
-      href: "https://perplexity.com",
-    },
-    {
-      name: "Monzo",
-      logo: "/logos/monzo.svg",
-      width: 104,
-      height: 18,
-      href: "https://monzo.com",
-    },
-    {
-      name: "Ramp",
-      logo: "/logos/ramp.svg",
-      width: 105,
-      height: 28,
-      href: "https://ramp.com",
-    },
-    {
-      name: "Raycast",
-      logo: "/logos/raycast.svg",
-      width: 128,
-      height: 33,
-      href: "https://raycast.com",
-    },
-    {
-      name: "Arc",
-      logo: "/logos/arc.svg",
-      width: 90,
-      height: 28,
-      href: "https://arc.com",
-    },
-  ];
-
   return (
-    <section className="pb-28 lg:pb-32 overflow-hidden">
+    <section className="overflow-hidden pb-28 lg:pb-32">
       <div className="container space-y-10 lg:space-y-16">
         <div className="text-center">
           <h2 className="mb-4 text-xl text-balance md:text-2xl lg:text-3xl">
-            Powering the world's best product teams.
+            Talks to every AI tool that speaks MCP.
             <br className="max-md:hidden" />
             <span className="text-muted-foreground">
-              From next-gen startups to established enterprises.
+              Drop your edits straight into Claude, Cursor, or any agent that
+              supports the protocol.
             </span>
           </h2>
         </div>
 
         <div className="flex w-full flex-col items-center gap-8">
-          {/* Top row - 4 logos */}
           <LogoRow companies={topRowCompanies} gridClassName="grid-cols-4" />
-
-          {/* Bottom row - 5 logos */}
           <LogoRow
             companies={bottomRowCompanies}
-            gridClassName="grid-cols-5"
+            gridClassName="grid-cols-4"
             direction="right"
           />
         </div>

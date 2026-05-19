@@ -6,13 +6,13 @@ import { cn } from "@/lib/utils";
 
 const topItems = [
   {
-    title: "Reusable issue templates.",
+    title: "Presets — reusable styles.",
     description:
-      "Draft lightning-fast documents with our Smart Instructions and Templates.",
+      "Save a typography stack, a button look, a colour palette, and apply it to any element on any page.",
     images: [
       {
         src: "/resource-allocation/templates.webp",
-        alt: "Issue template interface",
+        alt: "Presets panel",
         width: 495,
         height: 186,
       },
@@ -22,37 +22,23 @@ const topItems = [
     fade: [""],
   },
   {
-    title: "Simplify your stack.",
-    description: "No more Confluence, SharePoint, or Microsoft Word.",
+    title: "Talks to every coding agent.",
+    description:
+      "Local MCP server bridges your edits to Claude Desktop, Cursor, Claude Code, and any MCP-aware tool.",
     images: [
-      { src: "/logos/jira.svg", alt: "Jira logo", width: 48, height: 48 },
-      { src: "/logos/excel.svg", alt: "Excel logo", width: 48, height: 48 },
+      { src: "/logos/claude.svg", alt: "Claude logo", width: 48, height: 48 },
+      { src: "/logos/openai.svg", alt: "OpenAI logo", width: 48, height: 48 },
       {
-        src: "/logos/notion.svg",
-        alt: "Notion logo",
+        src: "/logos/perplexity.svg",
+        alt: "Perplexity logo",
         width: 48,
         height: 48,
       },
-      { src: "/logos/word.svg", alt: "Word logo", width: 48, height: 48 },
-      {
-        src: "/logos/monday.svg",
-        alt: "Monday logo",
-        width: 48,
-        height: 48,
-      },
-      {
-        src: "/logos/drive.svg",
-        alt: "Google Drive logo",
-        width: 48,
-        height: 48,
-      },
-      {
-        src: "/logos/jira.svg",
-        alt: "Jira logo",
-        width: 48,
-        height: 48,
-      },
-      { src: "/logos/asana.svg", alt: "Asana logo", width: 48, height: 48 },
+      { src: "/logos/notion.svg", alt: "Notion logo", width: 48, height: 48 },
+      { src: "/logos/raycast.svg", alt: "Raycast logo", width: 48, height: 48 },
+      { src: "/logos/arc.svg", alt: "Arc logo", width: 48, height: 48 },
+      { src: "/logos/retool.svg", alt: "Retool logo", width: 48, height: 48 },
+      { src: "/logos/descript.svg", alt: "Descript logo", width: 48, height: 48 },
     ],
     className:
       "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8 md:[&>.title-container]:translate-x-2 xl:[&>.title-container]:translate-x-4 [&>.title-container]:translate-x-0",
@@ -62,13 +48,13 @@ const topItems = [
 
 const bottomItems = [
   {
-    title: "Graveyard it.",
+    title: "Layers tab.",
     description:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do.",
+      "See and reorganise the DOM tree of the page you're editing — without leaving the side panel.",
     images: [
       {
         src: "/resource-allocation/graveyard.webp",
-        alt: "Graveyard interface",
+        alt: "Layers tab",
         width: 305,
         height: 280,
       },
@@ -78,13 +64,13 @@ const bottomItems = [
     fade: ["bottom"],
   },
   {
-    title: "Task discussions.",
+    title: "Comments on the page.",
     description:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.",
+      "Drop numbered pins on any element, write a note, resolve when shipped. Like Figma comments, on live pages.",
     images: [
       {
         src: "/resource-allocation/discussions.webp",
-        alt: "Task discussions interface",
+        alt: "Comments overlay",
         width: 320,
         height: 103,
       },
@@ -94,13 +80,13 @@ const bottomItems = [
     fade: [""],
   },
   {
-    title: "Notifications.",
+    title: "Changes tab.",
     description:
-      "Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod.",
+      "A full audit trail of every style, text, and DOM edit. Undo any one of them, or export the whole diff.",
     images: [
       {
         src: "/resource-allocation/notifications.webp",
-        alt: "Notifications interface",
+        alt: "Changes tab",
         width: 305,
         height: 280,
       },
@@ -117,9 +103,9 @@ export const ResourceAllocation = () => {
       id="resource-allocation"
       className="overflow-hidden pb-28 lg:pb-32"
     >
-      <div className="">
+      <div>
         <h2 className="container text-center text-3xl tracking-tight text-balance sm:text-4xl md:text-5xl lg:text-6xl">
-          Mainline your resource allocation and execution
+          Every design control, in one side panel
         </h2>
 
         <div className="mt-8 md:mt-12 lg:mt-20">
@@ -186,7 +172,6 @@ const Item = ({ item, isLast, className }: ItemProps) => {
       {item.images.length > 4 ? (
         <div className="relative overflow-hidden">
           <div className="flex flex-col gap-5">
-            {/* First row - right aligned */}
             <div className="flex translate-x-4 justify-end gap-5">
               {item.images.slice(0, 4).map((image, j) => (
                 <div
@@ -204,7 +189,6 @@ const Item = ({ item, isLast, className }: ItemProps) => {
                 </div>
               ))}
             </div>
-            {/* Second row - left aligned */}
             <div className="flex -translate-x-4 gap-5">
               {item.images.slice(4).map((image, j) => (
                 <div

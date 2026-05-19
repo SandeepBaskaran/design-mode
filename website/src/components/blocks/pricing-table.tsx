@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import Link from "next/link";
+
 import { Check, ChevronsUpDown, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,127 +17,124 @@ interface FeatureSection {
   category: string;
   features: {
     name: string;
-    free: true | false | null | string;
-    startup: true | false | null | string;
-    enterprise: true | false | null | string;
+    local: true | false | null | string;
+    cloud: true | false | null | string;
+    selfHosted: true | false | null | string;
   }[];
 }
 
+const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
+
 const pricingPlans = [
   {
-    name: "Free",
-    button: {
-      text: "Get started",
-      variant: "outline" as const,
-    },
+    name: "Local",
+    button: { text: "Setup guide", variant: "outline" as const, href: "/mcp" as const, external: false },
   },
   {
-    name: "Startup",
-    button: {
-      text: "Get started",
-      variant: "outline" as const,
-    },
+    name: "Cloud",
+    button: { text: "How Cloud works", variant: "outline" as const, href: "/mcp" as const, external: false },
   },
   {
-    name: "Enterprise",
+    name: "Self-hosted",
     button: {
-      text: "Get a demo",
+      text: "View on GitHub",
       variant: "outline" as const,
+      href: `${REPO_URL}/tree/main/packages/mcp-cloud`,
+      external: true as const,
     },
   },
 ];
 
 const comparisonFeatures: FeatureSection[] = [
   {
-    category: "Usage",
+    category: "Setup",
     features: [
       {
-        name: "Members",
-        free: "Unlimited",
-        startup: "Unlimited",
-        enterprise: "Unlimited",
+        name: "Install command",
+        local: "npx @design-mode/mcp-local",
+        cloud: "no install",
+        selfHosted: "deploy to Vercel",
       },
       {
-        name: "Transactions",
-        free: "250",
-        startup: "Unlimited",
-        enterprise: "Unlimited",
+        name: "Bearer token required",
+        local: false,
+        cloud: true,
+        selfHosted: true,
       },
       {
-        name: "Teams",
-        free: "2",
-        startup: "Unlimited",
-        enterprise: "Unlimited",
+        name: "Auto-connects on panel open",
+        local: true,
+        cloud: false,
+        selfHosted: false,
       },
     ],
   },
   {
-    category: "Features",
+    category: "Privacy",
     features: [
       {
-        name: "Reporting",
-        free: true,
-        startup: true,
-        enterprise: true,
+        name: "Network egress from your machine",
+        local: false,
+        cloud: true,
+        selfHosted: true,
       },
       {
-        name: "Analytics",
-        free: true,
-        startup: true,
-        enterprise: true,
+        name: "Edits persisted server-side",
+        local: false,
+        cloud: false,
+        selfHosted: "your call",
       },
       {
-        name: "Import and export",
-        free: true,
-        startup: true,
-        enterprise: true,
+        name: "Payload bodies dropped within ~60s",
+        local: "n/a",
+        cloud: true,
+        selfHosted: true,
       },
       {
-        name: "Integrations",
-        free: true,
-        startup: true,
-        enterprise: true,
-      },
-      {
-        name: "Mainline AI",
-        free: null,
-        startup: true,
-        enterprise: true,
-      },
-      {
-        name: "Admin roles",
-        free: null,
-        startup: null,
-        enterprise: true,
-      },
-      {
-        name: "Audit log",
-        free: null,
-        startup: null,
-        enterprise: true,
+        name: "Anyone else operates the infra",
+        local: false,
+        cloud: true,
+        selfHosted: false,
       },
     ],
   },
   {
-    category: "Support",
+    category: "Agent compatibility",
     features: [
       {
-        name: "Priority Support",
-        free: true,
-        startup: true,
-        enterprise: true,
+        name: "Claude Desktop",
+        local: true,
+        cloud: true,
+        selfHosted: true,
       },
       {
-        name: "Account Manager",
-        free: null,
-        startup: null,
-        enterprise: true,
+        name: "Cursor",
+        local: true,
+        cloud: true,
+        selfHosted: true,
       },
       {
-        name: "Uptime SLA",
-        free: null,
-        startup: null,
-        enterprise: true,
+        name: "Claude Code",
+        local: true,
+        cloud: true,
+        selfHosted: true,
+      },
+      {
+        name: "Agents in remote / sandboxed contexts",
+        local: false,
+        cloud: true,
+        selfHosted: true,
+      },
+    ],
+  },
+  {
+    category: "Cost",
+    features: [
+      {
+        name: "Price",
+        local: "Free",
+        cloud: "Free",
+        selfHosted: "Free + your Vercel bill",
       },
     ],
   },
@@ -151,7 +150,6 @@ const renderFeatureValue = (value: true | false | null | string) => {
   if (value === null) {
     return null;
   }
-  // String value
   return (
     <div className="flex items-center gap-2">
       <Check className="size-4" />
@@ -161,7 +159,7 @@ const renderFeatureValue = (value: true | false | null | string) => {
 };
 
 export const PricingTable = () => {
-  const [selectedPlan, setSelectedPlan] = useState(1); // Default to Startup plan
+  const [selectedPlan, setSelectedPlan] = useState(0); // Default to Local mode
 
   return (
     <section className="pb-28 lg:py-32">
@@ -185,11 +183,22 @@ const PlanHeaders = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
+  const renderCta = (plan: (typeof pricingPlans)[number]) =>
+    plan.button.external ? (
+      <a href={plan.button.href} target="_blank" rel="noopener noreferrer">
+        <Button variant={plan.button.variant}>{plan.button.text}</Button>
+      </a>
+    ) : (
+      <Link href={plan.button.href}>
+        <Button variant={plan.button.variant}>{plan.button.text}</Button>
+      </Link>
+    );
+
   return (
-    <div className="">
+    <div>
       {/* Mobile View */}
       <div className="md:hidden">
-        <Collapsible open={isOpen} onOpenChange={setIsOpen} className="">
+        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <div className="flex items-center justify-between border-b py-4">
             <CollapsibleTrigger className="flex items-center gap-2">
               <h3 className="text-2xl font-semibold">
@@ -199,12 +208,7 @@ const PlanHeaders = ({
                 className={`size-5 transition-transform ${isOpen ? "rotate-180" : ""}`}
               />
             </CollapsibleTrigger>
-            <Button
-              variant={pricingPlans[selectedPlan].button.variant}
-              className="w-fit"
-            >
-              {pricingPlans[selectedPlan].button.text}
-            </Button>
+            {renderCta(pricingPlans[selectedPlan])}
           </div>
           <CollapsibleContent className="flex flex-col space-y-2 p-2">
             {pricingPlans.map(
@@ -232,11 +236,9 @@ const PlanHeaders = ({
         <div className="col-span-1 max-md:hidden"></div>
 
         {pricingPlans.map((plan, index) => (
-          <div key={index} className="">
+          <div key={index}>
             <h3 className="mb-3 text-2xl font-semibold">{plan.name}</h3>
-            <Button variant={plan.button.variant} className="">
-              {plan.button.text}
-            </Button>
+            {renderCta(plan)}
           </div>
         ))}
       </div>
@@ -247,7 +249,7 @@ const PlanHeaders = ({
 const FeatureSections = ({ selectedPlan }: { selectedPlan: number }) => (
   <>
     {comparisonFeatures.map((section, sectionIndex) => (
-      <div key={sectionIndex} className="">
+      <div key={sectionIndex}>
         <div className="border-primary/40 border-b py-4">
           <h3 className="text-lg font-semibold">{section.category}</h3>
         </div>
@@ -263,15 +265,15 @@ const FeatureSections = ({ selectedPlan }: { selectedPlan: number }) => (
             <div className="md:hidden">
               <div className="flex items-center gap-1 py-4 md:border-b">
                 {renderFeatureValue(
-                  [feature.free, feature.startup, feature.enterprise][
+                  [feature.local, feature.cloud, feature.selfHosted][
                     selectedPlan
                   ],
                 )}
               </div>
             </div>
-            {/* Desktop View - All Plans */}
+            {/* Desktop View - All Modes */}
             <div className="hidden md:col-span-3 md:grid md:grid-cols-3 md:gap-4">
-              {[feature.free, feature.startup, feature.enterprise].map(
+              {[feature.local, feature.cloud, feature.selfHosted].map(
                 (value, i) => (
                   <div
                     key={i}

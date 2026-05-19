@@ -10,52 +10,67 @@ import { cn } from "@/lib/utils";
 
 const categories = [
   {
-    title: "Support",
+    title: "Getting started",
     questions: [
       {
-        question: "How do I update my account without breaking my laptop?",
+        question: "What is Design Mode?",
         answer:
-          "Lorem ipsum dolor sit amet consectetur adipisicing elit. Minus voluptates deserunt officia temporibus dignissimos.",
+          "A free, open-source Chrome extension that turns any website into a live design surface. You inspect any element on any page, change its CSS visually (type, colour, layout, spacing, structure), and ship the resulting diff straight to a coding agent like Claude Code or Cursor over MCP. No mock files, no copy-paste.",
       },
       {
-        question: "Is support free, or do I need to Google everything?",
+        question: "Is it really free?",
         answer:
-          "Lorem ipsum dolor sit amet consectetur adipisicing elit. Minus voluptates deserunt officia temporibus dignissimos.",
+          "Yes — free forever, MIT-licensed, no accounts, no paywalls, no telemetry by default. If you find it valuable, the in-panel Contribute panel has ways to help (Star the repo, share, sponsor) but none of them are required.",
       },
       {
-        question: "Are you going to be subsumed by AI?",
+        question: "Which browsers does it work in?",
         answer:
-          "Lorem ipsum dolor sit amet consectetur adipisicing elit. Minus voluptates deserunt officia temporibus dignissimos.",
+          "Any Chromium-based browser that supports Manifest V3 side panels — Chrome, Edge, Arc, Brave. Firefox is not supported today. Safari is out of scope (no MV3 side-panel API). It's also a desktop-only experience — touch-only mobile devices won't have a place to anchor the side panel.",
       },
     ],
   },
   {
-    title: "Your account",
+    title: "Privacy & data",
     questions: [
       {
-        question: "Is support free, or do I need to Google everything?",
+        question: "What data leaves my machine?",
         answer:
-          "Lorem ipsum dolor sit amet consectetur adipisicing elit. Minus voluptates deserunt officia temporibus dignissimos.",
+          "By default, nothing. The extension stores your edits in chrome.storage locally. The optional MCP server runs on localhost. The hosted Cloud relay (mcp.designmode.app) is opt-in — you only use it if you explicitly enable Cloud mode and register a bearer token. Full breakdown: see /privacy.",
       },
       {
-        question: "Are you going to be subsumed by AI?",
+        question: "How does the Cloud relay work?",
         answer:
-          "Lorem ipsum dolor sit amet consectetur adipisicing elit. Minus voluptates deserunt officia temporibus dignissimos.",
+          "It's a thin SSE pass-through. Your edits flow from the extension to your AI agent through it. We hash and log the token + connection metadata for abuse prevention, drop payload bodies within ~60 seconds, never persist edits, and never train on the traffic. The full PRIVACY.md doc has the exact list.",
       },
     ],
   },
   {
-    title: "Other questions",
+    title: "Agents & MCP",
     questions: [
       {
-        question: "Is support free, or do I need to Google everything?",
+        question: "Which AI coding agents does it work with?",
         answer:
-          "Lorem ipsum dolor sit amet consectetur adipisicing elit. Minus voluptates deserunt officia temporibus dignissimos.",
+          "Anything that speaks MCP (Model Context Protocol) — Claude Desktop, Cursor, Claude Code, Windsurf, and the growing list of MCP-aware tools. Setup configs for the major ones live on the /mcp page.",
       },
       {
-        question: "Are you going to be subsumed by AI?",
+        question: "Can I self-host the relay?",
         answer:
-          "Lorem ipsum dolor sit amet consectetur adipisicing elit. Minus voluptates deserunt officia temporibus dignissimos.",
+          "Yes — packages/mcp-cloud in the repo is Vercel-deployable. Self-hosted mode is one of the three connection modes on the Modes page.",
+      },
+    ],
+  },
+  {
+    title: "Contributing",
+    questions: [
+      {
+        question: "Can I contribute?",
+        answer:
+          "Yes. The CONTRIBUTING.md doc has the contributor flow. Easy first issues are tagged on GitHub; bigger changes start in a Discussion or a draft PR. Security issues should be emailed (not filed publicly) — see /privacy.",
+      },
+      {
+        question: "How do I report a bug?",
+        answer:
+          "Open the Help panel inside the extension (? icon in the side-panel header) → click Copy diagnostics → file an issue on GitHub with the pasted diagnostics, repro steps, and what you expected. The issue template walks you through it.",
       },
     ],
   },
@@ -77,11 +92,11 @@ export const FAQ = ({
           <div className="space-y-4">
             {headerTag === "h1" ? (
               <h1 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
-                Got Questions?
+                Frequently asked questions
               </h1>
             ) : (
               <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
-                Got Questions?
+                Frequently asked questions
               </h2>
             )}
             <p className="text-muted-foreground max-w-md leading-snug lg:mx-auto">
@@ -95,7 +110,7 @@ export const FAQ = ({
 
           <div className="grid gap-6 text-start">
             {categories.map((category, categoryIndex) => (
-              <div key={category.title} className="">
+              <div key={category.title}>
                 <h3 className="text-muted-foreground border-b py-4">
                   {category.title}
                 </h3>
