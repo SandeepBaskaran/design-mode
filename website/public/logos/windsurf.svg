@@ -1,0 +1,6 @@
+<svg width="124" height="28" viewBox="0 0 124 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M3 19 Q9 14 15 19 T27 19" stroke="#000" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M3 23 Q9 18 15 23 T27 23" stroke="#000" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M15 5 L23 17 L7 17 Z" fill="#000"/>
+  <text x="33" y="20" font-family="-apple-system, system-ui, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="600" letter-spacing="-0.3" fill="#000">Windsurf</text>
+</svg>

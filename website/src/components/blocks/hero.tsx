@@ -51,8 +51,16 @@ export const Hero = () => {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-4 lg:flex-nowrap">
-            <Button asChild>
+            <Button asChild className="gap-2">
               <a href={CWS_URL} target="_blank" rel="noopener noreferrer">
+                <Image
+                  src="/chrome.svg"
+                  width={18}
+                  height={18}
+                  alt=""
+                  aria-hidden="true"
+                  className="shrink-0"
+                />
                 Add to Chrome
               </a>
             </Button>

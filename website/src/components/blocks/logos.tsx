@@ -16,6 +16,13 @@ type Company = {
 export const Logos = () => {
   const topRowCompanies: Company[] = [
     {
+      name: "OpenAI",
+      logo: "/logos/openai.svg",
+      width: 100,
+      height: 26,
+      href: "https://openai.com",
+    },
+    {
       name: "Claude",
       logo: "/logos/claude.svg",
       width: 120,
@@ -23,11 +30,11 @@ export const Logos = () => {
       href: "https://www.anthropic.com/claude",
     },
     {
-      name: "OpenAI",
-      logo: "/logos/openai.svg",
-      width: 100,
-      height: 26,
-      href: "https://openai.com",
+      name: "Gemini",
+      logo: "/logos/gemini.svg",
+      width: 118,
+      height: 28,
+      href: "https://gemini.google.com",
     },
     {
       name: "Perplexity",
@@ -36,43 +43,29 @@ export const Logos = () => {
       height: 32,
       href: "https://perplexity.ai",
     },
-    {
-      name: "Notion",
-      logo: "/logos/notion.svg",
-      width: 110,
-      height: 24,
-      href: "https://notion.so",
-    },
   ];
 
   const bottomRowCompanies: Company[] = [
     {
-      name: "Raycast",
-      logo: "/logos/raycast.svg",
-      width: 128,
-      height: 33,
-      href: "https://raycast.com",
-    },
-    {
-      name: "Arc",
-      logo: "/logos/arc.svg",
-      width: 90,
+      name: "Cursor",
+      logo: "/logos/cursor.svg",
+      width: 108,
       height: 28,
-      href: "https://arc.net",
+      href: "https://cursor.com",
     },
     {
-      name: "Retool",
-      logo: "/logos/retool.svg",
-      width: 113,
-      height: 22,
-      href: "https://retool.com",
+      name: "Windsurf",
+      logo: "/logos/windsurf.svg",
+      width: 124,
+      height: 28,
+      href: "https://windsurf.com",
     },
     {
-      name: "Descript",
-      logo: "/logos/descript.svg",
-      width: 112,
-      height: 27,
-      href: "https://descript.com",
+      name: "Antigravity",
+      logo: "/logos/antigravity.svg",
+      width: 140,
+      height: 28,
+      href: "https://antigravity.google",
     },
   ];
 
@@ -94,7 +87,7 @@ export const Logos = () => {
           <LogoRow companies={topRowCompanies} gridClassName="grid-cols-4" />
           <LogoRow
             companies={bottomRowCompanies}
-            gridClassName="grid-cols-4"
+            gridClassName="grid-cols-3"
             direction="right"
           />
         </div>

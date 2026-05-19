@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
@@ -18,18 +19,13 @@ export function Footer() {
     { name: "About", href: "/about" },
     { name: "FAQ", href: "/faq" },
     { name: "Contact", href: "/contact" },
+    { name: "Privacy", href: "/privacy" },
   ];
 
   const social = [
     { name: "GitHub", href: REPO_URL },
     { name: "X (Twitter)", href: X_URL },
     { name: "Sponsor", href: SPONSORS_URL },
-  ];
-
-  const legal = [
-    { name: "Privacy", href: "/privacy" },
-    { name: "Security", href: `${REPO_URL}/blob/main/SECURITY.md` },
-    { name: "License (MIT)", href: `${REPO_URL}/blob/main/LICENSE` },
   ];
 
   return (
@@ -43,8 +39,16 @@ export function Footer() {
           controls and ship the changes to your coding agent over MCP.
         </p>
         <div>
-          <Button size="lg" className="mt-4" asChild>
+          <Button size="lg" className="mt-4 gap-2" asChild>
             <a href={CWS_URL} target="_blank" rel="noopener noreferrer">
+              <Image
+                src="/chrome.svg"
+                width={20}
+                height={20}
+                alt=""
+                aria-hidden="true"
+                className="shrink-0"
+              />
               Add to Chrome
             </a>
           </Button>
@@ -73,29 +77,6 @@ export function Footer() {
               >
                 {item.name} <ArrowUpRight className="size-4" />
               </a>
-            </li>
-          ))}
-        </ul>
-        <ul className="flex flex-wrap items-center justify-center gap-6">
-          {legal.map((item) => (
-            <li key={item.name}>
-              {item.href.startsWith("/") ? (
-                <Link
-                  href={item.href}
-                  className="text-muted-foreground text-sm transition-opacity hover:opacity-75"
-                >
-                  {item.name}
-                </Link>
-              ) : (
-                <a
-                  href={item.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground text-sm transition-opacity hover:opacity-75"
-                >
-                  {item.name}
-                </a>
-              )}
             </li>
           ))}
         </ul>

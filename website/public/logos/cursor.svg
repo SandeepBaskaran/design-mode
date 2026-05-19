@@ -1,0 +1,5 @@
+<svg width="108" height="28" viewBox="0 0 108 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M14 3 L24 8.5 L24 19.5 L14 25 L4 19.5 L4 8.5 Z" stroke="#000" stroke-width="2" stroke-linejoin="round" fill="none"/>
+  <path d="M14 14 L24 8.5 M14 14 L14 25 M14 14 L4 8.5" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+  <text x="33" y="20" font-family="-apple-system, system-ui, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="600" letter-spacing="-0.3" fill="#000">Cursor</text>
+</svg>
