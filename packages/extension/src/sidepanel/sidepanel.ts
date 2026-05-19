@@ -359,7 +359,7 @@ let mcpAutoConnect = true;
 // Cloud / self-hosted MCP. Mode picks where the extension dials; the
 // other three are only meaningful when mode !== 'local'.
 type McpMode = 'local' | 'cloud' | 'self-hosted';
-let mcpMode: McpMode = 'local';
+let mcpMode: McpMode = 'cloud';
 let mcpCloudToken = '';
 let mcpCloudUrl = 'https://mcp.designmode.app';
 let mcpCloudTenantId = '';
@@ -427,7 +427,7 @@ const port = chrome.runtime.connect({ name: 'sidepanel' });
 port.onMessage.addListener((msg) => {
   if (msg.type === 'INIT_STATE') {
     enabled = msg.enabled ?? false; inspecting = msg.inspecting ?? true;
-    mcpState = msg.connected ? 'connected' : msg.serverRunning ? 'running' : 'offline';
+    mcpState = !msg.connected ? 'offline' : msg.agentConnected ? 'connected' : 'running';
     if (msg.pinnedUrl) { try { pinnedDomain = new URL(msg.pinnedUrl).hostname; } catch { pinnedDomain = msg.pinnedUrl; } }
     render(); refreshMcpStatus(); refreshDomTree(); refreshChanges(); refreshDesignTokens(); refreshPageFonts();
   }
@@ -1457,6 +1457,14 @@ chrome.runtime.onMessage.addListener((msg) => {
     render();
   }
   if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; render(); }
+  if (msg.type === 'AGENT_PRESENCE_UPDATE') {
+    // Transport state is implicit from current mcpState — if we were
+    // 'offline' an AGENT_PRESENCE_UPDATE shouldn't suddenly say
+    // connected, so guard on the existing state.
+    if (mcpState === 'offline') return;
+    mcpState = msg.connected ? 'connected' : 'running';
+    render();
+  }
 });
 
 /* ── Phase 2: Tag icon mapping ── */
@@ -7029,7 +7037,7 @@ function renderChangesTab(): string {
 function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: string, inactiveBtn: string): string {
   const modeBtn = (m: McpMode, label: string) => '<button data-dm-mcp-mode="' + m + '" style="' + (mcpMode === m ? activeBtn : inactiveBtn) + '">' + label + '</button>';
   const modeRow = '<div style="display:flex;gap:4px;margin-bottom:8px;">' +
-    modeBtn('local', 'Local') + modeBtn('cloud', 'Cloud') + modeBtn('self-hosted', 'Self-hosted') +
+    modeBtn('cloud', 'Cloud') + modeBtn('local', 'Local') + modeBtn('self-hosted', 'Self-hosted') +
     '</div>';
 
   let body = '';

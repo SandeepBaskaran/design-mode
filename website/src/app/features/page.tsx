@@ -9,14 +9,18 @@ import {
   Eye,
   EyeOff,
   Folder,
+  HeartHandshake,
+  HelpCircle,
   Layers,
   Layers3,
   MessageCircle,
-  MousePointer2,
   MoveHorizontal,
   MoveVertical,
   Pause,
+  Plug,
   Send,
+  Settings as SettingsIcon,
+  SunMoon,
   Sparkles,
   Square,
   Type,
@@ -32,24 +36,36 @@ export const metadata = {
     "Every control inside the Design Mode side panel — header row, three middle panels (Layers, Design, Changes), and the bottom row that ships your edits to your agent.",
 };
 
-const headerItems = [
+const headerIcons = [
   {
-    icon: MousePointer2,
-    title: "Activate + Inspect",
+    icon: Plug,
+    title: "MCP status",
     description:
-      "Toggle the extension on, then hover to highlight elements and click to lock selection.",
+      "Click-to-refresh chip showing whether the MCP server is offline, running, or has an agent attached.",
   },
   {
-    icon: Square,
-    title: "Selected element chip",
+    icon: SunMoon,
+    title: "Theme",
     description:
-      "Shows the live selector (tag + nearest id/class). Click the chip to focus the matching layer in the Layers tab.",
+      "Toggle the side panel between system / light / dark.",
   },
   {
-    icon: Sparkles,
-    title: "Open in CSS",
+    icon: HeartHandshake,
+    title: "Contribute",
     description:
-      "Pop the full computed-style sheet for the current selection in an overlay — same view DevTools gives you, only readable.",
+      "Star the repo, share, sponsor — full overlay with low-friction ways to support the project.",
+  },
+  {
+    icon: HelpCircle,
+    title: "Help",
+    description:
+      "Quick links to docs, privacy, and a one-click “Copy diagnostics” for bug reports.",
+  },
+  {
+    icon: SettingsIcon,
+    title: "Settings",
+    description:
+      "Theme, colour format, capture mode, inspector colours, and the MCP mode picker (Cloud / Local / Self-hosted).",
   },
 ];
 
@@ -95,42 +111,87 @@ export default function FeaturesPage() {
 
         <DashedLine className="container mt-16 max-w-5xl" />
 
-        {/* Header row */}
+        {/* Section 1: Header row + Action toolbar (one merged card) */}
         <div className="container mt-16 max-w-5xl">
           <div className="mb-8 flex items-baseline gap-3">
             <span className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
               Row 1
             </span>
             <h2 className="text-2xl tracking-tight md:text-3xl">
-              Header — pick what you're editing
+              Top of the panel
             </h2>
           </div>
           <p className="text-muted-foreground mb-10 max-w-2xl">
-            The top of the panel always shows what's selected, gives you
-            access to the raw computed CSS, and houses the per-tab
-            theme + Contribute + Help + Settings overlays.
+            Five icons set up your session and surface the overlays
+            (Contribute, Help, Settings). Just below them, an action
+            toolbar puts the most-used DOM and session mutations one
+            click away.
           </p>
-          <div className="grid gap-4 md:grid-cols-3">
-            {headerItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Card key={item.title}>
-                  <CardContent className="flex flex-col gap-2 p-5">
-                    <Icon className="text-foreground size-5" />
-                    <h3 className="text-base font-semibold">{item.title}</h3>
-                    <p className="text-muted-foreground text-sm leading-relaxed">
-                      {item.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+
+          <Card>
+            <CardContent className="grid gap-8 p-6 md:grid-cols-2 md:p-8">
+              {/* Left column — header icons */}
+              <div>
+                <h3 className="text-foreground mb-4 text-base font-semibold">
+                  Header icons
+                </h3>
+                <ul className="space-y-3">
+                  {headerIcons.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <li
+                        key={item.title}
+                        className="flex items-start gap-3"
+                      >
+                        <Icon className="text-foreground mt-0.5 size-4 shrink-0" />
+                        <div>
+                          <div className="text-foreground text-sm font-semibold">
+                            {item.title}
+                          </div>
+                          <div className="text-muted-foreground text-sm leading-relaxed">
+                            {item.description}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* Right column — action toolbar */}
+              <div>
+                <h3 className="text-foreground mb-4 text-base font-semibold">
+                  Action toolbar
+                </h3>
+                <ul className="space-y-3">
+                  {actionItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <li
+                        key={item.title}
+                        className="flex items-start gap-3"
+                      >
+                        <Icon className="text-foreground mt-0.5 size-4 shrink-0" />
+                        <div>
+                          <div className="text-foreground text-sm font-semibold">
+                            {item.title}
+                          </div>
+                          <div className="text-muted-foreground text-sm leading-relaxed">
+                            {item.description}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <DashedLine className="container mt-20 max-w-5xl" />
 
-        {/* Three panels */}
+        {/* Section 2: Three middle panels */}
         <div className="container mt-16 max-w-5xl">
           <div className="mb-8 flex items-baseline gap-3">
             <span className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
@@ -176,15 +237,15 @@ export default function FeaturesPage() {
                   control — sliders, colour pickers, segmented buttons —
                   not a textarea of CSS.
                 </p>
-                <ul className="mt-2 grid grid-cols-1 gap-1 text-sm">
+                <ul className="mt-2 grid grid-cols-1 gap-1.5 text-sm">
                   {designSections.map((s) => {
                     const Icon = s.icon;
                     return (
                       <li
                         key={s.label}
-                        className="text-muted-foreground flex items-center gap-2"
+                        className="text-foreground/90 flex items-center gap-2"
                       >
-                        <Icon className="size-3.5" />
+                        <Icon className="text-foreground/70 size-3.5" />
                         {s.label}
                       </li>
                     );
@@ -216,56 +277,19 @@ export default function FeaturesPage() {
 
         <DashedLine className="container mt-20 max-w-5xl" />
 
-        {/* Action row */}
-        <div className="container mt-16 max-w-5xl">
-          <div className="mb-8 flex items-baseline gap-3">
-            <span className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
-              Row between
-            </span>
-            <h2 className="text-2xl tracking-tight md:text-3xl">
-              Action toolbar — quick mutations
-            </h2>
-          </div>
-          <p className="text-muted-foreground mb-10 max-w-2xl">
-            A row of single-purpose buttons between the header and the
-            three tabs. Each is either a DOM mutation or a session-wide
-            toggle.
-          </p>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            {actionItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Card key={item.title}>
-                  <CardContent className="flex flex-col gap-2 p-4">
-                    <div className="flex items-center gap-2">
-                      <Icon className="text-foreground size-4" />
-                      <h3 className="text-sm font-semibold">{item.title}</h3>
-                    </div>
-                    <p className="text-muted-foreground text-xs leading-relaxed">
-                      {item.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-
-        <DashedLine className="container mt-20 max-w-5xl" />
-
-        {/* Bottom row */}
+        {/* Section 3: Bottom row */}
         <div className="container mt-16 max-w-5xl">
           <div className="mb-8 flex items-baseline gap-3">
             <span className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
               Row 3
             </span>
             <h2 className="text-2xl tracking-tight md:text-3xl">
-              Bottom — hand off to your agent
+              Bottom — ship your edits
             </h2>
           </div>
           <p className="text-muted-foreground mb-10 max-w-2xl">
-            The sticky bottom of the panel collapses all your edits into
-            one shippable diff. Two buttons, no ceremony.
+            Two buttons. The only two ways your changes leave the panel
+            — one to the clipboard, one to a connected AI coding agent.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
@@ -277,7 +301,8 @@ export default function FeaturesPage() {
                 <p className="text-muted-foreground text-sm leading-relaxed">
                   Bundles every change into a Markdown export
                   (selector → property → value lines) and writes it to
-                  your clipboard. Paste into whichever agent you use.
+                  your clipboard. Paste into whichever agent you use —
+                  works without any MCP setup.
                 </p>
               </CardContent>
             </Card>
@@ -290,7 +315,8 @@ export default function FeaturesPage() {
                 <p className="text-muted-foreground text-sm leading-relaxed">
                   Pushes the same Markdown straight to the connected
                   MCP agent — Claude Desktop, Cursor, Claude Code, or
-                  any MCP-aware tool.
+                  any MCP-aware tool. Enables once an agent is actually
+                  attached; greyed out otherwise.
                 </p>
               </CardContent>
             </Card>

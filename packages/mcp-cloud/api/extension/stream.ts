@@ -10,6 +10,7 @@
 import { authenticate } from '../../lib/auth.js';
 import { readInbound } from '../../lib/store.js';
 import { logEvent } from '../../lib/log.js';
+import { getPresence } from '../../lib/presence.js';
 import { corsHeaders, preflight, withCors } from '../../lib/cors.js';
 
 export const config = { runtime: 'nodejs' };
@@ -36,11 +37,45 @@ export async function GET(req: Request): Promise<Response> {
       };
       send('hello', JSON.stringify({ tenantId, version: '1.2.0' }));
 
+      // Initial presence snapshot so the side panel doesn't wait
+      // up to 30s for the first poll tick.
+      let lastPresence = false;
+      try {
+        lastPresence = await getPresence(tenantId);
+        send('relay', JSON.stringify({
+          type: 'AGENT_PRESENCE',
+          payload: { connected: lastPresence },
+        }));
+      } catch { /* fall through; the poll tick will retry */ }
+
       const heartbeat = setInterval(() => {
         try { controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`)); }
         catch { /* stream already closed */ }
       }, heartbeatMs);
       heartbeat.unref?.();
+
+      // Edge-triggered presence push. We only emit on transitions so
+      // the extension doesn't re-render every 30s for no reason. The
+      // /api/mcp handler also publishes a 0→1 edge inline via
+      // publishInbound, so most transitions arrive within seconds —
+      // this loop is the safety net for missed edges and for the
+      // 1→0 timeout transition.
+      let lastPoll = lastPresence;
+      const presenceTimer = setInterval(async () => {
+        try {
+          const now = await getPresence(tenantId);
+          if (now !== lastPoll) {
+            lastPoll = now;
+            controller.enqueue(encoder.encode(
+              `event: relay\ndata: ${JSON.stringify({
+                type: 'AGENT_PRESENCE',
+                payload: { connected: now },
+              })}\n\n`,
+            ));
+          }
+        } catch { /* next tick retries */ }
+      }, 30_000);
+      presenceTimer.unref?.();
 
       try {
         for await (const msg of readInbound({ tenantId, signal: ctrl.signal })) {
@@ -54,6 +89,7 @@ export async function GET(req: Request): Promise<Response> {
         logEvent('stream.error', { tenantId, error: err?.code || 'unknown' });
       } finally {
         clearInterval(heartbeat);
+        clearInterval(presenceTimer);
         try { controller.close(); } catch {}
         logEvent('stream.close', { tenantId, latencyMs: Date.now() - started });
       }

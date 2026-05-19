@@ -104,7 +104,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       msg.type === 'ANNOTATION_CREATED' || msg.type === 'TEXT_SELECTED' ||
       msg.type === 'SECTIONS_DETECTED' || msg.type === 'ANIMATION_STATE' ||
       msg.type === 'PROMPT_ANNOTATION' || msg.type === 'ELEMENT_HOVERED_INFO' ||
-      msg.type === 'COMMENT_BUBBLE_CLICKED' || msg.type === 'OPEN_COMMENT_FOR_SELECTED') {
+      msg.type === 'COMMENT_BUBBLE_CLICKED' || msg.type === 'OPEN_COMMENT_FOR_SELECTED' ||
+      msg.type === 'AGENT_PRESENCE_UPDATE') {
     return false;
   }
 

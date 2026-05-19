@@ -27,12 +27,12 @@ const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
 
 const pricingPlans = [
   {
-    name: "Local",
-    button: { text: "Setup guide", variant: "outline" as const, href: "/mcp" as const, external: false },
-  },
-  {
     name: "Cloud",
     button: { text: "How Cloud works", variant: "outline" as const, href: "/mcp" as const, external: false },
+  },
+  {
+    name: "Local",
+    button: { text: "Setup guide", variant: "outline" as const, href: "/mcp" as const, external: false },
   },
   {
     name: "Self-hosted",
@@ -159,7 +159,7 @@ const renderFeatureValue = (value: true | false | null | string) => {
 };
 
 export const ModesComparison = () => {
-  const [selectedPlan, setSelectedPlan] = useState(0); // Default to Local mode
+  const [selectedPlan, setSelectedPlan] = useState(0); // Default to Cloud mode
 
   return (
     <section className="pb-28 lg:py-32">
@@ -265,7 +265,7 @@ const FeatureSections = ({ selectedPlan }: { selectedPlan: number }) => (
             <div className="md:hidden">
               <div className="flex items-center gap-1 py-4 md:border-b">
                 {renderFeatureValue(
-                  [feature.local, feature.cloud, feature.selfHosted][
+                  [feature.cloud, feature.local, feature.selfHosted][
                     selectedPlan
                   ],
                 )}
@@ -273,7 +273,7 @@ const FeatureSections = ({ selectedPlan }: { selectedPlan: number }) => (
             </div>
             {/* Desktop View - All Modes */}
             <div className="hidden md:col-span-3 md:grid md:grid-cols-3 md:gap-4">
-              {[feature.local, feature.cloud, feature.selfHosted].map(
+              {[feature.cloud, feature.local, feature.selfHosted].map(
                 (value, i) => (
                   <div
                     key={i}

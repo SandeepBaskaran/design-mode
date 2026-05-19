@@ -53,7 +53,7 @@ unless noted otherwise.
 | 0.5.6 | Inspector selection colour | Pick a custom colour | Selection overlay renders in the new colour |
 | 0.5.7 | MCP — port | Change to e.g. `9970` | Persists; affects the WebSocket URL the extension dials on next connect |
 | 0.5.8 | MCP — auto-connect | Toggle off | Side panel doesn't auto-dial on open; the indicator stays grey until manually connected |
-| 0.5.9 | MCP — mode (Local / Cloud / Self-hosted) | Switch each | Local uses `ws://localhost:<port>`; Cloud uses `https://mcp.designmode.app` (or the configured URL); Self-hosted exposes a URL field |
+| 0.5.9 | MCP — mode (Cloud / Local / Self-hosted) | Switch each | Cloud (default for fresh installs) uses `https://mcp.designmode.app` (or the configured URL); Local uses `ws://localhost:<port>`; Self-hosted exposes a URL field |
 | 0.5.10| MCP — cloud token & tenant | Enter a registered token + tenant ID | Stored in `chrome.storage.local`; shown masked; clearing re-disconnects |
 | 0.5.11| Reset to defaults | Click Reset | Theme back to system, colour format to HEX, hover/select colours to defaults, MCP port to default |
 

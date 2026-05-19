@@ -10,7 +10,7 @@ import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLay
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, downloadDataUrl } from './screenshots';
 import { getCustomPresets, saveCustomPreset, deleteCustomPreset, updateCustomPreset, importPresets, getPageTokens } from './presets';
@@ -80,6 +80,7 @@ function getFullState() {
   return {
     enabled: on,
     connected: isConnected(),
+    agentConnected: isAgentConnected(),
     inspecting: isInspectActive(),
     frozen: isFrozen(),
     multiSelect: isMultiSelectActive(),
@@ -400,7 +401,7 @@ setUnhandledMessageHandler(dispatchCloudMessage);
 async function openConfiguredTransport() {
   try {
     const conf = await chrome.storage.local.get(['dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url']);
-    const mode = (conf['dm-mcp-mode'] as 'local' | 'cloud' | 'self-hosted' | undefined) || 'local';
+    const mode = (conf['dm-mcp-mode'] as 'local' | 'cloud' | 'self-hosted' | undefined) || 'cloud';
     if (mode === 'local') { connectToServer({ mode: 'local' }); return; }
     const cloudToken = conf['dm-mcp-cloud-token'];
     const cloudUrl = conf['dm-mcp-cloud-url'] || (mode === 'cloud' ? 'https://mcp.designmode.app' : '');
@@ -582,14 +583,18 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
 
     // New: MCP status (3 states)
     case 'GET_MCP_STATUS': {
-      // isConnected() checks WebSocket to server
-      // We don't have direct access to MCP client state from content script
-      // so we report what we know: WebSocket connection state
+      // Three-state derivation:
+      //   - offline: transport (WS/SSE) is down
+      //   - running: transport up, no agent attached recently
+      //   - connected: transport up AND an agent has signalled presence
+      //     (HELLO from mcp-local, or AGENT_PRESENCE from the cloud relay)
+      const connected = isConnected();
+      const agent = isAgentConnected();
       sendResponse({
-        connected: isConnected(),
-        serverRunning: isConnected(),
-        agentConnected: false, // Will be updated by server push
-        mcpState: isConnected() ? 'running' : 'offline',
+        connected,
+        serverRunning: connected,
+        agentConnected: agent,
+        mcpState: !connected ? 'offline' : agent ? 'connected' : 'running',
       });
       break;
     }

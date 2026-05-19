@@ -959,6 +959,17 @@ let cloudToken: string | null = null;
 let cloudBaseUrl: string | null = null;
 let sseAbort: AbortController | null = null;
 let unhandledMessageHandler: ((msg: any) => void) | null = null;
+let agentConnected = false;
+
+export function isAgentConnected() { return agentConnected; }
+
+function setAgentConnected(next: boolean) {
+  if (agentConnected === next) return;
+  agentConnected = next;
+  try {
+    chrome.runtime.sendMessage({ type: 'AGENT_PRESENCE_UPDATE', connected: next });
+  } catch { /* SW gone — next status poll will reconcile */ }
+}
 
 // Lets content/index.ts plug in the cloud-tools dispatcher (CLOUD_GET_CHANGES
 // etc.) without change-tracker needing to know about comments, sessions,
@@ -972,6 +983,14 @@ export function setUnhandledMessageHandler(fn: (msg: any) => void) {
 function dispatchIncoming(msg: any) {
   try {
     if (!msg || typeof msg.type !== 'string') return;
+    if (msg.type === 'AGENT_PRESENCE') {
+      setAgentConnected(!!msg.payload?.connected);
+      return;
+    }
+    if (msg.type === 'HELLO') {
+      if (msg.payload?.agentConnected) setAgentConnected(true);
+      return;
+    }
     if (msg.type === 'APPLY_CHANGES' && msg.payload) {
       // Cloud may send `{ changes: [...] }` (ack-expected) or a single
       // `{ elementId, styles }` (legacy). Handle both shapes.
@@ -1016,8 +1035,8 @@ export function connectToServer(opts: ConnectOpts | number = {}) {
     try {
       ws = new WebSocket(`ws://localhost:${port}`);
       ws.onopen = () => console.log('[Design Mode] Connected to companion server');
-      ws.onclose = () => { ws = null; };
-      ws.onerror = () => { ws = null; };
+      ws.onclose = () => { ws = null; setAgentConnected(false); };
+      ws.onerror = () => { ws = null; setAgentConnected(false); };
       ws.onmessage = (event) => {
         try { dispatchIncoming(JSON.parse(event.data)); } catch {}
       };
@@ -1210,4 +1229,5 @@ export function syncAllChanges() {
 export function disconnectFromServer() {
   if (ws) { try { ws.close(); } catch {} ws = null; }
   if (sseAbort) { try { sseAbort.abort(); } catch {} sseAbort = null; }
+  setAgentConnected(false);
 }

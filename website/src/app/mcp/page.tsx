@@ -96,27 +96,27 @@ type Mode = {
 
 const modes: Mode[] = [
   {
-    id: "local",
-    name: "Local",
-    icon: Monitor,
-    tagline: "Default, fastest, fully offline.",
-    description:
-      "Run the companion MCP server on your own machine. Nothing leaves the laptop.",
-    bestFor:
-      "Best for: any setup where Claude / Cursor / Claude Code runs on the same machine you design from.",
-    configs: { claudeDesktop: localClaude, cursor: localCursor },
-  },
-  {
     id: "cloud",
     name: "Cloud",
     icon: Cloud,
-    tagline: "Hosted SSE relay. Opt-in.",
+    tagline: "Default. Hosted SSE relay.",
     description:
       "Use mcp.designmode.app as the relay. The extension dials the relay over HTTPS, your agent connects via the same URL with a bearer token. Edits flow through; nothing persists.",
     bestFor:
-      "Best for: agents that can't reach localhost (sandboxed CI, remote VSCode tunnels, certain web-based agents).",
+      "Best for: anyone who'd rather not run a local process — including agents that can't reach localhost (sandboxed CI, remote VSCode tunnels, web-based agents).",
     highlight: true,
     configs: { claudeDesktop: cloudClaude, cursor: cloudCursor },
+  },
+  {
+    id: "local",
+    name: "Local",
+    icon: Monitor,
+    tagline: "Fastest, fully offline.",
+    description:
+      "Run the companion MCP server on your own machine. Nothing leaves the laptop.",
+    bestFor:
+      "Best for: power users with a terminal who want zero network egress and the lowest possible latency.",
+    configs: { claudeDesktop: localClaude, cursor: localCursor },
   },
   {
     id: "self-hosted",

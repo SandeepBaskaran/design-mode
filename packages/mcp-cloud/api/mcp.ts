@@ -14,6 +14,7 @@
 import { authenticate } from '../lib/auth.js';
 import { awaitResponse, publishInbound } from '../lib/store.js';
 import { logEvent } from '../lib/log.js';
+import { bumpPresence } from '../lib/presence.js';
 import { consumeQuota } from '../lib/quota.js';
 import { corsHeaders, preflight, withCors } from '../lib/cors.js';
 import { randomBytes } from 'node:crypto';
@@ -159,6 +160,22 @@ async function handle(req: Request): Promise<Response> {
   let row;
   try { row = await authenticate(req); }
   catch (resp) { return withCors(resp as Response); }
+
+  // Mark this tenant's agent as active. On a 0→1 edge, push a
+  // presence event to the extension SSE stream so the side panel
+  // flips to "connected" immediately instead of waiting for the
+  // 30s poll in stream.ts.
+  try {
+    const wasNew = await bumpPresence(row.tenantId);
+    if (wasNew) {
+      await publishInbound(row.tenantId, {
+        type: 'AGENT_PRESENCE',
+        payload: { connected: true },
+      });
+    }
+  } catch (err: any) {
+    logEvent('mcp.presence.error', { tenantId: row.tenantId, error: err?.message || 'unknown' });
+  }
 
   let body: any;
   try { body = await req.json(); }

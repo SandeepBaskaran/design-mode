@@ -83,7 +83,7 @@ export const Navbar = () => {
 
         {/* Desktop Navigation */}
         <NavigationMenu className="max-lg:hidden">
-          <NavigationMenuList>
+          <NavigationMenuList className="gap-4">
             {ITEMS.map((link) => (
               <NavigationMenuItem key={link.label}>
                 <Link
