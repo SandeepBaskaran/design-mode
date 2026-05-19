@@ -176,7 +176,7 @@ async function handle(req: Request): Promise<Response> {
     case 'initialize':
       response = rpcResult(id, {
         protocolVersion: PROTOCOL_VERSION,
-        serverInfo: { name: 'design-mode', version: '1.1.0' },
+        serverInfo: { name: 'design-mode', version: '1.2.0' },
         capabilities: { tools: {} },
       });
       break;

@@ -59,6 +59,25 @@ unless noted otherwise.
 
 ---
 
+## Phase 0.6 — Header overlay panels (Help, Contribute)
+
+The header icons between the MCP chip and the gear open full-page overlays.
+All three overlays (Settings, Help, Contribute) are mutually exclusive — opening
+any one closes the other two.
+
+| #     | Test | Steps | Expected |
+|-------|------|-------|----------|
+| 0.6.1 | Open / close Help | Click `?` icon → click `?` again | Help overlay replaces the tabs; second click closes |
+| 0.6.2 | Help links | From Help, click Report an issue / Read the docs / Privacy / Security disclosure | Each opens the right page in a new tab via `target="_blank"` |
+| 0.6.3 | Copy diagnostics | In Help, click Copy diagnostics | Clipboard contains `Design Mode: x.y.z` + Chrome + Platform + Theme; button label flashes "Copied ✓" then reverts after ~1.5s |
+| 0.6.4 | Open / close Contribute | Click heart-handshake icon → click again | Contribute overlay replaces the tabs; second click closes |
+| 0.6.5 | Contribute links | Click each row in Contribute (Star repo, Review on CWS, Report issue, Start a discussion, Open a pull request, Sponsor on GitHub) | Each opens the right URL in a new tab |
+| 0.6.6 | Copy share text | In Contribute, click "Share with your network" | Clipboard contains the prefilled share blurb (extension pitch + CWS link); label flashes "Copied ✓ — paste anywhere" then reverts |
+| 0.6.7 | Mutual exclusivity | Open any one of Settings / Help / Contribute, then click another header icon | Previous overlay closes, new one opens |
+| 0.6.8 | Theme parity | Toggle theme while each overlay is open | Colours follow `--dm-*` custom properties; no flash, no broken contrast |
+
+---
+
 ## Phase 0.10 — Keyboard shortcuts
 
 Defaults live in `packages/shared/src/constants.ts:DEFAULT_SHORTCUTS`. Wired actions register

@@ -350,7 +350,11 @@ Every edit you've made grouped by element.
 ### 5.1 Header
 
 - App name + **MCP status chip** — three states: `offline` (grey), `running` (green pulse), `connected` (green glow). The whole chip is clickable; clicking it re-pings the server / agent. The hover tooltip explains the current state and includes the start command (`npm start --prefix packages/mcp-local`) when offline. State changes after the click surface as toasts (`MCP connected`, `MCP running — waiting for agent`, `MCP offline`); a click that doesn't change state still toasts the offline-with-hint message so the user gets feedback.
-- **Theme toggle** (cycles system / dark / light) and **Settings** gear.
+- **Theme toggle** (cycles system / dark / light), **Contribute**
+  (heart-handshake — opens a full-page overlay with ways to support
+  the project), **Help** (`?` — opens the Help overlay with "Report
+  an issue" and "Copy diagnostics"), and **Settings** (gear). All
+  three full-page overlays are mutually exclusive.
 
 ### 5.2 Action toolbar (between header and tabs)
 

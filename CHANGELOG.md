@@ -6,6 +6,48 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-05-19
+
+### Added
+
+- **Contribute panel.** New heart-handshake icon in the side panel
+  header (between Theme and Help) opens a full-page Contribute
+  overlay. Three tiered sections — Spread the word (Star the repo,
+  Review on the Chrome Web Store, Share with your network), Help
+  improve it (Report an issue, Start a discussion, Open a pull
+  request), and Support the project (Sponsor on GitHub). The
+  "Share with your network" action copies a short prefilled blurb
+  to the clipboard. No new permissions; clipboard write only.
+
+### Fixed
+
+- **Canonical website URL.** Five docs/metadata references to
+  `design-mode.dev` were rewritten to `designmode.app` — the bug
+  template's scope dropdown, `FEATURES.md` website note,
+  `PRIVACY.md` website section, `README.md` website paragraph, and
+  the Next.js `metadataBase` in `website/src/app/layout.tsx` (which
+  otherwise emitted the wrong canonical / OG / Twitter URLs).
+- **Diagnostics label alignment.** "Design Mode:" was butting up
+  against the version in `Copy diagnostics` output because the
+  label-padding helper padded to 12 chars instead of 13. Now padded
+  to 13.
+
+### Internal
+
+- **CodeQL `js/identity-replacement` cleanup.** Removed a dead
+  `.replace(/[-]/g, '-')` no-op in the Changes-tab filter regex
+  builder.
+- **Dependabot config tightened.** Per-ecosystem
+  `open-pull-requests-limit: 3` plus explicit `ignore` lists for
+  the deferred majors (zod 4, TS 6, Vite majors, React 19, Next
+  majors, Vercel majors, `@types/node` majors, redis 5, eslint 9)
+  so the weekly scan can't flood the queue again.
+- **FEATURES.md §5.1** rewritten to list all four header icons
+  (Theme, Contribute, Help, Settings) in order; **`docs/e2e-testcases.md`**
+  gained Phase 0.6 — Header overlay panels (Help, Contribute) — with
+  8 manual test rows covering open/close, link targets, clipboard
+  flows, mutual exclusivity, and theme parity.
+
 ## [1.1.0] — 2026-05-14
 
 ### Added
