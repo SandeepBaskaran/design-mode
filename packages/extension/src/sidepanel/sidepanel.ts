@@ -7257,6 +7257,9 @@ function renderContributeView(): string {
     row('star', 'Star the repo on GitHub', 'https://github.com/SandeepBaskaran/design-mode') +
     row('messageSquare', 'Review on the Chrome Web Store', 'https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih') +
     shareRow +
+    '<a href="https://www.producthunt.com/products/design-mode?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-design-mode-2" target="_blank" rel="noopener noreferrer" style="display:flex;justify-content:center;padding:6px 0;">' +
+      '<img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1146657&theme=light&t=1779274729933" alt="Design Mode — Featured on Product Hunt" width="250" height="54" style="border:0;" />' +
+    '</a>' +
     '</div></div></div>' +
 
     '<div><div style="' + sectionLabel + '">Help improve it</div>' +
