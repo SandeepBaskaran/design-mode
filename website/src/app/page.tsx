@@ -10,7 +10,7 @@ import { PanelAnatomy } from "@/components/blocks/panel-anatomy";
 export default function Home() {
   return (
     <>
-      <Background className="via-muted to-muted/80">
+      <Background>
         <Hero />
       </Background>
       <HeroShowcase />

@@ -67,12 +67,25 @@ export const Hero = () => {
 export const HeroShowcase = () => {
   return (
     <section className="pb-12 lg:pb-16">
-      <div className="container flex flex-col gap-10 py-6 lg:flex-row lg:items-center lg:gap-16">
-        {/* Left — feature bullets */}
-        <div className="relative flex flex-1 flex-col justify-center space-y-5 lg:max-w-md lg:pr-10">
+      <div className="container flex flex-col gap-10 py-12 lg:flex-row lg:items-center lg:gap-16">
+        {/* Left — cover image */}
+        <div className="flex-1">
+          <div className="relative mx-auto h-[400px] w-full max-w-[400px]">
+            <Image
+              src="/cover.png"
+              alt="The Design Mode side panel on a live website"
+              fill
+              className="rounded-2xl object-contain object-top shadow-lg"
+              priority
+            />
+          </div>
+        </div>
+
+        {/* Right — feature bullets */}
+        <div className="relative flex flex-1 flex-col justify-center space-y-5 lg:max-w-md lg:pl-10">
           <DashedLine
             orientation="vertical"
-            className="absolute top-0 right-0 max-lg:hidden"
+            className="absolute top-0 left-0 max-lg:hidden"
           />
           {features.map((feature) => {
             const Icon = feature.icon;
@@ -90,19 +103,6 @@ export const HeroShowcase = () => {
               </div>
             );
           })}
-        </div>
-
-        {/* Right — cover image */}
-        <div className="flex-1">
-          <div className="relative mx-auto h-[400px] w-full max-w-[400px]">
-            <Image
-              src="/cover.png"
-              alt="The Design Mode side panel on a live website"
-              fill
-              className="rounded-2xl object-contain object-top shadow-lg"
-              priority
-            />
-          </div>
         </div>
       </div>
     </section>

@@ -37,12 +37,12 @@ export const Features = () => {
           </span>
         </div>
 
-        {/* Content */}
-        <div className="mx-auto mt-10 grid max-w-4xl items-center gap-3 md:gap-0 lg:mt-24 lg:grid-cols-2">
+        {/* Content — vertical stack of title + body */}
+        <div className="mx-auto mt-10 flex max-w-4xl flex-col gap-4 lg:mt-24">
           <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
             Made for the vibe-coding loop
           </h2>
-          <p className="text-muted-foreground leading-snug">
+          <p className="text-muted-foreground max-w-2xl leading-snug">
             Most design-to-code workflows force you to mock the change, paste a
             screenshot, and hope your agent guesses your CSS. Design Mode skips
             the mocking step entirely — edit the real page, capture the diff,
