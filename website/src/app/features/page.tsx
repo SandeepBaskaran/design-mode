@@ -46,8 +46,7 @@ const headerIcons = [
   {
     icon: SunMoon,
     title: "Theme",
-    description:
-      "Toggle the side panel between system / light / dark.",
+    description: "Toggle the side panel between system / light / dark.",
   },
   {
     icon: HeartHandshake,
@@ -94,22 +93,27 @@ const designSections = [
 
 export default function FeaturesPage() {
   return (
-    <Background>
-      <section className="py-28 lg:py-32 lg:pt-44">
-        {/* Hero */}
-        <div className="container max-w-5xl">
-          <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-            Every control, where you need it
-          </h1>
-          <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-            The Design Mode side panel is split into three rows. A header
-            row to pick what you're working on, three middle panels for
-            the actual editing, and a bottom row that ships your edits
-            to your AI coding agent.
-          </p>
-        </div>
+    <>
+      {/* Hero — yellow background confined to this slab */}
+      <Background>
+        <section className="py-28 lg:py-32 lg:pt-44">
+          <div className="container max-w-5xl">
+            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
+              Every control, where you need it
+            </h1>
+            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
+              The Design Mode side panel is split into three rows. A header
+              row to pick what you're working on, three middle panels for
+              the actual editing, and a bottom row that ships your edits
+              to your AI coding agent.
+            </p>
+          </div>
+        </section>
+      </Background>
 
-        <DashedLine className="container mt-16 max-w-5xl" />
+      {/* Middle — plain background */}
+      <section className="py-16 lg:py-20">
+        <DashedLine className="container max-w-5xl" />
 
         {/* Section 1: Header row + Action toolbar (one merged card) */}
         <div className="container mt-16 max-w-5xl">
@@ -130,7 +134,6 @@ export default function FeaturesPage() {
 
           <Card>
             <CardContent className="grid gap-8 p-6 md:grid-cols-2 md:p-8">
-              {/* Left column — header icons */}
               <div>
                 <h3 className="text-foreground mb-4 text-base font-semibold">
                   Header icons
@@ -158,7 +161,6 @@ export default function FeaturesPage() {
                 </ul>
               </div>
 
-              {/* Right column — action toolbar */}
               <div>
                 <h3 className="text-foreground mb-4 text-base font-semibold">
                   Action toolbar
@@ -207,7 +209,6 @@ export default function FeaturesPage() {
           </p>
 
           <div className="grid gap-6 md:grid-cols-3">
-            {/* Layers */}
             <Card>
               <CardContent className="flex h-full flex-col gap-3 p-6">
                 <Layers className="text-foreground size-5" />
@@ -227,7 +228,6 @@ export default function FeaturesPage() {
               </CardContent>
             </Card>
 
-            {/* Design */}
             <Card className="outline-primary outline-4">
               <CardContent className="flex h-full flex-col gap-3 p-6">
                 <Sparkles className="text-foreground size-5" />
@@ -254,7 +254,6 @@ export default function FeaturesPage() {
               </CardContent>
             </Card>
 
-            {/* Changes */}
             <Card>
               <CardContent className="flex h-full flex-col gap-3 p-6">
                 <Layers3 className="text-foreground size-5" />
@@ -274,55 +273,58 @@ export default function FeaturesPage() {
             </Card>
           </div>
         </div>
-
-        <DashedLine className="container mt-20 max-w-5xl" />
-
-        {/* Section 3: Bottom row */}
-        <div className="container mt-16 max-w-5xl">
-          <div className="mb-8 flex items-baseline gap-3">
-            <span className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
-              Row 3
-            </span>
-            <h2 className="text-2xl tracking-tight md:text-3xl">
-              Bottom — ship your edits
-            </h2>
-          </div>
-          <p className="text-muted-foreground mb-10 max-w-2xl">
-            Two buttons. The only two ways your changes leave the panel
-            — one to the clipboard, one to a connected AI coding agent.
-          </p>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardContent className="flex flex-col gap-2 p-6">
-                <div className="flex items-center gap-2">
-                  <Copy className="text-foreground size-5" />
-                  <h3 className="text-lg font-semibold">Copy Prompt</h3>
-                </div>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Bundles every change into a Markdown export
-                  (selector → property → value lines) and writes it to
-                  your clipboard. Paste into whichever agent you use —
-                  works without any MCP setup.
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex flex-col gap-2 p-6">
-                <div className="flex items-center gap-2">
-                  <Send className="text-foreground size-5" />
-                  <h3 className="text-lg font-semibold">Send to Agent</h3>
-                </div>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Pushes the same Markdown straight to the connected
-                  MCP agent — Claude Desktop, Cursor, Claude Code, or
-                  any MCP-aware tool. Enables once an agent is actually
-                  attached; greyed out otherwise.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
       </section>
-    </Background>
+
+      {/* Bottom — yellow background slab */}
+      <Background variant="bottom">
+        <section className="py-20 lg:py-28">
+          <DashedLine className="container max-w-5xl" />
+          <div className="container mt-16 max-w-5xl">
+            <div className="mb-8 flex items-baseline gap-3">
+              <span className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
+                Row 3
+              </span>
+              <h2 className="text-2xl tracking-tight md:text-3xl">
+                Bottom — ship your edits
+              </h2>
+            </div>
+            <p className="text-muted-foreground mb-10 max-w-2xl">
+              Two buttons. The only two ways your changes leave the panel
+              — one to the clipboard, one to a connected AI coding agent.
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardContent className="flex flex-col gap-2 p-6">
+                  <div className="flex items-center gap-2">
+                    <Copy className="text-foreground size-5" />
+                    <h3 className="text-lg font-semibold">Copy Prompt</h3>
+                  </div>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    Bundles every change into a Markdown export
+                    (selector → property → value lines) and writes it to
+                    your clipboard. Paste into whichever agent you use —
+                    works without any MCP setup.
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="flex flex-col gap-2 p-6">
+                  <div className="flex items-center gap-2">
+                    <Send className="text-foreground size-5" />
+                    <h3 className="text-lg font-semibold">Send to Agent</h3>
+                  </div>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    Pushes the same Markdown straight to the connected
+                    MCP agent — Claude Desktop, Cursor, Claude Code, or
+                    any MCP-aware tool. Enables once an agent is actually
+                    attached; greyed out otherwise.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </section>
+      </Background>
+    </>
   );
 }

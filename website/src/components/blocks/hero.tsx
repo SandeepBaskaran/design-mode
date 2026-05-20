@@ -1,12 +1,11 @@
 import Image from "next/image";
+import Link from "next/link";
 
-import { ArrowRight, Heart, MousePointer2, Palette, Wand2 } from "lucide-react";
+import { Heart, MousePointer2, Palette, Wand2 } from "lucide-react";
 
 import { DashedLine } from "@/components/dashed-line";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 import { Button } from "@/components/ui/button";
-
-const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
 
 const features = [
   {
@@ -33,46 +32,42 @@ const features = [
 
 export const Hero = () => {
   return (
-    <section className="py-28 lg:py-32 lg:pt-44">
-      <div className="container flex flex-col justify-between gap-8 md:gap-14 lg:flex-row lg:gap-20">
-        {/* Left side - Main content */}
-        <div className="flex-1">
-          <h1 className="text-foreground max-w-160 text-3xl tracking-tight md:text-4xl lg:text-5xl">
-            Design directly in your browser.
-            <br className="hidden md:block" /> Your agent writes the code.
-          </h1>
+    <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+      {/* Hero — vertical stack, centred */}
+      <div className="container max-w-4xl text-center">
+        <h1 className="text-foreground text-3xl tracking-tight md:text-4xl lg:text-5xl">
+          Design directly in your browser.
+          <br className="hidden md:block" /> Your agent writes the code.
+        </h1>
 
-          <p className="text-muted-foreground mt-5 text-lg md:text-xl">
-            A free, open-source Chrome extension that turns any website into a
-            live design surface. Edit layout, type, colour, spacing and
-            structure, then ship the result straight to Claude Code, Cursor, or
-            any AI coding agent over MCP.
-          </p>
+        <p className="text-muted-foreground mx-auto mt-5 max-w-3xl text-lg md:text-xl">
+          A free, open-source Chrome extension that turns any website into a
+          live design surface. Edit layout, type, colour, spacing and
+          structure, then ship the result straight to Claude Code, Cursor, or
+          any AI coding agent over MCP.
+        </p>
 
-          <div className="mt-8 flex flex-wrap items-center gap-4 lg:flex-nowrap">
-            <AddToChromeCta />
-            <Button
-              variant="outline"
-              className="from-background h-auto gap-2 bg-linear-to-r to-transparent shadow-md"
-              asChild
-            >
-              <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
-                Read the docs on GitHub
-                <ArrowRight className="stroke-3" />
-              </a>
-            </Button>
-          </div>
+        {/* Secondary on the LEFT (Try by yourself → /demo), primary on the RIGHT (Add to Chrome) */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+          <Button variant="outline" asChild>
+            <Link href="/demo">Try by yourself</Link>
+          </Button>
+          <AddToChromeCta />
         </div>
+      </div>
+    </section>
+  );
+};
 
-        {/* Right side - Features */}
-        <div className="relative flex flex-1 flex-col justify-center space-y-5 max-lg:pt-10 lg:pl-10">
+export const HeroShowcase = () => {
+  return (
+    <section className="pb-12 lg:pb-16">
+      <div className="container flex flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
+        {/* Left — feature bullets */}
+        <div className="relative flex flex-1 flex-col justify-center space-y-5 lg:max-w-md lg:pr-10">
           <DashedLine
             orientation="vertical"
-            className="absolute top-0 left-0 max-lg:hidden"
-          />
-          <DashedLine
-            orientation="horizontal"
-            className="absolute top-0 lg:hidden"
+            className="absolute top-0 right-0 max-lg:hidden"
           />
           {features.map((feature) => {
             const Icon = feature.icon;
@@ -91,17 +86,18 @@ export const Hero = () => {
             );
           })}
         </div>
-      </div>
 
-      <div className="mt-12 max-lg:ml-6 max-lg:h-[550px] max-lg:overflow-hidden md:mt-20 lg:container lg:mt-24">
-        <div className="relative mx-auto h-[793px] w-full max-w-3xl">
-          <Image
-            src="/cover.png"
-            alt="The Design Mode side panel on a live website"
-            fill
-            className="rounded-2xl object-contain object-top shadow-lg"
-            priority
-          />
+        {/* Right — cover image */}
+        <div className="flex-1">
+          <div className="relative mx-auto h-[560px] w-full max-w-md lg:h-[640px]">
+            <Image
+              src="/cover.png"
+              alt="The Design Mode side panel on a live website"
+              fill
+              className="rounded-2xl object-contain object-top shadow-lg"
+              priority
+            />
+          </div>
         </div>
       </div>
     </section>

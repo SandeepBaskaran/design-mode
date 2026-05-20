@@ -25,23 +25,34 @@ export default function DemoPage() {
   topLevel.forEach((s, i) => topIndexMap.set(s.id, i + 1));
 
   return (
-    <Background>
-      <section className="py-28 lg:py-32 lg:pt-44">
-        <div className="container max-w-5xl">
-          <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-            Live demo
-          </h1>
-          <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-            Open the side panel on this page and try every feature with the
-            demo targets below — no recordings, the canvas is the real thing.
-          </p>
-        </div>
+    <>
+      {/* Hero — yellow background slab */}
+      <Background>
+        <section className="py-28 lg:py-32 lg:pt-44">
+          <div className="container max-w-5xl">
+            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
+              Live demo
+            </h1>
+            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
+              Open the side panel on this page and try every feature with
+              the demo targets below — no recordings, the canvas is the
+              real thing.
+            </p>
+          </div>
+        </section>
+      </Background>
 
-        <div className={`${styles.extensionBannerWrap} container mt-10 max-w-5xl`}>
+      {/* Middle — interactive canvas */}
+      <section className="py-12 lg:py-16">
+        <div
+          className={`${styles.extensionBannerWrap} container max-w-5xl`}
+        >
           <ExtensionDetected />
         </div>
 
-        <div className={`${styles.demoLayout} container mt-10 max-w-5xl`}>
+        <div
+          className={`${styles.demoLayout} container mt-10 max-w-5xl`}
+        >
           <DemoLeftNav />
 
           <main className={styles.content}>
@@ -66,6 +77,6 @@ export default function DemoPage() {
           </main>
         </div>
       </section>
-    </Background>
+    </>
   );
 }

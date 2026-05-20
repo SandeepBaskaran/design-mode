@@ -8,7 +8,7 @@ const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
 
 const About = () => {
   return (
-    <section className="container mt-10 flex max-w-5xl flex-col-reverse gap-8 md:mt-14 md:gap-14 lg:mt-20 lg:flex-row lg:items-end">
+    <section className="container mt-10 flex max-w-5xl flex-col gap-12 md:mt-14 md:gap-14 lg:mt-20 lg:gap-20">
       <div className="flex flex-col gap-8 lg:gap-16 xl:gap-20">
         <ImageSection
           images={[
@@ -19,27 +19,14 @@ const About = () => {
         />
 
         <TextSection
-          title="Why this exists"
-          paragraphs={[
-            "Most design-to-code workflows look like this: open a mock, take a screenshot, paste it into an agent, then hope it guesses your CSS correctly. It works often enough that we tolerate it, but the round-trip is brutal — and the agent never sees the real page state.",
-            "Design Mode skips the mocking step. You inspect a real element on a real page in your real browser, change it visually, and send the exact diff to your agent over MCP. The agent gets ground truth instead of a guess.",
-            "Built in the open under MIT. Read the source, file an issue, or open a PR.",
-          ]}
-          ctaButton={{
-            href: REPO_URL,
-            text: "View on GitHub",
-            external: true,
-          }}
-        />
-      </div>
-
-      <div className="flex flex-col gap-8 lg:gap-16 xl:gap-20">
-        <TextSection
           paragraphs={[
             "Privacy is not a feature on the roadmap — it's the default. The extension stores edits in chrome.storage locally. The optional MCP server runs on localhost. The hosted cloud relay is opt-in, self-hostable, and drops payload bodies within ~60 seconds.",
             "No accounts. No telemetry by default. No paywalls. The Contribute panel inside the side panel has ways to help if you find it useful — but they are all optional. The default state of using Design Mode is: download, install, design.",
           ]}
         />
+      </div>
+
+      <div className="flex flex-col gap-8 lg:gap-16 xl:gap-20">
         <ImageSection
           images={[
             { src: "/about/3.webp", alt: "Editing live page" },
@@ -53,6 +40,27 @@ const About = () => {
 };
 
 export default About;
+
+// Exported separately so the page can wrap it in <Background variant="bottom">.
+export function WhyThisExists() {
+  return (
+    <section className="container max-w-5xl">
+      <TextSection
+        title="Why this exists"
+        paragraphs={[
+          "Most design-to-code workflows look like this: open a mock, take a screenshot, paste it into an agent, then hope it guesses your CSS correctly. It works often enough that we tolerate it, but the round-trip is brutal — and the agent never sees the real page state.",
+          "Design Mode skips the mocking step. You inspect a real element on a real page in your real browser, change it visually, and send the exact diff to your agent over MCP. The agent gets ground truth instead of a guess.",
+          "Built in the open under MIT. Read the source, file an issue, or open a PR.",
+        ]}
+        ctaButton={{
+          href: REPO_URL,
+          text: "View on GitHub",
+          external: true,
+        }}
+      />
+    </section>
+  );
+}
 
 interface ImageSectionProps {
   images: { src: string; alt: string }[];

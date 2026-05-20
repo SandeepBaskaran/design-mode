@@ -166,20 +166,26 @@ const tools = [
 
 export default function McpPage() {
   return (
-    <Background>
-      <section className="py-28 lg:py-32 lg:pt-44">
-        <div className="container max-w-5xl">
-          <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-            Connect your AI agent
-          </h1>
-          <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-            Design Mode talks to Claude Desktop, Cursor, Claude Code, or any
-            MCP-aware agent. Pick one of three connection modes, paste the
-            snippet, restart your agent.
-          </p>
-        </div>
+    <>
+      {/* Hero — yellow background slab */}
+      <Background>
+        <section className="py-28 lg:py-32 lg:pt-44">
+          <div className="container max-w-5xl">
+            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
+              Connect your AI agent
+            </h1>
+            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
+              Design Mode talks to Claude Desktop, Cursor, Claude Code, or
+              any MCP-aware agent. Pick one of three connection modes,
+              paste the snippet, restart your agent.
+            </p>
+          </div>
+        </section>
+      </Background>
 
-        <DashedLine className="container mt-16 max-w-5xl" />
+      {/* Middle — plain */}
+      <section className="py-16 lg:py-20">
+        <DashedLine className="container max-w-5xl" />
 
         <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-3">
           {modes.map((mode) => {
@@ -262,50 +268,55 @@ export default function McpPage() {
             ))}
           </Accordion>
         </div>
-
-        <DashedLine className="container mt-20 max-w-5xl" />
-
-        <div className="container mt-16 max-w-5xl">
-          <h2 className="text-2xl tracking-tight md:text-3xl">
-            The six MCP tools
-          </h2>
-          <p className="text-muted-foreground mt-2 max-w-2xl">
-            Every mode exposes the same six tools — your agent can read the
-            current page diff, push patches back, and grab screenshots.
-          </p>
-
-          <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {tools.map((tool) => {
-              const Icon = tool.icon;
-              return (
-                <Card key={tool.name}>
-                  <CardContent className="flex flex-col gap-2 p-5">
-                    <div className="flex items-center gap-2">
-                      <Icon className="text-foreground size-4" />
-                      <code className="text-sm font-semibold">
-                        {tool.name}
-                      </code>
-                    </div>
-                    <p className="text-muted-foreground text-sm leading-relaxed">
-                      {tool.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          <p className="text-muted-foreground mt-10 text-sm">
-            Privacy: Local mode keeps everything on your machine. Cloud and
-            Self-hosted modes pass messages through the relay without
-            persisting payloads.{" "}
-            <Link href="/privacy" className="underline underline-offset-4">
-              Full privacy disclosure →
-            </Link>
-          </p>
-        </div>
       </section>
-    </Background>
+
+      {/* Bottom — yellow background slab */}
+      <Background variant="bottom">
+        <section className="py-20 lg:py-28">
+          <DashedLine className="container max-w-5xl" />
+          <div className="container mt-16 max-w-5xl">
+            <h2 className="text-2xl tracking-tight md:text-3xl">
+              The six MCP tools
+            </h2>
+            <p className="text-muted-foreground mt-2 max-w-2xl">
+              Every mode exposes the same six tools — your agent can read
+              the current page diff, push patches back, and grab
+              screenshots.
+            </p>
+
+            <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {tools.map((tool) => {
+                const Icon = tool.icon;
+                return (
+                  <Card key={tool.name}>
+                    <CardContent className="flex flex-col gap-2 p-5">
+                      <div className="flex items-center gap-2">
+                        <Icon className="text-foreground size-4" />
+                        <code className="text-sm font-semibold">
+                          {tool.name}
+                        </code>
+                      </div>
+                      <p className="text-muted-foreground text-sm leading-relaxed">
+                        {tool.description}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            <p className="text-muted-foreground mt-10 text-sm">
+              Privacy: Local mode keeps everything on your machine. Cloud
+              and Self-hosted modes pass messages through the relay
+              without persisting payloads.{" "}
+              <Link href="/privacy" className="underline underline-offset-4">
+                Full privacy disclosure →
+              </Link>
+            </p>
+          </div>
+        </section>
+      </Background>
+    </>
   );
 }
 
