@@ -69,7 +69,7 @@ export function Footer() {
       <p className="text-muted-foreground text-center text-xs">
         Made by{" "}
         <a
-          href={X_URL}
+          href="https://sandeepbaskaran.com"
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-foreground transition-colors"
