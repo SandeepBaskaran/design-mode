@@ -6,6 +6,92 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-05-20
+
+### Added
+
+- **Real agent-presence everywhere.** The MCP status indicator now
+  distinguishes three states — offline, running (transport up but
+  no agent attached), and connected (transport up AND an agent has
+  talked to the relay in the last 5 minutes). The Send-to-Agent
+  button enables only in the connected state.
+  - In **Local mode**, the local server's WebSocket connection is
+    itself proof of an attached agent (the MCP client process
+    spawned it), so `HELLO` carries `agentConnected: true`
+    immediately.
+  - In **Cloud / Self-hosted mode**, the relay tracks per-tenant
+    presence in Redis with a 5-minute TTL; every authenticated
+    `/api/mcp` POST refreshes it. A new `/api/extension/stream`
+    SSE endpoint pushes initial state on connect and 1→0
+    transitions when the TTL expires.
+- **Cloud is now the default MCP mode for fresh installs.**
+  Existing users keep whatever `dm-mcp-mode` was stored — no
+  migration. The Settings mode picker order is now
+  **Cloud · Local · Self-hosted**.
+- **Product Hunt badge in the Contribute panel.** The "Spread the
+  word" tier now embeds the live Product Hunt badge from
+  `api.producthunt.com`. The same badge appears on the homepage
+  hero and in the website footer.
+
+### Changed
+
+- **Mode picker order** flipped to Cloud · Local · Self-hosted in
+  both the extension Settings view and the website's `/mcp` page,
+  reflecting the new default.
+- **Canonical relay URL** in the extension (`content/index.ts` +
+  `sidepanel.ts`) is now the apex `mcp.designmode.app` instead of
+  `www.mcp.designmode.app`. The `www` subdomain still serves the
+  routes but is no longer the default; the 307 redirect was
+  retired at the Vercel domain layer.
+- **Homepage HeroShowcase** leads with the cover screenshot on the
+  left and feature bullets on the right (was the reverse). The
+  "Made for the vibe-coding loop" title/body stacks vertically at
+  every breakpoint (was a side-by-side grid at lg+). The homepage
+  top slab uses the same yellow gradient as every other page (the
+  muted-grey override was removed). New `hero.png` shot sits below
+  FAQ, just above the footer.
+- **Full website rebuild on the Mainline template** — new homepage,
+  About, Contact, Privacy, Demo, MCP, and Features pages. `/faq`
+  and `/pricing` removed; `/features` added. Light-mode-only
+  lock-in. Navbar widened and re-styled, primary CTA unified
+  across the site.
+
+### Fixed
+
+- **Layer-move origin preservation** — moving a layer in the Layers
+  tab no longer corrupts the change-tracker's stored origin (was
+  causing the diff to lose track of the original position for
+  moved layers).
+- **Hydration warning on `<html>`** — `suppressHydrationWarning`
+  added to the root tag in `layout.tsx` so night-mode browser
+  extensions (Night Eye, Dark Reader variants) injecting attributes
+  like `data-nm-theme="dark"` no longer trigger a React warning.
+- **Wrong-product OG image** replaced with Design Mode artwork
+  rendered via Next.js's `next/og` dynamic image route at
+  `/opengraph-image`.
+
+### Internal
+
+- **Website dep cleanup.** Removed 7 unused shadcn primitives
+  (`checkbox`, `form`, `input`, `label`, `select`, `switch`,
+  `textarea`) and 10 dead npm dependencies
+  (`@hookform/resolvers`, `@radix-ui/react-{checkbox,label,select,switch}`,
+  `motion`, `next-safe-action`, `react-hook-form`, `react-icons`,
+  `zod`). Pruned orphaned `--chart-*` and `--sidebar*` CSS tokens
+  from `globals.css`. Removed duplicate `public/icon.png` (Next.js
+  auto-discovers the file-convention `src/app/icon.png`). Net
+  diff: −1,198 / +7.
+
+### Security
+
+- **postcss CVE override.** Pinned `postcss: ^8.5.10` via root
+  `package.json` overrides to neutralise GHSA-qx2v-qp2m-jg93 (XSS
+  via unescaped `</style>` in CSS stringify output) inside `next`'s
+  transitive tree. Website `npm audit` is now clean.
+  `packages/mcp-cloud` still surfaces 16 advisories — all in the
+  `vercel` CLI's dev-only transitive tree; not shipped to
+  production users; re-audit each quarter.
+
 ## [1.2.0] — 2026-05-19
 
 ### Added
