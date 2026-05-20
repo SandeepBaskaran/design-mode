@@ -120,7 +120,7 @@ const LogoRow = ({ companies, gridClassName, direction }: LogoRowProps) => {
                 alt={`${company.name} logo`}
                 width={company.width}
                 height={company.height}
-                className="object-contain opacity-70 transition-opacity hover:opacity-100"
+                className="h-7 w-auto object-contain brightness-0 opacity-50 transition hover:opacity-100"
               />
             </Link>
           ))}
@@ -135,14 +135,14 @@ const LogoRow = ({ companies, gridClassName, direction }: LogoRowProps) => {
               href={company.href}
               target="_blank"
               key={index}
-              className="mx-8 inline-block transition-opacity hover:opacity-70"
+              className="mx-8 inline-block"
             >
               <Image
                 src={company.logo}
                 alt={`${company.name} logo`}
                 width={company.width}
                 height={company.height}
-                className="object-contain"
+                className="h-7 w-auto object-contain brightness-0 opacity-50 transition hover:opacity-100"
               />
             </Link>
           ))}

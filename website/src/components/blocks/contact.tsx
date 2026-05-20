@@ -23,7 +23,7 @@ export function ContactHero() {
 
 export function ContactChannels() {
   return (
-    <div className="container max-w-5xl">
+    <div className="container max-w-5xl pl-[152px]">
       <div className="grid gap-12 md:grid-cols-2 md:gap-16">
         <div>
           <h2 className="text-foreground font-medium">Email</h2>
