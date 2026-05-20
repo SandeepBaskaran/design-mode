@@ -23,13 +23,12 @@ const topItems: Item[] = [
     description:
       "A header row of overlay icons and an action toolbar that sits just above the three editing panels.",
     image: {
-      src: "/resource-allocation/top-row.png",
+      src: "/panel-anatomy/top-row.png",
       alt: "Top bar of the side panel",
       width: 1485,
       height: 558,
     },
-    className:
-      "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
+    className: "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
     fade: [""],
   },
   {
@@ -37,13 +36,12 @@ const topItems: Item[] = [
     description:
       "Two buttons collapse every change in the session into a shippable diff. Copy Prompt goes to the clipboard; Send to Agent goes over MCP to a connected coding agent.",
     image: {
-      src: "/resource-allocation/bottom-row.png",
+      src: "/panel-anatomy/bottom-row.png",
       alt: "Bottom buttons of the side panel",
       width: 1485,
       height: 558,
     },
-    className:
-      "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
+    className: "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
     fade: [""],
   },
 ];
@@ -54,13 +52,12 @@ const bottomItems: Item[] = [
     description:
       "See and reorganise the DOM tree of the page you're editing — without leaving the side panel.",
     image: {
-      src: "/resource-allocation/layers-tab.png",
+      src: "/panel-anatomy/layers-tab.png",
       alt: "Layers tab",
       width: 981,
       height: 840,
     },
-    className:
-      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
+    className: "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
     fade: ["bottom"],
   },
   {
@@ -68,13 +65,12 @@ const bottomItems: Item[] = [
     description:
       "Nine Figma-aligned sections. Real controls — sliders, colour pickers, segmented buttons — not a textarea of CSS.",
     image: {
-      src: "/resource-allocation/design-tab.png",
+      src: "/panel-anatomy/design-tab.png",
       alt: "Design tab",
       width: 981,
       height: 840,
     },
-    className:
-      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
+    className: "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
     fade: ["bottom"],
   },
   {
@@ -82,21 +78,20 @@ const bottomItems: Item[] = [
     description:
       "A full audit trail of every style, text, and DOM edit. Undo any one of them, or export the whole diff.",
     image: {
-      src: "/resource-allocation/changes-tab.png",
+      src: "/panel-anatomy/changes-tab.png",
       alt: "Changes tab",
       width: 981,
       height: 840,
     },
-    className:
-      "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8 xl:[&>.image-container]:translate-x-6 [&>.image-container]:translate-x-2",
+    className: "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
     fade: ["bottom"],
   },
 ];
 
-export const ResourceAllocation = () => {
+export const PanelAnatomy = () => {
   return (
     <section
-      id="resource-allocation"
+      id="panel-anatomy"
       className="overflow-hidden pb-28 lg:pb-32"
     >
       <div>

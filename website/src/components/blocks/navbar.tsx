@@ -89,8 +89,10 @@ export const Navbar = () => {
                 <Link
                   href={link.href}
                   className={cn(
-                    "relative bg-transparent px-1.5 text-sm font-medium transition-opacity hover:opacity-75",
-                    pathname === link.href && "text-muted-foreground",
+                    "relative bg-transparent px-1.5 text-sm transition-opacity hover:opacity-75",
+                    pathname === link.href
+                      ? "text-foreground font-semibold"
+                      : "text-muted-foreground font-medium",
                   )}
                 >
                   {link.label}
@@ -160,8 +162,10 @@ export const Navbar = () => {
               key={link.label}
               href={link.href}
               className={cn(
-                "text-primary hover:text-primary/80 py-4 text-base font-medium transition-colors first:pt-0 last:pb-0",
-                pathname === link.href && "text-muted-foreground",
+                "py-4 text-base transition-colors first:pt-0 last:pb-0",
+                pathname === link.href
+                  ? "text-foreground font-semibold"
+                  : "text-muted-foreground hover:text-foreground font-medium",
               )}
               onClick={() => setIsMenuOpen(false)}
             >

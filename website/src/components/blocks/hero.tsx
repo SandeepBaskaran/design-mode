@@ -94,7 +94,7 @@ export const HeroShowcase = () => {
 
         {/* Right — cover image */}
         <div className="flex-1">
-          <div className="relative mx-auto h-[400px] w-full max-w-md lg:h-[448px]">
+          <div className="relative mx-auto h-[400px] w-full max-w-[400px]">
             <Image
               src="/cover.png"
               alt="The Design Mode side panel on a live website"
