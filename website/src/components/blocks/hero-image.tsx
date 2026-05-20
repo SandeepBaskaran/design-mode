@@ -1,8 +1,8 @@
 import Image from "next/image";
 
 // Wide marketing screenshot — the live website with the side panel
-// attached. Sits between the hero CTAs and the HeroShowcase row to
-// give the user a "see it in context" before the bullets + close-up.
+// attached. Sits at the bottom of the homepage (after the FAQ slab,
+// just above the footer) as a closing "see it in context" shot.
 export function HeroImage() {
   return (
     <section className="py-16 lg:py-24">
@@ -12,8 +12,7 @@ export function HeroImage() {
           alt="Design Mode in action — the live website with the side panel attached"
           width={2360}
           height={951}
-          className="rounded-2xl border shadow-lg"
-          priority
+          className="shadow-sm"
         />
       </div>
     </section>
