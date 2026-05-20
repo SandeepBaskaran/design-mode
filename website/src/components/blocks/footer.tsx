@@ -2,7 +2,9 @@ import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
 
+import { ProductHunt } from "@/components/blocks/product-hunt";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
+import { Button } from "@/components/ui/button";
 
 const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
 const X_URL = "https://x.com/sandeepbaskaran";
@@ -27,6 +29,9 @@ export function Footer() {
   return (
     <footer className="flex flex-col items-center gap-14 pt-28 pb-12 lg:pt-32">
       <div className="container space-y-3 text-center">
+        <div className="mb-6 flex justify-center">
+          <ProductHunt />
+        </div>
         <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
           Design directly in your browser.
         </h2>
@@ -34,7 +39,10 @@ export function Footer() {
           Free forever, open source. Edit any live site with visual
           controls and ship the changes to your coding agent over MCP.
         </p>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
+          <Button variant="outline" asChild>
+            <Link href="/demo">Try by yourself</Link>
+          </Button>
           <AddToChromeCta />
         </div>
       </div>

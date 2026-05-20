@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Heart, MousePointer2, Palette, Wand2 } from "lucide-react";
 
+import { ProductHunt } from "@/components/blocks/product-hunt";
 import { DashedLine } from "@/components/dashed-line";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,10 @@ export const Hero = () => {
     <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
       {/* Hero — vertical stack, centred */}
       <div className="container max-w-4xl text-center">
+        <div className="mb-6 flex justify-center">
+          <ProductHunt />
+        </div>
+
         <h1 className="text-foreground text-3xl tracking-tight md:text-4xl lg:text-5xl">
           Design directly in your browser.
           <br className="hidden md:block" /> Your agent writes the code.
