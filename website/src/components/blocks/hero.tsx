@@ -67,7 +67,7 @@ export const Hero = () => {
 export const HeroShowcase = () => {
   return (
     <section className="pb-12 lg:pb-16">
-      <div className="container flex flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
+      <div className="container flex flex-col gap-10 py-6 lg:flex-row lg:items-center lg:gap-16">
         {/* Left — feature bullets */}
         <div className="relative flex flex-1 flex-col justify-center space-y-5 lg:max-w-md lg:pr-10">
           <DashedLine
@@ -94,7 +94,7 @@ export const HeroShowcase = () => {
 
         {/* Right — cover image */}
         <div className="flex-1">
-          <div className="relative mx-auto h-[560px] w-full max-w-md lg:h-[640px]">
+          <div className="relative mx-auto h-[400px] w-full max-w-md lg:h-[448px]">
             <Image
               src="/cover.png"
               alt="The Design Mode side panel on a live website"

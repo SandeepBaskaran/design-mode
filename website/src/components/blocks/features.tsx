@@ -10,17 +10,17 @@ import { Card, CardContent } from "@/components/ui/card";
 const items = [
   {
     title: "Inspect any element on any site",
-    image: "/features/triage-card.svg",
+    image: "/features/inspect-card.png",
     href: "/mcp",
   },
   {
     title: "Edit type, colour, layout, structure",
-    image: "/features/cycle-card.svg",
+    image: "/features/edit-card.png",
     href: "/demo",
   },
   {
     title: "Ship the diff straight to your agent",
-    image: "/features/overview-card.svg",
+    image: "/features/ship-card.png",
     href: "/mcp",
   },
 ];
