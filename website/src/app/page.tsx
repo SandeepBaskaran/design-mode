@@ -4,7 +4,7 @@ import { Features } from "@/components/blocks/features";
 import { Hero, HeroShowcase } from "@/components/blocks/hero";
 import { Logos } from "@/components/blocks/logos";
 import { ResourceAllocation } from "@/components/blocks/resource-allocation";
-import { Testimonials } from "@/components/blocks/testimonials";
+// import { Testimonials } from "@/components/blocks/testimonials"; // hidden until real quotes
 
 export default function Home() {
   return (
@@ -16,7 +16,7 @@ export default function Home() {
       <Logos />
       <Features />
       <ResourceAllocation />
-      <Testimonials />
+      {/* <Testimonials /> — hidden until we have real quotes */}
       <Background variant="bottom">
         <FAQ />
       </Background>

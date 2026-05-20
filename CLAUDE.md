@@ -18,7 +18,10 @@ tool), these rules are read automatically at session start.
 - `packages/mcp-cloud` — Hosted MCP relay (Vercel-deployable).
 - `packages/shared` — Types, message schemas, constants. Re-exported
   via `@shared/...`.
-- `website/` — Next.js 14 marketing/docs site.
+- `website/` — Next.js 15 / React 19 / Tailwind 4 / shadcn-ui
+  (new-york) marketing + docs + interactive demo site. Light mode
+  only; the `dark:` variants still present in shadcn primitives
+  are inert (no `.dark` class is ever added to the root).
 
 ## Default build commands
 
@@ -114,6 +117,88 @@ tool), these rules are read automatically at session start.
 - **Message routing**: side panel → background → content. The
   background script in `packages/extension/src/background/` is a
   forwarder; every new `SP_*` message needs a matching forward rule.
+
+## Canonical URLs
+
+- **Marketing site**: `https://designmode.app`. Never
+  `design-mode.dev`, `designmode.dev`, or any hyphenated/`.dev`
+  variant — those are wrong.
+- **Cloud relay**: `https://mcp.designmode.app` (apex). The `www.`
+  subdomain also serves the routes, but apex is canonical since
+  the 307 redirect was killed at the Vercel domain layer. All
+  user-facing copy + config snippets must use the apex form.
+
+## MCP modes + agent presence
+
+- **Three modes**: **Cloud (default)**, **Local**, **Self-hosted**.
+  Fresh installs land on Cloud. Existing users keep whatever
+  `dm-mcp-mode` was stored. UI order in the Settings picker and
+  on the website's `/mcp` page is Cloud · Local · Self-hosted.
+- **Three-state `mcpState`** (`packages/extension/src/sidepanel/sidepanel.ts`):
+  - `offline` — transport (WS / SSE) is down.
+  - `running` — transport up, no agent activity seen recently.
+  - `connected` — transport up AND an `AGENT_PRESENCE` event was
+    received within the last 5 minutes. Send-to-Agent button only
+    enables in this state.
+- **Local presence**: `packages/mcp-local/src/websocket-server.ts`
+  sends a `HELLO` message on every WS connection with
+  `agentConnected: true`. The local server is spawned by the MCP
+  client process, so "WS open" ≡ "agent attached" — no separate
+  presence machine.
+- **Cloud / Self-hosted presence**: `packages/mcp-cloud/lib/presence.ts`
+  `bumpPresence` / `getPresence` over Redis. 5-min TTL key per
+  tenant (`presence:{tenantId}`). Every `/api/mcp` POST bumps the
+  key; 0→1 transitions publish an inbound `AGENT_PRESENCE` event
+  via `publishInbound`. The extension SSE stream
+  (`api/extension/stream.ts`) sends initial presence on connect
+  and polls every 30s for 1→0 (TTL expiry) edges.
+- **Extension side**: `content/change-tracker.ts` owns an
+  `agentConnected` boolean. The content script handles incoming
+  `AGENT_PRESENCE` and `HELLO` messages and broadcasts
+  `AGENT_PRESENCE_UPDATE` via `chrome.runtime.sendMessage`. The
+  side panel listens for that message and re-derives `mcpState`.
+
+## Self-hosted relay
+
+- The `packages/mcp-cloud` code is **Node.js + Redis**, runnable
+  on any host (Vercel, Railway, Fly, your own VM, etc). Don't
+  write user-facing copy that names Vercel as the only target.
+- The in-repo dev workflow (`npm run dev:mcp-cloud` →
+  `npx vercel dev`) and the `lib/kv.ts` comment about
+  `REDIS_URL` being auto-injected by the Vercel Marketplace are
+  internal references — those stay Vercel-flavoured because
+  that's our reference setup, but production users can deploy
+  anywhere.
+
+## Website conventions
+
+- **Background slabs** (`website/src/components/background.tsx`):
+  each page wraps ONLY its hero in `<Background>` (yellow
+  gradient at top) and ONLY its final section in
+  `<Background variant="bottom">`. Never wrap the whole page —
+  the gradient height scales with the wrapped div, so a long page
+  shows yellow far past the hero. The middle of each page renders
+  in a plain `<section>` with no Background wrap.
+- **Product Hunt badge**: lives in two places — the homepage
+  `<Hero />` block (above the h1) and the global `<Footer />`
+  block (above the h2). Single shared atom in
+  `components/blocks/product-hunt.tsx`. PH re-stamps the badge URL
+  with a `t=` tracking param each render — use a plain `<img>`
+  (`<Image>` from next/image would need `api.producthunt.com` in
+  `next.config.ts` `images.remotePatterns` for no benefit).
+- **Hydration warning**: `<html lang="en" suppressHydrationWarning>`
+  in `layout.tsx` is intentional. Night-mode browser extensions
+  (Night Eye, Dark Reader variants) inject attributes like
+  `data-nm-theme="dark"` on the root after SSR, which React would
+  otherwise warn about. `suppressHydrationWarning` scopes to the
+  `<html>` element's attributes only — subtree mismatches still
+  fire.
+- **Single shared lockfile**: only one `package-lock.json` lives
+  in the repo, at the root. `npm workspaces` handles `website/`
+  plus every package from there. If a workspace ever ends up with
+  its own `package-lock.json` (the template bootstrap put one
+  inside `website/` once), delete it before committing — Next.js's
+  build warns about ambiguous workspace root.
 
 ## Documentation conventions
 
