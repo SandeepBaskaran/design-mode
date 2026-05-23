@@ -29,8 +29,10 @@ import {
   refreshOverlays as refreshMultiSelectOverlays,
   toggleSelection as toggleMultiSelectMember,
 } from './multi-select';
-// Design/Layout mode — component palette + resize handles
-import { getComponentsByCategory, placeComponent, showResizeHandles, hideResizeHandles } from './design-mode';
+// Design/Layout mode — component palette + wireframe placement
+import { getComponentsByCategory, placeComponent } from './design-mode';
+// Measurement guides — axis lines, distance pills, resize handles
+import { setResizeCommitHandler, setResizePreviewHandler, teardownMeasureGuides, resetMeasureTeardown, showResizeDots, repositionResizeDots } from './measure-guides';
 // Enhanced export — markdown for Copy Prompt
 import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } from './enhanced-export';
 // Keyboard shortcuts
@@ -73,6 +75,32 @@ interface VisibilityUndoEntry { kind: "visibility"; elementId: string; wasHidden
 type UndoEntry = StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoEntry;
 const undoStack: UndoEntry[] = [];
 const redoStack: UndoEntry[] = [];
+
+// Corner-dot resize commits its final width/height through the change-tracker
+// (so it lands in the Changes tab and exports), pushes an undo entry per
+// dimension, and refreshes the panel — same path the side panel's APPLY_STYLE
+// would take, just initiated from the page.
+setResizeCommitHandler((id, width, height) => {
+  const el = getElementById(id);
+  if (!el) return;
+  const meta = { groupId: `resize-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, groupLabel: 'Resize' };
+  const cs = window.getComputedStyle(el);
+  const beforeW = cs.width, beforeH = cs.height;
+  if (width) applyWithCompanions(id, 'width', width, undefined, meta);
+  const change = height ? applyWithCompanions(id, 'height', height, undefined, meta) : null;
+  if (width) undoStack.push({ kind: 'style', elementId: id, property: 'width', oldValue: beforeW, newValue: width });
+  if (height) undoStack.push({ kind: 'style', elementId: id, property: 'height', oldValue: beforeH, newValue: height, changeId: change?.id });
+  redoStack.length = 0;
+  const updated = getElementById(id);
+  if (updated) onElementSelected(buildElementInfo(updated));
+  getChangesPayload().then(p => notifyPanel('CHANGES_UPDATE', p));
+});
+
+// Live (uncommitted) dimensions while a resize handle is dragged — the panel
+// patches just its W/H fields so they tick along without a full reselect.
+setResizePreviewHandler((id, width, height) => {
+  notifyPanel('LIVE_RESIZE', { elementId: id, width, height });
+});
 
 /* —— Helpers —— */
 
@@ -272,6 +300,7 @@ function selectAndNotify(el: HTMLElement) {
   const info = buildElementInfo(el);
   setSelectedElementId(info.id);
   showSelect(el);
+  showResizeDots(el);
   onElementSelected(info);
   return info;
 }
@@ -420,6 +449,7 @@ function enable() {
   if (on) return;
   on = true;
   resetOverlayTeardown();
+  resetMeasureTeardown();
   showCommentPins();         // surface saved comment pins on the page
   startPanelHeartbeat();     // detect a panel-close that the message chain missed
   void openConfiguredTransport();
@@ -452,6 +482,7 @@ function disable() {
   disableInspect();
   disableMultiSelect();
   destroyOverlays();
+  teardownMeasureGuides();
   hideCommentPins();
   if (isFrozen()) unfreezeAnimations();
   disconnectFromServer();
@@ -460,7 +491,7 @@ function disable() {
   // Final sweep — if any other module attached an overlay-like element, this
   // catches the strays so the page goes back to a pristine state the moment
   // the panel closes.
-  document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-toolbar, .dm-multi-overlay, .dm-comment-pin').forEach(el => el.remove());
+  document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-axis-guides, #dm-distance, #dm-resize-dots, #dm-toolbar, .dm-multi-overlay, .dm-comment-pin').forEach(el => el.remove());
   if (document.documentElement.style.cursor === 'crosshair') {
     document.documentElement.style.cursor = '';
   }
@@ -1029,6 +1060,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           if (multiIds.length > 0) refreshMultiSelectOverlays();
           const focusedEl = getElementById(sid);
           if (focusedEl) showSelect(focusedEl);
+          repositionResizeDots();
         });
         const updatedEl = getElementById(sid);
         const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
@@ -1109,6 +1141,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       requestAnimationFrame(() => {
         const focusedEl = getElementById(sid);
         if (focusedEl) showSelect(focusedEl);
+        repositionResizeDots();
       });
       const updatedEl = getElementById(sid);
       const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
@@ -1131,6 +1164,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         requestAnimationFrame(() => {
           const focusedEl = sid ? getElementById(sid) : null;
           if (focusedEl) showSelect(focusedEl);
+          repositionResizeDots();
         });
         const updatedEl = el;
         const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
@@ -1521,8 +1555,6 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       if (msg.html && msg.parentId) { const id = placeComponent(msg.html, msg.parentId); sendResponse({ elementId: id }); }
       else sendResponse({ error: 'Missing html or parentId' }); break;
     }
-    case 'SHOW_RESIZE_HANDLES': { const el = getElementById(msg.elementId || getSelectedElementId() || ''); if (el) showResizeHandles(el); sendResponse({ ok: true }); break; }
-    case 'HIDE_RESIZE_HANDLES': { hideResizeHandles(); sendResponse({ ok: true }); break; }
 
     // ── Phase 6: Rearrange ──
     case 'GET_DESIGN_TOKENS': {

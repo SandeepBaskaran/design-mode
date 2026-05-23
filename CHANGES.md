@@ -162,6 +162,8 @@ The batch-apply button shows `×N` when `N > 1` matching elements exist on the p
 
 This is how you escalate a one-off edit into a sitewide change. E.g., changing `font-weight: 700` on one heading, then batch-applying so all 14 headings on the page also get it.
 
+**Resize entries**: dragging an element's resize handles on the page emits its `width` and `height` as style changes sharing a **"Resize"** group, so they collapse into a single revertable row instead of two.
+
 ### 2. Text change
 
 An edit to a text-bearing element's `textContent`.

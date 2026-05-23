@@ -72,6 +72,13 @@ Design Mode brings a coding agent inside the page through a small bridge called 
   on the selected element via a `::before` pseudo-element. Doesn't
   affect layout; per-element session memory; survives page reload
   while the side panel is open.
+- **Measure & resize** — VisBug-style measurement guides in inspect
+  mode: hovering draws dashed axis lines through an element's edges;
+  with one element selected, hovering another shows edge-to-edge
+  distance pills (gap + side offsets). The selection gets 8 drag
+  handles (corners + edge midpoints) — resizing is live and lands in
+  the Changes tab / export as `width`/`height`. Shift-click adds
+  elements and shows the pixel spacing between them.
 - **Transition editor** — Per-property breakdown (property / duration / timing / delay) plus
   ▶ Preview that flashes a contrast value for the configured duration so you can see the curve.
 - **Changes log** — Every edit grouped by element. View Original / View Changes toggle,

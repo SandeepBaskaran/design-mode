@@ -4,19 +4,12 @@
 // resize handles, size indicators
 // ============================================================
 
-import { Z_INDEX, DATA_ATTR } from '../shared';
-import { getOrAssignId, getElementById, getElementRect } from './helpers';
-import type { ComponentPalette, SnapGuide, ResizeHandle } from '@shared/types';
+import { Z_INDEX } from '../shared';
+import { getOrAssignId, getElementById } from './helpers';
+import type { ComponentPalette } from '@shared/types';
 
 let designModeActive = false;
-let snapGuidesVisible = false;
-let resizeHandlesVisible = false;
-let activeResizeEl: HTMLElement | null = null;
-let resizeStartRect: DOMRect | null = null;
-let resizeDirection: string = '';
 let snapGuideElements: HTMLDivElement[] = [];
-let resizeHandleElements: HTMLDivElement[] = [];
-let sizeIndicatorEl: HTMLDivElement | null = null;
 let placementGhostEl: HTMLDivElement | null = null;
 
 // ── Component Palette ──
@@ -187,123 +180,6 @@ function showSnapGuides(target: HTMLElement) {
 function hideSnapGuides() {
   snapGuideElements.forEach(g => g.remove());
   snapGuideElements = [];
-}
-
-// ── Resize Handles ──
-
-const HANDLE_DIRS: Array<{ dir: string; cursor: string; top: string; left: string }> = [
-  { dir: 'n', cursor: 'n-resize', top: '-4px', left: '50%' },
-  { dir: 'ne', cursor: 'ne-resize', top: '-4px', left: '100%' },
-  { dir: 'e', cursor: 'e-resize', top: '50%', left: '100%' },
-  { dir: 'se', cursor: 'se-resize', top: '100%', left: '100%' },
-  { dir: 's', cursor: 's-resize', top: '100%', left: '50%' },
-  { dir: 'sw', cursor: 'sw-resize', top: '100%', left: '-4px' },
-  { dir: 'w', cursor: 'w-resize', top: '50%', left: '-4px' },
-  { dir: 'nw', cursor: 'nw-resize', top: '-4px', left: '-4px' },
-];
-
-export function showResizeHandles(el: HTMLElement) {
-  hideResizeHandles();
-  const rect = el.getBoundingClientRect();
-
-  for (const h of HANDLE_DIRS) {
-    const handle = document.createElement('div');
-    Object.assign(handle.style, {
-      position: 'fixed',
-      width: '8px', height: '8px',
-      background: '#3B82F6', border: '1px solid white',
-      borderRadius: '50%',
-      cursor: h.cursor,
-      zIndex: String(Z_INDEX.RESIZE_HANDLE),
-      transform: 'translate(-50%, -50%)',
-      pointerEvents: 'auto',
-    });
-
-    const top = h.top === '-4px' ? rect.top : h.top === '50%' ? rect.top + rect.height / 2 : rect.bottom;
-    const left = h.left === '-4px' ? rect.left : h.left === '50%' ? rect.left + rect.width / 2 : rect.right;
-    handle.style.top = top + 'px';
-    handle.style.left = left + 'px';
-
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      startResize(el, h.dir, e);
-    });
-
-    document.documentElement.appendChild(handle);
-    resizeHandleElements.push(handle);
-  }
-}
-
-export function hideResizeHandles() {
-  resizeHandleElements.forEach(h => h.remove());
-  resizeHandleElements = [];
-}
-
-function startResize(el: HTMLElement, dir: string, e: MouseEvent) {
-  activeResizeEl = el;
-  resizeDirection = dir;
-  resizeStartRect = el.getBoundingClientRect();
-  const startX = e.clientX;
-  const startY = e.clientY;
-
-  const onMove = (ev: MouseEvent) => {
-    if (!activeResizeEl || !resizeStartRect) return;
-    const dx = ev.clientX - startX;
-    const dy = ev.clientY - startY;
-    applyResize(activeResizeEl, resizeStartRect, resizeDirection, dx, dy);
-    showSizeIndicator(activeResizeEl);
-  };
-
-  const onUp = () => {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
-    hideSizeIndicator();
-    if (activeResizeEl) showResizeHandles(activeResizeEl);
-    activeResizeEl = null;
-  };
-
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
-}
-
-function applyResize(el: HTMLElement, startRect: DOMRect, dir: string, dx: number, dy: number) {
-  if (dir.includes('e')) el.style.width = Math.max(20, startRect.width + dx) + 'px';
-  if (dir.includes('w')) el.style.width = Math.max(20, startRect.width - dx) + 'px';
-  if (dir.includes('s')) el.style.height = Math.max(20, startRect.height + dy) + 'px';
-  if (dir.includes('n')) el.style.height = Math.max(20, startRect.height - dy) + 'px';
-}
-
-// ── Size Indicators ──
-
-export function showSizeIndicator(el: HTMLElement) {
-  hideSizeIndicator();
-  const rect = el.getBoundingClientRect();
-  sizeIndicatorEl = document.createElement('div');
-  Object.assign(sizeIndicatorEl.style, {
-    position: 'fixed',
-    top: (rect.bottom + 8) + 'px',
-    left: (rect.left + rect.width / 2) + 'px',
-    transform: 'translateX(-50%)',
-    padding: '2px 8px',
-    background: '#1F2937',
-    color: 'white',
-    fontSize: '11px',
-    fontFamily: 'monospace',
-    borderRadius: '4px',
-    zIndex: String(Z_INDEX.RESIZE_HANDLE),
-    pointerEvents: 'none',
-    whiteSpace: 'nowrap',
-  });
-  sizeIndicatorEl.textContent = `${Math.round(rect.width)} × ${Math.round(rect.height)}`;
-  document.documentElement.appendChild(sizeIndicatorEl);
-}
-
-export function hideSizeIndicator() {
-  if (sizeIndicatorEl) {
-    sizeIndicatorEl.remove();
-    sizeIndicatorEl = null;
-  }
 }
 
 export function isDesignModeActive(): boolean { return designModeActive; }

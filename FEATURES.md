@@ -14,27 +14,39 @@ outline). The side panel mirrors whatever you have selected.
 ### 1.1 Inspect / hover
 
 - **What it does**: highlights the element under the cursor and pushes its
-  computed styles to the side panel.
+  computed styles to the side panel. Hovering also draws dashed **axis
+  guide lines** through the element's four edges, spanning the page, so you
+  can eyeball alignment against everything else.
 - **Use**: just move the mouse. The Design tab updates with the hovered
   element's styles when nothing is selected.
 
 ### 1.2 Click to select
 
 - **What it does**: locks the orange outline on a single element, marks it
-  as the editing target, and shows its dimensions.
+  as the editing target, and shows its dimensions. The selection also gets
+  **8 resize handles** — four corners + four edge midpoints.
 - **Use**: click any element. Press `Escape` to deselect.
+- **Drag to resize**: drag any handle. The element resizes live, the orange
+  outline + `W × H` label track instantly, and the Design tab's width/height
+  fields update as you go. On release the new `width`/`height` ship — they
+  land in the **Changes** tab (as a grouped "Resize" entry) and in the CSS
+  export, just like any other edit. Edge handles change a single dimension;
+  corner handles change both. Resizing from the Design tab keeps the handles
+  in sync.
 
-### 1.3 Multi-select mode (toggle in Layers tab)
+### 1.3 Multi-select (Shift-click, or the Layers-tab toggle)
 
-- **What it does**: every click ADDS the element to a selection set instead
-  of replacing the single selection. Edits in the Design tab fan out to
-  every selected element — one change record per element so the Changes
-  tab and Copy Prompt show the full impact.
-- **Use**: open the **Layers** tab → flip the **Multi-select** toggle to
-  the right of the search box. Click N elements (on the page or in the
-  Layers list — both work). The button shows a count badge. Edit any
-  property in the Design tab and it lands on every selected element.
-  Press `Escape` or click the toggle again to exit.
+- **What it does**: adds the element to a selection set instead of replacing
+  the single selection. Edits in the Design tab fan out to every selected
+  element — one change record per element so the Changes tab and Copy Prompt
+  show the full impact. With two or more elements selected, the **pixel
+  spacing between them** is drawn as distance pills.
+- **Use**: **Shift-click** elements directly on the page, or open the
+  **Layers** tab → flip the **Multi-select** toggle to the right of the
+  search box and click N elements (page or Layers list — both work). The
+  button shows a count badge. Press `Escape` or click the toggle again to
+  exit. (While inspecting, native text selection is suppressed so shift-click
+  never highlights page text.)
 
 ### 1.4 Animation freeze (toolbar)
 
@@ -60,6 +72,18 @@ Comments anchor a sticky note to a specific element. Each comment renders as a d
 - **Resolve**: click the green **Resolve** button on the comment row. The pin fades to grey + 60% opacity; the body strikes through. Resolving keeps the comment (it's not a delete) — click **Reopen** to restore.
 - **Hide all**: the new `eye` / `eye-off` toolbar action toggles every pin on the page. The Changes tab still shows them; only the page overlay is muted. State persists across sessions via `chrome.storage.local`.
 - **Click**: opens the comment row in the panel and scrolls the page to the layer.
+
+### 1.7 Distance measurement (spacing)
+
+- **What it does**: with one element selected, hovering another element shows
+  the **edge-to-edge spacing** between them as orange pills with connector
+  lines — both the gap on the open axis AND the side-edge offsets (e.g. a
+  `20` px vertical gap plus the `40` / `52` px left/right offsets). When one
+  element contains the other, it shows the four inset gaps (left / right /
+  top / bottom) instead. With a multi-selection, the pills measure the
+  spacing between the selected elements.
+- **Use**: select an element, then hover its container or a neighbour. The
+  pills are a session-only visual aid — they're never recorded as a change.
 
 ---
 

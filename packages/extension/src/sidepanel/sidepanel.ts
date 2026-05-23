@@ -1407,6 +1407,15 @@ chrome.runtime.onMessage.addListener((msg) => {
     hoverInfo = msg.payload;
     if (tab === 'design' && !info) render();
   }
+  // Live dimensions streamed while a resize handle is dragged on the page.
+  // Patch the selected element's computed W/H so the Design tab's size fields
+  // tick along; the full ELEMENT_SELECTED roundtrip settles state on mouseup.
+  if (msg.type === 'LIVE_RESIZE') {
+    if (!info || info.id !== msg.elementId || !info.computedStyles) return;
+    if (msg.width) info.computedStyles.width = msg.width;
+    if (msg.height) info.computedStyles.height = msg.height;
+    if (tab === 'design') render();
+  }
   if (msg.type === 'COMMENT_BUBBLE_CLICKED') {
     const c = comments.find(cc => cc.id === msg.commentId);
     if (c) { tab = 'changes'; viewingCommentId = msg.commentId; editingCommentId = null; commentMode = false; render(); }

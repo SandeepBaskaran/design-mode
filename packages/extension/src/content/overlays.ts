@@ -98,6 +98,15 @@ export function updateSelectPosition(el: HTMLElement) {
   if (selectOverlay?.style.display !== 'none') showSelect(el);
 }
 
+// During a live drag the 80ms ease lags the box behind the cursor; turn it
+// off so the orange outline + dimension label track the element instantly.
+export function setOverlayTransitions(enabled: boolean) {
+  const t = enabled ? 'all 80ms ease-out' : 'none';
+  if (selectOverlay) selectOverlay.style.transition = t;
+  if (dimensionLabel) dimensionLabel.style.transition = t;
+  if (hoverOverlay) hoverOverlay.style.transition = t;
+}
+
 export function destroyOverlays() {
   teardown = true;
   [hoverOverlay, selectOverlay, dimensionLabel].forEach(el => el?.remove());

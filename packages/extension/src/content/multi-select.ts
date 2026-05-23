@@ -6,6 +6,7 @@
 
 import { getElementById, getElementRect } from './helpers';
 import { Z_INDEX } from '../shared';
+import { showPairwiseDistances, hideDistance } from './measure-guides';
 
 let active = false;
 const selectedIds = new Set<string>();
@@ -30,6 +31,7 @@ export function disableMultiSelect(): void {
   active = false;
   selectedIds.clear();
   removeAllOverlays();
+  hideDistance();
   window.removeEventListener('scroll', refreshOverlays, true);
   window.removeEventListener('resize', refreshOverlays);
 }
@@ -52,6 +54,7 @@ export function setSelectedIds(ids: string[]): void {
 export function clearSelection(): void {
   selectedIds.clear();
   removeAllOverlays();
+  hideDistance();
 }
 
 function ensureOverlayFor(id: string): HTMLDivElement {
@@ -104,4 +107,6 @@ export function refreshOverlays(): void {
       height: rect.height + 'px',
     });
   }
+  // Pairwise spacing readout between the selected elements.
+  showPairwiseDistances(Array.from(selectedIds));
 }

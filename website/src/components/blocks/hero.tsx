@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { Heart, MousePointer2, Palette, Wand2 } from "lucide-react";
+import { Heart, MousePointer2, Palette, Ruler, Wand2 } from "lucide-react";
 
 import { ProductHunt } from "@/components/blocks/product-hunt";
 import { DashedLine } from "@/components/dashed-line";
@@ -18,6 +18,11 @@ const features = [
     title: "Layout, type, colour",
     description: "A full design surface in the side panel — not a devtools fork.",
     icon: Palette,
+  },
+  {
+    title: "Measure & resize",
+    description: "Drag 8 handles to resize, and see pixel spacing between elements live.",
+    icon: Ruler,
   },
   {
     title: "Ship to your agent",

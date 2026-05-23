@@ -125,6 +125,14 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 1.8  | Selection follows scroll | Select an element then scroll | Select overlay stays anchored to the element |
 | 1.9  | Escape deselects | Press `Escape` with a selection | Selection cleared, design tab returns to page-context view |
 | 1.10 | Parent / child traversal | Click ↑ then ↓ in the action row | Selection moves to parent, then back to first child |
+| 1.11 | Axis guides on hover | Hover any element | Blue dashed lines run through the element's four edges, spanning the full document; clear on mouse-out |
+| 1.12 | Hover distance pills | Select an element, then hover a stacked sibling | Vertical gap pill PLUS the left/right side-edge offset pills with dashed extension lines (e.g. `20` gap + `40`/`52` side offsets); containment → 4 inset gaps |
+| 1.13 | Eight resize handles | Select an element | Eight orange dots — four corners + four edge midpoints — on the selection box, each with the correct resize cursor |
+| 1.14 | Drag-resize is live + guided | Drag any handle | Element resizes live; the orange outline + `W × H` label track instantly (no lag); side-panel W/H fields update during the drag; orange axis guides show for alignment |
+| 1.15 | Resize persists + exports | Release the drag, open Changes tab + Export CSS | Changed `width`/`height` appear as a `Resize` row in Changes and in the exported CSS; Cmd/Ctrl+Z reverts. Edge handles commit only the one dimension they changed |
+| 1.16 | Resize follows scroll | Resize, then scroll | All eight handles stay anchored to the element |
+| 1.17 | Shift-select pairwise distances | Select an element, then Shift+click a second | Both outline (dashed); pairwise distance pills render between them; Shift+click more to extend |
+| 1.18 | Pairwise distances persist on hover/scroll | With ≥2 shift-selected, move the mouse away and scroll | Pairwise pills remain and stay anchored (not cleared by mouse-out) |
 
 ---
 

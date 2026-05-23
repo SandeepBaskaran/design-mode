@@ -6,6 +6,37 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Measurement guides in inspect mode (VisBug-style).** Hovering an
+  element now draws dashed axis guide lines through its four edges,
+  spanning the page. With one element selected, hovering another shows
+  edge-to-edge distance pills — the gap on the open axis plus the
+  side-edge offsets; a contained element shows its four inset gaps
+  instead. The pills are a session-only visual aid (never recorded).
+- **Drag-to-resize handles.** The selected element shows 8 handles
+  (four corners + four edge midpoints). Dragging resizes live — the
+  orange outline + `W × H` label track instantly and the Design tab's
+  width/height fields update during the drag. On release the new
+  `width`/`height` land in the Changes tab as a grouped "Resize" entry
+  and export as CSS. Edge handles change one dimension, corners change
+  both; resizing from the Design tab keeps the handles in sync.
+- **Shift-click multi-select on the canvas.** Shift-clicking elements
+  on the page adds them to the multi-select set (previously only the
+  Layers-tab toggle did this) and draws the pixel spacing between the
+  selected elements. Native text selection is suppressed while
+  inspecting so shift-click never highlights page text.
+
+### Internal
+
+- Removed the dead session-only 8-handle resize block in
+  `content/design-mode.ts` (and its unreachable
+  `SHOW_RESIZE_HANDLES` / `HIDE_RESIZE_HANDLES` message handlers); the
+  new inspect-mode resize supersedes it and routes through the
+  change-tracker so edits ship.
+
 ## [1.3.0] — 2026-05-20
 
 ### Added

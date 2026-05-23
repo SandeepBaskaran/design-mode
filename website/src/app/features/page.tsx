@@ -205,7 +205,10 @@ export default function FeaturesPage() {
           </div>
           <p className="text-muted-foreground mb-10 max-w-2xl">
             Layers, Design, and Changes. Each tab is its own scrollable
-            surface; switching keeps the selection alive.
+            surface; switching keeps the selection alive. On the canvas
+            itself, hovering measures spacing between elements and the
+            selection gets eight drag-to-resize handles — every resize
+            ships as a change like any other edit.
           </p>
 
           <div className="grid gap-6 md:grid-cols-3">

@@ -29,12 +29,23 @@ export const STEPS: Step[] = [
     id: "inspector",
     title: "Inspector mode",
     body: [
-      "The crosshair icon at the top of the side panel toggles inspector mode. Hover any element on the page and you'll see a yellow outline; click to select it and the Design tab fills with that element's properties.",
+      "The crosshair icon at the top of the side panel toggles inspector mode. Hover any element on the page and you'll see a blue outline; click to select it and the Design tab fills with that element's properties.",
       "Hovering shows the layer in the panel's indicator chip as 'Hovering'. Clicking flips it to 'Selected' and locks the focus on that layer.",
     ],
     tryIt:
       "Click the crosshair in the side panel header, then hover over the card below. Click the card to select it.",
     targetId: "inspector",
+  },
+  {
+    id: "measure-resize",
+    title: "Measure & resize",
+    body: [
+      "Inspect mode doubles as a measuring tool. Hovering an element draws dashed guide lines through its edges, spanning the page, so you can read alignment at a glance.",
+      "With one element selected, hover another and edge-to-edge distance pills appear — the gap between them plus the side offsets, exactly like VisBug or Figma's measure tool. Shift-click extra elements to see the pixel spacing between them.",
+      "The selected element also gets 8 drag handles (four corners + four edge midpoints). Drag any of them to resize live; the new width and height ship straight into the Changes tab and the CSS export, so your agent gets the exact dimensions.",
+    ],
+    tryIt:
+      "Select the card below, then hover the elements around it to read the spacing. Grab a corner handle and drag to resize.",
   },
   {
     id: "layers",

@@ -4,7 +4,8 @@
 
 import { getOrAssignId, getElementById, getElementRect, generateSelector, getBreadcrumbs, getComputedStyleSubset } from './helpers';
 import { showHover, hideHover, showSelect, updateSelectPosition, isOverlayElement } from './overlays';
-import { isMultiSelectActive, toggleSelection, getSelectedIds } from './multi-select';
+import { isMultiSelectActive, enableMultiSelect, toggleSelection, getSelectedIds } from './multi-select';
+import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots } from './measure-guides';
 
 export type IconInfo = { library: string; name: string; availableIcons?: string[] };
 
@@ -98,10 +99,13 @@ export function buildElementInfo(el: HTMLElement): ElementInfo {
 }
 
 function isDMElement(el: HTMLElement): boolean {
-  return isOverlayElement(el) || !!el.id?.startsWith('dm-') ||
-    !!el.className?.toString?.().includes?.('dm-comment-pin') ||
-    !!el.closest?.('.dm-comment-pin') ||
-    !!el.closest('#dm-panel') || !!el.closest('#dm-toolbar');
+  // Any Design Mode UI is transparent to the inspector: the hover/select/dim
+  // overlays, the axis-guide / distance / resize-dot layers (all `dm-*` ids),
+  // the panel, the toolbar, and comment pins. Without this, hovering a resize
+  // dot would draw hover outlines + distance pills on our own chrome.
+  return isOverlayElement(el) ||
+    !!el.closest?.('[id^="dm-"]') ||
+    !!el.closest?.('.dm-comment-pin');
 }
 
 function handleMouseOver(e: MouseEvent) {
@@ -109,8 +113,18 @@ function handleMouseOver(e: MouseEvent) {
   if (!t || isDMElement(t)) return;
   showHover(t);
 
-  // Debounced hover info for side panel design tab
   const hovId = getOrAssignId(t);
+  const hovRect = getElementRect(t);
+  showAxisGuides(hovRect, 'hover');
+  // With a single element selected, hovering another shows the edge-to-edge
+  // distances between them. In multi-select the pairwise distances own the
+  // distance layer, so don't overwrite them with a hover measurement.
+  if (!isMultiSelectActive() && selectedId && selectedId !== hovId) {
+    const sel = getElementById(selectedId);
+    if (sel) showDistance(getElementRect(sel), hovRect);
+  }
+
+  // Debounced hover info for side panel design tab
   if (hovId === lastHoveredId) return;
   lastHoveredId = hovId;
   if (hoverDebounceTimer) clearTimeout(hoverDebounceTimer);
@@ -134,9 +148,25 @@ function handleMouseOver(e: MouseEvent) {
 
 function handleMouseOut() {
   hideHover();
+  hideAxisGuides();
+  // Single-select hover measurement clears; multi-select pairwise distances
+  // are restored so they survive the mouse leaving an element.
+  if (isMultiSelectActive()) showPairwiseDistances(getSelectedIds());
+  else hideDistance();
   lastHoveredId = null;
   if (hoverDebounceTimer) { clearTimeout(hoverDebounceTimer); hoverDebounceTimer = null; }
   try { chrome.runtime.sendMessage({ type: 'ELEMENT_HOVERED_INFO', payload: null }); } catch {}
+}
+
+// Stop the browser starting a text selection on mousedown (especially
+// Shift+click, which extends a selection). Inspect mode hijacks clicks for
+// element selection, so a page text selection is never wanted here — matches
+// VisBug, which keeps the viewport selection-free while its tool is active.
+function handleMouseDown(e: MouseEvent) {
+  const t = e.target as HTMLElement;
+  if (!t || isDMElement(t)) return;
+  e.preventDefault();
+  if (e.shiftKey) window.getSelection()?.removeAllRanges();
 }
 
 function handleClick(e: MouseEvent) {
@@ -148,13 +178,17 @@ function handleClick(e: MouseEvent) {
   lastHoveredId = null;
   try { chrome.runtime.sendMessage({ type: 'ELEMENT_HOVERED_INFO', payload: null }); } catch {}
   const id = getOrAssignId(t);
-  if (isMultiSelectActive()) {
-    // Click toggles membership in the multi-select set; the single-select
-    // overlay still tracks the most-recently-touched element so the panel
-    // has someone to render styles for.
+  // Shift-click (or any click while multi-select is already on) builds the
+  // measurement selection set. Shift bootstraps the mode and folds in the
+  // current single selection as an anchor so the first shift-click yields a
+  // measurable pair.
+  if (e.shiftKey || isMultiSelectActive()) {
+    if (!isMultiSelectActive()) enableMultiSelect();
+    if (getSelectedIds().length === 0 && selectedId && selectedId !== id) toggleSelection(selectedId);
     toggleSelection(id);
     selectedId = id;
     showSelect(t);
+    showResizeDots(t);
     try {
       chrome.runtime.sendMessage({
         type: 'MULTI_SELECT_UPDATE',
@@ -166,6 +200,8 @@ function handleClick(e: MouseEvent) {
   }
   selectedId = id;
   showSelect(t);
+  showResizeDots(t);
+  hideDistance();
   if (onSelect) onSelect(buildElementInfo(t));
 }
 
@@ -175,6 +211,7 @@ export function enableInspect(cb: SelectionCallback) {
   document.documentElement.style.cursor = 'crosshair';
   document.addEventListener('mouseover', handleMouseOver, true);
   document.addEventListener('mouseout', handleMouseOut, true);
+  document.addEventListener('mousedown', handleMouseDown, true);
   document.addEventListener('click', handleClick, true);
 }
 
@@ -184,6 +221,7 @@ export function disableInspect() {
   document.documentElement.style.cursor = '';
   document.removeEventListener('mouseover', handleMouseOver, true);
   document.removeEventListener('mouseout', handleMouseOut, true);
+  document.removeEventListener('mousedown', handleMouseDown, true);
   document.removeEventListener('click', handleClick, true);
   hideHover();
   lastHoveredId = null;
@@ -194,6 +232,7 @@ export function isInspectActive() { return active; }
 
 // Keep selection overlay in sync on scroll/resize
 function refreshSelection() {
+  repositionResizeDots();
   if (!selectedId) return;
   const el = getElementById(selectedId);
   if (el) updateSelectPosition(el);
