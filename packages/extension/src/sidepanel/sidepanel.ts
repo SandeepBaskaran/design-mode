@@ -10,6 +10,13 @@
 import morphdom from 'morphdom';
 import { icon, icons } from '../content/icons';
 import { escapeAttr, rgbToHex } from '../content/helpers';
+import {
+  CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
+  isTransparent, resolveCategory, thresholdFor,
+  type Category as A11yCategory, type Level as A11yLevel,
+  type ResolvedCategory as A11yResolvedCategory,
+  type Rating as A11yRating, type Rgb, type Rgba,
+} from './contrast';
 
 /* ── Strict HTML sanitizer for the rich-text editor seed ──
    The contenteditable in the Typography section is seeded with the
@@ -170,13 +177,23 @@ let textChanges: TextChange[] = [];
 let domChanges: DomChange[] = [];
 let comments: CommentEntry[] = [];
 let batchAppliedChanges: Set<string> = new Set();
-let mediaInfo: { kind: string; src: string; alt?: string; naturalWidth?: number; naturalHeight?: number; filename?: string; markup?: string; isObjectUrl?: boolean; poster?: string } | null = null;
+let mediaInfo: { kind: string; src: string; alt?: string; naturalWidth?: number; naturalHeight?: number; filename?: string; markup?: string; isObjectUrl?: boolean; poster?: string; bytes?: number } | null = null;
 let lastMediaElementId: string | null = null;
 let activeColorPickerProp: string | null = null;
 // Tokens-only dropdown (a focus-driven shortcut on hex inputs) — distinct
 // from the full HSV+tokens panel that opens on swatch click.
 let tokensDropdownProp: string | null = null;
 let colorPickerSearch = '';
+// Inline contrast checker (WCAG ratio + AA/AAA badge + rating label)
+// shown above the SV gradient. Category / Level live in chrome.storage.local
+// so the user's preferred threshold sticks across selections + sessions.
+let a11yCategory: A11yCategory = 'auto';
+let a11yLevel: A11yLevel = 'AA';
+let contrastSettingsOpen = false;
+// Cached result of the ancestor-walk for the selected element's effective
+// background — populated on selection when info.computedStyles.backgroundColor
+// is transparent. Keyed by element id; cleared when selection changes.
+const effectiveBgCache = new Map<string, string>();
 let domTree: DomNode[] = [];
 let hoveredLayerId: string | null = null;
 let undoCount = 0;
@@ -366,6 +383,13 @@ let mcpCloudTenantId = '';
 let mcpCloudRegistering = false;
 let inspectorHoverColor = '#4F9EFF';
 let inspectorSelectColor = '#FF6B35';
+// Box-model band defaults — light coral red for margin, soft pastel green
+// for padding. Stored as hex (the colour picker only accepts hex); the
+// content script multiplies by a fixed alpha when painting.
+const OVERLAY_MARGIN_DEFAULT = '#FF6363';
+const OVERLAY_PADDING_DEFAULT = '#7CC886';
+let overlayMarginColor = OVERLAY_MARGIN_DEFAULT;
+let overlayPaddingColor = OVERLAY_PADDING_DEFAULT;
 // Display unit for pixel-based inputs (W/H, min/max, padding/margin/border
 // width). When set to rem, the panel converts resolved px to rem for
 // display and writes new values back as rem to the override stylesheet —
@@ -381,7 +405,9 @@ chrome.storage?.local?.get?.([
   'dm-mcp-port', 'dm-mcp-auto-connect',
   'dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url', 'dm-mcp-cloud-tenant',
   'dm-inspector-hover-color', 'dm-inspector-select-color',
+  'dm-overlay-margin-color', 'dm-overlay-padding-color',
   'dm-input-unit',
+  'dm-a11y-category', 'dm-a11y-level',
 ], (result: any) => {
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
   if (result?.['dm-color-format']) { colorFormat = result['dm-color-format']; }
@@ -394,7 +420,13 @@ chrome.storage?.local?.get?.([
   if (typeof result?.['dm-mcp-cloud-tenant'] === 'string') mcpCloudTenantId = result['dm-mcp-cloud-tenant'];
   if (typeof result?.['dm-inspector-hover-color'] === 'string') inspectorHoverColor = result['dm-inspector-hover-color'];
   if (typeof result?.['dm-inspector-select-color'] === 'string') inspectorSelectColor = result['dm-inspector-select-color'];
+  if (typeof result?.['dm-overlay-margin-color'] === 'string') overlayMarginColor = result['dm-overlay-margin-color'];
+  if (typeof result?.['dm-overlay-padding-color'] === 'string') overlayPaddingColor = result['dm-overlay-padding-color'];
   if (result?.['dm-input-unit'] === 'rem' || result?.['dm-input-unit'] === 'px') inputUnit = result['dm-input-unit'];
+  const cat = result?.['dm-a11y-category'];
+  if (cat === 'auto' || cat === 'large' || cat === 'normal' || cat === 'graphics') a11yCategory = cat;
+  const lvl = result?.['dm-a11y-level'];
+  if (lvl === 'AA' || lvl === 'AAA') a11yLevel = lvl;
   // Resolve the host page's rem root once so px → rem conversions are
   // accurate even when the page customises the root font-size.
   try {
@@ -411,6 +443,16 @@ chrome.storage?.session?.get?.(['dm-section-states'], (result: any) => {
   }
   render();
 });
+
+// Compact human-readable byte formatter (1 decimal place; B / KB / MB / GB).
+// Uses 1024 base, matching how dev tools / file managers display sizes.
+function formatBytes(n: number): string {
+  if (!isFinite(n) || n < 0) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10 * 1024 ? 1 : 0) + ' KB';
+  if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0) + ' MB';
+  return (n / 1024 / 1024 / 1024).toFixed(1) + ' GB';
+}
 
 function parseNumeric(val: string): { num: number; unit: string } | null {
   const m = val.match(/^(-?[\d.]+)\s*(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|deg|s|ms)?$/);
@@ -1393,6 +1435,9 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'ELEMENT_SELECTED') {
     info = msg.payload; hoverInfo = null; commentMode = false;
     hydrateLayoutGuidesFromPayload(info);
+    contrastSettingsOpen = false;
+    effectiveBgCache.clear();
+    maybeFetchEffectiveBg();
     render();
     refreshMedia();
     setTimeout(() => {
@@ -1954,6 +1999,189 @@ function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
   return [clampInt((r1 + m) * 255), clampInt((g1 + m) * 255), clampInt((b1 + m) * 255)];
 }
 
+// ── Contrast checker ──
+// Determines what colour to pair against when the user edits `prop`.
+// Returns null when the contrast row shouldn't render (box-shadow / drop-
+// shadow colours, or no current selection).
+type ContrastContext = {
+  role: 'fg' | 'bg';
+  fg: Rgba;
+  bg: Rgb;
+  pairLabel: string;
+};
+
+// Normalise any CSS colour string to RGBA. parseRgba handles hex + rgb/rgba
+// in both legacy (comma) and modern (space, slash-alpha) forms. oklab and
+// oklch are converted via the spec math in contrast.ts so we don't depend
+// on canvas / browser version. Anything else (named colours, hsl, lab, lch,
+// color()) is fed through a canvas 2D context which always coerces fillStyle
+// to sRGB on readback. Cached per input string to avoid recomputing during
+// SV drag.
+const normaliseColourCache = new Map<string, Rgba | null>();
+let probeCanvasCtx: CanvasRenderingContext2D | null = null;
+function normaliseToRgba(value: string): Rgba | null {
+  const fast = parseRgba(value);
+  if (fast) return fast;
+  const lowered = value.trim().toLowerCase();
+  if (lowered.startsWith('oklab(')) {
+    const r = parseOklab(value);
+    if (r) return r;
+  }
+  if (lowered.startsWith('oklch(')) {
+    const r = parseOklch(value);
+    if (r) return r;
+  }
+  if (normaliseColourCache.has(value)) return normaliseColourCache.get(value) || null;
+  let result: Rgba | null = null;
+  try {
+    if (!probeCanvasCtx) {
+      probeCanvasCtx = document.createElement('canvas').getContext('2d');
+    }
+    if (probeCanvasCtx) {
+      probeCanvasCtx.fillStyle = '#000';
+      probeCanvasCtx.fillStyle = value;
+      const normalised = probeCanvasCtx.fillStyle;
+      if (typeof normalised === 'string') result = parseRgba(normalised);
+    }
+  } catch {}
+  normaliseColourCache.set(value, result);
+  return result;
+}
+
+function isBoxShadowColorProp(prop: string): boolean {
+  if (prop === '__shadow_color') return true;
+  if (prop.startsWith('__effd_')) return true;
+  return false;
+}
+
+function getContrastContext(prop: string, value: string): ContrastContext | null {
+  if (!info) return null;
+  if (isBoxShadowColorProp(prop)) return null;
+  const s = info.computedStyles || {};
+
+  let currentValue = (value || '').trim();
+  const tokenResolved = resolveCssVarToColor(currentValue);
+  if (tokenResolved) currentValue = tokenResolved;
+  const currentRgba = normaliseToRgba(currentValue);
+  if (!currentRgba) return null;
+
+  const isFillProp = prop.startsWith('__fill_color__') || prop.startsWith('__fill_stop_color__');
+  const role: 'fg' | 'bg' = isFillProp ? 'bg' : 'fg';
+
+  let fg: Rgba;
+  let bgSource: string;
+  if (role === 'fg') {
+    fg = currentRgba;
+    const ownBg = s.backgroundColor || '';
+    if (!isTransparent(ownBg)) {
+      bgSource = ownBg;
+    } else {
+      const id = info.id;
+      const cached = id ? effectiveBgCache.get(id) : undefined;
+      bgSource = cached || '#FFFFFF';
+    }
+  } else {
+    bgSource = currentValue;
+    const textColor = s.color || '#000000';
+    fg = normaliseToRgba(textColor) || [0, 0, 0, 1];
+  }
+  const bgResolved = resolveCssVarToColor(bgSource) || bgSource;
+  // Fall back to white so the row always renders for a valid foreground —
+  // unparseable backgrounds (rare modern colour spaces) shouldn't silently
+  // hide the row; a best-effort ratio against white is more useful than nothing.
+  const bgRgba = normaliseToRgba(bgResolved) || [255, 255, 255, 1];
+  const bg: Rgb = [bgRgba[0], bgRgba[1], bgRgba[2]];
+  return { role, fg, bg, pairLabel: role === 'fg' ? 'Background' : 'Text' };
+}
+
+function maybeFetchEffectiveBg() {
+  if (!info) return;
+  const s = info.computedStyles || {};
+  if (!isTransparent(s.backgroundColor || '')) return;
+  const id = info.id;
+  if (!id || effectiveBgCache.has(id)) return;
+  send({ type: 'SP_GET_EFFECTIVE_BG', elementId: id }).then(r => {
+    if (r?.ok && r.color) {
+      effectiveBgCache.set(id, r.color);
+      if (activeColorPickerProp) render();
+    }
+  });
+}
+
+function renderContrastSettingsPopover(resolved: A11yResolvedCategory): string {
+  const item = (label: string, attr: string, active: boolean) =>
+    '<button class="dm-popover-item" ' + attr + ' data-active="' + (active ? 'true' : 'false') + '">' +
+      '<span style="flex:1;">' + escapeAttr(label) + '</span>' +
+      (active ? '<span style="color:var(--dm-accent);display:flex;">' + icon('check', 11) + '</span>' : '') +
+    '</button>';
+  return '<div class="dm-popover dm-contrast-settings" data-dm-contrast-settings>' +
+    '<div class="dm-contrast-section-header">Category</div>' +
+    item('Auto (' + CATEGORY_LABEL[resolved] + ')', 'data-dm-action="set-a11y-category" data-dm-cat="auto"', a11yCategory === 'auto') +
+    item('Large text', 'data-dm-action="set-a11y-category" data-dm-cat="large"', a11yCategory === 'large') +
+    item('Normal text', 'data-dm-action="set-a11y-category" data-dm-cat="normal"', a11yCategory === 'normal') +
+    item('Graphics', 'data-dm-action="set-a11y-category" data-dm-cat="graphics"', a11yCategory === 'graphics') +
+  '</div>';
+}
+
+// Render the AA / AAA pair as a 2-tab segmented control. Both pass/fail
+// verdicts are visible simultaneously; the active tab is the user's
+// currently-selected target Level (drives the ratio number's threshold
+// halo + persists across sessions). Clicking either switches Level.
+function renderLevelTabs(
+  resolved: A11yResolvedCategory,
+  ratio: number,
+): string {
+  const tab = (level: A11yLevel) => {
+    const threshold = thresholdFor(resolved, level);
+    const pass = ratio >= threshold;
+    const active = a11yLevel === level;
+    const title = (pass ? 'Passes' : 'Fails') + ' WCAG ' + level +
+      ' for ' + CATEGORY_LABEL[resolved] + ' (' + threshold + ' : 1)';
+    return '<button class="dm-contrast-tab" data-dm-action="set-a11y-level" data-dm-level="' + level +
+      '" data-active="' + (active ? 'true' : 'false') + '" data-pass="' + (pass ? 'true' : 'false') +
+      '" title="' + escapeAttr(title) + '">' +
+      (pass ? icon('check', 10) : icon('x', 10)) +
+      '<span class="dm-contrast-tab-label">' + level + '</span>' +
+    '</button>';
+  };
+  return '<div class="dm-contrast-tabs" role="tablist">' + tab('AA') + tab('AAA') + '</div>';
+}
+
+function renderContrastRow(prop: string, value: string): string {
+  const ctx = getContrastContext(prop, value);
+  if (!ctx) return '';
+
+  const fontSizePx = parseFloat(info?.computedStyles?.fontSize || '16') || 16;
+  const fwRaw = info?.computedStyles?.fontWeight || '400';
+  const fontWeight = fwRaw === 'bold' ? 700 : (parseInt(fwRaw, 10) || 400);
+
+  const res = evaluate({
+    fg: ctx.fg, bg: ctx.bg,
+    category: a11yCategory, level: a11yLevel,
+    prop, fontSizePx, fontWeight,
+  });
+  const meta = RATING_META[res.rating];
+
+  const fgCss = 'rgba(' + ctx.fg[0] + ',' + ctx.fg[1] + ',' + ctx.fg[2] + ',' + ctx.fg[3] + ')';
+  const bgCss = 'rgb(' + ctx.bg[0] + ',' + ctx.bg[1] + ',' + ctx.bg[2] + ')';
+  const safeFg = safeCssColor(fgCss) || '#000';
+  const safeBg = safeCssColor(bgCss) || '#fff';
+
+  const popoverHtml = contrastSettingsOpen ? renderContrastSettingsPopover(res.resolvedCategory) : '';
+
+  return '<div class="dm-contrast-row" data-dm-contrast-row>' +
+    '<span class="dm-contrast-chip" title="' + escapeAttr(ctx.pairLabel + ' • ' + bgCss) + '" style="background:linear-gradient(135deg, ' + safeFg + ' 50%, ' + safeBg + ' 50%);"></span>' +
+    '<span class="dm-contrast-ratio">' + res.ratio.toFixed(2) + ' : 1</span>' +
+    '<span class="dm-contrast-rating" data-rating="' + res.rating + '" title="' + escapeAttr(meta.description) + '">' + meta.label + '</span>' +
+    '<span class="dm-contrast-spacer"></span>' +
+    renderLevelTabs(res.resolvedCategory, res.ratio) +
+    '<button data-dm-action="toggle-contrast-settings" class="dm-contrast-settings-btn" data-active="' + (contrastSettingsOpen ? 'true' : 'false') + '" aria-label="Contrast settings" aria-expanded="' + (contrastSettingsOpen ? 'true' : 'false') + '" title="Contrast settings">' +
+      icon('slidersHorizontal', 12) +
+    '</button>' +
+    popoverHtml +
+  '</div>';
+}
+
 // Renders the inline custom color picker: HSV gradient + hue slider +
 // hex/R/G/B inputs. All interaction wires through `data-dm-color-*`
 // attributes that the input + pointer handlers below recognize.
@@ -1968,6 +2196,10 @@ function renderInlineColorPicker(prop: string, value: string): string {
   const hex = rgbToHexStr(r, g, b);
 
   return (
+    // Contrast checker — pairs the edited colour against the element's
+    // effective background (or the element's text colour when the prop is
+    // itself a fill). Hidden for box-shadow colours via getContrastContext.
+    renderContrastRow(prop, value) +
     // SV (saturation × value) gradient. Bottom→top black overlay handles
     // the V axis; left→right white→hue handles the S axis. Marker dot
     // positioned on top via percentage offsets.
@@ -4646,9 +4878,14 @@ function renderMediaSection(displayInfo: any, s: Record<string, string>, isImg: 
     preview = '<div style="margin-bottom:8px;border-radius:6px;overflow:hidden;max-height:140px;background:var(--dm-bg-secondary);display:flex;align-items:center;justify-content:center;padding:12px;"><img src="' + escapeAttr(m.src) + '" style="max-width:100%;max-height:120px;display:block;"/></div>';
   }
 
-  const meta = (m.naturalWidth && m.naturalHeight)
-    ? '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:6px;">' + m.naturalWidth + ' × ' + m.naturalHeight + 'px · ' + m.kind + '</div>'
-    : '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:6px;text-transform:capitalize;">' + m.kind + '</div>';
+  const metaParts: string[] = [];
+  if (m.naturalWidth && m.naturalHeight) metaParts.push(m.naturalWidth + ' × ' + m.naturalHeight + 'px');
+  metaParts.push(m.kind);
+  if (typeof m.bytes === 'number' && m.bytes > 0) metaParts.push(formatBytes(m.bytes));
+  const meta = '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:6px;' +
+    (m.naturalWidth ? '' : 'text-transform:capitalize;') + '">' +
+    escapeAttr(metaParts.join(' · ')) +
+    '</div>';
 
   const downloadBtn = '<button data-dm-action="download-media" style="width:100%;padding:7px 10px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:500;">' + icon('download', 11) + ' Download ' + escapeAttr(m.filename || m.kind) + '</button>';
 
@@ -7135,9 +7372,32 @@ function renderSettingsView(): string {
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Settings</span></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px;">' +
     renderMcpServerCard(sS, sT, lS, activeBtn, inactiveBtn) +
-    '<div style="' + sS + '"><div style="' + sT + '">Inspector overlay</div><div style="display:flex;flex-direction:column;gap:6px;">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Hover color</span><input type="color" data-dm-setting="hoverColor" value="' + escapeAttr(inspectorHoverColor) + '" style="width:28px;height:22px;border:1px solid var(--dm-input-border);border-radius:4px;cursor:pointer;background:none;padding:0;"/></div>' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Selection color</span><input type="color" data-dm-setting="selectColor" value="' + escapeAttr(inspectorSelectColor) + '" style="width:28px;height:22px;border:1px solid var(--dm-input-border);border-radius:4px;cursor:pointer;background:none;padding:0;"/></div></div></div>' +
+    (() => {
+      const swatch = (key: string, val: string) =>
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-size:10px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;text-transform:uppercase;letter-spacing:0.4px;">' + escapeAttr(val.toUpperCase()) + '</span>' +
+          '<input type="color" data-dm-setting="' + key + '" value="' + escapeAttr(val) + '" style="width:28px;height:22px;border:1px solid var(--dm-input-border);border-radius:4px;cursor:pointer;background:none;padding:0;"/>' +
+        '</div>';
+      const row = (label: string, key: string, val: string) =>
+        '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">' + label + '</span>' + swatch(key, val) + '</div>';
+      const resetBtn =
+        '<button data-dm-action="reset-inspector-overlay-colors" title="Restore default colours" style="display:flex;align-items:center;gap:3px;background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;padding:2px 4px;border-radius:3px;">' +
+          icon('rotateCcw', 11) +
+          '<span>Reset</span>' +
+        '</button>';
+      return '<div style="' + sS + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+          '<div style="' + sT + 'margin-bottom:0;">Inspector overlay</div>' +
+          resetBtn +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;">' +
+          row('Hover color', 'hoverColor', inspectorHoverColor) +
+          row('Selection color', 'selectColor', inspectorSelectColor) +
+          row('Margin overlay', 'marginColor', overlayMarginColor) +
+          row('Padding overlay', 'paddingColor', overlayPaddingColor) +
+        '</div>' +
+      '</div>';
+    })() +
     '<div style="' + sS + '"><div style="' + sT + '">Color Format</div><div style="display:flex;gap:4px;">' +
     '<button data-dm-color-format="hex" style="' + (cfHex ? activeBtn : inactiveBtn) + '">HEX</button>' +
     '<button data-dm-color-format="rgba" style="' + (cfRgba ? activeBtn : inactiveBtn) + '">RGBA</button>' +
@@ -7518,6 +7778,45 @@ function setupDelegation() {
         case 'toggle-changes-sort': {
           changesSortMenuOpen = !changesSortMenuOpen;
           render();
+          break;
+        }
+        case 'toggle-contrast-settings': {
+          contrastSettingsOpen = !contrastSettingsOpen;
+          render();
+          break;
+        }
+        case 'reset-inspector-overlay-colors': {
+          inspectorHoverColor = '#4F9EFF';
+          inspectorSelectColor = '#FF6B35';
+          overlayMarginColor = OVERLAY_MARGIN_DEFAULT;
+          overlayPaddingColor = OVERLAY_PADDING_DEFAULT;
+          chrome.storage?.local?.set?.({
+            'dm-inspector-hover-color': inspectorHoverColor,
+            'dm-inspector-select-color': inspectorSelectColor,
+            'dm-overlay-margin-color': overlayMarginColor,
+            'dm-overlay-padding-color': overlayPaddingColor,
+          });
+          send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
+          render();
+          break;
+        }
+        case 'set-a11y-category': {
+          const next = actionBtn.dataset.dmCat;
+          if (next === 'auto' || next === 'large' || next === 'normal' || next === 'graphics') {
+            a11yCategory = next;
+            chrome.storage?.local?.set?.({ 'dm-a11y-category': a11yCategory });
+            contrastSettingsOpen = false;
+            render();
+          }
+          break;
+        }
+        case 'set-a11y-level': {
+          const next = actionBtn.dataset.dmLevel;
+          if (next === 'AA' || next === 'AAA') {
+            a11yLevel = next;
+            chrome.storage?.local?.set?.({ 'dm-a11y-level': a11yLevel });
+            render();
+          }
           break;
         }
         case 'export-changes': {
@@ -8223,7 +8522,7 @@ function setupDelegation() {
     // Color trigger swatch — toggles the picker. Clicking the same
     // swatch twice closes it (matches the popover's click-outside
     // behaviour so users don't have to aim at empty space).
-    const colorTrigger = target.closest<HTMLInputElement>('[data-dm-color-trigger]');
+    const colorTrigger = target.closest<HTMLElement>('[data-dm-color-trigger]');
     if (colorTrigger) {
       const prop = colorTrigger.dataset.dmColorTrigger!;
       if (activeColorPickerProp === prop) {
@@ -8236,18 +8535,33 @@ function setupDelegation() {
       activeColorPickerProp = prop;
       colorPickerSearch = '';
       render();
-      // Re-focus and select after re-render
+      // After the picker re-renders, focus the hex input inside it so the
+      // user can type a value immediately. The swatch trigger itself is a
+      // <button> (no .select() / .value), so we query the hex input by its
+      // data attribute instead.
       setTimeout(() => {
-        const inp = root.querySelector<HTMLInputElement>('[data-dm-color-trigger="' + prop + '"]');
-        if (inp) { inp.focus(); inp.select(); }
+        const inp = root.querySelector<HTMLInputElement>('input[data-dm-color-hex="' + prop + '"]');
+        if (inp) {
+          inp.focus();
+          inp.select();
+        }
       }, 0);
       return;
+    }
+
+    // Close the contrast settings popover when a click lands outside it
+    // (and outside its trigger button). Set/category actions handle their
+    // own close inside the action switch above.
+    if (contrastSettingsOpen && !target.closest('[data-dm-contrast-settings]') && !target.closest('[data-dm-action="toggle-contrast-settings"]')) {
+      contrastSettingsOpen = false;
+      render();
     }
 
     // Click outside any color popover closes it
     if (activeColorPickerProp && !target.closest('[data-dm-color-popover]') && !target.closest('[data-dm-color-trigger]')) {
       activeColorPickerProp = null;
       colorPickerSearch = '';
+      contrastSettingsOpen = false;
       render();
     }
 
@@ -10134,6 +10448,20 @@ function setupDelegation() {
         send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
         return;
       }
+      if (key === 'marginColor') {
+        overlayMarginColor = settingInput.value;
+        // Content script subscribes to chrome.storage.onChanged for the
+        // band colours so a write here triggers a live repaint there.
+        chrome.storage?.local?.set?.({ 'dm-overlay-margin-color': overlayMarginColor });
+        render();
+        return;
+      }
+      if (key === 'paddingColor') {
+        overlayPaddingColor = settingInput.value;
+        chrome.storage?.local?.set?.({ 'dm-overlay-padding-color': overlayPaddingColor });
+        render();
+        return;
+      }
       if (key === 'cloudUrl') {
         // Strip trailing slash for stable comparison + storage. We don't
         // reconnect on every keystroke — only when the user clicks
@@ -10271,6 +10599,16 @@ function setupDelegation() {
       e.preventDefault();
       clearAllConfirming = false;
       deletingCommentId = null;
+      render();
+      return;
+    }
+
+    // Escape closes just the contrast settings popover (the picker stays
+    // open). Triggered before the picker-level Esc handler so the popover
+    // closes one layer at a time.
+    if (contrastSettingsOpen && e.key === 'Escape') {
+      e.preventDefault();
+      contrastSettingsOpen = false;
       render();
       return;
     }

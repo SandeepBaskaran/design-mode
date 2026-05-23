@@ -324,6 +324,26 @@ async function getChangesPayload() {
   };
 }
 
+// Look up the transferred size of a resource via the Performance API.
+// Returns undefined when the entry is missing (resource not navigated
+// through the network — e.g. inline data:, cross-origin opaque) or when
+// transferSize is 0 (cache hit on a CORS-opaque response). encodedBodySize
+// is the on-the-wire compressed bytes; falling back to decodedBodySize
+// approximates the uncompressed size when both are zero.
+function resolveResourceBytes(src: string): number | undefined {
+  try {
+    const url = new URL(src, location.href).href;
+    const entries = performance.getEntriesByName(url) as PerformanceResourceTiming[];
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const e = entries[i];
+      if (e.transferSize) return e.transferSize;
+      if (e.encodedBodySize) return e.encodedBodySize;
+      if (e.decodedBodySize) return e.decodedBodySize;
+    }
+  } catch {}
+  return undefined;
+}
+
 function notifyPanel(type: string, payload?: any) {
   // chrome.runtime.id goes undefined the moment the extension is reloaded
   // / disabled / removed while a content script is still alive on a page.
@@ -1434,7 +1454,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const svgMarkup = el.outerHTML;
         const blob = new Blob([svgMarkup], { type: 'image/svg+xml' });
         const url = URL.createObjectURL(blob);
-        media = { kind: 'svg', src: url, markup: svgMarkup, filename: 'icon.svg', isObjectUrl: true };
+        media = { kind: 'svg', src: url, markup: svgMarkup, filename: 'icon.svg', isObjectUrl: true, bytes: blob.size };
       } else if (tag === 'source' || tag === 'picture') {
         const inner = el.querySelector('img, video, source');
         if (inner) {
@@ -1453,9 +1473,27 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           const svgMarkup = innerSvg.outerHTML;
           const blob = new Blob([svgMarkup], { type: 'image/svg+xml' });
           const url = URL.createObjectURL(blob);
-          media = { kind: 'svg', src: url, markup: svgMarkup, filename: 'icon.svg', isObjectUrl: true };
+          media = { kind: 'svg', src: url, markup: svgMarkup, filename: 'icon.svg', isObjectUrl: true, bytes: blob.size };
         } else if (innerImg && !media) {
           media = { kind: 'image', src: innerImg.src, alt: innerImg.alt, filename: (innerImg.src.split('/').pop() || 'image').split('?')[0] };
+        }
+      }
+      // Resolve transferred bytes if we don't already have it. Prefer
+      // PerformanceResourceTiming (no network — the browser already fetched
+      // the resource). data: URLs are computed from the payload length.
+      // Cross-origin / opaque responses leave bytes undefined and the panel
+      // falls back to showing resolution + kind only.
+      if (media && media.src && media.bytes === undefined) {
+        media.bytes = resolveResourceBytes(media.src);
+        if (media.bytes === undefined && /^data:/.test(media.src)) {
+          const comma = media.src.indexOf(',');
+          if (comma > -1) {
+            const payload = media.src.slice(comma + 1);
+            const isB64 = /;base64/i.test(media.src.slice(0, comma));
+            media.bytes = isB64
+              ? Math.floor(payload.length * 3 / 4) - (payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0)
+              : decodeURIComponent(payload).length;
+          }
         }
       }
       sendResponse({ media });
@@ -1612,6 +1650,33 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'GET_COMPUTED_CSS': {
       const el = getElementById(msg.elementId || getSelectedElementId() || '');
       sendResponse({ css: el ? getComputedStylesBlock(el) : '' }); break;
+    }
+
+    case 'GET_EFFECTIVE_BG': {
+      // Walks the ancestor chain for the first opaque backgroundColor.
+      // Side panel calls this when computing contrast — the element's
+      // own background is transparent and we need the actual painted
+      // colour behind it. Falls back to #FFFFFF at the viewport.
+      const el = getElementById(msg.elementId || getSelectedElementId() || '');
+      if (!el) { sendResponse({ ok: false, color: null }); break; }
+      let cur: Element | null = el;
+      let result: string | null = null;
+      while (cur && cur !== document.documentElement) {
+        const bg = getComputedStyle(cur).backgroundColor;
+        if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+          result = bg;
+          break;
+        }
+        cur = cur.parentElement;
+      }
+      if (!result && document.documentElement) {
+        const htmlBg = getComputedStyle(document.documentElement).backgroundColor;
+        if (htmlBg && htmlBg !== 'transparent' && htmlBg !== 'rgba(0, 0, 0, 0)') {
+          result = htmlBg;
+        }
+      }
+      sendResponse({ ok: true, color: result || '#FFFFFF' });
+      break;
     }
 
     case 'PREVIEW_ORIGINAL': {
