@@ -22,6 +22,26 @@ if (chrome.sidePanel) {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 }
 
+// Returns false for URLs Chrome blocks extensions from scripting —
+// chrome:// internal pages, the Web Store, devtools, etc. Used to skip
+// inject + activate cleanly so the console stays quiet on those tabs.
+function isScriptableUrl(url: string | undefined | null): boolean {
+  if (!url) return false;
+  if (url.startsWith('chrome://')) return false;
+  if (url.startsWith('chrome-extension://')) return false;
+  if (url.startsWith('chrome-search://')) return false;
+  if (url.startsWith('chrome-untrusted://')) return false;
+  if (url.startsWith('devtools://')) return false;
+  if (url.startsWith('edge://')) return false;
+  if (url.startsWith('about:')) return false;
+  try {
+    const u = new URL(url);
+    if (u.hostname === 'chromewebstore.google.com') return false;
+    if (u.hostname === 'chrome.google.com' && u.pathname.startsWith('/webstore')) return false;
+  } catch {}
+  return true;
+}
+
 // When side panel connects, pin the current tab and auto-activate
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === 'sidepanel') {
@@ -30,6 +50,14 @@ chrome.runtime.onConnect.addListener((port) => {
       if (tab?.id) {
         pinnedTabId = tab.id;
         pinnedTabUrl = tab.url || null;
+        const scriptable = isScriptableUrl(tab.url);
+        if (!scriptable) {
+          // Chrome internal pages / Web Store / devtools — extension can't
+          // script these. Quietly ship a disabled INIT_STATE so the side
+          // panel renders without retrying.
+          try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: pinnedTabUrl }); } catch {}
+          return;
+        }
         try {
           await injectContentScript(tab.id);
         } catch {}
@@ -39,7 +67,13 @@ chrome.runtime.onConnect.addListener((port) => {
             const state = await chrome.tabs.sendMessage(tab.id!, { type: 'GET_STATE' });
             try { port.postMessage({ type: 'INIT_STATE', ...state, pinnedUrl: pinnedTabUrl }); } catch {}
           } catch (err) {
-            console.error('[DM] Auto-activate failed:', err);
+            // "Could not establish connection" on unscriptable / racing tabs
+            // is expected — don't pollute the console. Anything else is
+            // worth flagging.
+            const msg = String((err as any)?.message || err);
+            if (!/Could not establish connection|Receiving end does not exist/i.test(msg)) {
+              console.error('[DM] Auto-activate failed:', err);
+            }
             try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: pinnedTabUrl }); } catch {}
           }
         }, 300);
@@ -359,6 +393,13 @@ async function injectContentScript(tabId: number) {
     try {
       await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
     } catch (err) {
+      // Quiet the expected failures: chrome://, chrome-extension://,
+      // chromewebstore.google.com, etc. Chrome blocks scripting these by
+      // design — logging looks like a real error to users.
+      const msg = String((err as any)?.message || err);
+      if (/cannot be scripted|Cannot access|chrome:\/\/|chrome-extension:\/\/|chrome-untrusted:\/\/|chromewebstore|extensions gallery/i.test(msg)) {
+        return;
+      }
       console.error('[DM] Failed to inject content script:', err);
     }
   }
@@ -379,6 +420,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (tabId !== pinnedTabId) return;
   if (changeInfo.status !== 'complete') return;
   pinnedTabUrl = tab.url || pinnedTabUrl;
+  if (!isScriptableUrl(tab.url)) return;
   try {
     await injectContentScript(tabId);
     setTimeout(async () => {
