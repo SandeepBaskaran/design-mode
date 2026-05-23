@@ -33,6 +33,18 @@ outline). The side panel mirrors whatever you have selected.
   export, just like any other edit. Edge handles change a single dimension;
   corner handles change both. Resizing from the Design tab keeps the handles
   in sync.
+- **Drag to move**: with an element selected, drag its body (anywhere
+  outside the 8 handles) to reposition it. The cursor switches to `move`
+  the moment you're over the selection; the outline + handles follow the
+  cursor, and the Design tab's **X** / **Y** fields tick along. Hold
+  **Shift** to lock motion to the dominant axis. On release the new
+  `left`/`top` land in the **Changes** tab as a grouped "Move" entry and
+  in the CSS export. Elements that were `position: static` auto-promote
+  to `relative` on first drag (so `left`/`top` actually take effect) —
+  the promotion is captured into the same Changes entry, so a single
+  undo reverts both the position switch and the offsets. In multi-select,
+  dragging any selected member moves the whole set together as one undo
+  step.
 
 ### 1.3 Multi-select (Shift-click, or the Layers-tab toggle)
 

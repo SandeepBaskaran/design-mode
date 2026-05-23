@@ -5,7 +5,7 @@
 import { getOrAssignId, getElementById, getElementRect, generateSelector, getBreadcrumbs, getComputedStyleSubset } from './helpers';
 import { showHover, hideHover, showSelect, updateSelectPosition, isOverlayElement } from './overlays';
 import { isMultiSelectActive, enableMultiSelect, toggleSelection, getSelectedIds } from './multi-select';
-import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots } from './measure-guides';
+import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag } from './measure-guides';
 
 export type IconInfo = { library: string; name: string; availableIcons?: string[] };
 
@@ -114,6 +114,11 @@ function handleMouseOver(e: MouseEvent) {
   showHover(t);
 
   const hovId = getOrAssignId(t);
+  // Cursor swap: `move` over the current selection (or any member of the
+  // multi-select set) to telegraph that the body of that element is draggable.
+  // Falls back to the default inspect crosshair anywhere else.
+  const isDragTarget = hovId === selectedId || (isMultiSelectActive() && getSelectedIds().includes(hovId));
+  document.documentElement.style.cursor = isDragTarget ? 'move' : 'crosshair';
   const hovRect = getElementRect(t);
   showAxisGuides(hovRect, 'hover');
   // With a single element selected, hovering another shows the edge-to-edge
@@ -162,11 +167,31 @@ function handleMouseOut() {
 // Shift+click, which extends a selection). Inspect mode hijacks clicks for
 // element selection, so a page text selection is never wanted here — matches
 // VisBug, which keeps the viewport selection-free while its tool is active.
+//
+// Also the entry point for body-drag: when the mousedown lands on the
+// current selection (or any member of the multi-select), arm a potential
+// drag — armMoveDrag waits for a 3 px movement before committing, so a
+// plain click on the same element still falls through to handleClick.
 function handleMouseDown(e: MouseEvent) {
   const t = e.target as HTMLElement;
   if (!t || isDMElement(t)) return;
   e.preventDefault();
-  if (e.shiftKey) window.getSelection()?.removeAllRanges();
+  if (e.shiftKey) {
+    window.getSelection()?.removeAllRanges();
+    // Shift-mousedown is the "add to multi-select" gesture; never start a
+    // drag — let the click handler toggle membership instead.
+    return;
+  }
+  const tId = t.dataset.dmId;
+  if (!tId) return;
+  if (isMultiSelectActive() && getSelectedIds().includes(tId)) {
+    const members = getSelectedIds()
+      .map(id => getElementById(id))
+      .filter((el): el is HTMLElement => !!el);
+    armMoveDrag(t, members, selectedId, e);
+  } else if (tId === selectedId) {
+    armMoveDrag(t, [t], selectedId, e);
+  }
 }
 
 function handleClick(e: MouseEvent) {

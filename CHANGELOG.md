@@ -23,6 +23,16 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   `width`/`height` land in the Changes tab as a grouped "Resize" entry
   and export as CSS. Edge handles change one dimension, corners change
   both; resizing from the Design tab keeps the handles in sync.
+- **Drag-to-move the selected element.** Dragging the body of the
+  selected element (anywhere outside the 8 resize handles) moves it
+  live — the Design tab's X / Y fields tick along, the orange outline
+  follows the cursor, and the change persists through the change-tracker
+  as a grouped "Move" entry that exports as CSS. Holding Shift constrains
+  motion to the dominant axis. Elements that were `position: static`
+  auto-promote to `relative` on first drag so `left` / `top` become
+  live (the promotion is captured into the same Changes entry, so undo
+  reverts it together). In multi-select, dragging any selected member
+  moves the whole set together as a single undo step.
 - **Shift-click multi-select on the canvas.** Shift-clicking elements
   on the page adds them to the multi-select set (previously only the
   Layers-tab toggle did this) and draws the pixel spacing between the

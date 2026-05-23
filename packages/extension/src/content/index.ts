@@ -32,7 +32,7 @@ import {
 // Design/Layout mode — component palette + wireframe placement
 import { getComponentsByCategory, placeComponent } from './design-mode';
 // Measurement guides — axis lines, distance pills, resize handles
-import { setResizeCommitHandler, setResizePreviewHandler, teardownMeasureGuides, resetMeasureTeardown, showResizeDots, repositionResizeDots } from './measure-guides';
+import { setResizeCommitHandler, setResizePreviewHandler, setMoveCommitHandler, setMovePreviewHandler, teardownMeasureGuides, resetMeasureTeardown, showResizeDots, repositionResizeDots } from './measure-guides';
 // Enhanced export — markdown for Copy Prompt
 import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } from './enhanced-export';
 // Keyboard shortcuts
@@ -100,6 +100,45 @@ setResizeCommitHandler((id, width, height) => {
 // patches just its W/H fields so they tick along without a full reselect.
 setResizePreviewHandler((id, width, height) => {
   notifyPanel('LIVE_RESIZE', { elementId: id, width, height });
+});
+
+// Body-drag commit: final left/top per element (and `position: relative` on
+// any element that was promoted from `static`) lands here on mouseup. All
+// entries share one groupId so the multi-select drag is one undo step in
+// the Changes tab.
+setMoveCommitHandler((entries) => {
+  if (!entries.length) return;
+  const meta = { groupId: `move-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, groupLabel: 'Move' };
+  for (const entry of entries) {
+    const el = getElementById(entry.id);
+    if (!el) continue;
+    const cs = window.getComputedStyle(el);
+    const beforeLeft = cs.left, beforeTop = cs.top, beforePos = cs.position;
+    if (entry.promotedPosition) {
+      applyWithCompanions(entry.id, 'position', entry.promotedPosition, undefined, meta);
+      undoStack.push({ kind: 'style', elementId: entry.id, property: 'position', oldValue: beforePos, newValue: entry.promotedPosition });
+    }
+    if (entry.left) {
+      applyWithCompanions(entry.id, 'left', entry.left, undefined, meta);
+      undoStack.push({ kind: 'style', elementId: entry.id, property: 'left', oldValue: beforeLeft, newValue: entry.left });
+    }
+    if (entry.top) {
+      const change = applyWithCompanions(entry.id, 'top', entry.top, undefined, meta);
+      undoStack.push({ kind: 'style', elementId: entry.id, property: 'top', oldValue: beforeTop, newValue: entry.top, changeId: change?.id });
+    }
+  }
+  redoStack.length = 0;
+  const focusId = getSelectedElementId();
+  const focusEl = focusId ? getElementById(focusId) : null;
+  if (focusEl) onElementSelected(buildElementInfo(focusEl));
+  getChangesPayload().then(p => notifyPanel('CHANGES_UPDATE', p));
+});
+
+// Live (uncommitted) position while a body drag is in flight — the panel
+// patches its X/Y fields (and Position select if the static-promotion just
+// landed) so they tick along without a full reselect.
+setMovePreviewHandler((id, left, top, promotedPosition) => {
+  notifyPanel('LIVE_MOVE', { elementId: id, left, top, position: promotedPosition });
 });
 
 /* —— Helpers —— */

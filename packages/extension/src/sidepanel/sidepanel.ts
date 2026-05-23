@@ -1416,6 +1416,17 @@ chrome.runtime.onMessage.addListener((msg) => {
     if (msg.height) info.computedStyles.height = msg.height;
     if (tab === 'design') render();
   }
+  // Live left/top streamed while the selected element's body is dragged.
+  // Patch the panel's X/Y fields — plus `position` on the first frame after
+  // a static-element auto-promotion, otherwise the offset row would stay
+  // hidden mid-drag (`offsetActive` gates on position !== 'static').
+  if (msg.type === 'LIVE_MOVE') {
+    if (!info || info.id !== msg.elementId || !info.computedStyles) return;
+    if (msg.position) info.computedStyles.position = msg.position;
+    if (msg.left) info.computedStyles.left = msg.left;
+    if (msg.top) info.computedStyles.top = msg.top;
+    if (tab === 'design') render();
+  }
   if (msg.type === 'COMMENT_BUBBLE_CLICKED') {
     const c = comments.find(cc => cc.id === msg.commentId);
     if (c) { tab = 'changes'; viewingCommentId = msg.commentId; editingCommentId = null; commentMode = false; render(); }

@@ -133,6 +133,14 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 1.16 | Resize follows scroll | Resize, then scroll | All eight handles stay anchored to the element |
 | 1.17 | Shift-select pairwise distances | Select an element, then Shift+click a second | Both outline (dashed); pairwise distance pills render between them; Shift+click more to extend |
 | 1.18 | Pairwise distances persist on hover/scroll | With ≥2 shift-selected, move the mouse away and scroll | Pairwise pills remain and stay anchored (not cleared by mouse-out) |
+| 1.19 | Move cursor over selection | Select an element, then hover its body (not a handle) | Cursor swaps to `move`; cursor returns to crosshair when hovering any non-selected element |
+| 1.20 | Drag-to-move is live + guided | Select a non-static element, drag its body | Element moves live; orange outline + handles follow the cursor; Design-tab **X** / **Y** fields tick during the drag; orange axis guides show new edges |
+| 1.21 | Move persists + exports | Release the drag, open Changes tab + Export CSS | New `left`/`top` appear as a single **Move** group in Changes and in the exported CSS; Cmd/Ctrl+Z reverts both offsets together |
+| 1.22 | Move under-threshold = click | Mousedown on the selected element, release without moving | No drag fires; no Changes entry; selection stays as-is |
+| 1.23 | Shift-axis lock | Drag the selected element with **Shift** held | Motion locks to the dominant axis (purely horizontal or purely vertical) |
+| 1.24 | Static-promote on first drag | Pick a `position: static` element (e.g. an in-flow heading), drag its body | Element moves; Design tab's Position field becomes `relative`; X/Y inputs appear with the drag delta; Changes shows the **Move** group with three entries (`position`, `left`, `top`); a single undo reverts all three |
+| 1.25 | Multi-select drag in lockstep | Shift-click two elements, then drag either one | Both elements translate by the same delta; one undo reverts the whole gesture |
+| 1.26 | Move follows scroll | Move an element, then scroll the page | The selection box + handles stay anchored to the element |
 
 ---
 

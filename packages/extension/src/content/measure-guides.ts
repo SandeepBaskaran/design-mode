@@ -39,6 +39,42 @@ function schedulePreview(id: string, w: string, h: string) {
   });
 }
 
+// Move commit — final left/top (and `position: relative` for elements that
+// were promoted from `static`) per element after a body drag. One handler
+// receives the whole multi-select set so index.ts can group them under a
+// single undo / "Move" change entry.
+export interface MoveCommitEntry {
+  id: string;
+  left: string;
+  top: string;
+  promotedPosition?: 'relative';
+}
+type MoveCommit = (entries: MoveCommitEntry[]) => void;
+let moveCommit: MoveCommit | null = null;
+export function setMoveCommitHandler(fn: MoveCommit) { moveCommit = fn; }
+
+// Live left/top while a body drag is in flight — drives the side panel's
+// X/Y fields. Only the element the panel is currently showing gets a
+// preview; the rest move in lockstep on screen and settle on mouseup.
+type MovePreview = (elementId: string, left: string, top: string, promotedPosition?: 'relative') => void;
+let movePreview: MovePreview | null = null;
+export function setMovePreviewHandler(fn: MovePreview) { movePreview = fn; }
+let movePreviewRaf = 0;
+let pendingMovePreview: { id: string; left: string; top: string; promotedPosition?: 'relative' } | null = null;
+function scheduleMovePreview(id: string, left: string, top: string, promotedPosition?: 'relative') {
+  pendingMovePreview = { id, left, top, promotedPosition };
+  if (movePreviewRaf) return;
+  movePreviewRaf = requestAnimationFrame(() => {
+    movePreviewRaf = 0;
+    if (pendingMovePreview && movePreview) {
+      movePreview(pendingMovePreview.id, pendingMovePreview.left, pendingMovePreview.top, pendingMovePreview.promotedPosition);
+    }
+    pendingMovePreview = null;
+  });
+}
+
+const DRAG_THRESHOLD_PX = 3;
+
 let teardown = false;
 
 let axisLayer: HTMLDivElement | null = null;
@@ -309,6 +345,119 @@ function startResize(el: HTMLElement, dir: string, e: MouseEvent) {
 function px(v: string): number {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+// ── Drag-to-move (body of the selected element) ─────────────────────────
+// Mirrors the resize affordance: the eight dots resize, the body drags.
+// Writes inline left/top during the drag (auto-promoting `position: static`
+// to `relative` so left/top become live) and hands the final values to
+// index.ts on mouseup, where they commit through the change-tracker.
+
+// `members` is the full set of elements that should move together — single
+// element for single-select, all selected ids for multi-select. `previewId`
+// is whichever element the side panel is currently rendering (only that
+// one needs LIVE_MOVE updates).
+export function armMoveDrag(anchor: HTMLElement, members: HTMLElement[], previewId: string | null, e: MouseEvent) {
+  if (teardown) return;
+  const startX = e.clientX, startY = e.clientY;
+  let started = false;
+  let driver: ReturnType<typeof startMove> | null = null;
+
+  const onMove = (ev: MouseEvent) => {
+    if (!started) {
+      if (Math.abs(ev.clientX - startX) < DRAG_THRESHOLD_PX && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD_PX) return;
+      started = true;
+      driver = startMove(anchor, members, previewId, startX, startY);
+    }
+    driver?.onMove(ev);
+  };
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove, true);
+    document.removeEventListener('mouseup', onUp, true);
+    if (!started) return;
+    driver?.onUp();
+    // Suppress the trailing click — otherwise the inspector's click handler
+    // would re-fire selection (and worse, toggle the element off in
+    // multi-select). One-shot, capture-phase, removes itself.
+    const suppress = (clickEv: MouseEvent) => {
+      clickEv.preventDefault();
+      clickEv.stopPropagation();
+      clickEv.stopImmediatePropagation();
+      document.removeEventListener('click', suppress, true);
+    };
+    document.addEventListener('click', suppress, true);
+  };
+  document.addEventListener('mousemove', onMove, true);
+  document.addEventListener('mouseup', onUp, true);
+}
+
+function startMove(anchor: HTMLElement, members: HTMLElement[], previewId: string | null, startX: number, startY: number) {
+  // Snapshot each member's pre-drag position so the delta lands on the
+  // original offset (not a stale rect that has already drifted).
+  const states = members.map(el => {
+    const cs = window.getComputedStyle(el);
+    const wasStatic = cs.position === 'static';
+    return {
+      el,
+      id: el.dataset.dmId || null,
+      // `static` elements have no resolved left/top, so the drag baseline
+      // is 0 — left/top will be set fresh once we promote to `relative`.
+      baseLeft: wasStatic ? 0 : px(cs.left),
+      baseTop:  wasStatic ? 0 : px(cs.top),
+      promoted: wasStatic,
+    };
+  });
+  for (const s of states) {
+    if (s.promoted) s.el.style.setProperty('position', 'relative', 'important');
+  }
+  setOverlayTransitions(false);
+  const previewState = previewId ? states.find(s => s.id === previewId) : null;
+
+  return {
+    onMove(ev: MouseEvent) {
+      let dx = ev.clientX - startX;
+      let dy = ev.clientY - startY;
+      // Shift constrains motion to the dominant axis — Figma/Sketch convention.
+      if (ev.shiftKey) {
+        if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0;
+      }
+      for (const s of states) {
+        // !important so the live drag overrides any existing tracked left/top
+        // rule (the change-tracker writes !important too).
+        s.el.style.setProperty('left', (s.baseLeft + dx) + 'px', 'important');
+        s.el.style.setProperty('top',  (s.baseTop  + dy) + 'px', 'important');
+      }
+      const rect = getElementRect(anchor);
+      showSelect(anchor);
+      showAxisGuides(rect, 'select');
+      repositionResizeDots();
+      if (previewState && previewState.id) {
+        scheduleMovePreview(
+          previewState.id,
+          Math.round(previewState.baseLeft + dx) + 'px',
+          Math.round(previewState.baseTop  + dy) + 'px',
+          previewState.promoted ? 'relative' : undefined,
+        );
+      }
+    },
+    onUp() {
+      setOverlayTransitions(true);
+      hideAxisGuides();
+      const entries: MoveCommitEntry[] = [];
+      for (const s of states) {
+        const left = s.el.style.getPropertyValue('left');
+        const top  = s.el.style.getPropertyValue('top');
+        // Drop the inline values + the inline position promotion — the
+        // change-tracker rule that index.ts writes next owns them.
+        s.el.style.removeProperty('left');
+        s.el.style.removeProperty('top');
+        if (s.promoted) s.el.style.removeProperty('position');
+        if (s.id) entries.push({ id: s.id, left, top, promotedPosition: s.promoted ? 'relative' : undefined });
+      }
+      if (entries.length && moveCommit) moveCommit(entries);
+      repositionResizeDots();
+    },
+  };
 }
 
 // ── Rendering helpers ──
