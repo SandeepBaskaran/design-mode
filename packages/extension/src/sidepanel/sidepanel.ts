@@ -177,7 +177,7 @@ let textChanges: TextChange[] = [];
 let domChanges: DomChange[] = [];
 let comments: CommentEntry[] = [];
 let batchAppliedChanges: Set<string> = new Set();
-let mediaInfo: { kind: string; src: string; alt?: string; naturalWidth?: number; naturalHeight?: number; filename?: string; markup?: string; isObjectUrl?: boolean; poster?: string } | null = null;
+let mediaInfo: { kind: string; src: string; alt?: string; naturalWidth?: number; naturalHeight?: number; filename?: string; markup?: string; isObjectUrl?: boolean; poster?: string; bytes?: number } | null = null;
 let lastMediaElementId: string | null = null;
 let activeColorPickerProp: string | null = null;
 // Tokens-only dropdown (a focus-driven shortcut on hex inputs) — distinct
@@ -433,6 +433,16 @@ chrome.storage?.session?.get?.(['dm-section-states'], (result: any) => {
   }
   render();
 });
+
+// Compact human-readable byte formatter (1 decimal place; B / KB / MB / GB).
+// Uses 1024 base, matching how dev tools / file managers display sizes.
+function formatBytes(n: number): string {
+  if (!isFinite(n) || n < 0) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10 * 1024 ? 1 : 0) + ' KB';
+  if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0) + ' MB';
+  return (n / 1024 / 1024 / 1024).toFixed(1) + ' GB';
+}
 
 function parseNumeric(val: string): { num: number; unit: string } | null {
   const m = val.match(/^(-?[\d.]+)\s*(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|deg|s|ms)?$/);
@@ -4858,9 +4868,14 @@ function renderMediaSection(displayInfo: any, s: Record<string, string>, isImg: 
     preview = '<div style="margin-bottom:8px;border-radius:6px;overflow:hidden;max-height:140px;background:var(--dm-bg-secondary);display:flex;align-items:center;justify-content:center;padding:12px;"><img src="' + escapeAttr(m.src) + '" style="max-width:100%;max-height:120px;display:block;"/></div>';
   }
 
-  const meta = (m.naturalWidth && m.naturalHeight)
-    ? '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:6px;">' + m.naturalWidth + ' × ' + m.naturalHeight + 'px · ' + m.kind + '</div>'
-    : '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:6px;text-transform:capitalize;">' + m.kind + '</div>';
+  const metaParts: string[] = [];
+  if (m.naturalWidth && m.naturalHeight) metaParts.push(m.naturalWidth + ' × ' + m.naturalHeight + 'px');
+  metaParts.push(m.kind);
+  if (typeof m.bytes === 'number' && m.bytes > 0) metaParts.push(formatBytes(m.bytes));
+  const meta = '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:6px;' +
+    (m.naturalWidth ? '' : 'text-transform:capitalize;') + '">' +
+    escapeAttr(metaParts.join(' · ')) +
+    '</div>';
 
   const downloadBtn = '<button data-dm-action="download-media" style="width:100%;padding:7px 10px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:500;">' + icon('download', 11) + ' Download ' + escapeAttr(m.filename || m.kind) + '</button>';
 
