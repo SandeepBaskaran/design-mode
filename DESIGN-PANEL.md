@@ -88,7 +88,7 @@ The section's contents adapt to the media kind detected at runtime (`mediaInfo.k
 | Element | What | Behavior |
 |---|---|---|
 | **Preview** | Renders the image inline (max 140px tall) so you can confirm what you're looking at. | Visual only. |
-| **Meta line** | `naturalWidth × naturalHeight px · image` — the source's natural dimensions and the kind label. | Read-only. |
+| **Meta line** | `naturalWidth × naturalHeight px · image · size` — natural dimensions, kind label, and transferred file size (e.g. `1200 × 630px · image · 124 KB`) when available. Size is read from the browser's resource timing (no extra request) and omitted for cross-origin opaque resources. | Read-only. |
 | **Download `<filename>`** | Button (`download` icon). Clicking saves the file via `chrome.downloads`. The filename comes from the source URL (or `image.png` as a fallback). Object-URL resources (e.g. blob: URLs) are also supported. | Always enabled when the source loaded. |
 | **Src** | Text input bound to `src` (the `src` attribute, not a CSS property). Edit to swap the image source live. | Always editable. |
 | **Fit** (select) | Bound to `object-fit`. Values: `fill` (default — stretch), `contain` (fit inside, letterbox), `cover` (fill, may crop), `none` (natural size, may overflow), `scale-down` (smaller of `none` / `contain`). | Always editable. |
@@ -391,6 +391,10 @@ Visualises the box-model:
 - Outer (dashed border) = margin.
 - Inner = padding.
 - Each side has its own input.
+- On the page itself, hovering or selecting an element draws matching
+  box-model bands on the overlay — light red outside the box (margin), light
+  green between border and content (padding). Colours are configurable in
+  Settings → Inspector overlay; bands hide when the spacing is zero.
 
 **Figma equivalent**: padding fields in Auto Layout. Figma doesn't expose margin (CSS-only concept).
 
@@ -793,6 +797,22 @@ The colour picker has three entry points, each surfacing the same site-colour to
 | Focus the **hex input** | Tokens-only dropdown floating beneath the input | Quick access to site colours without opening the full HSV. Closes when focus leaves. |
 | Type into the **hex input** | (Same input, no popup) — typed value applies on commit | Paste a hex / rgb / hsl / colour-name / `var(--token)` directly. |
 | **Pick** button (inside HSV panel) | Chrome `EyeDropper` system picker | Sample any pixel on screen. Falls back to a friendly alert on Firefox / Safari. |
+
+### Inline WCAG contrast checker
+
+When the colour applies to text/foreground (`color`, `fill`, `stroke`,
+`accent-color`, `caret-color`, `text-shadow`), the picker shows a contrast row
+above the HSV gradient:
+
+| Element | What |
+|---|---|
+| **Ratio + chip** | Contrast ratio against the effective background (ancestor-walked when the element's own background is transparent), with a diagonal-split preview chip. |
+| **Absolute rating** | Excellent / Good / Poor / Very Poor against the 7 / 4.5 / 3 thresholds. |
+| **AA / AAA tabs** | Both pass/fail verdicts shown at once. |
+| **Category override** (popover) | Auto (inferred from the property + computed font size) / Large / Normal / Graphics; persists with the AA/AAA level via `chrome.storage.local`. |
+
+Fill-layer and gradient-stop colours pair against the element's text colour
+instead; box-shadow colours skip the row.
 
 ## Advanced (chevron in section header)
 

@@ -259,6 +259,9 @@ side panel is open.
 ### 2.15 Media (when an `<img>`, `<video>`, `<audio>`, or SVG is selected)
 
 - Preview thumbnail.
+- Meta line shows resolution, kind, and transferred file size (e.g.
+  `1200 × 630px · image · 124 KB`) — size is read from the browser's resource
+  timing (no extra network) and omitted for cross-origin opaque resources.
 - For images: src input, alt text, object-fit dropdown.
 - For SVG: **Copy SVG markup** button.
 - **Download** button to save the asset locally.
@@ -271,6 +274,11 @@ side panel is open.
 - Picking a token writes `var(--name)` instead of a raw hex. The Copy
   Prompt output then resolves matching values back to `var(--name)`
   automatically.
+- **Inline WCAG contrast checker** (when picking a foreground colour): the
+  contrast ratio against the effective background, an absolute rating
+  (Excellent / Good / Poor / Very Poor), AA and AAA pass/fail tabs, and a
+  Category override (Auto / Large / Normal / Graphics). Category and level
+  persist across sessions.
 
 ---
 
@@ -555,6 +563,8 @@ Open via the gear icon in the header.
 | **Auto-connect** | Reconnect to the MCP server automatically when it comes back online. | on |
 | **Inspector hover color** | Colour of the hover overlay. Edits are persisted **and** broadcast to the content script via `SP_SET_INSPECTOR_COLORS` so the live overlay updates immediately. | `#4F9EFF` |
 | **Inspector selection color** | Colour of the selection overlay. Same persistence + broadcast as above. | `#FF6B35` |
+| **Inspector margin overlay color** | Colour of the margin band drawn outside the element box on the hover/selection overlay. Persisted + broadcast; the overlay repaints live. | `#FF6363` |
+| **Inspector padding overlay color** | Colour of the padding band drawn between the border and content. Persisted + broadcast; the overlay repaints live. | `#7CC886` |
 | **Color format** | Display colours in the editor as `HEX` / `RGBA` / `HSL`. | `HEX` |
 | **Screenshot capture** | What the camera button does. `Clipboard` copies the PNG; `Download` saves it; `Both` does both. | `Clipboard` |
 | **Theme** | `System` / `Dark` / `Light`. | `System` |

@@ -6,6 +6,42 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — 2026-05-23
+
+### Added
+
+- **Margin & padding overlay bands.** The on-page hover and selection overlay
+  now draws DevTools-style box-model bands — light red outside the element box
+  for margin, light green between the border and content for padding. Bands
+  hide when the corresponding spacing is all-zero.
+- **All four inspector overlay colours configurable.** Settings → Inspector
+  overlay now exposes hover, selection, margin, and padding colours with hex
+  codes next to each swatch and a Reset link that restores the defaults.
+- **WCAG contrast checker in the colour picker.** Picking a foreground colour
+  shows the contrast ratio against the effective background, an absolute rating
+  (Excellent / Good / Poor / Very Poor), AA and AAA pass/fail tabs, and a
+  Category override (Auto / Large / Normal / Graphics). Category and level
+  persist across sessions.
+- **File size in the Media section.** The Media meta line now shows the
+  transferred size beside the resolution (e.g. `1200 × 630px · image · 124 KB`),
+  read from the browser's resource timing — no extra network request.
+
+### Changed
+
+- The website Open Graph image is now a static `og-image.png` instead of the
+  dynamic `opengraph-image` route, so link unfurls use the designed asset.
+
+### Fixed
+
+- The hover and selection overlay colour swatches now repaint the overlay live
+  the moment you change them — previously they persisted to storage but had no
+  visible effect.
+- The colour picker focuses its hex input on swatch click (was throwing a
+  TypeError trying to `.select()` the swatch button).
+- The background script no longer logs expected "cannot be scripted" /
+  "could not establish connection" errors on pages Chrome refuses to script
+  (`chrome://`, the Web Store, devtools); it ships a disabled state instead.
+
 ## [1.4.0] — 2026-05-23
 
 ### Added

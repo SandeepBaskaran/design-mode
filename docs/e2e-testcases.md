@@ -35,6 +35,7 @@ before ticking.
 | 0.9  | Browser-session boundary | Close & reopen browser | Session storage is cleared (per `chrome.storage.session` semantics) — fresh state |
 | 0.10 | Theme toggle | Click sun/moon in header | Side panel + page overlays switch theme; persists across reloads |
 | 0.11 | Side-panel toggle shortcut | Press `Alt+D` (Chrome command, registered in `manifest.json`) | Side panel toggles open / close |
+| 0.12 | Unscriptable page | Open the panel on a `chrome://` page, the Chrome Web Store, or a devtools page | No "cannot be scripted" / "could not establish connection" error spam in the background console; the panel shows a disabled / empty state, not a crash |
 
 ---
 
@@ -49,13 +50,15 @@ unless noted otherwise.
 | 0.5.2 | Theme picker (system / dark / light) | Pick each | Side panel + page overlays update; persists across reloads |
 | 0.5.3 | Color format (HEX / RGBA / HSL) | Switch each option | All colour text inputs in the Design tab re-render in the chosen format on next selection; existing rules keep their stored format |
 | 0.5.4 | Screenshot capture mode | Switch among Clipboard / Download / Both | Subsequent camera-button screenshots respect the mode |
-| 0.5.5 | Inspector hover colour | Pick a custom colour (e.g. green) | Hover overlay on the page renders in the new colour |
-| 0.5.6 | Inspector selection colour | Pick a custom colour | Selection overlay renders in the new colour |
+| 0.5.5 | Inspector hover colour | Pick a custom colour (e.g. green) | Hover overlay repaints **live** (no reload) in the new colour; the swatch shows its hex |
+| 0.5.6 | Inspector selection colour | Pick a custom colour | Selection overlay repaints **live** in the new colour; swatch shows its hex |
 | 0.5.7 | MCP — port | Change to e.g. `9970` | Persists; affects the WebSocket URL the extension dials on next connect |
 | 0.5.8 | MCP — auto-connect | Toggle off | Side panel doesn't auto-dial on open; the indicator stays grey until manually connected |
 | 0.5.9 | MCP — mode (Cloud / Local / Self-hosted) | Switch each | Cloud (default for fresh installs) uses `https://mcp.designmode.app` (or the configured URL); Local uses `ws://localhost:<port>`; Self-hosted exposes a URL field |
 | 0.5.10| MCP — cloud token & tenant | Enter a registered token + tenant ID | Stored in `chrome.storage.local`; shown masked; clearing re-disconnects |
-| 0.5.11| Reset to defaults | Click Reset | Theme back to system, colour format to HEX, hover/select colours to defaults, MCP port to default |
+| 0.5.11| Reset to defaults | Click Reset | Theme back to system, colour format to HEX, all four overlay colours (hover / selection / margin / padding) to defaults, MCP port to default |
+| 0.5.12| Inspector margin overlay colour | Pick a custom colour | Margin bands on the hover/selection overlay render in it and repaint live (default `#FF6363`) |
+| 0.5.13| Inspector padding overlay colour | Pick a custom colour | Padding bands render in it and repaint live (default `#7CC886`); the ↺ Reset link beside the overlay colours restores all four |
 
 ---
 
@@ -141,6 +144,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 1.24 | Static-promote on first drag | Pick a `position: static` element (e.g. an in-flow heading), drag its body | Element moves; Design tab's Position field becomes `relative`; X/Y inputs appear with the drag delta; Changes shows the **Move** group with three entries (`position`, `left`, `top`); a single undo reverts all three |
 | 1.25 | Multi-select drag in lockstep | Shift-click two elements, then drag either one | Both elements translate by the same delta; one undo reverts the whole gesture |
 | 1.26 | Move follows scroll | Move an element, then scroll the page | The selection box + handles stay anchored to the element |
+| 1.27 | Margin/padding overlay bands | Hover or select an element with non-zero margin **and** padding | Light-red margin band paints outside the element box; light-green padding band paints between border and content; bands hide when the spacing is all-zero; colours follow Settings → Inspector overlay |
 
 ---
 
@@ -171,6 +175,9 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 2.20 | Format cycle button | With colour dropdown open, click the format button | Cycles HEX → RGB → HSL; Settings → Color Format also reflects |
 | 2.21 | HEX vs RGBA format | Settings → Color Format → HEX | All colour text inputs render `#xxxxxx`; switch to RGBA → `rgba(...)` |
 | 2.22 | Text alignment / transform / decoration | Change each control | Element updates instantly |
+| 2.23 | Contrast checker — ratio | Open the colour picker on a text colour over a known background | A contrast row above the HSV gradient shows the ratio vs the effective background (e.g. `4.5:1`) with a diagonal-split chip |
+| 2.24 | Contrast checker — rating + AA/AAA | Read the contrast row | Absolute rating pill (Excellent / Good / Poor / Very Poor) plus AA and AAA tabs showing both pass/fail verdicts at once |
+| 2.25 | Contrast checker — category override | Open the Category popover, switch Auto → Large → Normal → Graphics | The pass/fail verdict updates to the chosen threshold; the choice + AA/AAA level persist across reloads |
 
 ---
 
@@ -199,13 +206,14 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 
 | #   | Test | Steps | Expected |
 |-----|------|-------|----------|
-| 4.1 | Image preview | Select an `<img>` | Media section shows preview thumbnail + dimensions + "Download {filename}" button |
+| 4.1 | Image preview | Select an `<img>` | Media section shows preview thumbnail + dimensions + transferred file size (e.g. `124 KB`) + "Download {filename}" button |
 | 4.2 | Image download | Click Download | Browser downloads the original image with its filename |
 | 4.3 | SVG inline | Select an inline `<svg>` | Media section shows rendered SVG, "Download icon.svg" + "Copy SVG markup" |
 | 4.4 | Copy SVG markup | Click "Copy SVG markup" | SVG `outerHTML` ends up in the clipboard (paste into a text file to verify) |
 | 4.5 | Video element | Select a `<video>` | Embedded `<video>` controls + Download button |
 | 4.6 | Background image | Select a div with `background-image: url(...)` | Media section detects the URL, offers download |
 | 4.7 | Icon library detection | Select a Lucide / Heroicons / Remix icon | Icon section appears showing library + name; if multiple matches in the library, a replace-icon dropdown |
+| 4.8 | Media file size — cross-origin | Select a cross-origin image whose response is opaque | Meta line shows resolution + kind but omits the size (no error) |
 
 ---
 
@@ -412,6 +420,7 @@ bleeding to duplicates and back.
 | 14.7 | Favicon | Hard reload | Browser tab icon is the Design Mode logo (matches `/icon.png`) |
 | 14.8 | 720px column | Inspect at desktop width | Article + footer are both 720px wide and centered |
 | 14.9 | Manrope font | Inspect any text | `font-family` resolves to Manrope first |
+| 14.10 | Static OG image | View `/`'s `<head>` (or unfurl the URL in Slack/iMessage) | `og:image` and `twitter:image` resolve to the static `/og-image.png` (not the old dynamic `opengraph-image` route) |
 
 ---
 
@@ -420,7 +429,7 @@ bleeding to duplicates and back.
 After every full pass, tag the run in the project notes:
 
 ```
-v1.2.0 — 2026-MM-DD
+v1.5.0 — 2026-MM-DD
 ✓ All 14 phases pass
 ✓ npm run build:extension clean
 ✓ npm run prepublish:check ran without warnings
