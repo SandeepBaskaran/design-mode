@@ -59,6 +59,11 @@
       --dm-btn-border-disabled: oklch(1 0 0 / 5%);
       --dm-scrollbar-thumb: oklch(1 0 0 / 10%);
       --dm-scrollbar-thumb-hover: oklch(1 0 0 / 20%);
+      /* Contrast checker — rating tier colours (dark theme). */
+      --dm-rating-excellent: #22c55e;
+      --dm-rating-good: #84cc16;
+      --dm-rating-poor: #f59e0b;
+      --dm-rating-very-poor: #ef4444;
     }
     :root[data-theme="light"] {
       /* shadcn tokens — light */
@@ -111,6 +116,12 @@
       --dm-btn-border-disabled: oklch(0 0 0 / 5%);
       --dm-scrollbar-thumb: oklch(0 0 0 / 12%);
       --dm-scrollbar-thumb-hover: oklch(0 0 0 / 20%);
+      /* Contrast checker — rating tier colours (light theme; slightly darker
+         to retain legibility against the off-white panel background). */
+      --dm-rating-excellent: #16a34a;
+      --dm-rating-good: #65a30d;
+      --dm-rating-poor: #d97706;
+      --dm-rating-very-poor: #dc2626;
     }
 
     html, body {
@@ -367,6 +378,109 @@
       height: 1px;
       background: var(--dm-separator);
       margin: 4px 0;
+    }
+
+    /* ── Contrast checker row (inside the colour picker, above the SV) ── */
+    .dm-contrast-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0 10px 0;
+      font-size: 11px;
+    }
+    .dm-contrast-chip {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1px solid var(--dm-separator-strong);
+      flex-shrink: 0;
+    }
+    .dm-contrast-ratio {
+      font-family: SF Mono, Monaco, monospace;
+      font-size: 11px;
+      color: var(--dm-text);
+      letter-spacing: 0.2px;
+    }
+    .dm-contrast-rating {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+      color: var(--rating-color, var(--dm-text));
+      background: color-mix(in srgb, var(--rating-color, transparent) 16%, transparent);
+      cursor: help;
+    }
+    .dm-contrast-rating[data-rating="excellent"] { --rating-color: var(--dm-rating-excellent); }
+    .dm-contrast-rating[data-rating="good"]      { --rating-color: var(--dm-rating-good); }
+    .dm-contrast-rating[data-rating="poor"]      { --rating-color: var(--dm-rating-poor); }
+    .dm-contrast-rating[data-rating="very-poor"] { --rating-color: var(--dm-rating-very-poor); }
+    .dm-contrast-spacer { flex: 1; }
+    /* AA / AAA segmented tabs — pass/fail per level visible at all times,
+       active tab is the user's selected target Level. */
+    .dm-contrast-tabs {
+      display: inline-flex;
+      background: var(--dm-input-bg);
+      border: 1px solid var(--dm-input-border);
+      border-radius: 5px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .dm-contrast-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 6px;
+      background: none;
+      border: none;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--dm-text-muted);
+      cursor: pointer;
+      font-family: inherit;
+      transition: background-color 0.12s ease, color 0.12s ease;
+    }
+    .dm-contrast-tab[data-pass="true"]  { color: var(--dm-rating-excellent); }
+    .dm-contrast-tab[data-pass="false"] { color: var(--dm-rating-very-poor); }
+    .dm-contrast-tab:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+    .dm-contrast-tab[data-active="true"] {
+      background: color-mix(in srgb, currentColor 16%, transparent);
+    }
+    .dm-contrast-tab-label { line-height: 1; letter-spacing: 0.2px; }
+    .dm-contrast-settings-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      background: var(--dm-btn-bg);
+      border: 1px solid var(--dm-btn-border);
+      border-radius: 4px;
+      color: var(--dm-text-secondary);
+      cursor: pointer;
+    }
+    .dm-contrast-settings-btn:hover { background: var(--dm-bg-secondary); color: var(--dm-text); }
+    .dm-contrast-settings-btn[data-active="true"] {
+      background: var(--dm-accent-bg);
+      border-color: var(--dm-accent-border);
+      color: var(--dm-accent);
+    }
+    .dm-contrast-settings {
+      top: calc(100% + 2px);
+      right: 0;
+      min-width: 220px;
+    }
+    .dm-contrast-section-header {
+      padding: 4px 8px 2px 8px;
+      font-size: 9px;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      color: var(--dm-text-dim);
     }
 
     /* Corner radius grid — linked input on top, 2x2 individual corners

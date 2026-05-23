@@ -1614,6 +1614,33 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       sendResponse({ css: el ? getComputedStylesBlock(el) : '' }); break;
     }
 
+    case 'GET_EFFECTIVE_BG': {
+      // Walks the ancestor chain for the first opaque backgroundColor.
+      // Side panel calls this when computing contrast — the element's
+      // own background is transparent and we need the actual painted
+      // colour behind it. Falls back to #FFFFFF at the viewport.
+      const el = getElementById(msg.elementId || getSelectedElementId() || '');
+      if (!el) { sendResponse({ ok: false, color: null }); break; }
+      let cur: Element | null = el;
+      let result: string | null = null;
+      while (cur && cur !== document.documentElement) {
+        const bg = getComputedStyle(cur).backgroundColor;
+        if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+          result = bg;
+          break;
+        }
+        cur = cur.parentElement;
+      }
+      if (!result && document.documentElement) {
+        const htmlBg = getComputedStyle(document.documentElement).backgroundColor;
+        if (htmlBg && htmlBg !== 'transparent' && htmlBg !== 'rgba(0, 0, 0, 0)') {
+          result = htmlBg;
+        }
+      }
+      sendResponse({ ok: true, color: result || '#FFFFFF' });
+      break;
+    }
+
     case 'PREVIEW_ORIGINAL': {
       // Style rollback is one DOM op — flip the override stylesheet's
       // disabled bit. Everything else (text + DOM mutations) still needs
