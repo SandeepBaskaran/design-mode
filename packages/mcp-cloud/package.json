@@ -6,7 +6,7 @@
   "description": "Hosted multi-tenant MCP server for Design Mode — deploys to Vercel, relays between coding agents and the browser extension via Upstash Redis Streams.",
   "license": "MIT",
   "scripts": {
-    "dev": "vercel dev",
+    "dev": "npx vercel dev",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
@@ -17,7 +17,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0",
-    "vercel": "^39.0.0"
+    "typescript": "^5.7.0"
   }
 }

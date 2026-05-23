@@ -248,11 +248,19 @@ npm run dev:link        # parallel agents: link this git worktree's dist/ → ma
 npm run clean           # nuke all build artefacts
 ```
 
-Running several agents in parallel git worktrees (e.g. Conductor)? Run
-`npm run dev:link` once per worktree — or paste it into the tool's setup step —
-so every worktree's build lands in your main clone's
-`packages/extension/dist`. Load that one folder in Chrome once and just hit
-reload after any agent builds.
+Running several agents in parallel git worktrees (e.g. Conductor)? Use this as
+the tool's per-worktree setup command — it brings the worktree up to your local
+`main` first (so it has the `dev:link` script even if the tool branched off an
+older or remote commit), installs, then links:
+
+```bash
+git merge main --ff-only && npm install --workspaces --include-workspace-root && npm run dev:link
+```
+
+Every worktree's build then lands in your main clone's
+`packages/extension/dist` — load that one folder in Chrome once and hit reload
+after any agent builds. (`npm run dev:link` on its own re-links any checkout
+that already has the script.)
 
 ## Test fixture & debug helpers
 
