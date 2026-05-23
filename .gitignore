@@ -24,6 +24,7 @@ out/
 
 # ── Per-package build outputs ────────────────────────────────────────────
 packages/extension/dist/
+packages/extension/dist
 packages/server/dist/
 packages/shared/dist/
 

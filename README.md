@@ -244,8 +244,15 @@ npm run dev:mcp-cloud   # run the hosted MCP relay locally (Vercel dev)
 npm run dev:website     # next dev for the docs site
 npm run build           # build extension + website
 npm run package:extension # build + zip dist into packages/extension/design-mode-extension.zip
+npm run dev:link        # parallel agents: link this git worktree's dist/ → main clone's dist/ (load that one folder in Chrome)
 npm run clean           # nuke all build artefacts
 ```
+
+Running several agents in parallel git worktrees (e.g. Conductor)? Run
+`npm run dev:link` once per worktree — or paste it into the tool's setup step —
+so every worktree's build lands in your main clone's
+`packages/extension/dist`. Load that one folder in Chrome once and just hit
+reload after any agent builds.
 
 ## Test fixture & debug helpers
 
