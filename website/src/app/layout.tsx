@@ -57,6 +57,14 @@ export const metadata: Metadata = {
       "Edit any live website with visual controls, then ship the result to Claude Code, Cursor, or any AI coding agent over MCP. Free + open source.",
     siteName: "Design Mode",
     url: "https://designmode.app",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode — Live design editing for developers and agents",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
@@ -64,6 +72,7 @@ export const metadata: Metadata = {
     description:
       "Edit any live website with visual controls, then ship the result to Claude Code, Cursor, or any AI coding agent over MCP.",
     creator: "@sandeepbaskaran",
+    images: ["/og-image.png"],
   },
 };
 
