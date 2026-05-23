@@ -6,7 +6,7 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] — 2026-05-23
 
 ### Added
 
@@ -46,6 +46,13 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   `SHOW_RESIZE_HANDLES` / `HIDE_RESIZE_HANDLES` message handlers); the
   new inspect-mode resize supersedes it and routes through the
   change-tracker so edits ship.
+- `dev:link` script (`npm run dev:link`) symlinks a worktree's
+  `packages/extension/dist` to the main clone's, so parallel-agent
+  worktrees (Conductor, etc.) share one build folder and Chrome reloads
+  a single extension.
+- Removed the `vercel` CLI devDependency from `mcp-cloud` (run
+  `vercel dev` via `npx`); drops ~250 transitive packages and takes
+  `npm audit` to zero.
 
 ## [1.3.0] — 2026-05-20
 
