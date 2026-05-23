@@ -383,6 +383,13 @@ let mcpCloudTenantId = '';
 let mcpCloudRegistering = false;
 let inspectorHoverColor = '#4F9EFF';
 let inspectorSelectColor = '#FF6B35';
+// Box-model band defaults — light coral red for margin, soft pastel green
+// for padding. Stored as hex (the colour picker only accepts hex); the
+// content script multiplies by a fixed alpha when painting.
+const OVERLAY_MARGIN_DEFAULT = '#FF6363';
+const OVERLAY_PADDING_DEFAULT = '#7CC886';
+let overlayMarginColor = OVERLAY_MARGIN_DEFAULT;
+let overlayPaddingColor = OVERLAY_PADDING_DEFAULT;
 // Display unit for pixel-based inputs (W/H, min/max, padding/margin/border
 // width). When set to rem, the panel converts resolved px to rem for
 // display and writes new values back as rem to the override stylesheet —
@@ -398,6 +405,7 @@ chrome.storage?.local?.get?.([
   'dm-mcp-port', 'dm-mcp-auto-connect',
   'dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url', 'dm-mcp-cloud-tenant',
   'dm-inspector-hover-color', 'dm-inspector-select-color',
+  'dm-overlay-margin-color', 'dm-overlay-padding-color',
   'dm-input-unit',
   'dm-a11y-category', 'dm-a11y-level',
 ], (result: any) => {
@@ -412,6 +420,8 @@ chrome.storage?.local?.get?.([
   if (typeof result?.['dm-mcp-cloud-tenant'] === 'string') mcpCloudTenantId = result['dm-mcp-cloud-tenant'];
   if (typeof result?.['dm-inspector-hover-color'] === 'string') inspectorHoverColor = result['dm-inspector-hover-color'];
   if (typeof result?.['dm-inspector-select-color'] === 'string') inspectorSelectColor = result['dm-inspector-select-color'];
+  if (typeof result?.['dm-overlay-margin-color'] === 'string') overlayMarginColor = result['dm-overlay-margin-color'];
+  if (typeof result?.['dm-overlay-padding-color'] === 'string') overlayPaddingColor = result['dm-overlay-padding-color'];
   if (result?.['dm-input-unit'] === 'rem' || result?.['dm-input-unit'] === 'px') inputUnit = result['dm-input-unit'];
   const cat = result?.['dm-a11y-category'];
   if (cat === 'auto' || cat === 'large' || cat === 'normal' || cat === 'graphics') a11yCategory = cat;
@@ -7362,9 +7372,32 @@ function renderSettingsView(): string {
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Settings</span></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px;">' +
     renderMcpServerCard(sS, sT, lS, activeBtn, inactiveBtn) +
-    '<div style="' + sS + '"><div style="' + sT + '">Inspector overlay</div><div style="display:flex;flex-direction:column;gap:6px;">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Hover color</span><input type="color" data-dm-setting="hoverColor" value="' + escapeAttr(inspectorHoverColor) + '" style="width:28px;height:22px;border:1px solid var(--dm-input-border);border-radius:4px;cursor:pointer;background:none;padding:0;"/></div>' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Selection color</span><input type="color" data-dm-setting="selectColor" value="' + escapeAttr(inspectorSelectColor) + '" style="width:28px;height:22px;border:1px solid var(--dm-input-border);border-radius:4px;cursor:pointer;background:none;padding:0;"/></div></div></div>' +
+    (() => {
+      const swatch = (key: string, val: string) =>
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<span style="font-size:10px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;text-transform:uppercase;letter-spacing:0.4px;">' + escapeAttr(val.toUpperCase()) + '</span>' +
+          '<input type="color" data-dm-setting="' + key + '" value="' + escapeAttr(val) + '" style="width:28px;height:22px;border:1px solid var(--dm-input-border);border-radius:4px;cursor:pointer;background:none;padding:0;"/>' +
+        '</div>';
+      const row = (label: string, key: string, val: string) =>
+        '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">' + label + '</span>' + swatch(key, val) + '</div>';
+      const resetBtn =
+        '<button data-dm-action="reset-inspector-overlay-colors" title="Restore default colours" style="display:flex;align-items:center;gap:3px;background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;padding:2px 4px;border-radius:3px;">' +
+          icon('rotateCcw', 11) +
+          '<span>Reset</span>' +
+        '</button>';
+      return '<div style="' + sS + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+          '<div style="' + sT + 'margin-bottom:0;">Inspector overlay</div>' +
+          resetBtn +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;">' +
+          row('Hover color', 'hoverColor', inspectorHoverColor) +
+          row('Selection color', 'selectColor', inspectorSelectColor) +
+          row('Margin overlay', 'marginColor', overlayMarginColor) +
+          row('Padding overlay', 'paddingColor', overlayPaddingColor) +
+        '</div>' +
+      '</div>';
+    })() +
     '<div style="' + sS + '"><div style="' + sT + '">Color Format</div><div style="display:flex;gap:4px;">' +
     '<button data-dm-color-format="hex" style="' + (cfHex ? activeBtn : inactiveBtn) + '">HEX</button>' +
     '<button data-dm-color-format="rgba" style="' + (cfRgba ? activeBtn : inactiveBtn) + '">RGBA</button>' +
@@ -7749,6 +7782,21 @@ function setupDelegation() {
         }
         case 'toggle-contrast-settings': {
           contrastSettingsOpen = !contrastSettingsOpen;
+          render();
+          break;
+        }
+        case 'reset-inspector-overlay-colors': {
+          inspectorHoverColor = '#4F9EFF';
+          inspectorSelectColor = '#FF6B35';
+          overlayMarginColor = OVERLAY_MARGIN_DEFAULT;
+          overlayPaddingColor = OVERLAY_PADDING_DEFAULT;
+          chrome.storage?.local?.set?.({
+            'dm-inspector-hover-color': inspectorHoverColor,
+            'dm-inspector-select-color': inspectorSelectColor,
+            'dm-overlay-margin-color': overlayMarginColor,
+            'dm-overlay-padding-color': overlayPaddingColor,
+          });
+          send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
           render();
           break;
         }
@@ -10398,6 +10446,20 @@ function setupDelegation() {
         inspectorSelectColor = settingInput.value;
         chrome.storage?.local?.set?.({ 'dm-inspector-select-color': inspectorSelectColor });
         send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
+        return;
+      }
+      if (key === 'marginColor') {
+        overlayMarginColor = settingInput.value;
+        // Content script subscribes to chrome.storage.onChanged for the
+        // band colours so a write here triggers a live repaint there.
+        chrome.storage?.local?.set?.({ 'dm-overlay-margin-color': overlayMarginColor });
+        render();
+        return;
+      }
+      if (key === 'paddingColor') {
+        overlayPaddingColor = settingInput.value;
+        chrome.storage?.local?.set?.({ 'dm-overlay-padding-color': overlayPaddingColor });
+        render();
         return;
       }
       if (key === 'cloudUrl') {
