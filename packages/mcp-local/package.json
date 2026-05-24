@@ -16,7 +16,7 @@
   "dependencies": {
     "@design-mode/shared": "*",
     "@modelcontextprotocol/sdk": "^1.12.0",
-    "ws": "^8.18.0",
+    "ws": "^8.21.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
