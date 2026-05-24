@@ -24,9 +24,32 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = {
-  title: "MCP setup",
+  title:
+    "MCP setup — Connect Claude Code, Cursor, Claude Desktop, Windsurf & more",
   description:
-    "Three ways to connect your AI agent to Design Mode — Local, Cloud, or Self-hosted. Step-by-step setup for Claude Desktop, Cursor, and Claude Code.",
+    "Three ways to connect any MCP-compatible AI coding agent to Design Mode — Cloud (default, hosted), Local (offline), or Self-hosted. Step-by-step setup for Claude Desktop, Claude Code, Cursor, Windsurf, Cline, and any client that speaks Model Context Protocol.",
+  keywords: [
+    "MCP setup",
+    "Model Context Protocol",
+    "Claude Code MCP",
+    "Cursor MCP",
+    "Claude Desktop MCP",
+    "Windsurf MCP",
+    "Cline MCP",
+    "MCP server for design",
+    "MCP for AI coding agents",
+    "self-hosted MCP",
+    "MCP relay",
+  ],
+  alternates: { canonical: "https://designmode.app/mcp" },
+  openGraph: {
+    title:
+      "MCP setup — Connect Claude Code, Cursor, Claude Desktop, Windsurf & more",
+    description:
+      "Three connection modes (Cloud, Local, Self-hosted) and the six MCP tools your agent gets.",
+    url: "https://designmode.app/mcp",
+    images: ["/og-image.png"],
+  },
 };
 
 const localClaude = `{
@@ -172,13 +195,40 @@ export default function McpPage() {
         <section className="py-28 lg:py-32 lg:pt-44">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Connect your AI agent
+              Connect your AI agent over MCP
             </h1>
             <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-              Design Mode talks to Claude Desktop, Cursor, Claude Code, or
-              any MCP-aware agent. Pick one of three connection modes,
-              paste the snippet, restart your agent.
+              Design Mode talks to Claude Desktop, Claude Code, Cursor,
+              Windsurf, Cline, Continue, Zed — any AI coding agent that
+              speaks Model Context Protocol. Pick one of three connection
+              modes, paste the snippet, restart your agent.
             </p>
+            <div className="text-muted-foreground mt-8 max-w-3xl space-y-4 text-base leading-relaxed">
+              <p>
+                <strong className="text-foreground">
+                  What is Model Context Protocol (MCP)?
+                </strong>{" "}
+                MCP is Anthropic&apos;s open standard for letting AI agents
+                call external tools safely. A &quot;tool&quot; is anything
+                the agent can read from or write to — a database, a
+                filesystem, a web service, or in this case, the design
+                state of your live page. Design Mode exposes six MCP tools
+                so your agent can read every edit you made in the side
+                panel, push patches back to the page, and grab
+                screenshots — all without copy-paste.
+              </p>
+              <p>
+                <strong className="text-foreground">
+                  Why three connection modes?
+                </strong>{" "}
+                Different teams have different constraints. Cloud is the
+                no-install default for solo makers and anyone whose agent
+                can&apos;t reach localhost. Local is for power users who
+                want zero network egress and the lowest possible latency.
+                Self-hosted is for teams who want Cloud ergonomics on
+                their own infrastructure.
+              </p>
+            </div>
           </div>
         </section>
       </Background>
@@ -313,6 +363,43 @@ export default function McpPage() {
                 Full privacy disclosure →
               </Link>
             </p>
+
+            <DashedLine className="mt-20" />
+
+            <div className="mt-16">
+              <h2 className="text-2xl tracking-tight md:text-3xl">
+                Compatible AI coding agents
+              </h2>
+              <p className="text-muted-foreground mt-2 max-w-2xl">
+                Any agent that supports Model Context Protocol works with
+                Design Mode. Confirmed:
+              </p>
+              <ul className="text-foreground mt-6 grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-3">
+                <li>• Claude Desktop</li>
+                <li>• Claude Code</li>
+                <li>• Cursor</li>
+                <li>• Windsurf</li>
+                <li>• Cline</li>
+                <li>• Continue</li>
+                <li>• Zed</li>
+                <li>• VS Code (with MCP extension)</li>
+                <li>• Any custom MCP client</li>
+              </ul>
+              <p className="text-muted-foreground mt-6 max-w-2xl text-sm">
+                Don&apos;t see your tool? If it speaks MCP, the
+                Self-hosted or Cloud snippet above will work. File an
+                issue on{" "}
+                <a
+                  href="https://github.com/SandeepBaskaran/design-mode/issues"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-4"
+                >
+                  GitHub
+                </a>{" "}
+                if you hit a quirk and we&apos;ll add a dedicated snippet.
+              </p>
+            </div>
           </div>
         </section>
       </Background>

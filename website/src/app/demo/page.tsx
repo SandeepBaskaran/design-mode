@@ -8,9 +8,24 @@ import { STEPS } from "./steps";
 import { Background } from "@/components/background";
 
 export const metadata = {
-  title: "Demo",
+  title: "Demo — Try Design Mode live in your browser",
   description:
-    "Live, interactive walkthrough of every Design Mode feature. The page itself is the canvas — open the side panel and edit it.",
+    "Live, interactive walkthrough of every Design Mode feature. The page itself is the canvas — open the side panel and edit headings, colours, spacing, layout, copy, and DOM in real time.",
+  keywords: [
+    "Design Mode demo",
+    "try visual editor for websites",
+    "live design tool demo",
+    "in-browser design surface",
+    "Chrome extension demo",
+  ],
+  alternates: { canonical: "https://designmode.app/demo" },
+  openGraph: {
+    title: "Demo — Try Design Mode live in your browser",
+    description:
+      "Open the side panel on this page and try every feature with the demo targets — no recordings.",
+    url: "https://designmode.app/demo",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function DemoPage() {

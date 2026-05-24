@@ -1,0 +1,151 @@
+# Design Mode — Full content for LLMs
+
+> One markdown file distilling every page on designmode.app, optimized for retrieval by AI search engines (ChatGPT, Claude, Perplexity, Google AI Overviews, Bing Copilot).
+
+---
+
+## What is Design Mode?
+
+Design Mode is a free, open-source Chrome extension that turns any live website into a visual design surface. Open the side panel on any URL — your own deploy, a competitor's marketing page, a Tailwind component library, a staging environment — and edit it visually. Drag handles to resize, pick colours, change fonts, swap copy, restructure DOM, hide elements, capture before/after screenshots. Every edit is tracked as a structured change.
+
+When you're done, ship the changes straight to your AI coding agent over Model Context Protocol (MCP). The agent reads the exact selectors and properties you changed and writes the production code. No mocking, no screenshot guessing, no copy-paste loop.
+
+**License:** MIT. **Price:** Free forever. **Telemetry:** None by default. **Source:** github.com/SandeepBaskaran/design-mode.
+
+---
+
+## Who is Design Mode for?
+
+One design tool for every maker:
+
+- **Designers** — design directly on the live product, not in a mockup file that drifts from code.
+- **Design engineers** — own the loop from sketch to PR without context-switching between tools.
+- **Frontend developers** — iterate on UI visually, then have your AI agent commit the change.
+- **Full-stack developers + vibe coders** — describe a change in English to your agent, see it on the real page, refine visually.
+- **QA / UI testers** — annotate broken layouts, contrast bugs, copy errors on a staging URL and export a structured diff with full developer context (selector → property → value).
+- **Product managers** — file bug reports that point at the exact pixel, not "the button is wrong".
+- **Content / marketing teams** — fix microcopy on the live page, export the diff, no Figma round-trip.
+- **Indie hackers + solo founders** — iterate on your own landing page with an AI agent in the loop.
+- **Agencies** — make tweaks on the client's staging URL during review and hand engineering a precise spec.
+- **AI-coding-agent users** — close the loop between Claude Code / Cursor / Windsurf and the live UI.
+- **Design-system maintainers** — audit deployed apps for token drift; log every off-spec colour, spacing, or type with one diff.
+
+---
+
+## How does it work?
+
+1. Install Design Mode from the Chrome Web Store. Pin the side panel.
+2. Open any page. Click the toolbar icon. The side panel opens with a full design surface — Layers, Design, Changes tabs.
+3. Click anything on the page. Edit it visually — typography, colour, spacing, layout, motion, effects, copy, DOM.
+4. Every change is recorded in the Changes tab with selector + property + old/new value.
+5. Choose one of three handoff paths:
+   - **Copy Prompt** — Markdown export to your clipboard. Paste into any chat.
+   - **Send to Agent** — pushes the diff straight to your MCP-aware agent (Claude Desktop, Cursor, Claude Code, Windsurf, Cline, etc.).
+   - **Export** — JSON or Markdown for code review, Linear / Jira tickets, or a Figma annotation.
+
+---
+
+## Features
+
+The side panel has three rows.
+
+**Row 1 — Header + Action toolbar.** MCP status chip, theme toggle, contribute panel, help (with Copy Diagnostics for bug reports), settings (colour format, capture mode, inspector colours, MCP mode picker). Action toolbar: parent/child walk, duplicate/delete, comment pins, hide pins, freeze animations, screenshot, presets, undo/redo.
+
+**Row 2 — Three middle panels.**
+- *Layers* — full DOM tree, searchable, multi-select, drag-to-reorder, visibility toggle per row.
+- *Design* — nine Figma-aligned sections (Typography, Position, Layout, Size & spacing, Border, Appearance, Effects, Motion, Variants). Real controls — sliders, colour pickers, segmented buttons. Not a textarea of CSS.
+- *Changes* — every style, text, DOM, and comment edit in reverse chronological order. Group by selector, filter by kind, search by value, resolve or revert anything. Export / import as JSON.
+
+**Row 3 — Handoff.** Copy Prompt → clipboard. Send to Agent → MCP push (only enables when an agent is actually attached).
+
+**Canvas overlays.** Hover shows pixel spacing to nearest elements. Eight resize handles per selection. Comment pins with numbered badges. Margin/padding overlay bands. WCAG contrast checker on the colour picker. Layout guides (grid, columns, baselines).
+
+---
+
+## MCP — Model Context Protocol
+
+MCP is Anthropic's open standard that lets AI agents safely call external tools. Design Mode exposes six MCP tools:
+
+- `get_changes` — return the structured list of style/text/DOM changes for the current session.
+- `apply_changes` — apply a patch from the agent back to the page.
+- `clear_changes` — wipe the buffer between iterations.
+- `get_session_summary` — high-level diff: what selectors changed, by how many properties.
+- `export_changes` — Markdown export with selector → property → value lines.
+- `get_screenshot` — visible-tab PNG of the page in its current edited state.
+
+**Three connection modes:**
+
+- **Cloud (default)** — Hosted SSE relay at `mcp.designmode.app`. Extension dials the relay over HTTPS; agent connects with a bearer token. Messages pass through; nothing persists. Best for sandboxed agents, remote VS Code tunnels, web-based agents.
+- **Local** — Companion MCP server on your own machine. Nothing leaves the laptop. Fastest, fully offline. Best for power users who want zero network egress.
+- **Self-hosted** — Fork `packages/mcp-cloud` and deploy on Node.js + Redis (Vercel, Railway, Fly, your own VM). Same protocol, your infrastructure. Best for teams.
+
+**Compatible agents:** Claude Desktop, Claude Code, Cursor, Windsurf, Cline, Continue, Zed, VS Code with MCP, and any client that speaks Model Context Protocol.
+
+---
+
+## Comparison summary
+
+- **vs Chrome DevTools** — DevTools is a developer inspector; Design Mode is a design surface that emits structured diffs and pushes to AI agents. DevTools' edits don't persist; Design Mode's do.
+- **vs Stagewise** — Closest competitor. Both target the AI-coding-agent loop. Design Mode ships under MIT with a hosted Cloud relay you don't have to run; covers a broader design control set (motion, effects, variants).
+- **vs Cursor's built-in design mode** — Cursor's mode lives inside the editor; Design Mode lives on the actual web page, so you edit the real rendered UI with real layout context.
+- **vs pls-fix / Agentation / Dialkit / UI Inspector / CSSPeeper / Hover Inspector** — these are narrower utilities (inspecting, comment-pinning, copying CSS). Design Mode covers inspect + edit + persist + ship-to-agent in one surface.
+- **vs Figma Dev Mode** — Figma Dev Mode reads a static design file; Design Mode edits the live deploy. Pair them: design in Figma, refine in Design Mode on the rendered page.
+- **vs Builder.io Visual Copilot / Locofy** — those generate React from a Figma file. Design Mode goes the other direction: tweak the live page, hand the agent precise CSS deltas.
+- **vs VisBug** — VisBug edits the live page but has no agent / MCP handoff and no session persistence.
+
+---
+
+## Privacy
+
+- **Default behaviour:** Local-only. Edits live in `chrome.storage`. No outbound network calls.
+- **Cloud relay (opt-in):** SSE pass-through at `mcp.designmode.app`. Token + connection metadata hashed and logged for abuse prevention; payload bodies dropped within ~60 seconds; never persisted, never used for training.
+- **Self-hosted relay:** You operate it. We see nothing.
+- **Diagnostics:** The Copy Diagnostics button captures `APP_VERSION`, `navigator.*`, and current theme. No PII, no URLs, no extension state.
+- **Permissions:** activeTab, storage, scripting, tabs, sidePanel, host_permissions for `<all_urls>`. Required for cross-site editing.
+
+Full disclosure: https://designmode.app/privacy
+
+---
+
+## Frequently asked questions
+
+**Is it really free?**
+Yes — free forever, MIT-licensed, no accounts, no paywalls, no telemetry by default.
+
+**Which browsers does it work in?**
+Any Chromium-based browser with MV3 side-panel support — Chrome, Edge, Arc, Brave. Firefox and Safari are not supported. Desktop-only.
+
+**Is Design Mode for designers or developers?**
+Both, plus QA, PMs, content teams, indie hackers, and vibe coders. The shared surface is "edit the live page → ship a precise diff."
+
+**Does it work with Claude Code?**
+Yes. Claude Code reads MCP servers from `.claude/settings.json`. The MCP setup page has the exact JSON.
+
+**Does it work with Cursor?**
+Yes. Cursor reads MCP servers from `~/.cursor/mcp.json`.
+
+**Do I need to run a local server?**
+No. The Cloud mode is the default and needs no local install. Local mode is for power users who want offline + lowest latency.
+
+**Can I self-host?**
+Yes. `packages/mcp-cloud` deploys to any Node.js host with Redis.
+
+**Does it train on my edits?**
+No. There is no telemetry by default, the Cloud relay does not persist payloads, and nothing is used for training.
+
+**What's the difference vs Chrome DevTools?**
+DevTools is a debugger. Design Mode is a design surface that emits structured diffs and ships them to AI agents over MCP.
+
+**Can I report a bug or contribute?**
+Yes. The Help panel inside the extension has Copy Diagnostics. File on GitHub. CONTRIBUTING.md has the flow.
+
+---
+
+## Links
+
+- Site: https://designmode.app
+- Repo: https://github.com/SandeepBaskaran/design-mode
+- Cloud relay: https://mcp.designmode.app
+- Author: https://sandeepbaskaran.com
+- X / Twitter: https://x.com/sandeepbaskaran
+- Sponsor: https://github.com/sponsors/SandeepBaskaran

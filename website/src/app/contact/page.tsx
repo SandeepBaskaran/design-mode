@@ -8,6 +8,25 @@ import {
 } from "@/components/blocks/contact";
 import { DashedLine } from "@/components/dashed-line";
 
+export const metadata = {
+  title: "Contact — Bug reports, ideas, sponsorship",
+  description:
+    "Get in touch about Design Mode — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
+  keywords: [
+    "Design Mode contact",
+    "bug report Design Mode",
+    "Design Mode support",
+    "Design Mode security disclosure",
+  ],
+  alternates: { canonical: "https://designmode.app/contact" },
+  openGraph: {
+    title: "Contact — Bug reports, ideas, sponsorship",
+    description: "Email, GitHub, security disclosure for Design Mode.",
+    url: "https://designmode.app/contact",
+    images: ["/og-image.png"],
+  },
+};
+
 const Page = () => {
   return (
     <>

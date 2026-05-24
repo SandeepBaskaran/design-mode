@@ -31,9 +31,31 @@ import { DashedLine } from "@/components/dashed-line";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = {
-  title: "Features",
+  title:
+    "Features — Visual controls for any live website (Layers, Design, Changes)",
   description:
-    "Every control inside the Design Mode side panel — header row, three middle panels (Layers, Design, Changes), and the bottom row that ships your edits to your agent.",
+    "Every control inside the Design Mode side panel: header icons, action toolbar, the Layers / Design / Changes tabs, and the Copy Prompt + Send to Agent handoff. Visual editing for live websites — no devtools fork.",
+  keywords: [
+    "Design Mode features",
+    "side panel design editor",
+    "Layers tab",
+    "Changes tab",
+    "visual CSS editor",
+    "DOM tree editor",
+    "in-browser design tool",
+    "Chrome extension for designers",
+    "Copy Prompt",
+    "Send to Agent",
+  ],
+  alternates: { canonical: "https://designmode.app/features" },
+  openGraph: {
+    title:
+      "Design Mode features — every visual control inside the side panel",
+    description:
+      "Header icons, action toolbar, Layers / Design / Changes panels, and the Copy Prompt + Send-to-Agent handoff.",
+    url: "https://designmode.app/features",
+    images: ["/og-image.png"],
+  },
 };
 
 const headerIcons = [

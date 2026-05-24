@@ -43,10 +43,13 @@ export const Features = () => {
             Made for the vibe-coding loop
           </h2>
           <p className="text-muted-foreground max-w-2xl leading-snug">
-            Most design-to-code workflows force you to mock the change, paste a
-            screenshot, and hope your agent guesses your CSS. Design Mode skips
-            the mocking step entirely — edit the real page, capture the diff,
-            send it on.
+            Most design-to-code workflows force you to mock the change, paste
+            a screenshot, and hope your AI agent guesses your CSS. Design
+            Mode skips the mocking step entirely — edit the real, rendered
+            page in your browser, capture a structured diff (selector →
+            property → value), and ship it to Claude Code, Cursor, Claude
+            Desktop, Windsurf, Cline, or any MCP-compatible agent in one
+            click.
           </p>
         </div>
 

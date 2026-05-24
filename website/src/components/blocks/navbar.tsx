@@ -20,9 +20,10 @@ const ITEMS = [
   { label: "Features", href: "/features" },
   { label: "Demo", href: "/demo" },
   { label: "MCP", href: "/mcp" },
-  { label: "About", href: "/about" },
-  { label: "Contact", href: "/contact" },
-  { label: "Privacy", href: "/privacy" },
+  { label: "Use cases", href: "/use-cases" },
+  { label: "Compare", href: "/compare" },
+  { label: "Docs", href: "/docs" },
+  { label: "Blog", href: "/blog" },
 ];
 
 const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";

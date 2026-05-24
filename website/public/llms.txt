@@ -1,0 +1,80 @@
+# Design Mode
+
+> Design Mode is a free, open-source Chrome extension that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM structure with real controls, then ship the diff straight to any AI coding agent — Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible tool. One design tool for every maker: designers, developers, design engineers, QA testers, PMs, indie hackers, agencies, and vibe coders.
+
+Key facts:
+- License: MIT, fully open source
+- Price: free forever, no accounts, no telemetry by default
+- Surface: Chromium-based browsers (Chrome, Edge, Brave, Arc) via Manifest V3 side panel
+- Protocol: Model Context Protocol (MCP) — three connection modes (Cloud default, Local offline, Self-hosted)
+- Repo: https://github.com/SandeepBaskaran/design-mode
+- Site: https://designmode.app
+- Author: Sandeep Baskaran (https://sandeepbaskaran.com)
+
+## Get started
+
+- [Homepage](https://designmode.app/): What Design Mode is and who it's for.
+- [Live demo](https://designmode.app/demo): Interactive walkthrough — the page itself is the canvas.
+- [Features](https://designmode.app/features): Every control inside the side panel, broken down by row.
+- [MCP setup](https://designmode.app/mcp): Connect Claude Desktop, Cursor, Claude Code, Windsurf, or any MCP-aware agent.
+- [FAQ](https://designmode.app/faq): Installation, browser support, MCP modes, agents, privacy, licensing.
+
+## Use cases
+
+- [One design tool for every maker](https://designmode.app/use-cases): Index of workflows by persona.
+- [Vibe coding with Claude Code](https://designmode.app/use-cases/vibe-coding-with-claude-code)
+- [Visual editing with Cursor](https://designmode.app/use-cases/visual-editing-with-cursor)
+- [Redesign any website](https://designmode.app/use-cases/redesign-any-website)
+- [Design review in production](https://designmode.app/use-cases/design-review-in-production)
+- [Tailwind component tuning](https://designmode.app/use-cases/tailwind-component-tuning)
+- [Figma-to-code without Figma](https://designmode.app/use-cases/figma-to-code-without-figma)
+- [UI testing — export visual bugs to developers with full context](https://designmode.app/use-cases/ui-testing-export-to-developers)
+- [Bug reports with a visual diff](https://designmode.app/use-cases/bug-report-with-visual-diff)
+- [Copy edits without a PR](https://designmode.app/use-cases/copy-edits-without-a-pr)
+- [Accessibility quick fixes](https://designmode.app/use-cases/accessibility-quick-fixes)
+- [Landing-page iteration for indie hackers](https://designmode.app/use-cases/landing-page-iteration-for-indie-hackers)
+- [Client handoff: agency to engineering](https://designmode.app/use-cases/client-handoff-from-agency-to-engineering)
+- [Design-system audit on a deployed app](https://designmode.app/use-cases/design-system-audit)
+
+## Comparisons
+
+- [Comparisons index](https://designmode.app/compare)
+- [Design Mode vs Stagewise](https://designmode.app/compare/design-mode-vs-stagewise)
+- [Design Mode vs pls-fix](https://designmode.app/compare/design-mode-vs-pls-fix)
+- [Design Mode vs Agentation](https://designmode.app/compare/design-mode-vs-agentation)
+- [Design Mode vs Dialkit](https://designmode.app/compare/design-mode-vs-dialkit)
+- [Design Mode vs UI Inspector](https://designmode.app/compare/design-mode-vs-ui-inspector)
+- [Design Mode vs Cursor's design mode](https://designmode.app/compare/design-mode-vs-cursor-design-mode)
+- [Design Mode vs CSSPeeper](https://designmode.app/compare/design-mode-vs-csspeeper)
+- [Design Mode vs Hover Inspector](https://designmode.app/compare/design-mode-vs-hover-inspector)
+- [Design Mode vs Builder.io Visual Copilot](https://designmode.app/compare/design-mode-vs-builder-io-visual-copilot)
+- [Design Mode vs Locofy](https://designmode.app/compare/design-mode-vs-locofy)
+- [Design Mode vs Chrome DevTools](https://designmode.app/compare/design-mode-vs-chrome-devtools)
+- [Design Mode vs Figma Dev Mode](https://designmode.app/compare/design-mode-vs-figma-dev-mode)
+- [Design Mode vs VisBug](https://designmode.app/compare/design-mode-vs-visbug)
+
+## Docs
+
+- [Docs index](https://designmode.app/docs)
+- [Install](https://designmode.app/docs/install)
+- [Keyboard shortcuts](https://designmode.app/docs/keyboard-shortcuts)
+- [MCP setup](https://designmode.app/docs/mcp-setup)
+- [Changes tab](https://designmode.app/docs/changes-tab)
+- [Troubleshooting](https://designmode.app/docs/troubleshooting)
+
+## Blog
+
+- [Why we built an MCP server for design edits](https://designmode.app/blog/why-we-built-an-mcp-server-for-design-edits)
+- [Vibe coding: how visual editing fits the AI-coding-agent workflow](https://designmode.app/blog/vibe-coding-visual-editing-workflow)
+- [Design Mode 1.5.0 changelog deep-dive](https://designmode.app/blog/design-mode-1-5-0-changelog-deep-dive)
+- [Redesigning a Tailwind landing page with Claude Code](https://designmode.app/blog/redesigning-a-tailwind-landing-page-with-claude-code)
+
+## Privacy & contact
+
+- [Privacy](https://designmode.app/privacy): What leaves your machine, when, why.
+- [Contact](https://designmode.app/contact): Email, GitHub, security disclosure.
+- [About](https://designmode.app/about): The creator and the motivation.
+
+## Optional
+
+- Full distilled content (every page in one markdown file): https://designmode.app/llms-full.txt

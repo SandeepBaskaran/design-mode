@@ -50,11 +50,21 @@ export const Hero = () => {
           <br className="hidden md:block" /> Your agent writes the code.
         </h1>
 
-        <p className="text-muted-foreground mx-auto mt-5 max-w-3xl text-lg md:text-xl">
-          A free, open-source Chrome extension that turns any website into a
-          live design surface. Edit layout, type, colour, spacing and
-          structure, then ship the result straight to Claude Code, Cursor, or
-          any AI coding agent over MCP.
+        <p className="text-muted-foreground mx-auto mt-5 max-w-[848px] text-lg">
+          Design Mode is a free, open-source Chrome extension that turns any
+          live website into a visual design surface — one design tool for
+          every maker, from designers and developers to QA testers, PMs,
+          indie hackers, and vibe coders.
+        </p>
+        <p className="text-muted-foreground mx-auto mt-3 max-w-[848px] text-sm md:text-base">
+          Edit layout, typography, colour, spacing, copy and DOM with real
+          controls, then ship the diff to{" "}
+          <span className="text-foreground">Claude Code</span>,{" "}
+          <span className="text-foreground">Cursor</span>,{" "}
+          <span className="text-foreground">Claude Desktop</span>,{" "}
+          <span className="text-foreground">Windsurf</span>,{" "}
+          <span className="text-foreground">Cline</span>, or any
+          MCP-compatible AI coding agent.
         </p>
 
         {/* Secondary on the LEFT (Try by yourself → /demo), primary on the RIGHT (Add to Chrome) */}
@@ -75,12 +85,13 @@ export const HeroShowcase = () => {
       <div className="container flex flex-col gap-10 py-12 lg:flex-row lg:items-center lg:gap-16">
         {/* Left — cover image */}
         <div className="flex-1">
-          <div className="relative mx-auto h-[400px] w-full max-w-[400px]">
+          <div className="relative mx-auto aspect-square w-full max-w-[400px]">
             <Image
               src="/cover.png"
               alt="The Design Mode side panel on a live website"
               fill
-              className="rounded-2xl object-contain object-top shadow-lg"
+              sizes="(min-width: 1024px) 400px, (min-width: 640px) 50vw, 90vw"
+              className="rounded-2xl object-cover object-top shadow-lg"
               priority
             />
           </div>

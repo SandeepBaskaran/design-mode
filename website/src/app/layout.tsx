@@ -6,8 +6,12 @@ import type { Metadata } from "next";
 import { Footer } from "@/components/blocks/footer";
 import { Navbar } from "@/components/blocks/navbar";
 import { Analytics } from "@/components/site/analytics";
+import {
+  JsonLd,
+  organizationSchema,
+  websiteSchema,
+} from "@/components/site/json-ld";
 import { LinkTracker } from "@/components/site/link-tracker";
-import { MobileNotice } from "@/components/site/mobile-notice";
 import "@/styles/globals.css";
 
 const dmSans = localFont({
@@ -30,31 +34,74 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   metadataBase: new URL("https://designmode.app"),
   title: {
-    default: "Design Mode — Live design editing for developers and agents",
+    default:
+      "Design Mode — Visual editor for any live website, ships to Claude Code, Cursor & MCP agents",
     template: "%s | Design Mode",
   },
   description:
-    "A free, open-source Chrome extension that turns any website into a live design surface. Edit layout, type, colour, spacing and structure with visual controls, then ship the result straight to Claude Code, Cursor, or any AI coding agent over MCP.",
+    "Free, open-source Chrome extension that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM structure, then ship the diff to Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible AI coding agent. One design tool for designers, developers, QA testers, PMs, indie hackers, and vibe coders.",
+  applicationName: "Design Mode",
+  category: "Developer Tools",
   keywords: [
     "Design Mode",
     "Chrome extension",
-    "live CSS editing",
     "visual editor",
+    "live CSS editing",
+    "edit any website live",
+    "in-browser design tool",
+    "design-to-code",
+    "AI design-to-code workflow",
+    "vibe coding",
+    "vibe coder tools",
     "MCP",
     "Model Context Protocol",
-    "Claude Code",
-    "Cursor",
-    "AI coding agents",
-    "open source",
+    "MCP server for design",
+    "MCP for design edits",
+    "Claude Code visual editor",
+    "Cursor visual editor",
+    "Claude Desktop MCP",
+    "Windsurf MCP",
+    "Cline MCP",
+    "AI coding agent UI editing",
+    "design handoff to developers",
+    "UI testing export to developers",
+    "visual bug report tool",
+    "open source design tool",
+    "free Chrome extension for designers",
+    "vs Stagewise",
+    "vs Chrome DevTools",
+    "vs Figma Dev Mode",
+    "Tailwind visual editor",
+    "shadcn visual editor",
+    "accessibility quick fix",
+    "design system audit",
+    "browser design surface",
+    "side panel design editor",
   ],
-  authors: [{ name: "Sandeep Baskaran" }],
+  authors: [{ name: "Sandeep Baskaran", url: "https://sandeepbaskaran.com" }],
   creator: "Sandeep Baskaran",
   publisher: "Sandeep Baskaran",
-  robots: { index: true, follow: true },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+      "max-video-preview": -1,
+    },
+  },
+  alternates: {
+    canonical: "https://designmode.app",
+  },
   openGraph: {
-    title: "Design Mode — Live design editing for developers and agents",
+    type: "website",
+    locale: "en_US",
+    title:
+      "Design Mode — Visual editor for any live website, ships to Claude Code, Cursor & MCP agents",
     description:
-      "Edit any live website with visual controls, then ship the result to Claude Code, Cursor, or any AI coding agent over MCP. Free + open source.",
+      "Edit any live website with visual controls — typography, colour, layout, spacing, copy, DOM — then ship the diff to Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible agent. Free + open source.",
     siteName: "Design Mode",
     url: "https://designmode.app",
     images: [
@@ -68,10 +115,12 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Design Mode — Live design editing for developers and agents",
+    title:
+      "Design Mode — Visual editor for any live website, ships to Claude Code, Cursor & MCP agents",
     description:
-      "Edit any live website with visual controls, then ship the result to Claude Code, Cursor, or any AI coding agent over MCP.",
+      "Edit any live website with visual controls, then ship the diff to Claude Code, Cursor, or any MCP-compatible AI coding agent. Free + open source.",
     creator: "@sandeepbaskaran",
+    site: "@sandeepbaskaran",
     images: ["/og-image.png"],
   },
 };
@@ -84,7 +133,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${dmSans.variable} ${inter.variable} antialiased`}>
-        <MobileNotice />
+        <JsonLd data={organizationSchema} />
+        <JsonLd data={websiteSchema} />
         <Navbar />
         <main className="mx-auto w-full max-w-[1080px]">{children}</main>
         <Footer />
