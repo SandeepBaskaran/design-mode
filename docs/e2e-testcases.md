@@ -421,6 +421,14 @@ bleeding to duplicates and back.
 | 14.8 | 720px column | Inspect at desktop width | Article + footer are both 720px wide and centered |
 | 14.9 | Manrope font | Inspect any text | `font-family` resolves to Manrope first |
 | 14.10 | Static OG image | View `/`'s `<head>` (or unfurl the URL in Slack/iMessage) | `og:image` and `twitter:image` resolve to the static `/og-image.png` (not the old dynamic `opengraph-image` route) |
+| 14.11 | New content routes | Visit `/about`, `/faq`, `/contact`, `/use-cases`, `/compare`, `/docs`, `/blog` | Each returns 200 and renders (hero + related-links / persona blocks); no console errors |
+| 14.12 | Dynamic detail routes | Open one `/use-cases/<slug>`, `/compare/<slug>`, `/docs/<slug>`, `/blog/<slug>` (slugs listed in `sitemap.ts`) | Renders the entry sourced from `content/*.ts`; an unknown slug 404s |
+| 14.13 | sitemap.xml | Visit `/sitemap.xml` | Lists the 12 root routes + every use-cases / compare / docs / blog slug, all under `https://designmode.app` |
+| 14.14 | robots.txt | Visit `/robots.txt` | `Allow: /` for `*`; LLM crawlers explicitly allowed (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, …); `Sitemap:` points to `/sitemap.xml` |
+| 14.15 | llms.txt | Visit `/llms.txt` and `/llms-full.txt` | Both serve plain-text site / product summaries |
+| 14.16 | Web app manifest | Visit `/manifest.webmanifest` | Serves valid JSON (name, icons, theme) |
+| 14.17 | JSON-LD structured data | View source on `/`, a `/compare/<slug>`, and `/faq` | `<script type="application/ld+json">` present (e.g. SoftwareApplication / FAQPage / Article) and valid JSON |
+| 14.18 | New nav + footer links | Open any page | Navbar / footer expose the new sections (FAQ, Use cases, Compare, Docs, Blog) and navigate correctly |
 
 ---
 

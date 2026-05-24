@@ -119,7 +119,7 @@ design-mode/
 │   ├── mcp-local/    MCP companion + WebSocket bridge (Node.js, TypeScript)
 │   ├── mcp-cloud/    Hosted MCP relay (Node.js + Redis; Vercel is our dev/prod target — anywhere works)
 │   └── shared/       Shared types, message schemas, constants
-├── website/          Marketing + docs + interactive demo (Next.js 14)
+├── website/          Marketing site: landing, demo, MCP, features, FAQ, use-cases, comparisons, docs, blog + LLM-SEO infra (Next.js 14)
 ├── docs/             Project docs (e2e-testcases.md)
 ├── icons/            Extension icons (16 / 48 / 128 PNG + chrome.svg)
 ├── scripts/          Repo helpers (pre-publish check)

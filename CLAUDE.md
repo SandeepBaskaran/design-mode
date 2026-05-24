@@ -199,6 +199,15 @@ tool), these rules are read automatically at session start.
   its own `package-lock.json` (the template bootstrap put one
   inside `website/` once), delete it before committing — Next.js's
   build warns about ambiguous workspace root.
+- **Content-driven pages + LLM-SEO infra**: the `/blog`, `/compare`,
+  `/docs`, and `/use-cases` index + `[slug]` routes are generated from
+  `website/src/content/{blog,comparisons,docs,use-cases}.ts` — add an
+  entry there rather than a new page file. The SEO surface is the Next
+  metadata routes `app/{robots,sitemap,manifest}.ts`, static
+  `public/llms.txt` + `public/llms-full.txt`, and per-page structured
+  data via `components/site/json-ld.tsx`. When you add a content route,
+  keep the slug list in `sitemap.ts` in sync. New pages still follow the
+  background-slab rule above.
 
 ## Documentation conventions
 
