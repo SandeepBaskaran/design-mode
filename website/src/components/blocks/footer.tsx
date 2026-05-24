@@ -32,15 +32,15 @@ export function Footer() {
   ];
 
   return (
-    <footer className="flex flex-col items-center gap-14 pt-28 pb-12 lg:pt-32">
-      <div className="container space-y-3 text-center">
+    <footer className="flex flex-col items-center gap-14 py-12">
+      <div className="container flex flex-col gap-4 text-center">
         <div className="mb-6 flex justify-center">
           <ProductHunt />
         </div>
         <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
           Design directly in your browser.
         </h2>
-        <p className="text-muted-foreground mx-auto max-w-xl leading-snug text-balance">
+        <p className="mx-auto max-w-xl text-lg leading-snug text-balance text-[#888888]">
           Free forever, open source. Edit any live site with visual
           controls and ship the changes to your coding agent over MCP.
         </p>
