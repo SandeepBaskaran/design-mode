@@ -13,7 +13,7 @@ import { createMcpServer } from '../mcp-server.js';
 import { startWebSocketServer, isExtensionConnected } from '../websocket-server.js';
 
 const DEFAULT_WS_PORT = 9960;
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 
 // ANSI color helpers (using stderr since stdout is for MCP stdio)
 const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;

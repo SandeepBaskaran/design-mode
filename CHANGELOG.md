@@ -6,6 +6,62 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] — 2026-05-29
+
+### Added
+
+- **Design-system / Tokens panel.** Three-tab panel surfacing the page's
+  design system, opened from the swatch-book icon in the action row.
+  - **Declared** — every `:root` CSS variable on the page, grouped by
+    purpose (Colour / Typography / Spacing / Radius / Shadow / Other),
+    with swatch/preview, an inline live editor that repaints the page via
+    `documentElement.style.setProperty`, a reset-to-original button, and a
+    "×N uses" badge that lights up the on-page consumers via the
+    multi-select overlay.
+  - **Detected** — histograms of values *actually used* by viewport-visible
+    elements for spacing / radius / font-size / shadow, with drift warnings
+    when a value is close to a declared token and a "Replace with…"
+    dropdown that fans out a `CONSOLIDATE_DETECTED` scan to rewrite every
+    matching computed value as `var(--name)` under a single grouped change
+    in the Changes tab.
+  - **Defined** — user-saved presets (the new home for the previous
+    Presets feature). Save the selected element's styles as a named
+    preset; the Add form's kind dropdown only lists kinds with at least
+    one non-default value on the current selection. Applied presets gain
+    an **↶ Applied** button that reverts every style change in that
+    application's `groupId`. Persists to `chrome.storage.sync`.
+- Cross-tab **filter chips** (`All` / `Colours` / `Type` / `Spacing` /
+  `Radius` / `Shadow` / `Other`), free-text search, and a **"Show only
+  tokens used on this page"** toggle — tab-aware.
+
+### Changed
+
+- **Presets panel replaced by the Design-system / Tokens panel.** Existing
+  user-saved presets surface in the Defined tab and are read back without
+  migration. The swatch-book header icon now opens the Tokens panel.
+- **Markdown exporter** no longer dumps the whole token catalog on every
+  Copy Prompt. It emits a focused **`## Tokens changed`** section listing
+  only the `:root` CSS variables you edited in this session (original →
+  current); with no root-var edits the section is omitted entirely.
+- **Website overhaul.** New marketing / docs pages — `/about`, `/faq`,
+  `/contact`, `/blog` (+ `[slug]`), `/compare` (+ `[slug]`), `/docs`
+  (+ `[slug]`), `/use-cases` (+ `[slug]`) — driven by content files in
+  `website/src/content/`. New SEO infra: `robots.ts`, `sitemap.ts`,
+  `manifest.ts`, `public/llms.txt` + `public/llms-full.txt`, and per-page
+  JSON-LD structured data via `components/site/json-ld.tsx`. Hero copy
+  split, mobile fixes, footer spacing polish.
+
+### Internal
+
+- New `content/root-var-store.ts` — tiny session-only store for per-token
+  original values, shared between the content message handlers and the
+  Markdown exporter without a circular dependency on `content/index.ts`.
+- Removed dead `__DEAD_PRESETS__` scaffolding in `sidepanel.ts`; removed
+  background `SP_*` relays for the deleted preset-bundle messages (the
+  generic `SP_` fallback handles every new message in the new panel).
+- Persistent storage now includes `dm-tokens-tab` (the active Tokens-panel
+  tab) alongside the existing `dm-*` UI preferences.
+
 ## [1.5.0] — 2026-05-23
 
 ### Added

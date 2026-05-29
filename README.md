@@ -88,11 +88,13 @@ Design Mode brings a coding agent inside the page through a small bridge called 
 - **Capture modes** — Camera-button setting: `clipboard` / `download` / `both`, persisted
   across captures with an inline confirmation toast.
 - **Comments** — Yellow pin sticky notes anchored to elements; export with the prompt.
-- **Presets** — Save current element styles as named presets across
-  9 kinds (Position / Layout / Appearance / Typography / Fill / Stroke /
-  Effects / Motion / Layout guide). One seeded preset per kind ships
-  out of the box so you can see the structure; site-token presets
-  surfaced as searchable dropdowns; cross-site sync via
+- **Design-system / Tokens panel** — Three tabs: **Declared** (page's
+  `:root` CSS variables with inline live editor + `×N uses` preview),
+  **Detected** (value histograms with drift warnings and `Replace with…`
+  → consolidate to `var(--name)`), and **Defined** (your saved presets
+  across 9 kinds: Position / Layout / Appearance / Typography / Fill /
+  Stroke / Effects / Motion / Layout guide). Cross-tab filters, search,
+  and a "Show only tokens used on this page" toggle. Sync via
   `chrome.storage.sync`.
 - **Compact prompt format** — `Copy Prompt` produces an LLM-optimised, ~8× smaller markdown
   format with framework + styling-system detection, source-file hints, and grep-ready selectors.

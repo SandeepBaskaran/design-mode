@@ -419,23 +419,36 @@ Every edit you've made grouped by element.
 
 ---
 
-## 6. Presets
+## 6. Design-system / Tokens panel
 
-Reusable, user-saved styles — modelled after Figma's styles but extended
-across **all nine Design-tab sections**. Open the panel from the bookmark
-icon in the action row. A fresh install ships with one seeded preset per
-kind so the exported JSON shows the full structure.
+Three-tab panel for working with the page's design system. Open from the
+swatch-book icon in the action row. Replaces the previous Presets surface —
+existing user-saved presets surface in the **Defined** tab without
+migration.
 
-> **Site-colour tokens** (CSS custom properties on the page) used to live
-> in a "Built-in" tab here. They've been retired — those tokens are now
-> surfaced **inline on every colour input** via a focus-driven dropdown.
-> The presets panel is purely user-saved.
+> **Site-colour tokens** (CSS custom properties on the page) also appear
+> inline on every colour input via the focus-driven dropdown (see §2.16).
+> The Tokens panel surfaces the underlying `:root` vars, the implicit
+> scales the page actually uses, and your user-saved presets.
 
-### 6.1 Nine kinds — one per Design-tab section
+The three tabs:
 
-When you save, pick a **Kind** from the dropdown. The kind drives which
-properties get captured from the selected element (NOT a 30-prop snapshot
-of unrelated styles).
+| Tab | What |
+|---|---|
+| **Declared** | Every `:root` CSS variable on the page, grouped by purpose (Colour / Typography / Spacing / Radius / Shadow / Other). Each row shows the swatch / preview, current value, an inline editor that repaints the page live via `documentElement.style.setProperty`, a reset-to-original button, and a `×N uses` badge that lights up the on-page consumers via the multi-select overlay. Per-token original values live in `content/root-var-store.ts` (session-only). |
+| **Detected** | Histograms of values *actually used* by viewport-visible elements for spacing / radius / font-size / shadow. Each entry shows its count, a drift warning when it's close to a declared token, and a "Replace with…" dropdown listing up to three closest declared tokens (lower / exact / upper). Picking one fans out a `CONSOLIDATE_DETECTED` scan that rewrites every matching computed value as `var(--name)` under a single grouped change in the Changes tab. |
+| **Defined** | User-saved presets — empty by default. Save the selected element's styles as a named preset; the Add form's kind dropdown only lists kinds with at least one non-default value on the current selection. Applied presets gain an **↶ Applied** button that reverts every style change in that application's `groupId`. |
+
+Across all three tabs: **filter chips** (`All` / `Colours` / `Type` /
+`Spacing` / `Radius` / `Shadow` / `Other`), free-text search, and a
+**"Show only tokens used on this page"** toggle. The active tab persists
+to `chrome.storage.local` as `dm-tokens-tab`.
+
+### 6.1 Defined-tab — nine kinds
+
+When you save a preset, pick a **Kind**. The kind drives which properties
+get captured from the selected element (NOT a 30-prop snapshot of
+unrelated styles):
 
 | Kind | What it captures |
 |---|---|
@@ -454,63 +467,46 @@ The exact property list per kind is owned by the side panel
 each save — so widening a section's surface area automatically widens what
 its preset captures.
 
-### 6.1a Seeded presets
+### 6.2 Save / Apply / Edit / Delete
 
-A fresh install seeds one preset of every kind so the exported JSON
-shows the schema. The seven Effects recipes (Soft / Hard / Layered
-drop, Glow, Embossed, Frosted glass, Neon text) that used to live in
-the Effects `+` menu now ship as presets too. Once deleted they stay
-deleted — a versioned seed flag (`dm_presets_seeded_version`)
-prevents resurrection on the next read.
-
-### 6.2 Save
-
-1. Select an element.
-2. Open the bookmark / Presets panel.
-3. Pick a Kind from the dropdown.
-4. Type a name → click **Save**.
-
-Default-valued properties (`none`, `normal`, `auto`) are skipped on
-capture so the preset stays small.
-
-### 6.3 Apply
-
-- Click **Apply** on any preset row. The captured properties land on the
-  selected element as live changes (recorded in the Changes tab, persisted
-  across reload).
-
-### 6.4 Edit
-
-- Pencil icon → opens the editor. Rename and tweak per-property values.
+- **Save**: select an element, open the Defined tab, pick a Kind, type a
+  name, click **Save**. Default-valued properties (`none`, `normal`,
+  `auto`) are skipped on capture so the preset stays small.
+- **Apply**: click **Apply** on any preset row. Captured properties land
+  on the selected element as live changes (recorded in the Changes tab,
+  persisted across reload). The row gains an **↶ Applied** button that
+  reverts every style in that application's `groupId`.
+- **Edit**: pencil icon → editor. Rename and tweak per-property values.
   CSS values are validated via `CSS.supports`; invalid pairs are dropped
   silently with a toast. The kind is **locked** as a read-only badge — to
   change kinds, save a new preset from the source element.
+- **Delete**: trash icon → confirmation overlay → confirm.
 
-### 6.5 Delete
+### 6.3 Import / Export
 
-- Trash icon → confirmation overlay → confirm.
+- **Export** writes a JSON file (`design-mode-design-system` kind marker)
+  with every saved preset.
+- **Import** reads any JSON file carrying that marker; foreign files are
+  rejected with a toast. Old presets saved under the legacy 3-kind set
+  (`color` / `shadow` / `typography`) are auto-migrated to the 9-kind set
+  on import. Duplicate IDs / names are renamed; toast confirms
+  `Imported X of Y presets`.
 
-### 6.6 Filter
+### 6.4 Sync + storage
 
-- When you have presets of more than one kind, a **Filter** dropdown
-  appears: `All kinds` plus one entry per kind that's actually present
-  in your saved list.
-
-### 6.7 Import / Export
-
-- **Export** writes a JSON file with every preset.
-- **Import** reads any JSON array of presets. Old presets saved under the
-  legacy 3-kind set (`color` / `shadow`) are auto-migrated to the new
-  7-kind set: `color → fill`, `shadow → effects`, `typography → typography`.
-- Duplicate IDs / names are renamed; toast confirms `Imported X of Y presets`.
-
-### 6.8 Sync
-
-- Custom presets sync via `chrome.storage.sync` so they're available
+- Saved presets sync via `chrome.storage.sync` so they're available
   across every site you visit (and across Chrome-signed-in devices).
 - If the sync bucket fills up (Chrome's 100 KB / 8 KB-per-item caps),
   saves fail with a clean "Storage full" toast — delete an old preset and
   try again.
+
+### 6.5 Markdown exporter integration
+
+The Copy-Prompt markdown exporter emits a focused **`## Tokens changed`**
+section listing only the `:root` CSS variables you've edited this session
+(original → current values). The section is omitted entirely when no
+root-var edits are present, so a Copy Prompt without token changes stays
+tight.
 
 ---
 

@@ -283,25 +283,29 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 
 ---
 
-## Phase 8 — Presets
+## Phase 8 — Design-system / Tokens panel
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
-| 8.1  | Open presets | Click bookmark icon in action row | Presets panel opens with two tabs: **Built-in** and **My Presets** |
-| 8.2  | Built-in tab — context | Select a `<button>`, open presets, Built-in tab | Context bar: "Showing tokens for `<button>`"; only relevant token groups (Buttons, Colors, Radius, Shadows, Borders) shown |
-| 8.3  | Built-in — text element | Select an `<h2>` | Filter switches to Typography, Colors, Spacing |
-| 8.4  | Apply token | Click **Apply** on any token row | `var(--token)` is set on the relevant property; row appears in Changes tab |
-| 8.5  | My Presets — save form gating | Open My Presets without an element selected | Save form disabled with hint "Click an element on the page to enable saving" |
-| 8.6  | Save preset — kind | Select element → My Presets → name → choose a kind (position / layout / appearance / typography / fill / stroke / effects) → Save | Preset appears in the list under the right kind; auto-switches to My Presets tab |
-| 8.7  | Apply custom preset | Click Apply on a saved preset | All recorded styles applied to the selected element with `groupKind: 'preset'`; rows in Changes tab collapse to a single labelled row |
-| 8.8  | Edit preset | Click pencil | Edit view: editable name + each property as a text row + remove (×) per property |
-| 8.9  | Save edits | Update values → Save Changes | Preset updated in storage; list returns |
-| 8.10 | Delete with confirmation | Click trash | Inline overlay modal "Delete preset?" with Cancel / Delete |
-| 8.11 | Cancel delete | Click Cancel | Preset stays |
-| 8.12 | Confirm delete | Click Delete | Preset removed from list and storage |
-| 8.13 | Export | Click **Export** (top right) | A `design-mode-presets.json` downloads with name + styles + kind |
-| 8.14 | Import | Click **Import**, choose the same JSON | Presets re-imported (deduped by ID); auto-switches to My Presets |
-| 8.15 | Built-in tab disables I/O | While on Built-in tab | Import / Export buttons rendered grey, no-pointer-events |
+| 8.1  | Open Tokens panel | Click the swatch-book icon in the action row | Panel opens with three tabs: **Declared**, **Detected**, **Defined**; last-active tab is restored from `dm-tokens-tab` |
+| 8.2  | Declared — grouping | Switch to Declared | Every `:root` CSS variable on the page is listed, grouped by purpose (Colour / Typography / Spacing / Radius / Shadow / Other), each row with swatch/preview + current value + inline editor |
+| 8.3  | Declared — live repaint | Type a new value (e.g. change a colour token's hex) | The page repaints live via `documentElement.style.setProperty` without a reload |
+| 8.4  | Declared — reset | Click the reset button on an edited row | Value restores to the original captured on the first edit |
+| 8.5  | `×N uses` preview | Click the `×N uses` badge on a token | On-page consumers light up via the multi-select overlay system |
+| 8.6  | Detected — histograms | Switch to Detected | Histograms of computed values used by viewport-visible elements for spacing / radius / font-size / shadow, each with a count |
+| 8.7  | Detected — drift warning | Find a detected value close to a declared token | Drift warning surfaces on that row |
+| 8.8  | Detected — Replace with… | Open the "Replace with…" dropdown → pick a closest token (lower / exact / upper) | `CONSOLIDATE_DETECTED` scan rewrites every matching computed value as `var(--name)`; appears as a **single grouped change** in the Changes tab |
+| 8.9  | Defined — empty by default | Open Defined on a fresh install | List is empty; no built-in seeds |
+| 8.10 | Defined — save | Select an element, choose a Kind (only kinds with non-default values on this element are listed), name, **Save** | Preset appears in the list under the chosen kind |
+| 8.11 | Defined — apply | Click **Apply** on a preset | Styles applied with `groupKind: 'preset'`; rows in Changes tab collapse to a single labelled row; an **↶ Applied** button appears on the preset row |
+| 8.12 | Defined — ↶ Applied revert | Click the **↶ Applied** button | Every change in that application's `groupId` reverts |
+| 8.13 | Defined — edit | Pencil → editor; rename + tweak values (kind is a locked badge) → save | Updates; invalid CSS dropped silently with a toast |
+| 8.14 | Defined — delete | Trash → confirmation overlay → confirm | Removed from list and storage |
+| 8.15 | Export / Import | **Export** → file downloads with kind marker `design-mode-design-system`; **Import** the same file | Re-imports cleanly; a foreign JSON (missing the marker) is rejected with a toast |
+| 8.16 | Cross-tab filters + search | Click filter chips (All / Colours / Type / Spacing / Radius / Shadow / Other) and type in the search box | Filters and search filter the active tab's rows; semantics adapt per tab |
+| 8.17 | "Used on this page" toggle | Toggle on | Active tab filters to entries actually consumed by viewport-visible elements |
+| 8.18 | Markdown exporter — Tokens changed | Edit a `:root` var → Copy Prompt | Output contains a focused **`## Tokens changed`** section listing only edited tokens (original → current). With no root-var edits, the section is omitted |
+| 8.19 | Pre-rework presets read back | If you had presets from before this rework | They load into the Defined tab without migration; `groupId` continues to work |
 
 ---
 
@@ -437,7 +441,7 @@ bleeding to duplicates and back.
 After every full pass, tag the run in the project notes:
 
 ```
-v1.5.0 — 2026-MM-DD
+v1.6.0 — 2026-MM-DD
 ✓ All 14 phases pass
 ✓ npm run build:extension clean
 ✓ npm run prepublish:check ran without warnings
