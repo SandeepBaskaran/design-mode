@@ -99,6 +99,8 @@ secrets/
 # ── Claude / agent session state ─────────────────────────────────────────
 .claude/
 .claude
+.claude/worktrees/
+.worktrees/
 .aider*
 
 # ── macOS ────────────────────────────────────────────────────────────────
