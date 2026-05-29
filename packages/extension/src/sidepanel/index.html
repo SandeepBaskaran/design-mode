@@ -483,6 +483,327 @@
       color: var(--dm-text-dim);
     }
 
+    /* ── Tokens / Design-system panel ── */
+    .dm-token-io-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 24px;
+      padding: 0 6px;
+      background: var(--dm-btn-bg);
+      border: 1px solid var(--dm-btn-border);
+      border-radius: 4px;
+      color: var(--dm-text-secondary);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 10px;
+    }
+    .dm-token-io-btn:hover { background: var(--dm-bg-secondary); color: var(--dm-text); }
+    .dm-token-io-btn-labelled { padding: 0 8px; }
+    /* Bare icon-only IO button (e.g. Rescan) stays compact and square. */
+    .dm-token-io-btn:not(.dm-token-io-btn-labelled) {
+      width: 24px;
+      padding: 0;
+    }
+    .dm-token-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .dm-token-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      background: var(--dm-btn-bg);
+      border: 1px solid var(--dm-btn-border);
+      border-radius: 9999px;
+      color: var(--dm-text-secondary);
+      cursor: pointer;
+      font-size: 9px;
+      font-family: inherit;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+      transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+    }
+    .dm-token-chip:hover { color: var(--dm-text); }
+    .dm-token-chip[data-active="true"] {
+      background: var(--dm-accent-bg);
+      border-color: var(--dm-accent-border);
+      color: var(--dm-accent);
+    }
+    .dm-token-chip-count {
+      font-family: SF Mono, Monaco, monospace;
+      font-size: 9px;
+      opacity: 0.7;
+    }
+    .dm-token-group { padding: 0; }
+    .dm-token-group-header {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px 6px;
+      position: sticky;
+      top: 0;
+      background: var(--dm-bg);
+      z-index: 2;
+      /* Two-px shadow below the sticky header so the boundary between the
+         header and the scrolling rows is clean even when a row partially
+         scrolls into the header's vertical band. */
+      box-shadow: 0 1px 0 var(--dm-separator);
+    }
+    .dm-token-group-label {
+      font-size: 9px;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      color: var(--dm-text-dim);
+    }
+    .dm-token-row { padding: 4px 12px; }
+    .dm-token-uses[data-unused="true"] {
+      color: var(--dm-text-dim);
+      cursor: default;
+      background: transparent;
+      border-color: var(--dm-separator);
+    }
+
+    /* ── Tokens panel — tab strip ── */
+    .dm-tokens-tabs {
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--dm-separator);
+      flex-shrink: 0;
+    }
+    .dm-tokens-tabs .dm-segmented-item {
+      gap: 6px;
+    }
+    .dm-tokens-tab-count {
+      font-family: SF Mono, Monaco, monospace;
+      font-size: 9px;
+      opacity: 0.7;
+    }
+    .dm-tokens-empty {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--dm-text-dim);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    /* ── Defined tab — Add CTA + inline form + preset rows ── */
+    .dm-defined-cta { padding: 10px 12px; }
+    .dm-defined-add-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      background: var(--dm-accent-bg);
+      border: 1px solid var(--dm-accent-border);
+      border-radius: 5px;
+      color: var(--dm-accent);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .dm-defined-add-btn[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+      background: var(--dm-btn-bg);
+      border-color: var(--dm-btn-border);
+      color: var(--dm-text-dim);
+    }
+    .dm-defined-add-form {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--dm-separator);
+      background: var(--dm-bg-secondary);
+    }
+    .dm-defined-kind {
+      flex: 0 0 110px;
+      font-size: 10px;
+      padding: 5px 6px;
+    }
+    .dm-defined-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 10px;
+      padding: 5px 7px;
+    }
+    .dm-defined-form-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .dm-defined-form-cancel {
+      background: var(--dm-btn-bg);
+      border: 1px solid var(--dm-btn-border);
+      color: var(--dm-text-secondary);
+    }
+    .dm-defined-form-save {
+      background: var(--dm-accent-bg);
+      border: 1px solid var(--dm-accent-border);
+      color: var(--dm-accent);
+    }
+    .dm-defined-list { padding: 4px 0; }
+    .dm-preset-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+    }
+    .dm-preset-row:hover { background: var(--dm-bg-secondary); }
+    .dm-preset-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      color: var(--dm-text);
+    }
+    .dm-preset-apply {
+      padding: 3px 9px;
+      background: var(--dm-accent-bg);
+      border: 1px solid var(--dm-accent-border);
+      border-radius: 3px;
+      color: var(--dm-accent);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+    .dm-preset-apply[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+      background: var(--dm-btn-bg);
+      border-color: var(--dm-btn-border);
+      color: var(--dm-text-dim);
+    }
+    .dm-preset-delete {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      background: var(--dm-danger-bg);
+      border: 1px solid var(--dm-danger-border);
+      border-radius: 3px;
+      color: var(--dm-danger);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .dm-preset-applied {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 3px 9px;
+      background: var(--dm-danger-bg);
+      border: 1px solid var(--dm-danger-border);
+      border-radius: 3px;
+      color: var(--dm-danger);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+
+    /* Detected-tab — "Replace with…" dropdown. Compact to match the
+       count badge to its right. */
+    .dm-detected-replace {
+      flex-shrink: 0;
+      max-width: 170px;
+      font-size: 9px;
+      padding: 3px 4px;
+      font-family: inherit;
+      background: var(--dm-input-bg);
+      border: 1px solid var(--dm-input-border);
+      color: var(--dm-text-secondary);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .dm-detected-replace:hover {
+      color: var(--dm-text);
+      border-color: var(--dm-accent-border);
+    }
+    .dm-token-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 12px;
+      transition: background-color 0.12s ease;
+    }
+    .dm-token-row:hover { background: var(--dm-bg-secondary); }
+    .dm-token-row-readonly:hover { background: transparent; cursor: default; }
+    .dm-token-name {
+      flex: 0 0 30%;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: SF Mono, Monaco, monospace;
+      font-size: 10px;
+      color: var(--dm-text);
+    }
+    .dm-token-name-detected { font-family: SF Mono, Monaco, monospace; color: var(--dm-text-secondary); }
+    .dm-token-value {
+      flex: 1;
+      min-width: 0;
+      font-size: 10px;
+      padding: 4px 6px;
+      font-family: SF Mono, Monaco, monospace;
+    }
+    .dm-token-uses {
+      flex-shrink: 0;
+      padding: 3px 7px;
+      font-size: 9px;
+      font-family: inherit;
+      color: var(--dm-text-secondary);
+      background: var(--dm-btn-bg);
+      border: 1px solid var(--dm-btn-border);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .dm-token-uses:hover { color: var(--dm-accent); border-color: var(--dm-accent-border); }
+    .dm-token-reset {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--dm-accent-bg);
+      border: 1px solid var(--dm-accent-border);
+      border-radius: 3px;
+      color: var(--dm-accent);
+      cursor: pointer;
+    }
+    .dm-token-reset-placeholder { flex-shrink: 0; width: 20px; height: 20px; }
+    .dm-token-count {
+      flex-shrink: 0;
+      margin-left: auto;
+      font-size: 9px;
+      color: var(--dm-text-dim);
+      font-family: SF Mono, Monaco, monospace;
+    }
+    .dm-token-drift {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px 6px;
+      font-size: 9px;
+      font-family: SF Mono, Monaco, monospace;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.14);
+      border-radius: 9999px;
+    }
+
     /* Corner radius grid — linked input on top, 2x2 individual corners
        below. Each corner input is small and labelled with a corner glyph. */
     .dm-corner-grid {

@@ -13,7 +13,12 @@ import type { ElementInfo } from './inspector';
 import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, downloadDataUrl } from './screenshots';
-import { getCustomPresets, saveCustomPreset, deleteCustomPreset, updateCustomPreset, importPresets, getPageTokens } from './presets';
+import {
+  getPageTokens, detectScales, annotateDrift, findTokenUsages,
+  getCustomPresets, saveCustomPreset, deleteCustomPreset,
+  type PresetKind,
+} from './presets';
+import { captureOriginalIfNew, clearRootVarEdit } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
 import { buildDomTree } from './dom-tree';
 import { addComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments } from './comments';
@@ -1305,87 +1310,162 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
     case 'REORDER_CHANGE': if (typeof msg.from === 'number' && typeof msg.to === 'number') reorderChange(msg.from, msg.to); getChangesPayload().then(p => sendResponse(p)); return true; break;
 
-    case 'APPLY_PRESET': {
-      const sid = getSelectedElementId();
-      if (sid && msg.preset) {
-        const el = getElementById(sid);
-        if (el) {
-          // One groupId per preset application — every property tagged
-          // with the same id collapses into a single Changes-tab row.
-          // groupLabel renders in the parent row.
-          const groupId = `pre-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          const groupLabel = msg.preset.name || 'Preset';
-          for (const [prop, val] of Object.entries(msg.preset.styles as Record<string, string>)) {
-            const kebab = prop.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
-            const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
-            // Companions ride along with the same groupId so the preset
-            // row in the Changes tab still collapses to one entry.
-            const change = applyWithCompanions(sid, prop, val, undefined, {
-              groupId, groupKind: 'preset', groupLabel,
-            });
-            const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
-            if (afterValue !== beforeValue) {
-              undoStack.push({ kind: 'style', elementId: sid, property: prop, oldValue: beforeValue, newValue: val, changeId: change?.id });
+    case 'GET_DESIGN_SYSTEM': {
+      // Single round-trip the panel uses to populate the Tokens view:
+      // declared :root vars + the implicit scales (spacing / radius /
+      // font-size / shadow) detected from viewport-visible elements.
+      // Drift is computed here so the panel doesn't have to.
+      const tokens = getPageTokens();
+      const scales = detectScales();
+      annotateDrift(scales, tokens);
+      sendResponse({ tokens, scales });
+      break;
+    }
+    case 'SET_ROOT_VAR': {
+      // Edit a CSS variable at :root. Inline-set on documentElement —
+      // resolves immediately for every consumer. The original value is
+      // captured in root-var-store on the first edit so RESET_ROOT_VAR
+      // and the markdown exporter can read it later. Changes-tab ledger
+      // integration is deferred (applyStyleChange requires data-dm-id'd
+      // elements; :root doesn't carry one).
+      if (msg.cssVar && msg.value != null) {
+        captureOriginalIfNew(msg.cssVar);
+        document.documentElement.style.setProperty(msg.cssVar, msg.value);
+        sendResponse({ ok: true });
+        return false;
+      }
+      sendResponse({ ok: false }); break;
+    }
+    case 'RESET_ROOT_VAR': {
+      if (msg.cssVar) {
+        document.documentElement.style.removeProperty(msg.cssVar);
+        clearRootVarEdit(msg.cssVar);
+        sendResponse({ ok: true });
+        return false;
+      }
+      sendResponse({ ok: false }); break;
+    }
+    case 'GET_TOKEN_USAGES': {
+      if (msg.cssVar) {
+        sendResponse({ ids: findTokenUsages(msg.cssVar) });
+      } else {
+        sendResponse({ ids: [] });
+      }
+      break;
+    }
+    case 'CONSOLIDATE_DETECTED': {
+      // Replace every on-page occurrence of msg.rawValue (in the relevant
+      // computed-style properties for the given scale) with var(--name).
+      // Each replacement is a style change; all share one groupId so the
+      // Changes tab shows it as a single collapsed row, revertable via
+      // the existing subgroup-revert button.
+      const PROPS_BY_SCALE: Record<string, string[]> = {
+        spacing: ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+                  'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+                  'gap', 'rowGap', 'columnGap'],
+        radius: ['borderTopLeftRadius', 'borderTopRightRadius',
+                 'borderBottomRightRadius', 'borderBottomLeftRadius'],
+        fontSize: ['fontSize'],
+        shadow: ['boxShadow', 'textShadow'],
+      };
+      const scale: string = msg.scale || '';
+      const props: string[] = PROPS_BY_SCALE[scale] || [];
+      const rawValue: string = msg.rawValue || '';
+      const cssVar: string = msg.cssVar || '';
+      if (!props.length || !rawValue || !cssVar) {
+        sendResponse({ ok: false, touched: 0 });
+        break;
+      }
+      const groupId = `consolidate-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const groupLabel = `Consolidate ${rawValue} → var(${cssVar})`;
+      let touched = 0;
+      const replacement = `var(${cssVar})`;
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>('[data-dm-id]'))) {
+        const cs = getComputedStyle(el);
+        const id = el.getAttribute('data-dm-id');
+        if (!id) continue;
+        for (const p of props) {
+          const v = (cs as any)[p] as string | undefined;
+          if (v === rawValue) {
+            const beforeValue = v;
+            const change = applyStyleChange(id, p, replacement, undefined,
+              { groupId, groupKind: 'consolidate', groupLabel });
+            if (change) {
+              undoStack.push({ kind: 'style', elementId: id, property: p, oldValue: beforeValue, newValue: replacement, changeId: change.id });
+              touched++;
             }
           }
-          redoStack.length = 0;
-          const updatedInfo = buildElementInfo(el);
-          getChangesPayload().then(p => sendResponse({ info: { ...updatedInfo, element: undefined }, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
-          return true;
         }
       }
-      sendResponse({ error: 'No element selected' }); break;
+      redoStack.length = 0;
+      getChangesPayload().then(p => sendResponse({
+        ok: true, touched, groupId, ...p,
+        undoCount: undoStack.length, redoCount: redoStack.length,
+      }));
+      return true;
+    }
+    case 'GET_PRESETS': {
+      getCustomPresets().then(presets => sendResponse({ presets }));
+      return true;
     }
     case 'SAVE_PRESET': {
       const sid = getSelectedElementId();
-      const kindsAllowed = ['position', 'layout', 'appearance', 'typography', 'fill', 'stroke', 'effects'] as const;
-      const kind = (kindsAllowed as readonly string[]).includes(msg.kind) ? msg.kind : 'typography';
-      const props: string[] = Array.isArray(msg.props) ? msg.props : [];
-      if (sid && msg.name) {
-        saveCustomPreset(msg.name, sid, kind, props).then(res => {
-          sendResponse(res?.error ? { ok: false, error: res.error } : { ok: true, preset: res?.preset });
-        });
-        return true;
+      if (!sid || !msg.name || !msg.kind) {
+        sendResponse({ ok: false, error: 'Select an element first' });
+        break;
       }
-      sendResponse({ ok: false, error: 'No element selected' });
-      break;
+      const props: string[] = Array.isArray(msg.props) ? msg.props : [];
+      saveCustomPreset(msg.name, sid, msg.kind as PresetKind, props).then(res => {
+        sendResponse(res?.error
+          ? { ok: false, error: res.error }
+          : { ok: true, preset: res?.preset });
+      });
+      return true;
     }
-    case 'DELETE_PRESET': if (msg.presetId) { deleteCustomPreset(msg.presetId).then(() => sendResponse({ ok: true })); return true; } sendResponse({ ok: true }); break;
-    case 'UPDATE_PRESET': {
-      if (msg.presetId && msg.name && msg.styles) {
-        updateCustomPreset(msg.presetId, msg.name, msg.styles).then(res => sendResponse(res));
+    case 'DELETE_PRESET': {
+      if (msg.presetId) {
+        deleteCustomPreset(msg.presetId).then(() => sendResponse({ ok: true }));
         return true;
       }
       sendResponse({ ok: false });
       break;
     }
-    case 'GET_PRESETS': { getCustomPresets().then(presets => sendResponse({ presets })); return true; }
-    case 'GET_PAGE_TOKENS': {
+    case 'APPLY_PRESET': {
       const sid = getSelectedElementId();
-      const el = (sid ? getElementById(sid) : null) || document.body;
-      const groups = getPageTokens(el);
-      sendResponse({ groups }); break;
-    }
-    case 'APPLY_TOKEN': {
-      const sid = getSelectedElementId();
-      if (sid && msg.cssVar && msg.property) {
-        const el = getElementById(sid);
-        if (el) {
-          const kebab = msg.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
-          const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
-          const varValue = `var(${msg.cssVar})`;
-          const change = applyWithCompanions(sid, msg.property, varValue);
-          const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
-          if (afterValue !== beforeValue) {
-            undoStack.push({ kind: 'style', elementId: sid, property: msg.property, oldValue: beforeValue, newValue: varValue, changeId: change?.id });
-            redoStack.length = 0;
-          }
-          const updatedInfo = buildElementInfo(el);
-          getChangesPayload().then(p => sendResponse({ info: { ...updatedInfo, element: undefined }, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
-          return true;
+      if (!sid || !msg.preset) {
+        sendResponse({ error: 'No element selected' });
+        break;
+      }
+      const el = getElementById(sid);
+      if (!el) {
+        sendResponse({ error: 'No element selected' });
+        break;
+      }
+      // One groupId per preset application — every prop tagged with the
+      // same id collapses into a single Changes-tab row.
+      const groupId = `pre-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const groupLabel = msg.preset.name || 'Preset';
+      for (const [prop, val] of Object.entries(msg.preset.styles as Record<string, string>)) {
+        const kebab = prop.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
+        const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
+        const change = applyWithCompanions(sid, prop, val, undefined, {
+          groupId, groupKind: 'preset', groupLabel,
+        });
+        const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
+        if (afterValue !== beforeValue) {
+          undoStack.push({ kind: 'style', elementId: sid, property: prop, oldValue: beforeValue, newValue: val, changeId: change?.id });
         }
       }
-      sendResponse({ error: 'No element selected' }); break;
+      redoStack.length = 0;
+      const updatedInfo = buildElementInfo(el);
+      getChangesPayload().then(p => sendResponse({
+        info: { ...updatedInfo, element: undefined },
+        ...p,
+        groupId,
+        undoCount: undoStack.length,
+        redoCount: redoStack.length,
+      }));
+      return true;
     }
     case 'IMPORT_CHANGES': {
       // Replace every change on the page with the imported payload. Revert
@@ -1419,21 +1499,6 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       })();
       return true;
     }
-    case 'EXPORT_PRESETS': { getCustomPresets().then(presets => sendResponse({ json: JSON.stringify(presets, null, 2) })); return true; }
-    case 'IMPORT_PRESETS': {
-      if (msg.json) {
-        importPresets(msg.json).then(res => sendResponse({
-          ok: !res.error,
-          count: res.count,
-          total: res.total,
-          error: res.error,
-        }));
-        return true;
-      }
-      sendResponse({ ok: false, error: 'Empty file' });
-      break;
-    }
-
     case 'GET_MEDIA': {
       const sid = getSelectedElementId();
       if (!sid) { sendResponse({ media: null }); break; }

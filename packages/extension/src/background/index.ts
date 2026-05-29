@@ -253,28 +253,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     forwardToPinnedTab({ type: 'REORDER_CHANGE', from: msg.from, to: msg.to }, sendResponse);
     return true;
   }
-  if (msg.type === 'SP_APPLY_PRESET') {
-    forwardToPinnedTab({ type: 'APPLY_PRESET', preset: msg.preset }, sendResponse);
-    return true;
-  }
-  if (msg.type === 'SP_SAVE_PRESET') {
-    forwardToPinnedTab({ type: 'SAVE_PRESET', name: msg.name, kind: msg.kind, props: msg.props }, sendResponse);
-    return true;
-  }
-  if (msg.type === 'SP_DELETE_PRESET') {
-    forwardToPinnedTab({ type: 'DELETE_PRESET', presetId: msg.presetId }, sendResponse);
-    return true;
-  }
-  if (msg.type === 'SP_GET_PRESETS') {
-    forwardToPinnedTab({ type: 'GET_PRESETS', category: msg.category }, sendResponse);
-    return true;
-  }
-  if (msg.type === 'SP_UPDATE_PRESET') { forwardToPinnedTab({ type: 'UPDATE_PRESET', presetId: msg.presetId, name: msg.name, styles: msg.styles }, sendResponse); return true; }
-  if (msg.type === 'SP_GET_PAGE_TOKENS') { forwardToPinnedTab({ type: 'GET_PAGE_TOKENS' }, sendResponse); return true; }
   if (msg.type === 'SP_GET_MEDIA') { forwardToPinnedTab({ type: 'GET_MEDIA' }, sendResponse); return true; }
-  if (msg.type === 'SP_APPLY_TOKEN') { forwardToPinnedTab({ type: 'APPLY_TOKEN', cssVar: msg.cssVar, property: msg.property }, sendResponse); return true; }
-  if (msg.type === 'SP_EXPORT_PRESETS') { forwardToPinnedTab({ type: 'EXPORT_PRESETS' }, sendResponse); return true; }
-  if (msg.type === 'SP_IMPORT_PRESETS') { forwardToPinnedTab({ type: 'IMPORT_PRESETS', json: msg.json }, sendResponse); return true; }
   if (msg.type === 'SP_IMPORT_CHANGES') { forwardToPinnedTab({ type: 'IMPORT_CHANGES', payload: msg.payload }, sendResponse); return true; }
   // Cloud-mode auth + transport reload. Register/revoke fire from the
   // background service worker (no content-script round-trip needed) so a

@@ -265,26 +265,41 @@ let pageFonts: Array<{ value: string; label: string }> = [];
 // Drag state (for layer reorder)
 let dragLayerId: string | null = null;
 
-// v1.2: Presets
-type PresetKind = 'position' | 'layout' | 'appearance' | 'typography' | 'fill' | 'stroke' | 'effects' | 'motion' | 'layoutGuide';
-const PRESET_KIND_LABELS: Record<PresetKind, string> = {
-  position: 'Position',
-  layout: 'Layout',
-  appearance: 'Appearance',
-  typography: 'Typography',
-  fill: 'Fill',
-  stroke: 'Stroke',
-  effects: 'Effects',
-  motion: 'Motion',
-  layoutGuide: 'Layout guide',
-};
-const PRESET_KIND_ORDER: PresetKind[] = ['position', 'layout', 'appearance', 'typography', 'fill', 'stroke', 'effects', 'motion', 'layoutGuide'];
-let presetsOpen = false;
-let customPresetsList: any[] = [];
-let editingPresetData: { id: string; name: string; kind?: PresetKind; styles: Record<string, string> } | null = null;
-let deletingPresetId: string | null = null;
-let savePresetKind: PresetKind = 'typography';
-let presetFilter: 'all' | PresetKind = 'all';
+// Design-system / Tokens panel state. Replaces the previous Presets
+// surface — the swatch-book header button now lists the page's :root
+// CSS variables grouped by purpose (Colour / Typography / Spacing /
+// Radius / Shadow / Other), plus the implicit scales detected from
+// computed styles of viewport-visible elements.
+type TokenGroup = 'colour' | 'typography' | 'spacing' | 'radius' | 'shadow' | 'other';
+interface DesignToken { cssVar: string; value: string; resolvedValue: string; group: TokenGroup; usageCount: number }
+interface ScaleEntry { value: string; count: number; driftOf?: string }
+interface DesignSystemPayload {
+  tokens: DesignToken[];
+  scales: { spacing: ScaleEntry[]; radius: ScaleEntry[]; fontSize: ScaleEntry[]; shadow: ScaleEntry[] };
+}
+type TokenFilter = 'all' | TokenGroup;
+type TokensTab = 'declared' | 'detected' | 'defined';
+type PresetKindLocal = 'position' | 'layout' | 'appearance' | 'typography' | 'fill' | 'stroke' | 'effects' | 'motion';
+interface PresetLocal { id: string; name: string; kind: PresetKindLocal; styles: Record<string, string>; createdAt: number }
+let tokensOpen = false;
+let tokensTab: TokensTab = 'declared';
+let designSystem: DesignSystemPayload | null = null;
+let designSystemInflight = false;
+let tokenFilter: TokenFilter = 'all';
+let tokenUsedOnlyFilter = false;
+// User-defined preset bundles for the Defined tab. Empty by default —
+// the user adds them manually from the panel. Persisted via
+// chrome.storage.sync (handled in content-script presets module).
+let customPresets: PresetLocal[] = [];
+let presetAddingKind: PresetKindLocal | null = null;
+// Tracks presets the user has Applied in this session. Maps presetId
+// → groupId so the row's Unapply button knows which change-tracker
+// entries to revert. Session-only — cleared when the panel closes.
+const appliedPresetGroups = new Map<string, string>();
+// Map of cssVar → the user's edited value (cleared on Reset). Lets the
+// panel surface a Reset affordance only for tokens that have changed.
+const editedTokens = new Map<string, string>();
+let tokenSearch = '';
 
 // v1.2: Computed CSS
 let computedCssOpen = false;
@@ -517,13 +532,26 @@ async function refreshMedia() {
   mediaInfo = res?.media || null;
   render();
 }
-async function refreshPresets() {
-  // Built-in tab is gone — only user-saved presets live in the panel now.
-  // Site-colour CSS tokens are surfaced inline on every colour input via
-  // the focus-driven dropdown (see colorInp / renderTokensDropdown).
-  const res = await send({ type: 'SP_GET_PRESETS', category: 'custom' });
-  customPresetsList = res.presets || [];
+async function refreshCustomPresets(): Promise<void> {
+  const res = await send({ type: 'SP_GET_PRESETS' });
+  customPresets = (res && Array.isArray(res.presets)) ? res.presets : [];
   render();
+}
+
+// Fetch the page's design system — :root CSS variables + detected scales
+// (spacing, radius, font-size, shadow histograms from viewport-visible
+// elements). Cached in `designSystem` until the user reloads or
+// re-opens the Tokens panel.
+async function refreshDesignSystem() {
+  if (designSystemInflight) return;
+  designSystemInflight = true;
+  try {
+    const res = await send({ type: 'SP_GET_DESIGN_SYSTEM' });
+    designSystem = (res && res.tokens) ? res as DesignSystemPayload : { tokens: [], scales: { spacing: [], radius: [], fontSize: [], shadow: [] } };
+    render();
+  } finally {
+    designSystemInflight = false;
+  }
 }
 
 // Recompose translate / scale from their X/Y inputs and apply.
@@ -4616,211 +4644,458 @@ function renderVizPanel(): string {
 }
 
 /* ── Presets View — user-saved styles, 7 kinds (one per Design-tab section). ── */
-function renderPresetsView(): string {
-  const hasElement = !!info;
+// Design-system / Tokens view — lists every :root CSS variable the page
+// declares (grouped by purpose) plus the implicit scales detected from
+// computed styles of viewport-visible elements. The user can:
+//   • see the original value + a swatch / preview per row
+//   • edit declared CSS variables (the page repaints live across every
+//     consumer)
+//   • reset edited tokens back to their original value
+//   • click "×N uses" to highlight every element on the page that
+//     resolves to that token (existing multi-select overlay system)
+//   • spot drift — values close-but-not-equal to a declared token
+//
+// This panel replaced the user-saved-preset feature. The bookmark icon
+// in the header is now the swatchBook icon.
+function renderTokensView(): string {
+  // Token data is fetched lazily when the panel opens. Until it arrives
+  // we render an empty-state with a small spinner-like message.
+  if (!designSystem) {
+    refreshDesignSystem();
+  }
+  const ds: DesignSystemPayload = designSystem || { tokens: [], scales: { spacing: [], radius: [], fontSize: [], shadow: [] } };
 
-  // Import/Export buttons live in the header.
-  const btnBase = 'display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:5px;font-size:10px;font-family:inherit;cursor:pointer;';
-  const ioButtons = '<div style="display:flex;gap:4px;">' +
-    '<label style="' + btnBase + 'background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text-secondary);" title="Import presets from JSON file">' +
-    icon('upload', 11) + ' Import<input type="file" accept=".json" data-dm-import-presets style="display:none;"/></label>' +
-    '<button data-dm-action="export-presets" style="' + btnBase + 'background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text-secondary);" title="Export presets as JSON">' + icon('download', 11) + ' Export</button>' +
+  const header = '<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);">' +
+    '<button data-dm-action="close-tokens" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:2px;" title="Back">' + icon('chevronLeft', 14) + '</button>' +
+    '<span style="font-size:13px;font-weight:600;color:var(--dm-text);flex:1;">Design system</span>' +
+    '<label class="dm-token-io-btn dm-token-io-btn-labelled" title="Import design-system JSON">' +
+      icon('upload', 11) + '<span>Import</span>' +
+      '<input type="file" accept=".json" data-dm-tokens-import style="display:none;"/></label>' +
+    '<button data-dm-action="tokens-export" class="dm-token-io-btn dm-token-io-btn-labelled" title="Export the detected design system as JSON">' + icon('download', 11) + '<span>Export</span></button>' +
+    '<button data-dm-action="refresh-tokens" class="dm-token-io-btn" title="Rescan the page">' + icon('rotateCw', 11) + '</button>' +
     '</div>';
 
-  const presetsHeader = '<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dm-separator-strong);flex-shrink:0;">' +
-    '<button data-dm-action="close-presets" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:2px;">' + icon('chevronLeft', 14) + '</button>' +
-    '<span style="font-size:13px;font-weight:600;color:var(--dm-text);flex:1;">Presets</span>' +
-    ioButtons + '</div>';
+  // Per-tab chip count — the same chip strip is shown on every tab but
+  // each tab maps the chip onto its own content (see plan's table).
+  const detectedCountForChip = (g: TokenFilter): number => {
+    if (g === 'spacing') return ds.scales.spacing.length;
+    if (g === 'radius') return ds.scales.radius.length;
+    if (g === 'typography') return ds.scales.fontSize.length;
+    if (g === 'shadow') return ds.scales.shadow.length;
+    if (g === 'all') return ds.scales.spacing.length + ds.scales.radius.length + ds.scales.fontSize.length + ds.scales.shadow.length;
+    return 0; // colour / other → no detected scale
+  };
+  const presetKindsForChip = (g: TokenFilter): PresetKindLocal[] => {
+    if (g === 'all') return ['position', 'layout', 'appearance', 'typography', 'fill', 'stroke', 'effects', 'motion'];
+    if (g === 'typography') return ['typography'];
+    if (g === 'spacing') return ['layout'];
+    if (g === 'radius') return ['appearance'];
+    if (g === 'shadow') return ['effects'];
+    if (g === 'colour') return ['fill', 'stroke'];
+    if (g === 'other') return ['position', 'motion'];
+    return [];
+  };
+  const definedCountForChip = (g: TokenFilter): number => {
+    const kinds = new Set<PresetKindLocal>(presetKindsForChip(g));
+    return customPresets.filter(p => kinds.has(p.kind)).length;
+  };
 
-  let content = '';
-  let deleteOverlay = '';
-
-  {
-    if (editingPresetData) {
-      // Edit view: name + editable style properties
-      const styleRows = Object.entries(editingPresetData.styles).map(([prop, val]) =>
-        '<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">' +
-        '<span style="font-size:9px;color:var(--dm-text-secondary);min-width:90px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeAttr(prop) + '">' + escapeAttr(prop) + '</span>' +
-        '<input class="dm-input" data-dm-edit-prop="' + escapeAttr(prop) + '" value="' + escapeAttr(String(val)) + '" style="flex:1;font-size:9px;padding:3px 5px;min-width:0;font-family:SF Mono,Monaco,monospace;"/>' +
-        '<button data-dm-remove-edit-prop="' + escapeAttr(prop) + '" title="Remove property" style="padding:2px;background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;flex-shrink:0;">' + icon('x', 9) + '</button>' +
-        '</div>'
-      ).join('');
-      const editKind = editingPresetData.kind || 'typography';
-      const editKindBadgeStyle = (() => {
-        // One pastel pair per kind. Reuse semantic CSS variables where they
-        // exist; otherwise hard-code accents that read on both themes.
-        const colors: Record<string, [string, string]> = {
-          position:   ['rgba(34,197,94,0.16)', 'rgb(34,197,94)'],
-          layout:     ['rgba(20,184,166,0.18)', 'rgb(20,184,166)'],
-          appearance: ['rgba(139,92,246,0.18)', 'var(--dm-purple)'],
-          typography: ['rgba(79,158,255,0.15)', 'var(--dm-accent)'],
-          fill:       ['rgba(245,158,11,0.18)', '#f59e0b'],
-          stroke:     ['rgba(244,63,94,0.18)', 'rgb(244,63,94)'],
-          effects:    ['rgba(168,85,247,0.18)', 'rgb(168,85,247)'],
-        };
-        const [bg, fg] = colors[editKind] || colors.typography;
-        return `font-size:8px;padding:2px 8px;border-radius:9999px;background:${bg};color:${fg};text-transform:uppercase;letter-spacing:0.4px;font-weight:600;flex-shrink:0;`;
-      })();
-      content = '<div style="padding:10px;">' +
-        '<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;">' +
-        '<div style="flex:1;">' +
-        '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:4px;">Preset Name</div>' +
-        '<input class="dm-input" data-dm-edit-preset-name value="' + escapeAttr(editingPresetData.name) + '" style="width:100%;font-size:11px;padding:5px 7px;box-sizing:border-box;"/>' +
-        '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:4px;">' +
-        '<div style="font-size:9px;color:var(--dm-text-dim);">Type</div>' +
-        '<span style="' + editKindBadgeStyle + '" title="Type cannot be changed — create a new preset to switch kinds">' + escapeAttr(editKind) + '</span>' +
-        '</div>' +
-        '</div>' +
-        '<div style="margin-bottom:10px;">' +
-        '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:6px;">Style Properties</div>' +
-        (styleRows || '<div style="font-size:10px;color:var(--dm-text-dim);">No styles</div>') +
-        '</div>' +
-        '<div style="display:flex;gap:6px;">' +
-        '<button data-dm-action="save-edit-preset" style="flex:1;padding:6px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Save Changes</button>' +
-        '<button data-dm-action="cancel-edit-preset" style="padding:6px 10px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Cancel</button>' +
-        '</div></div>';
-    } else {
-      // List view — save form always shown, disabled when no element selected.
-      // The Kind dropdown spans all 7 Design-tab sections (Position, Layout,
-      // Appearance, Typography, Fill, Stroke, Effects). The selected kind
-      // drives which properties get captured — the side panel's
-      // SECTION_PROPS is the single source of truth for that list and is
-      // sent across with the save message.
-      const saveDisabled = !hasElement;
-      // Kind picker — pill chips wrap onto multiple rows when needed.
-      // We tried a dropdown earlier; chips give better discoverability of
-      // the seven kinds at a glance.
-      const kindChip = (k: PresetKind) => {
-        const active = savePresetKind === k;
-        return '<button data-dm-preset-kind="' + k + '"' + (saveDisabled ? ' disabled' : '') +
-          ' style="padding:3px 9px;background:' + (active ? 'var(--dm-accent-bg)' : 'var(--dm-btn-bg)') +
-          ';border:1px solid ' + (active ? 'var(--dm-accent-border)' : 'var(--dm-btn-border)') +
-          ';border-radius:9999px;color:' + (active ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') +
-          ';cursor:' + (saveDisabled ? 'default' : 'pointer') +
-          ';font-size:9px;font-family:inherit;font-weight:' + (active ? '600' : '400') +
-          ';opacity:' + (saveDisabled ? '0.45' : '1') + ';">' + PRESET_KIND_LABELS[k] + '</button>';
-      };
-      const saveForm = '<div style="padding:8px 10px;border-bottom:1px solid var(--dm-separator);">' +
-        (saveDisabled
-          ? '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:6px;">Click an element on the page to enable saving</div>'
-          : '<div style="font-size:9px;color:var(--dm-text-dim);margin-bottom:6px;">What are you saving from this element?</div>') +
-        '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">' +
-        PRESET_KIND_ORDER.map(k => kindChip(k)).join('') +
-        '</div>' +
-        '<div style="display:flex;gap:6px;align-items:center;">' +
-        '<input type="text" class="dm-input" data-dm-preset-name placeholder="Name this preset..." ' +
-        (saveDisabled ? 'disabled style="flex:1;min-width:0;font-size:10px;opacity:0.4;"' : 'style="flex:1;min-width:0;font-size:10px;"') + '/>' +
-        '<button data-dm-action="save-preset" ' +
-        (saveDisabled ? 'disabled style="padding:4px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-dim);font-size:9px;font-family:inherit;white-space:nowrap;display:flex;align-items:center;gap:3px;opacity:0.4;cursor:default;pointer-events:none;"' :
-          'style="padding:4px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;font-size:9px;font-family:inherit;white-space:nowrap;display:flex;align-items:center;gap:3px;"') +
-        '>' + icon('save', 9) + ' Save</button>' +
-        '</div></div>';
-
-      // Filter chips — appear once the user has presets across more than
-      // one kind. Pills wrap cleanly when there are many kinds, so we
-      // get the discoverability win without crowding when there's only
-      // a handful.
-      const visibleKinds = new Set<string>(customPresetsList.map((p: any) => p.kind || 'typography'));
-      const filterRow = customPresetsList.length > 1 && visibleKinds.size > 1
-        ? (() => {
-            const fchip = (f: 'all' | PresetKind, label: string) => {
-              const active = presetFilter === f;
-              return '<button data-dm-preset-filter="' + f + '" style="padding:3px 9px;background:' + (active ? 'var(--dm-accent-bg)' : 'transparent') +
-                ';border:1px solid ' + (active ? 'var(--dm-accent-border)' : 'var(--dm-separator)') +
-                ';border-radius:9999px;color:' + (active ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') +
-                ';cursor:pointer;font-size:9px;font-family:inherit;font-weight:' + (active ? '600' : '400') + ';">' + label + '</button>';
-            };
-            const visibleChips = PRESET_KIND_ORDER
-              .filter(k => visibleKinds.has(k))
-              .map(k => fchip(k, PRESET_KIND_LABELS[k]))
-              .join('');
-            return '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;border-bottom:1px solid var(--dm-separator);">' +
-              fchip('all', 'All') + visibleChips +
-              '</div>';
-          })()
-        : '';
-
-      // Apply preset disabled state
-      const applyPresetStyle = hasElement
-        ? 'padding:2px 6px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:3px;color:var(--dm-accent);cursor:pointer;font-size:9px;font-family:inherit;flex-shrink:0;'
-        : 'padding:2px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:3px;color:var(--dm-text-dim);cursor:default;font-size:9px;font-family:inherit;flex-shrink:0;opacity:0.45;pointer-events:none;';
-
-      const filteredPresets = presetFilter === 'all'
-        ? customPresetsList
-        : customPresetsList.filter((p: any) => (p.kind || 'typography') === presetFilter);
-      const kindBadgeStyle = (kind: string): string => {
-        const colors: Record<string, [string, string]> = {
-          position:   ['rgba(34,197,94,0.16)', 'rgb(34,197,94)'],
-          layout:     ['rgba(20,184,166,0.18)', 'rgb(20,184,166)'],
-          appearance: ['rgba(139,92,246,0.18)', 'var(--dm-purple)'],
-          typography: ['rgba(79,158,255,0.15)', 'var(--dm-accent)'],
-          fill:       ['rgba(245,158,11,0.18)', '#f59e0b'],
-          stroke:     ['rgba(244,63,94,0.18)', 'rgb(244,63,94)'],
-          effects:    ['rgba(168,85,247,0.18)', 'rgb(168,85,247)'],
-        };
-        const [bg, fg] = colors[kind] || colors.typography;
-        return `font-size:8px;padding:1px 6px;border-radius:9999px;background:${bg};color:${fg};text-transform:uppercase;letter-spacing:0.4px;font-weight:600;flex-shrink:0;`;
-      };
-      // Best-effort visual preview per preset. Anything we can't visualise
-      // falls through to a small kind-tinted dot.
-      const previewSwatch = (p: any): string => {
-        const k = p.kind || 'typography';
-        const styles = p.styles || {};
-        if (styles.color && (k === 'typography' || k === 'fill')) {
-          return '<span title="' + escapeAttr(styles.color) + '" style="width:14px;height:14px;border-radius:3px;background:' + escapeAttr(styles.color) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>';
-        }
-        if (k === 'fill' && styles.backgroundColor) {
-          return '<span style="width:14px;height:14px;border-radius:3px;background:' + escapeAttr(styles.backgroundColor) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>';
-        }
-        if (k === 'fill' && styles.backgroundImage) {
-          return '<span style="width:14px;height:14px;border-radius:3px;background:' + escapeAttr(styles.backgroundImage) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>';
-        }
-        if (k === 'effects' && styles.boxShadow) {
-          return '<span style="width:14px;height:14px;border-radius:3px;background:white;box-shadow:' + escapeAttr(styles.boxShadow) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>';
-        }
-        if (k === 'stroke' && styles.borderTopColor) {
-          return '<span style="width:14px;height:14px;border-radius:3px;background:white;border:2px solid ' + escapeAttr(styles.borderTopColor) + ';flex-shrink:0;"></span>';
-        }
-        // Fallback — small kind-tinted square.
-        return '<span style="width:10px;height:10px;border-radius:50%;background:var(--dm-accent);opacity:0.5;flex-shrink:0;"></span>';
-      };
-      const presetsHtml = customPresetsList.length === 0
-        ? '<div style="text-align:center;padding:28px 16px;color:var(--dm-text-dim);font-size:11px;line-height:1.7;">No presets yet.<br/><br/>Pick an element on the page, choose a Kind<br/>(Position, Layout, Appearance, Typography, Fill, Stroke, or Effects),<br/>name it, and click Save.</div>'
-        : filteredPresets.length === 0
-        ? '<div style="text-align:center;padding:24px 16px;color:var(--dm-text-dim);font-size:11px;">No presets in this kind.</div>'
-        : '<div style="padding:8px;">' +
-          filteredPresets.map((p: any) => {
-            const kind = p.kind || 'typography';
-            return '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;margin-bottom:4px;">' +
-              previewSwatch(p) +
-              '<span style="flex:1;font-size:10px;font-weight:500;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeAttr(p.name) + '">' + escapeAttr(p.name) + '</span>' +
-              '<span style="' + kindBadgeStyle(kind) + '">' + escapeAttr(kind) + '</span>' +
-              '<button data-dm-apply-preset-id="' + escapeAttr(p.id) + '" title="' + (hasElement ? 'Apply to selected element' : 'Select an element first') + '" style="' + applyPresetStyle + '">Apply</button>' +
-              '<button data-dm-edit-preset="' + escapeAttr(p.id) + '" title="Edit" style="padding:2px 4px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:3px;color:var(--dm-text-secondary);cursor:pointer;display:flex;flex-shrink:0;">' + icon('pencil', 9) + '</button>' +
-              '<button data-dm-delete-preset="' + escapeAttr(p.id) + '" title="Delete" style="padding:2px 4px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:3px;color:var(--dm-danger);cursor:pointer;display:flex;flex-shrink:0;">' + icon('trash', 9) + '</button>' +
-              '</div>';
-          }).join('') + '</div>';
-
-      // Delete confirmation overlay
-      if (deletingPresetId) {
-        deleteOverlay = '<div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);z-index:30;display:flex;align-items:center;justify-content:center;">' +
-          '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:168px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
-          '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;">Delete preset?</div>' +
-          '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;">This cannot be undone.</div>' +
-          '<div style="display:flex;gap:6px;">' +
-          '<button data-dm-action="cancel-delete-preset" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Cancel</button>' +
-          '<button data-dm-action="confirm-delete-preset" style="flex:1;padding:6px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:6px;color:var(--dm-danger);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Delete</button>' +
-          '</div></div></div>';
+  // Filter chips — always visible. Each tab interprets the chip via the
+  // per-tab count + content selector.
+  const filterChips = (() => {
+    const chip = (key: TokenFilter, label: string, count: number) => {
+      const active = tokenFilter === key;
+      return '<button class="dm-token-chip" data-dm-token-filter="' + key + '" data-active="' + (active ? 'true' : 'false') + '">' +
+        escapeAttr(label) + ' <span class="dm-token-chip-count">' + count + '</span>' +
+      '</button>';
+    };
+    const countFor = (g: TokenFilter): number => {
+      if (tokensTab === 'declared') {
+        if (g === 'all') return ds.tokens.length;
+        return ds.tokens.filter(t => t.group === g).length;
       }
+      if (tokensTab === 'detected') return detectedCountForChip(g);
+      return definedCountForChip(g);
+    };
+    return '<div class="dm-token-chips">' +
+      chip('all', 'All', countFor('all')) +
+      chip('colour', 'Colours', countFor('colour')) +
+      chip('typography', 'Type', countFor('typography')) +
+      chip('spacing', 'Spacing', countFor('spacing')) +
+      chip('radius', 'Radius', countFor('radius')) +
+      chip('shadow', 'Shadow', countFor('shadow')) +
+      chip('other', 'Other', countFor('other')) +
+    '</div>';
+  })();
 
-      content = saveForm + filterRow + presetsHtml;
-    }
+  // Chrome row (chips + search + checkbox) shown on every tab so the
+  // user has consistent filtering affordances throughout the panel.
+  const filterChrome =
+    '<div style="padding:8px 10px;border-bottom:1px solid var(--dm-separator);flex-shrink:0;display:flex;flex-direction:column;gap:6px;background:var(--dm-bg);position:relative;z-index:2;">' +
+      filterChips +
+      '<input type="text" class="dm-input" data-dm-token-search value="' + escapeAttr(tokenSearch) + '" placeholder="Search tokens…" style="width:100%;font-size:10px;padding:5px 8px;box-sizing:border-box;"/>' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--dm-text-secondary);cursor:pointer;">' +
+        '<input type="checkbox" data-dm-tokens-used-only' + (tokenUsedOnlyFilter ? ' checked' : '') + ' style="accent-color:var(--dm-accent);"/>' +
+        '<span>Show only tokens used on this page</span>' +
+      '</label>' +
+    '</div>';
+
+  // Tab strip — Declared / Detected / Defined. Sticky-pin-style so it
+  // stays visible while the body scrolls.
+  const tabStrip = (() => {
+    const tab = (key: TokensTab, label: string, count: number) => {
+      const active = tokensTab === key;
+      return '<button class="dm-segmented-item" data-dm-action="switch-tokens-tab" data-tokens-tab="' + key + '" data-active="' + (active ? 'true' : 'false') + '">' +
+        '<span>' + escapeAttr(label) + '</span>' +
+        '<span class="dm-tokens-tab-count">' + count + '</span>' +
+      '</button>';
+    };
+    const declaredCount = ds.tokens.length;
+    const detectedCount = ds.scales.spacing.length + ds.scales.radius.length + ds.scales.fontSize.length + ds.scales.shadow.length;
+    const definedCount = customPresets.length;
+    return '<div class="dm-tokens-tabs" style="background:var(--dm-bg);">' +
+      '<div class="dm-segmented">' +
+        tab('declared', 'Declared', declaredCount) +
+        tab('detected', 'Detected', detectedCount) +
+        tab('defined', 'Defined', definedCount) +
+      '</div>' +
+    '</div>';
+  })();
+
+  const filter = tokenSearch.toLowerCase().trim();
+  const matchesFilter = (s: string) => !filter || s.toLowerCase().includes(filter);
+  const passesUsedFilter = (t: DesignToken) => !tokenUsedOnlyFilter || t.usageCount > 0;
+  const tFilter = (group: TokenGroup) => ds.tokens.filter(t =>
+    t.group === group &&
+    passesUsedFilter(t) &&
+    (matchesFilter(t.cssVar) || matchesFilter(t.resolvedValue) || matchesFilter(t.value)),
+  );
+
+  const showGroup = (g: TokenFilter) => tokenFilter === 'all' || tokenFilter === g;
+
+  // Groups for the Declared tab — only declared :root token buckets.
+  // Detected scales render on the Detected tab via a separate branch.
+  const declaredGroups: { key: TokenGroup; label: string; tokens: DesignToken[] }[] = [];
+  if (showGroup('colour')) declaredGroups.push({ key: 'colour', label: 'Colour', tokens: tFilter('colour') });
+  if (showGroup('typography')) declaredGroups.push({ key: 'typography', label: 'Typography', tokens: tFilter('typography') });
+  if (showGroup('spacing')) declaredGroups.push({ key: 'spacing', label: 'Spacing', tokens: tFilter('spacing') });
+  if (showGroup('radius')) declaredGroups.push({ key: 'radius', label: 'Radius', tokens: tFilter('radius') });
+  if (showGroup('shadow')) declaredGroups.push({ key: 'shadow', label: 'Shadow', tokens: tFilter('shadow') });
+  if (showGroup('other')) declaredGroups.push({ key: 'other', label: 'Other', tokens: tFilter('other') });
+
+  // Detected groups for the Detected tab. Filter by chip + search.
+  // Chip maps: Spacing→spacing scale, Radius→radius scale,
+  // Type→fontSize scale, Shadow→shadow scale; Colours/Other empty.
+  const showDetectedScale = (chipKey: TokenFilter): boolean =>
+    tokenFilter === 'all' || tokenFilter === chipKey;
+  const detectedGroups: { key: string; label: string; group: TokenGroup; entries: ScaleEntry[] }[] = [];
+  if (showDetectedScale('spacing')) {
+    detectedGroups.push({ key: 'detected-spacing',  label: 'Spacing',   group: 'spacing',    entries: ds.scales.spacing.filter(e => matchesFilter(e.value)) });
+  }
+  if (showDetectedScale('radius')) {
+    detectedGroups.push({ key: 'detected-radius',   label: 'Radius',    group: 'radius',     entries: ds.scales.radius.filter(e => matchesFilter(e.value)) });
+  }
+  if (showDetectedScale('typography')) {
+    detectedGroups.push({ key: 'detected-fontSize', label: 'Font size', group: 'typography', entries: ds.scales.fontSize.filter(e => matchesFilter(e.value)) });
+  }
+  if (showDetectedScale('shadow')) {
+    detectedGroups.push({ key: 'detected-shadow',   label: 'Shadow',    group: 'shadow',     entries: ds.scales.shadow.filter(e => matchesFilter(e.value)) });
   }
 
-  return presetsHeader +
-    '<div style="flex:1;overflow-y:auto;position:relative;">' + content + deleteOverlay + '</div>';
+  // Per-row preview swatch — type-aware. For colours we paint a chip; for
+  // shadows we stamp the shadow on a white square; for everything else we
+  // render the value text in monospace.
+  const renderSwatch = (group: TokenGroup, value: string): string => {
+    const safe = safeCssColor(value) || value;
+    if (group === 'colour') {
+      return '<span style="width:18px;height:18px;border-radius:4px;border:1px solid var(--dm-separator-strong);background:' + escapeAttr(safe) + ';flex-shrink:0;"></span>';
+    }
+    if (group === 'shadow') {
+      return '<span style="width:24px;height:18px;border-radius:3px;background:#fff;border:1px solid var(--dm-separator);box-shadow:' + escapeAttr(value) + ';flex-shrink:0;"></span>';
+    }
+    if (group === 'radius') {
+      return '<span style="width:18px;height:18px;border:2px solid var(--dm-text-secondary);border-radius:' + escapeAttr(value) + ';flex-shrink:0;"></span>';
+    }
+    if (group === 'spacing') {
+      const n = Math.max(2, Math.min(18, parseFloat(value) || 0));
+      return '<span style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="width:' + n + 'px;height:3px;background:var(--dm-accent);border-radius:1px;"></span></span>';
+    }
+    if (group === 'typography') {
+      const n = Math.max(8, Math.min(18, parseFloat(value) || 12));
+      return '<span style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;color:var(--dm-text);font-size:' + n + 'px;line-height:1;flex-shrink:0;">A</span>';
+    }
+    return '<span style="width:8px;height:8px;border-radius:50%;background:var(--dm-text-dim);flex-shrink:0;"></span>';
+  };
+
+  // ── Declared body ──
+  const renderDeclaredRow = (t: DesignToken) => {
+    const edited = editedTokens.has(t.cssVar);
+    const displayValue = edited ? editedTokens.get(t.cssVar)! : t.resolvedValue || t.value;
+    const swatch = renderSwatch(t.group, displayValue);
+    const valueInputAttrs = 'data-dm-token-edit="' + escapeAttr(t.cssVar) + '" value="' + escapeAttr(displayValue) + '"';
+    const usageLabel = t.usageCount > 0 ? '×' + t.usageCount + ' uses' : 'unused';
+    const usageTitle = t.usageCount > 0
+      ? 'Highlight ' + t.usageCount + ' element' + (t.usageCount === 1 ? '' : 's') + ' using this token'
+      : 'No on-page consumers — declared but never resolved on this page';
+    return '<div class="dm-token-row" data-dm-token-row="' + escapeAttr(t.cssVar) + '">' +
+      swatch +
+      '<span class="dm-token-name" title="' + escapeAttr(t.cssVar) + '">' + escapeAttr(t.cssVar) + '</span>' +
+      '<input class="dm-input dm-token-value" type="text" ' + valueInputAttrs + ' />' +
+      '<button class="dm-token-uses" data-dm-token-find-uses="' + escapeAttr(t.cssVar) + '" data-unused="' + (t.usageCount === 0 ? 'true' : 'false') + '" title="' + escapeAttr(usageTitle) + '">' + usageLabel + '</button>' +
+      (edited
+        ? '<button class="dm-token-reset" data-dm-token-reset="' + escapeAttr(t.cssVar) + '" title="Restore original value">' + icon('rotateCcw', 10) + '</button>'
+        : '<span class="dm-token-reset-placeholder"></span>') +
+      '</div>';
+  };
+
+  const declaredHtml = declaredGroups.map(g => {
+    if (!g.tokens.length) return '';
+    return '<div class="dm-token-group">' +
+      '<div class="dm-token-group-header">' +
+        '<span class="dm-token-group-label">' + escapeAttr(g.label) + ' · ' + g.tokens.length + '</span>' +
+      '</div>' +
+      g.tokens.map(renderDeclaredRow).join('') +
+      '</div>';
+  }).join('');
+
+  // ── Detected body ──
+  // Compute lower / exact / upper declared-token suggestions per group.
+  // Numeric comparison uses parseFloat on the resolved value. Tokens
+  // whose resolved value is non-numeric (named colours, shadows) skip
+  // the lookup — for shadows the Replace dropdown is hidden entirely
+  // since same-string matching is the only useful relation there.
+  const closestVarOptions = (entry: ScaleEntry, group: TokenGroup): Array<{ kind: 'lower' | 'exact' | 'upper'; cssVar: string; value: string; delta: number }> => {
+    const target = parseFloat(entry.value);
+    if (!isFinite(target)) return [];
+    // The detected "group" the row falls under maps onto declared-token
+    // groups: spacing→spacing, radius→radius, typography→typography
+    // (font-size variables), shadow→shadow.
+    const candidates = ds.tokens.filter(t => t.group === group)
+      .map(t => ({ cssVar: t.cssVar, value: t.resolvedValue || t.value, n: parseFloat(t.resolvedValue || t.value) }))
+      .filter(t => isFinite(t.n));
+    if (!candidates.length) return [];
+    const exact = candidates.find(c => c.n === target);
+    const below = candidates.filter(c => c.n < target).sort((a, b) => b.n - a.n)[0];
+    const above = candidates.filter(c => c.n > target).sort((a, b) => a.n - b.n)[0];
+    const out: Array<{ kind: 'lower' | 'exact' | 'upper'; cssVar: string; value: string; delta: number }> = [];
+    if (below) out.push({ kind: 'lower', cssVar: below.cssVar, value: below.value, delta: below.n - target });
+    if (exact) out.push({ kind: 'exact', cssVar: exact.cssVar, value: exact.value, delta: 0 });
+    if (above) out.push({ kind: 'upper', cssVar: above.cssVar, value: above.value, delta: above.n - target });
+    return out;
+  };
+
+  const detectedHtml = detectedGroups.map(g => {
+    if (!g.entries.length) return '';
+    return '<div class="dm-token-group">' +
+      '<div class="dm-token-group-header">' +
+        '<span class="dm-token-group-label">' + escapeAttr(g.label) + ' · ' + g.entries.length + '</span>' +
+      '</div>' +
+      g.entries.map(e => {
+        const swatch = renderSwatch(g.group, e.value);
+        const driftBadge = e.driftOf
+          ? '<span class="dm-token-drift" title="Close to ' + escapeAttr(e.driftOf) + ' — possible drift">' + icon('alertTriangle', 10) + ' ' + escapeAttr(e.driftOf) + '</span>'
+          : '';
+        // "Replace with…" select. Only shown when the row is numeric
+        // (skip shadows; same-string match is the only useful relation).
+        const scaleKey = g.key === 'detected-spacing' ? 'spacing' :
+                         g.key === 'detected-radius' ? 'radius' :
+                         g.key === 'detected-fontSize' ? 'fontSize' : 'shadow';
+        let replaceSelect = '';
+        if (scaleKey !== 'shadow') {
+          const opts = closestVarOptions(e, g.group);
+          if (opts.length > 0) {
+            const fmt = (o: typeof opts[number]) => {
+              const sign = o.delta === 0 ? 'exact' : (o.delta > 0 ? '+' + Math.round(o.delta * 100) / 100 : Math.round(o.delta * 100) / 100);
+              return o.cssVar + ' (' + o.value + ')' + (o.delta === 0 ? '' : ' · ' + sign);
+            };
+            const optionPayload = (o: typeof opts[number]) =>
+              JSON.stringify({ scale: scaleKey, rawValue: e.value, cssVar: o.cssVar });
+            const optionsHtml = opts.map(o =>
+              '<option value="' + escapeAttr(optionPayload(o)) + '">' + escapeAttr(fmt(o)) + '</option>'
+            ).join('');
+            replaceSelect =
+              '<select class="dm-detected-replace" data-dm-detected-replace title="Replace every on-page occurrence of ' + escapeAttr(e.value) + ' with a declared token">' +
+                '<option value="" selected>Replace with…</option>' +
+                optionsHtml +
+              '</select>';
+          }
+        }
+        return '<div class="dm-token-row dm-token-row-readonly">' +
+          swatch +
+          '<span class="dm-token-name dm-token-name-detected">' + escapeAttr(e.value) + '</span>' +
+          driftBadge +
+          replaceSelect +
+          '<span class="dm-token-count">×' + e.count + '</span>' +
+          '</div>';
+      }).join('') +
+      '</div>';
+  }).join('');
+
+  // ── Defined body ──
+  const allowedKinds = new Set<PresetKindLocal>(presetKindsForChip(tokenFilter));
+  const definedHtml = renderDefinedTab(allowedKinds, filter);
+
+  // Select which body to show based on the active tab.
+  let body = '';
+  if (tokensTab === 'declared') {
+    const emptyState = !designSystem
+      ? '<div class="dm-tokens-empty">Scanning the page…</div>'
+      : (declaredHtml === '' && !filter
+          ? '<div class="dm-tokens-empty">No declared CSS variables on this page.</div>'
+          : declaredHtml === ''
+            ? '<div class="dm-tokens-empty">Nothing matches "' + escapeAttr(filter) + '".</div>'
+            : '');
+    body = declaredHtml || emptyState;
+  } else if (tokensTab === 'detected') {
+    body = detectedHtml || '<div class="dm-tokens-empty">No detected scales — the page may be empty or off-screen.</div>';
+  } else {
+    body = definedHtml;
+  }
+
+  return header +
+    tabStrip +
+    filterChrome +
+    '<div style="flex:1;overflow-y:auto;position:relative;">' + body + '</div>';
 }
+
+// Compute the list of preset kinds that make sense for the currently
+// selected element. A kind is included iff at least one of its
+// SECTION_PROPS has a non-default value on the element. Mirrors the
+// short-circuit `saveCustomPreset` uses in content/presets.ts so the
+// user can't pick a kind that would save zero properties.
+function availableKindsForSelection(): PresetKindLocal[] {
+  if (!info || !info.computedStyles) return [];
+  const cs = info.computedStyles;
+  const isDefault = (v: string | undefined): boolean =>
+    !v || v === 'none' || v === 'normal' || v === 'auto' || v === '0px' || v === '0' ||
+    v === 'rgba(0, 0, 0, 0)' || v === 'transparent';
+  const ALL: PresetKindLocal[] = ['typography', 'fill', 'stroke', 'effects', 'position', 'layout', 'appearance', 'motion'];
+  const out: PresetKindLocal[] = [];
+  for (const k of ALL) {
+    const props = (SECTION_PROPS as Record<string, string[]>)[k] || [];
+    if (props.some(p => !isDefault((cs as any)[p]))) out.push(k);
+  }
+  return out;
+}
+
+// Render the Defined tab — user-saved style-bundle presets. Empty by
+// default. Users add via the Add CTA → inline form with a kind dropdown
+// + name input. List rows show preview swatch + kind badge + Apply +
+// Delete. Apply requires an element selected on the page; kind list
+// reflects which kinds the selected element actually has styles for.
+function renderDefinedTab(allowedKinds: Set<PresetKindLocal>, searchFilter: string): string {
+  const hasSelection = !!info;
+  const KIND_LABELS: Record<PresetKindLocal, string> = {
+    position: 'Position', layout: 'Layout', appearance: 'Appearance',
+    typography: 'Typography', fill: 'Fill', stroke: 'Stroke',
+    effects: 'Effects', motion: 'Motion',
+  };
+  const KIND_ORDER: PresetKindLocal[] = ['typography', 'fill', 'stroke', 'effects', 'position', 'layout', 'appearance', 'motion'];
+  const kindBadgeStyle = (k: PresetKindLocal): string => {
+    const colors: Record<string, [string, string]> = {
+      position:   ['rgba(34,197,94,0.16)', 'rgb(34,197,94)'],
+      layout:     ['rgba(20,184,166,0.18)', 'rgb(20,184,166)'],
+      appearance: ['rgba(139,92,246,0.18)', 'var(--dm-purple)'],
+      typography: ['rgba(79,158,255,0.15)', 'var(--dm-accent)'],
+      fill:       ['rgba(245,158,11,0.18)', '#f59e0b'],
+      stroke:     ['rgba(244,63,94,0.18)', 'rgb(244,63,94)'],
+      effects:    ['rgba(168,85,247,0.18)', 'rgb(168,85,247)'],
+      motion:     ['rgba(56,189,248,0.18)', 'rgb(56,189,248)'],
+    };
+    const [bg, fg] = colors[k] || colors.typography;
+    return `font-size:8px;padding:1px 6px;border-radius:9999px;background:${bg};color:${fg};text-transform:uppercase;letter-spacing:0.4px;font-weight:600;flex-shrink:0;`;
+  };
+  const previewSwatch = (p: PresetLocal): string => {
+    const styles = p.styles || {};
+    if ((p.kind === 'typography' || p.kind === 'fill') && styles.color) {
+      return '<span style="width:18px;height:18px;border-radius:4px;background:' + escapeAttr(styles.color) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>';
+    }
+    if (p.kind === 'fill' && styles.backgroundColor) {
+      return '<span style="width:18px;height:18px;border-radius:4px;background:' + escapeAttr(styles.backgroundColor) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>';
+    }
+    if (p.kind === 'effects' && styles.boxShadow) {
+      return '<span style="width:24px;height:18px;border-radius:3px;background:#fff;box-shadow:' + escapeAttr(styles.boxShadow) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>';
+    }
+    if (p.kind === 'stroke' && styles.borderTopColor) {
+      return '<span style="width:18px;height:18px;border-radius:4px;background:transparent;border:2px solid ' + escapeAttr(styles.borderTopColor) + ';flex-shrink:0;"></span>';
+    }
+    return '<span style="width:8px;height:8px;border-radius:50%;background:var(--dm-accent);opacity:0.6;flex-shrink:0;margin-left:5px;margin-right:5px;"></span>';
+  };
+
+  // Available kinds reflect the current selection — no point letting
+  // the user pick "Motion" if the element has no transition / animation.
+  const available = availableKindsForSelection();
+  const availableSet = new Set(available);
+  // If presetAddingKind is set to a kind that's no longer available
+  // (e.g. selection changed mid-edit), reset to the first available.
+  const effectiveAddingKind: PresetKindLocal | null = presetAddingKind && availableSet.has(presetAddingKind)
+    ? presetAddingKind
+    : (available[0] || null);
+
+  // Add form — inline when presetAddingKind is non-null.
+  const addPanel = presetAddingKind === null
+    ? '<div class="dm-defined-cta"><button data-dm-action="add-preset-open" class="dm-defined-add-btn"' +
+        (hasSelection ? '' : ' disabled') +
+        ' title="' + (hasSelection ? 'Save the selected element’s styles as a preset' : 'Select an element on the page first') + '">' +
+        icon('plus', 11) + '<span>Add preset</span></button></div>'
+    : available.length === 0
+      ? '<div class="dm-defined-add-form">' +
+          '<div style="font-size:11px;color:var(--dm-text-secondary);line-height:1.5;">Nothing non-default to save from this element.</div>' +
+          '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px;">' +
+            '<button data-dm-action="add-preset-cancel" class="dm-defined-form-btn dm-defined-form-cancel">Close</button>' +
+          '</div>' +
+        '</div>'
+      : (() => {
+          const kindOptions = KIND_ORDER.filter(k => availableSet.has(k)).map(k =>
+            '<option value="' + k + '"' + (effectiveAddingKind === k ? ' selected' : '') + '>' + KIND_LABELS[k] + '</option>'
+          ).join('');
+          return '<div class="dm-defined-add-form">' +
+            '<div style="display:flex;flex-direction:column;gap:6px;">' +
+              '<div style="display:flex;align-items:center;gap:6px;">' +
+                '<select class="dm-select dm-defined-kind" data-dm-defined-kind>' + kindOptions + '</select>' +
+                '<input type="text" class="dm-input dm-defined-name" data-dm-defined-name placeholder="Preset name" autofocus />' +
+              '</div>' +
+              '<div style="display:flex;justify-content:flex-end;gap:6px;">' +
+                '<button data-dm-action="add-preset-cancel" class="dm-defined-form-btn dm-defined-form-cancel">Cancel</button>' +
+                '<button data-dm-action="add-preset-save" class="dm-defined-form-btn dm-defined-form-save">' + icon('save', 10) + ' Save</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        })();
+
+  const sf = (searchFilter || '').toLowerCase();
+  const matchesSearch = (p: PresetLocal) =>
+    !sf ||
+    p.name.toLowerCase().includes(sf) ||
+    KIND_LABELS[p.kind].toLowerCase().includes(sf) ||
+    p.kind.toLowerCase().includes(sf);
+  const visiblePresets = customPresets.filter(p => allowedKinds.has(p.kind) && matchesSearch(p));
+
+  const list = customPresets.length === 0
+    ? '<div class="dm-tokens-empty" style="line-height:1.6;">No saved presets yet.<br/><br/>Select an element on the page, choose a category<br/>(Typography, Fill, Stroke, …), and click Add.</div>'
+    : visiblePresets.length === 0
+      ? '<div class="dm-tokens-empty">No presets match this filter.</div>'
+      : '<div class="dm-defined-list">' +
+        visiblePresets.map(p => {
+          const applied = appliedPresetGroups.has(p.id);
+          const applyTitle = hasSelection ? 'Apply to the selected element' : 'Select an element on the page first';
+          const actionBtn = applied
+            ? '<button class="dm-preset-applied" data-dm-action="unapply-preset" data-preset-id="' + escapeAttr(p.id) + '" title="Revert the styles this preset added">' + icon('undo', 10) + ' Applied</button>'
+            : '<button class="dm-preset-apply" data-dm-action="apply-preset" data-preset-id="' + escapeAttr(p.id) + '"' +
+              (hasSelection ? '' : ' disabled') + ' title="' + escapeAttr(applyTitle) + '">Apply</button>';
+          return '<div class="dm-preset-row">' +
+            previewSwatch(p) +
+            '<span class="dm-preset-name" title="' + escapeAttr(p.name) + '">' + escapeAttr(p.name) + '</span>' +
+            '<span style="' + kindBadgeStyle(p.kind) + '">' + escapeAttr(p.kind) + '</span>' +
+            actionBtn +
+            '<button class="dm-preset-delete" data-dm-action="delete-preset" data-preset-id="' + escapeAttr(p.id) + '" title="Delete preset">' + icon('trash', 10) + '</button>' +
+          '</div>';
+        }).join('') +
+        '</div>';
+
+  return addPanel + list;
+}
+
 
 /* ── v1.2: Computed CSS Overlay ── */
 function renderComputedCssOverlay(): string {
@@ -5000,7 +5275,7 @@ function renderActionRow(): string {
     '<button data-dm-action="toggle-freeze" title="' + (animationsFrozen ? 'Resume animations' : 'Pause every animation, transition and video on the page') + '" style="' + bs(undefined, true) + ';' + (animationsFrozen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon(animationsFrozen ? 'circlePlay' : 'circlePause', 14) + '</button>' +
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
-    '<button data-dm-action="open-presets" title="Presets" style="' + bs(undefined, true) + ';' + (presetsOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('bookmark', 14) + '</button>' +
+    '<button data-dm-action="open-tokens" title="Design system" style="' + bs(undefined, true) + ';' + (tokensOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('swatchBook', 14) + '</button>' +
     '<div style="flex:1;"></div>' +
     '<button data-dm-action="undo" title="Undo (Ctrl+Z)" style="' + bs(undefined, true) + '">' + icon('undo', 14) + '</button>' +
     '<button data-dm-action="redo" title="Redo (Ctrl+Shift+Z)" style="' + bs(undefined, true) + ';transform:scaleX(-1);">' + icon('undo', 14) + '</button></div>';
@@ -7610,9 +7885,9 @@ function render() {
     html = renderHeader() + renderHelpView() + renderCaptureToast();
   } else if (contributeOpen) {
     html = renderHeader() + renderContributeView() + renderCaptureToast();
-  } else if (presetsOpen) {
+  } else if (tokensOpen) {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
-      renderHeader() + renderPresetsView() + renderCaptureToast() + '</div>';
+      renderHeader() + renderTokensView() + renderCaptureToast() + '</div>';
   } else {
     let tabContent = '';
     if (tab === 'layers') tabContent = renderLayersTab();
@@ -7988,69 +8263,145 @@ function setupDelegation() {
           render();
           break;
         }
-        // v1.2: Presets
-        case 'open-presets':
-          presetsOpen = true;
-          editingPresetData = null; deletingPresetId = null;
-          refreshPresets(); break;
-        case 'close-presets': presetsOpen = false; editingPresetData = null; deletingPresetId = null; render(); break;
-        case 'save-preset': {
-          const nameInput = root.querySelector('[data-dm-preset-name]') as HTMLInputElement;
-          const name = nameInput?.value?.trim();
-          if (name) {
-            // Side panel owns the property list per kind — pass it across so
-            // content/presets.ts captures exactly what the section section
-            // is "about". Falls back to a tiny safe set if SECTION_PROPS
-            // is somehow missing the kind.
-            const props: string[] = (SECTION_PROPS as Record<string, string[]>)[savePresetKind] || ['color'];
-            send({ type: 'SP_SAVE_PRESET', name, kind: savePresetKind, props }).then((res: any) => {
-              if (res?.error) {
-                showCaptureToast('error', res.error);
-                return;
-              }
-              if (nameInput) nameInput.value = '';
-              refreshPresets();
-            });
+        // Tokens / Design system panel
+        case 'open-tokens':
+          tokensOpen = true;
+          // Restore the user's last-active tab within the session.
+          chrome.storage?.session?.get?.(['dm-tokens-tab'], (r: any) => {
+            const t = r?.['dm-tokens-tab'];
+            if (t === 'declared' || t === 'detected' || t === 'defined') tokensTab = t;
+            render();
+          });
+          // Force a refetch each time the panel opens — the page may have
+          // changed (theme switch, route nav) since the last open.
+          designSystem = null;
+          refreshDesignSystem();
+          refreshCustomPresets();
+          render();
+          break;
+        case 'close-tokens':
+          tokensOpen = false;
+          render();
+          break;
+        case 'refresh-tokens':
+          designSystem = null;
+          refreshDesignSystem();
+          render();
+          break;
+        case 'switch-tokens-tab': {
+          const next = actionBtn.dataset.tokensTab as TokensTab | undefined;
+          if (next === 'declared' || next === 'detected' || next === 'defined') {
+            tokensTab = next;
+            chrome.storage?.session?.set?.({ 'dm-tokens-tab': tokensTab });
+            // Lazy-fetch the Defined list the first time the user opens it.
+            if (next === 'defined') refreshCustomPresets();
+            render();
           }
           break;
         }
-        case 'save-edit-preset': {
-          if (!editingPresetData) break;
-          const propInputs = root.querySelectorAll<HTMLInputElement>('[data-dm-edit-prop]');
-          const newStyles: Record<string, string> = {};
-          propInputs.forEach(inp => { const p = inp.dataset.dmEditProp!; const v = inp.value.trim(); if (v) newStyles[p] = v; });
-          const nameInp = root.querySelector<HTMLInputElement>('[data-dm-edit-preset-name]');
-          const newName = nameInp?.value?.trim() || editingPresetData.name;
-          const id = editingPresetData.id;
-          editingPresetData = null;
-          send({ type: 'SP_UPDATE_PRESET', presetId: id, name: newName, styles: newStyles }).then((res: any) => {
-            if (res?.error) showCaptureToast('error', res.error);
-            else if (res?.invalidProps?.length > 0) {
-              showCaptureToast('error', `Saved. Skipped invalid: ${res.invalidProps.join(', ')}`);
-            }
-            refreshPresets();
-          });
-          break;
-        }
-        case 'cancel-edit-preset': editingPresetData = null; render(); break;
-        case 'confirm-delete-preset': {
-          if (deletingPresetId) {
-            const id = deletingPresetId;
-            deletingPresetId = null;
-            send({ type: 'SP_DELETE_PRESET', presetId: id }).then(() => refreshPresets());
+        case 'add-preset-open': {
+          if (!info) {
+            showCaptureToast('error', 'Select an element on the page first.');
+            break;
           }
+          presetAddingKind = 'typography';
+          render();
+          // Focus the name input after the re-render.
+          setTimeout(() => {
+            const inp = root.querySelector<HTMLInputElement>('[data-dm-defined-name]');
+            if (inp) { inp.focus(); inp.select(); }
+          }, 0);
           break;
         }
-        case 'cancel-delete-preset': deletingPresetId = null; render(); break;
-        case 'export-presets': {
-          send({ type: 'SP_EXPORT_PRESETS' }).then(r => {
-            if (r?.json) {
-              const blob = new Blob([r.json], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a'); a.href = url; a.download = 'design-mode-presets.json'; a.click();
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
+        case 'add-preset-cancel': {
+          presetAddingKind = null;
+          render();
+          break;
+        }
+        case 'add-preset-save': {
+          if (!info) { showCaptureToast('error', 'Select an element on the page first.'); break; }
+          const kindEl = root.querySelector<HTMLSelectElement>('[data-dm-defined-kind]');
+          const nameEl = root.querySelector<HTMLInputElement>('[data-dm-defined-name]');
+          const kind = (kindEl?.value || 'typography') as PresetKindLocal;
+          const name = (nameEl?.value || '').trim();
+          if (!name) {
+            showCaptureToast('error', 'Give the preset a name.');
+            break;
+          }
+          const props: string[] = (SECTION_PROPS as Record<string, string[]>)[kind] || [];
+          send({ type: 'SP_SAVE_PRESET', name, kind, props }).then((res: any) => {
+            if (res?.error) {
+              showCaptureToast('error', res.error);
+              return;
             }
+            showCaptureToast('success', 'Saved "' + name + '".');
+            presetAddingKind = null;
+            refreshCustomPresets();
           });
+          break;
+        }
+        case 'apply-preset': {
+          if (!info) { showCaptureToast('error', 'Select an element on the page first.'); break; }
+          const pid = actionBtn.dataset.presetId;
+          const preset = customPresets.find(p => p.id === pid);
+          if (!preset || !pid) break;
+          send({ type: 'SP_APPLY_PRESET', preset }).then((r: any) => {
+            if (r?.info) info = r.info;
+            if (r?.styleChanges) styleChanges = r.styleChanges;
+            if (r?.domChanges) domChanges = r.domChanges;
+            if (r?.comments) comments = r.comments;
+            if (r?.undoCount != null) undoCount = r.undoCount;
+            if (r?.redoCount != null) redoCount = r.redoCount;
+            if (r?.groupId) appliedPresetGroups.set(pid, r.groupId);
+            render();
+          });
+          break;
+        }
+        case 'unapply-preset': {
+          const pid = actionBtn.dataset.presetId;
+          if (!pid) break;
+          const gid = appliedPresetGroups.get(pid);
+          if (!gid) break;
+          // Same iteration pattern the existing "revert subgroup" button
+          // uses (sidepanel.ts:revert-subgroup) — find every style change
+          // tagged with this groupId and remove each via SP_REMOVE_CHANGE.
+          const ids = styleChanges
+            .filter(c => (c as any).groupId === gid)
+            .map(c => c.id)
+            .filter((x): x is string => !!x);
+          Promise.all(ids.map(id => removeChange(id))).then(() => {
+            appliedPresetGroups.delete(pid);
+            render();
+          });
+          break;
+        }
+        case 'delete-preset': {
+          const pid = actionBtn.dataset.presetId;
+          if (!pid) break;
+          send({ type: 'SP_DELETE_PRESET', presetId: pid }).then(() => {
+            refreshCustomPresets();
+          });
+          break;
+        }
+        case 'tokens-export': {
+          if (!designSystem) break;
+          const payload = {
+            version: 1,
+            kind: 'design-mode-design-system',
+            url: pinnedDomain || '',
+            exportedAt: Date.now(),
+            tokens: designSystem.tokens,
+            scales: designSystem.scales,
+          };
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'design-system-' + stamp + '.json';
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          showCaptureToast('success', 'Exported ' + designSystem.tokens.length + ' tokens.');
           break;
         }
         // v1.2: Computed CSS
@@ -8488,22 +8839,44 @@ function setupDelegation() {
       render(); return;
     }
 
-    // v1.2: Apply custom preset by ID
-    const applyPresetIdBtn = target.closest<HTMLElement>('[data-dm-apply-preset-id]');
-    if (applyPresetIdBtn) {
-      const pid = applyPresetIdBtn.dataset.dmApplyPresetId!;
-      const preset = customPresetsList.find((p: any) => p.id === pid);
-      if (preset) {
-        send({ type: 'SP_APPLY_PRESET', preset }).then(r => {
-          if (r?.info) info = r.info;
-          if (r?.styleChanges) styleChanges = r.styleChanges;
-          if (r?.domChanges) domChanges = r.domChanges;
-          if (r?.comments) comments = r.comments;
-          if (r?.undoCount != null) undoCount = r.undoCount;
-          if (r?.redoCount != null) redoCount = r.redoCount;
+    // Tokens panel — filter chip click.
+    const tokenChipBtn = target.closest<HTMLElement>('[data-dm-token-filter]');
+    if (tokenChipBtn) {
+      const next = tokenChipBtn.dataset.dmTokenFilter as TokenFilter;
+      tokenFilter = next;
+      render();
+      return;
+    }
+
+    // Tokens panel — reset a single edited token back to its original value.
+    const resetTokenBtn = target.closest<HTMLElement>('[data-dm-token-reset]');
+    if (resetTokenBtn) {
+      const cssVar = resetTokenBtn.dataset.dmTokenReset!;
+      editedTokens.delete(cssVar);
+      send({ type: 'SP_RESET_ROOT_VAR', cssVar }).then(() => {
+        designSystem = null;
+        refreshDesignSystem();
+      });
+      return;
+    }
+    // Tokens panel — "uses" badge highlights every element on the page that
+    // resolves to this token via the existing multi-select overlay system.
+    const findUsesBtn = target.closest<HTMLElement>('[data-dm-token-find-uses]');
+    if (findUsesBtn) {
+      const cssVar = findUsesBtn.dataset.dmTokenFindUses!;
+      send({ type: 'SP_GET_TOKEN_USAGES', cssVar }).then((r: any) => {
+        const ids: string[] = (r && r.ids) || [];
+        if (!ids.length) {
+          showCaptureToast('error', 'No on-page consumers of ' + cssVar);
+          return;
+        }
+        send({ type: 'SP_SET_MULTI_SELECT_IDS', ids }).then(() => {
+          multiSelectActive = true;
+          multiSelectIds = ids;
+          showCaptureToast('success', ids.length + ' element' + (ids.length === 1 ? '' : 's') + ' using ' + cssVar);
           render();
         });
-      }
+      });
       return;
     }
 
@@ -8614,48 +8987,6 @@ function setupDelegation() {
     // every colour input via the focus-driven dropdown. The
     // SP_APPLY_TOKEN message is unused but harmless if the background /
     // content scripts still implement it.)
-
-    // v1.2: Edit preset (open edit view)
-    const editPresetBtn = target.closest<HTMLElement>('[data-dm-edit-preset]');
-    if (editPresetBtn) {
-      const pid = editPresetBtn.dataset.dmEditPreset!;
-      const preset = customPresetsList.find((p: any) => p.id === pid);
-      if (preset) { editingPresetData = { id: pid, name: preset.name, kind: preset.kind, styles: { ...preset.styles } }; render(); }
-      return;
-    }
-
-    // v1.2: Remove a style prop in edit view
-    const removeEditPropBtn = target.closest<HTMLElement>('[data-dm-remove-edit-prop]');
-    if (removeEditPropBtn && editingPresetData) {
-      const prop = removeEditPropBtn.dataset.dmRemoveEditProp!;
-      const newStyles = { ...editingPresetData.styles };
-      delete newStyles[prop];
-      editingPresetData = { ...editingPresetData, styles: newStyles };
-      render(); return;
-    }
-
-    // v1.2: Delete preset (show confirmation)
-    const deletePresetBtn = target.closest<HTMLElement>('[data-dm-delete-preset]');
-    if (deletePresetBtn) {
-      deletingPresetId = deletePresetBtn.dataset.dmDeletePreset!;
-      render(); return;
-    }
-
-    // Preset kind chip — picks which kind the next save will capture.
-    const kindBtn = target.closest<HTMLElement>('[data-dm-preset-kind]');
-    if (kindBtn && !kindBtn.hasAttribute('disabled')) {
-      savePresetKind = kindBtn.dataset.dmPresetKind as PresetKind;
-      render();
-      return;
-    }
-    // Preset filter chip — narrows the saved-presets list to one kind
-    // (or "All").
-    const filterBtn = target.closest<HTMLElement>('[data-dm-preset-filter]');
-    if (filterBtn) {
-      presetFilter = filterBtn.dataset.dmPresetFilter as ('all' | PresetKind);
-      render();
-      return;
-    }
 
     // v1.2: Border link toggle
     const borderLinkBtn = target.closest<HTMLElement>('[data-dm-border-link]');
@@ -9571,35 +9902,82 @@ function setupDelegation() {
   root.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
 
-    // (Preset kind / filter selectors are chip-style buttons now — wired
-    // in the click handler below.)
+    // Defined tab — preset kind dropdown.
+    const definedKindSel = target.closest<HTMLSelectElement>('[data-dm-defined-kind]');
+    if (definedKindSel) {
+      presetAddingKind = definedKindSel.value as PresetKindLocal;
+      // No re-render — keeps focus on the dropdown.
+      return;
+    }
 
-    // Import presets file input
-    const importInput = target.closest<HTMLInputElement>('[data-dm-import-presets]');
-    if (importInput && importInput.files?.[0]) {
-      const file = importInput.files[0];
+    // Detected tab — "Replace with…" dropdown. Selecting an option
+    // dispatches the consolidate message; on success we reset the
+    // dropdown to its placeholder so the UI doesn't lie about state.
+    const replaceSel = target.closest<HTMLSelectElement>('[data-dm-detected-replace]');
+    if (replaceSel && replaceSel.value) {
+      let payload: { scale: string; rawValue: string; cssVar: string } | null = null;
+      try { payload = JSON.parse(replaceSel.value); } catch {}
+      // Reset the dropdown selection regardless of outcome.
+      replaceSel.value = '';
+      if (!payload) return;
+      send({ type: 'SP_CONSOLIDATE_DETECTED', scale: payload.scale, rawValue: payload.rawValue, cssVar: payload.cssVar }).then((r: any) => {
+        if (!r?.ok) {
+          showCaptureToast('error', 'Nothing to consolidate.');
+          return;
+        }
+        if (r?.styleChanges) styleChanges = r.styleChanges;
+        if (r?.undoCount != null) undoCount = r.undoCount;
+        if (r?.redoCount != null) redoCount = r.redoCount;
+        showCaptureToast('success',
+          'Replaced ' + r.touched + ' occurrence' + (r.touched === 1 ? '' : 's') + ' of ' + payload!.rawValue + ' with var(' + payload!.cssVar + ').');
+        // Refresh the design system so updated value-counts roll in.
+        designSystem = null;
+        refreshDesignSystem();
+      });
+      return;
+    }
+
+    // Tokens — "show only used on this page" checkbox.
+    const usedOnlyInp = target.closest<HTMLInputElement>('[data-dm-tokens-used-only]');
+    if (usedOnlyInp) {
+      tokenUsedOnlyFilter = usedOnlyInp.checked;
+      render();
+      return;
+    }
+
+    // Tokens — import a design-system JSON. Applies any tokens whose
+    // cssVar matches a declared :root variable via SP_SET_ROOT_VAR;
+    // unrecognised vars are reported but skipped (we don't create new
+    // root vars from imports — that's destructive).
+    const tokensImportInp = target.closest<HTMLInputElement>('[data-dm-tokens-import]');
+    if (tokensImportInp && tokensImportInp.files?.[0]) {
+      const file = tokensImportInp.files[0];
       const reader = new FileReader();
       reader.onload = (ev) => {
-        const json = ev.target?.result as string;
-        send({ type: 'SP_IMPORT_PRESETS', json }).then(r => {
-          importInput.value = '';
-          if (r?.error) {
-            showCaptureToast('error', r.error);
-            return;
-          }
-          const count = r?.count ?? 0;
-          const total = r?.total ?? count;
-          if (count === 0) {
-            showCaptureToast('error', `Imported 0 of ${total} presets — none were valid.`);
-            return;
-          }
-          showCaptureToast('success',
-            count === total
-              ? `Imported ${count} preset${count === 1 ? '' : 's'}.`
-              : `Imported ${count} of ${total} presets (${total - count} skipped as invalid).`);
-          presetsTab = 'custom';
-          refreshPresets();
-        });
+        tokensImportInp.value = '';
+        let parsed: any = null;
+        try { parsed = JSON.parse(ev.target?.result as string); }
+        catch { showCaptureToast('error', 'Invalid JSON.'); return; }
+        if (!parsed || typeof parsed !== 'object' || parsed.kind !== 'design-mode-design-system') {
+          showCaptureToast('error', 'Not a Design Mode design-system file.');
+          return;
+        }
+        const incoming = Array.isArray(parsed.tokens) ? parsed.tokens : [];
+        const declared = new Set((designSystem?.tokens || []).map(t => t.cssVar));
+        let applied = 0;
+        let skipped = 0;
+        for (const t of incoming) {
+          if (!t || typeof t.cssVar !== 'string' || typeof t.value !== 'string') { skipped++; continue; }
+          if (!declared.has(t.cssVar)) { skipped++; continue; }
+          editedTokens.set(t.cssVar, t.resolvedValue || t.value);
+          send({ type: 'SP_SET_ROOT_VAR', cssVar: t.cssVar, value: t.resolvedValue || t.value });
+          applied++;
+        }
+        showCaptureToast(applied > 0 ? 'success' : 'error',
+          'Applied ' + applied + ' token' + (applied === 1 ? '' : 's') +
+          (skipped > 0 ? ' (' + skipped + ' skipped — not declared on this page)' : ''));
+        designSystem = null;
+        refreshDesignSystem();
       };
       reader.readAsText(file);
       return;
@@ -10417,6 +10795,26 @@ function setupDelegation() {
     if (changesSearchInput) {
       changesSearch = changesSearchInput.value;
       render();
+      return;
+    }
+
+    // Tokens panel — live filter the grouped list as the user types.
+    const tokenSearchInput = target.closest<HTMLInputElement>('[data-dm-token-search]');
+    if (tokenSearchInput) {
+      tokenSearch = tokenSearchInput.value;
+      render();
+      return;
+    }
+
+    // Tokens panel — edit a CSS variable's value. We commit on every
+    // keystroke so the page repaints live (the user sees consumers
+    // shift as they type). Reset is available beside each edited token.
+    const tokenEditInput = target.closest<HTMLInputElement>('[data-dm-token-edit]');
+    if (tokenEditInput) {
+      const cssVar = tokenEditInput.dataset.dmTokenEdit!;
+      const newValue = tokenEditInput.value;
+      editedTokens.set(cssVar, newValue);
+      send({ type: 'SP_SET_ROOT_VAR', cssVar, value: newValue });
       return;
     }
 

@@ -10,6 +10,7 @@ import { getElementById } from './helpers';
 import { getStyleChanges, getTextChanges, getDomChanges } from './change-tracker';
 import { getSourceLocation } from './source-detection';
 import type { CommentData } from './comments';
+import { getRootVarEdits } from './root-var-store';
 
 interface ElementContext {
   selector: string;
@@ -62,6 +63,22 @@ function gatherElementContext(elementId: string, selector: string): ElementConte
 // instead of inlining hex colors and px sizes.
 
 interface TokenInfo { name: string; value: string; }
+
+// Emit a focused list of CSS variable changes the user made in this
+// session. Only fires when the user has actually modified at least one
+// token — otherwise the export stays silent on the design system.
+// Returns an empty string when no edits exist, so the caller can skip
+// the section without producing trailing whitespace.
+function buildTokenChangesSection(): string {
+  const edits = getRootVarEdits();
+  if (edits.length === 0) return '';
+  const lines: string[] = [];
+  lines.push('## Tokens changed');
+  for (const e of edits) {
+    lines.push(`- \`${e.cssVar}\`: ${e.original} → ${e.current}`);
+  }
+  return lines.join('\n');
+}
 
 function detectRootTokens(): TokenInfo[] {
   const tokens = new Map<string, string>();
@@ -132,6 +149,15 @@ export function exportMarkdown(
   const title = (document.title || '').trim() || 'untitled';
   lines.push(`# Visual changes — ${title}`);
   lines.push(`<${window.location.href}>`);
+
+  // Tokens-changed context — only included when the user has actually
+  // modified at least one :root CSS variable in this session. Avoids
+  // bloating every export with the full design-system catalog.
+  const tokensChanged = buildTokenChangesSection();
+  if (tokensChanged) {
+    lines.push('');
+    lines.push(tokensChanged);
+  }
 
   // Build context once per element for stable short labels + source file hints.
   const idsToContext = new Map<string, ElementContext>();
