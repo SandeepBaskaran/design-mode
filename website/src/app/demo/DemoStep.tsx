@@ -5,33 +5,20 @@ import type { Step } from "./steps";
 
 type Props = {
   step: Step;
-  index: number;          // overall position (1-based) — only used for top-level steps' visible numbering
-  childLetter?: string;   // a/b/c/… for Design sub-sections
   children?: React.ReactNode;
 };
 
-// Single step card: numbered title, body paragraphs, "Try it" callout,
-// and an optional slot below for the demo target component.
-export function DemoStep({ step, index, childLetter, children }: Props) {
+// Single step card: title, body paragraphs, "Try it" callout, and an
+// optional slot below for the demo target component.
+export function DemoStep({ step, children }: Props) {
   const isChild = !!step.parentId;
-  const number = isChild ? childLetter : String(index);
   return (
     <section
       id={step.id}
       data-step-id={step.id}
       className={`${styles.step} ${isChild ? styles.stepChild : ""}`}
     >
-      <header className={styles.stepHeader}>
-        {number && (
-          <span
-            className={isChild ? styles.stepLetter : styles.stepNumber}
-            aria-hidden="true"
-          >
-            {number}
-          </span>
-        )}
-        <h2 className={styles.stepTitle}>{step.title}</h2>
-      </header>
+      <h2 className={styles.stepTitle}>{step.title}</h2>
       <div className={styles.stepBody}>
         {step.body.map((p, i) => (
           <p key={i}>{p}</p>

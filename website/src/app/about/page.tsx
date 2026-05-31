@@ -31,7 +31,7 @@ export default function AboutPage() {
       <JsonLd data={personSchema} />
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="py-28 lg:py-32 lg:pt-44">
+        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
           <AboutHero />
         </section>
       </Background>

@@ -29,21 +29,11 @@ export const metadata = {
 };
 
 export default function DemoPage() {
-  const topLevel = STEPS.filter((s) => !s.parentId);
-  const childIndexMap = new Map<string, number>();
-  STEPS.forEach((s) => {
-    if (!s.parentId) return;
-    const siblings = STEPS.filter((x) => x.parentId === s.parentId);
-    childIndexMap.set(s.id, siblings.indexOf(s));
-  });
-  const topIndexMap = new Map<string, number>();
-  topLevel.forEach((s, i) => topIndexMap.set(s.id, i + 1));
-
   return (
     <>
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="py-28 lg:py-32 lg:pt-44">
+        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Live demo
@@ -71,24 +61,11 @@ export default function DemoPage() {
           <DemoLeftNav />
 
           <main className={styles.content}>
-            {STEPS.map((step) => {
-              const isChild = !!step.parentId;
-              const index = isChild ? 0 : topIndexMap.get(step.id) ?? 0;
-              const childIdx = isChild ? childIndexMap.get(step.id) ?? 0 : 0;
-              const childLetter = isChild
-                ? String.fromCharCode("a".charCodeAt(0) + childIdx)
-                : undefined;
-              return (
-                <DemoStep
-                  key={step.id}
-                  step={step}
-                  index={index}
-                  childLetter={childLetter}
-                >
-                  {renderDemoTarget(step.targetId)}
-                </DemoStep>
-              );
-            })}
+            {STEPS.map((step) => (
+              <DemoStep key={step.id} step={step}>
+                {renderDemoTarget(step.targetId)}
+              </DemoStep>
+            ))}
           </main>
         </div>
       </section>

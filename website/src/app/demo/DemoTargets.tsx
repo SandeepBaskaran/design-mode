@@ -21,6 +21,24 @@ export const DEMO_TARGETS: Record<string, () => ReactElement> = {
     </div>
   ),
 
+  "measure-resize": () => (
+    <div id="demo-measure-card" className={styles.targetCard}>
+      <h3>Select me, then resize me</h3>
+      <p>
+        Grab one of my 8 handles and drag. Hover the elements around me to
+        read the edge-to-edge spacing pills.
+      </p>
+    </div>
+  ),
+
+  "multi-select": () => (
+    <div id="demo-multi-row" className={styles.targetMultiRow}>
+      <div className={styles.targetMultiCard}>One</div>
+      <div className={styles.targetMultiCard}>Two</div>
+      <div className={styles.targetMultiCard}>Three</div>
+    </div>
+  ),
+
   layers: () => (
     <ul id="demo-layers-list" className={styles.targetList}>
       <li>List item one — drag me</li>
@@ -28,6 +46,16 @@ export const DEMO_TARGETS: Record<string, () => ReactElement> = {
       <li>List item three</li>
       <li>List item four</li>
     </ul>
+  ),
+
+  "annotate-draw": () => (
+    <div id="demo-annotate-card" className={styles.targetCard}>
+      <h3>Pin a comment on me</h3>
+      <p>
+        Drop a comment pin here with Alt+A, then sketch over me with Alt+D.
+        Both stay as overlays — my own styles never change.
+      </p>
+    </div>
   ),
 
   "design-indicator": () => (
@@ -141,14 +169,34 @@ export const DEMO_TARGETS: Record<string, () => ReactElement> = {
     </div>
   ),
 
+  "design-tokens": () => (
+    <div id="demo-tokens-stage" className={styles.targetTokensStage}>
+      <div id="demo-tokens-swatch" className={styles.targetTokensSwatch} />
+      <span className={styles.targetTokensHint}>
+        Open my Fill colour picker — pick from the Tokens row.
+      </span>
+    </div>
+  ),
+
+  presets: () => (
+    <div id="demo-presets-card" className={styles.targetPresetCard}>
+      <strong>Style me, then save me as a preset</strong>
+      <p>Apply a seeded preset, or save my look to reuse on another element.</p>
+    </div>
+  ),
+
   "action-row": () => (
     <div id="demo-action-stage" className={styles.targetActionStage}>
-      <div
-        id="demo-pulse-badge"
-        className={styles.targetPulse}
-        title="Click 'Pause animations' in the action row to freeze me"
-      >
-        ✦ pulsing badge
+      <div id="demo-action-group" className={styles.targetActionGroup}>
+        <span className={styles.targetActionLabel}>Parent group</span>
+        <div
+          id="demo-pulse-badge"
+          className={styles.targetPulse}
+          title="Select me, then try Parent / Child, Duplicate, Remove, and Pause animations in the action row"
+        >
+          ✦ pulsing badge
+        </div>
+        <span className={styles.targetActionSibling}>sibling</span>
       </div>
     </div>
   ),

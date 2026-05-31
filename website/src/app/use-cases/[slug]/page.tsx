@@ -80,7 +80,7 @@ export default async function UseCasePage({
       />
 
       <Background>
-        <section className="py-28 lg:py-32 lg:pt-44">
+        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
           <div className="container max-w-4xl">
             <div className="text-muted-foreground mb-4 text-sm font-medium tracking-wide uppercase">
               {u.persona}

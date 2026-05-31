@@ -239,7 +239,7 @@ export default function FaqPage() {
     <>
       <JsonLd data={faqSchema(flatQA)} />
       <Background>
-        <section className="py-28 lg:py-32 lg:pt-44">
+        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Frequently asked questions

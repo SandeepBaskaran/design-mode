@@ -20,10 +20,10 @@ export const STEPS: Step[] = [
     title: "Get started",
     body: [
       "Design Mode is a Chromium extension that turns any website into a live design surface. Edit layout, type, colour, and structure with visual controls — then ship the result to your AI coding agent.",
-      "First time? Pin the extension to your toolbar so it's always one click away. Then use the keyboard shortcut Alt+D (Option+D on macOS) to open the side panel on this page.",
+      "First time? Pin the extension to your toolbar so it's always one click away, then click the Design Mode icon to open the side panel on this page. Once it's open, every in-page shortcut (Alt+I to inspect, Alt+A to comment, Alt+D to draw, …) is listed and remappable in Settings.",
     ],
     tryIt:
-      "Pin Design Mode in your Chrome toolbar, then press Alt+D on this page. The side panel should open on the right.",
+      "Pin Design Mode in your Chrome toolbar, then click its icon to open the side panel on the right.",
   },
   {
     id: "inspector",
@@ -37,6 +37,17 @@ export const STEPS: Step[] = [
     targetId: "inspector",
   },
   {
+    id: "multi-select",
+    title: "Multi-select & distribute",
+    body: [
+      "Hold Shift (or Cmd / Ctrl) and click to select several elements at once — the indicator chip shows a count badge. Every edit in the Design tab now applies to the whole selection, so you can change padding, colour, or type on all of them in one move.",
+      "With multiple layers selected, the Position section gains Distribute buttons that space them evenly across the horizontal or vertical axis, exactly like Figma. The Layers tab also has a multi-select toggle for picking elements from the tree.",
+    ],
+    tryIt:
+      "Turn on inspect, click the first card below, then Shift-click the other two. Change their fill colour once — all three update together. Open Position and try the Distribute buttons.",
+    targetId: "multi-select",
+  },
+  {
     id: "measure-resize",
     title: "Measure & resize",
     body: [
@@ -46,6 +57,18 @@ export const STEPS: Step[] = [
     ],
     tryIt:
       "Select the card below, then hover the elements around it to read the spacing. Grab a corner handle and drag to resize.",
+    targetId: "measure-resize",
+  },
+  {
+    id: "annotate-draw",
+    title: "Annotate & draw",
+    body: [
+      "Design Mode overlays two annotation tools on the live page. Comment pins (the comment icon in the action row, or Alt+A) drop a numbered marker on any element — resolve, reopen, or edit them, and they collect in the Changes tab under the Comments filter so they ship alongside your edits.",
+      "Freehand Drawing mode (Alt+D) lets you sketch straight over the page to point things out. Both are overlay-only — they annotate without ever touching the page's own styles.",
+    ],
+    tryIt:
+      "Press Alt+A (or click the comment icon) and drop a pin on the note below. Then press Alt+D and sketch over it. Open the Changes tab → Comments filter to see the pin tracked.",
+    targetId: "annotate-draw",
   },
   {
     id: "layers",
@@ -62,8 +85,8 @@ export const STEPS: Step[] = [
     id: "design",
     title: "Design panel",
     body: [
-      "The Design tab is where you edit a selected layer's properties. It mirrors Figma's section order — Position → Layout → Appearance → Typography → Fill → Stroke → Effects — so the mental model carries over.",
-      "Sections only render for relevant layer kinds: Typography appears on text layers, Layout hides for media, etc. The next 8 sub-sections walk through each.",
+      "The Design tab is where you edit a selected layer's properties. It mirrors Figma's section order — Position → Layout → Appearance → Typography → Fill → Stroke → Effects → Motion → Layout guide — so the mental model carries over.",
+      "Sections only render for relevant layer kinds: Typography appears on text layers, Layout hides for media, etc. The sub-sections below walk through each, starting with the indicator chip and the Icon / Media sections that surface above Position.",
     ],
   },
   {
@@ -82,8 +105,9 @@ export const STEPS: Step[] = [
     id: "design-position",
     title: "Position",
     body: [
-      "Position handles where a layer sits inside its parent: position type (static / relative / absolute / fixed / sticky), object alignment, X/Y/Z, rotation, flip, and 3D transforms in Advanced.",
+      "Position handles where a layer sits inside its parent: position type (static / relative / absolute / fixed / sticky), object alignment, X/Y/Z, rotation, and flip.",
       "Try aligning the card to the right edge using the alignment buttons. Try rotating it 90° with the quick-rotate icon. Try flipping it horizontally.",
+      "Advanced unfolds the deep stuff: anchor positioning, 3D perspective and transform-style, skew, transform-origin, view-transition-name, and logical (writing-mode-aware) inset anchors.",
     ],
     tryIt:
       "Select the card below. In Position, click 'Align right', then 'Rotate 90° clockwise', then 'Flip horizontally'.",
@@ -96,6 +120,7 @@ export const STEPS: Step[] = [
     body: [
       "Layout is for sizing and child arrangement. The 4-mode segmented switches between block, horizontal stack (flex row), vertical stack (flex column), and grid. Below it: W/H, aspect ratio lock, padding/margin nested box, gap, and the 9-cell children-align pad.",
       "Switching to Grid auto-prefills a 1fr 1fr template so you see the change immediately.",
+      "Advanced opens the full grid template editor (columns / rows / areas), per-item flex and grid placement, clip & overflow, box-sizing, and logical margins for i18n layouts.",
     ],
     tryIt:
       "Select the container below. Switch its Layout mode from Free to Horizontal stack, then to Grid. Try the children-align pad to push items around.",
@@ -108,6 +133,7 @@ export const STEPS: Step[] = [
     body: [
       "Appearance covers opacity, blend mode, corner radius, and the color-adjust filters (brightness, contrast, saturate, hue-rotate, grayscale, invert, sepia).",
       "The corner radius has a primary input + a scan toggle that expands a 2×2 grid for individual corners. Click the scan icon and try unequal corners.",
+      "Advanced goes further: a structured clip-path editor with live preview, backdrop blur, scrollbar styling, containment / content-visibility, color-scheme, and pointer / selection interaction controls.",
     ],
     tryIt:
       "Select the card below. In Appearance, click the scan icon next to Corner radius, set the top-left corner to 24px and the bottom-right to 0.",
@@ -118,7 +144,8 @@ export const STEPS: Step[] = [
     id: "design-typography",
     title: "Typography",
     body: [
-      "Typography is shown for text-bearing layers (h1-h6, p, span, a, button, label, …). Pick from page-discovered fonts, set weight, size, line-height, letter-spacing, color. Toggle bold / italic / underline / strikethrough. Choose case, alignment, and list style.",
+      "Typography is shown for text-bearing layers (h1-h6, p, span, a, button, label, …). Pick from page-discovered fonts, set weight, size, line-height, letter-spacing, color (with an inline WCAG contrast read-out). Toggle bold / italic / underline / strikethrough. Choose case, alignment, and list style.",
+      "Advanced exposes text decoration, wrapping and line-clamp, OpenType font-features, and direction / writing-mode for right-to-left and vertical scripts.",
     ],
     tryIt:
       "Select the heading below. Bump the size to 32px, try changing case to UPPERCASE, then back to none. Set letter-spacing to 0.04em.",
@@ -130,6 +157,7 @@ export const STEPS: Step[] = [
     title: "Fill",
     body: [
       "Fill is multi-layered. Add a solid color, a gradient (linear / radial / conic), or an image as separate stacked layers. Each layer has its own size / repeat / position / blend mode in the per-layer settings.",
+      "Advanced covers background painting (clip / origin / attachment), masks, and — on SVG layers — a dedicated SVG paint sub-section with fill-rule and stroke linecap / linejoin.",
     ],
     tryIt:
       "Select the hero block below. Click '+ Add fill' → Linear gradient. The gradient stacks on top of the existing solid.",
@@ -166,10 +194,11 @@ export const STEPS: Step[] = [
     title: "Motion",
     body: [
       "Split out from Effects into its own section — Transition, Animation, Transform, Motion path, View transition, Scroll-driven animation. Each editor surfaces every CSS longhand the relevant property exposes, plus a Preview button for transitions and animations.",
+      "The timing-function picker includes a custom-curve (cubic-bézier) editor — drag the curve handles to author your own easing and reuse it across transitions and animations.",
       "The section starts collapsed by default so the design tab stays compact; expand the chevron next to 'Motion' in the side panel to use it.",
     ],
     tryIt:
-      "Select the floating card. Expand Motion. Click + → 'Transition', set duration 0.3s, then change the card's background colour — watch it ease into the new value. Click + → 'Animation' and pick a built-in dm-fade-in keyframe to preview a one-shot animation.",
+      "Select the floating card. Expand Motion. Click + → 'Transition', set duration 0.3s, then change the card's background colour — watch it ease into the new value. Open the timing dropdown and pick 'Custom' to drag a bézier curve. Then click + → 'Animation' and pick a built-in dm-fade-in keyframe to preview a one-shot animation.",
     targetId: "design-motion",
     parentId: "design",
   },
@@ -186,14 +215,27 @@ export const STEPS: Step[] = [
     parentId: "design",
   },
   {
+    id: "design-tokens",
+    title: "Design tokens",
+    body: [
+      "When the page exposes a design system — CSS custom properties / theme tokens — every colour picker in the Design tab surfaces them in a Tokens row. A fill, stroke, text, or shadow colour can be set straight from the system palette instead of a raw hex.",
+      "Picking a token stores the variable reference, so the exported diff and Copy Prompt carry the token name, not a frozen value — your agent writes `var(--brand-500)`, not `#2480ed`.",
+    ],
+    tryIt:
+      "Select the swatch below and open its Fill colour picker. Look for the Tokens row at the top of the picker, pick a token, and watch the Changes entry record the variable name.",
+    targetId: "design-tokens",
+    parentId: "design",
+  },
+  {
     id: "presets",
     title: "Presets",
     body: [
-      "Open with the bookmark icon in the action row. Presets covers all nine Design-tab sections (Position / Layout / Appearance / Typography / Fill / Stroke / Effects / Motion / Layout guide), with one preset seeded per kind so the JSON export shows the full schema.",
+      "Presets now live in the Design system panel — open it from the swatch-book icon in the toolbar (it shares the panel with the page's design tokens). They cover all eight Design-tab style sections (Position / Layout / Appearance / Typography / Fill / Stroke / Effects / Motion), with one preset seeded per kind so the JSON export shows the full schema.",
       "Save the currently-selected element's relevant CSS properties under a name + kind. Apply any saved preset back to a different element with one click. Edit a preset to rename / change properties / drop fields. Delete (with confirmation) to remove. Import / Export bring presets to a JSON file for sharing.",
     ],
     tryIt:
-      "Open the bookmark icon. Browse the seeded presets — apply 'Headline 1' to a heading on the page, then save the current card's styles as a new 'Card · Soft' preset under the Effects kind.",
+      "Open the swatch-book (Design system) icon and find the Presets list. Apply a seeded preset to the block below, then save the block's current styles as a new preset.",
+    targetId: "presets",
   },
   {
     id: "changes",
@@ -201,18 +243,20 @@ export const STEPS: Step[] = [
     body: [
       "Every edit is tracked in the Changes tab — grouped by element with friendly group labels (preset / multi-select / visibility) when one action touched many properties at once. The 'View Original' / 'View Changes' toggle previews the page with or without your edits.",
       "Per-change actions: Revert (trash icon, actually reverses the change on the page), Batch apply (zap icon, applies the change to all matching elements with a count badge ×N). Clear All wipes everything in one click.",
+      "Export / Import move the whole diff to and from a JSON file, so a session can be saved, shared, or replayed on another page. Export CSS (Alt+E) copies the generated stylesheet for the session straight to your clipboard.",
     ],
     tryIt:
-      "Switch to the Changes tab after making edits in the previous sections. Click 'View Original' to flip back. Try Batch apply (zap) on a style change.",
+      "Switch to the Changes tab after making edits in the previous sections. Click 'View Original' to flip back. Try Batch apply (zap) on a style change, then Export to download the diff as JSON.",
   },
   {
     id: "action-row",
     title: "Action row",
     body: [
-      "Above the tabs sits a row of contextual buttons: Parent / Child (DOM navigation), Duplicate / Remove, Comment, Pause animations, Screenshot, Presets, Undo / Redo. Most need a layer to be selected; Pause / Screenshot / Presets / Undo / Redo are always available.",
+      "Above the tabs sits the toolbar — a row of contextual buttons that act on the current selection or the whole page: Parent / Child (walk the DOM up and down), Duplicate / Remove, Comment, Pause animations, Screenshot, the Design system panel (swatch-book), and Undo / Redo. Most need a layer selected; Pause, Screenshot, Design system, and Undo / Redo are always available.",
+      "Pause animations is just one of them — it freezes every running CSS animation and transition on the page so you can inspect a single frame. The pulsing badge below keeps animating until you hit it.",
     ],
     tryIt:
-      "Try the Pause icon in the action row — the animated badge below should freeze. Click again to resume.",
+      "Select the badge below, then walk up to its group with Parent and back down with Child. Duplicate it, then Remove the copy. Finally hit Pause animations — the badge freezes; click again to resume.",
     targetId: "action-row",
   },
   {
@@ -243,6 +287,7 @@ export const STEPS: Step[] = [
     ],
     tryIt:
       "From the repo root: `npm start --prefix packages/mcp-local`. In the panel header, watch the MCP indicator flip from offline (grey) to running (yellow) to connected (green) once your agent attaches.",
+    nextLink: { label: "Read the full MCP setup guide →", href: "/mcp" },
   },
   {
     id: "copy-prompt",
