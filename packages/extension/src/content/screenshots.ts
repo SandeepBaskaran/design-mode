@@ -67,6 +67,19 @@ export async function captureElementScreenshot(elementId: string): Promise<strin
   return cropDataUrl(viewportDataUrl, rect);
 }
 
+// Capture a region comment's rectangle. `region` is in document coordinates
+// (scroll-independent), so translate to viewport space, capture the page with
+// all DM overlays hidden, and crop. Returns null if the region isn't on screen.
+export async function captureRegionScreenshot(region: { x: number; y: number; w: number; h: number }): Promise<string | null> {
+  if (!region || region.w <= 0 || region.h <= 0) return null;
+  const viewportDataUrl = await withDmOverlaysHidden(() => captureViewportScreenshot());
+  if (!viewportDataUrl) return null;
+  const rect = new DOMRect(region.x - window.scrollX, region.y - window.scrollY, region.w, region.h);
+  if (rect.left + rect.width <= 0 || rect.top + rect.height <= 0 ||
+      rect.left >= window.innerWidth || rect.top >= window.innerHeight) return null;
+  return cropDataUrl(viewportDataUrl, rect);
+}
+
 // Crop the captured viewport (which is rendered at devicePixelRatio) to the
 // element's rect. Anything outside the visible viewport is clamped — taller
 // elements just produce the visible portion.

@@ -381,6 +381,8 @@ at `https://mcp.designmode.app`). Both expose the **same seven MCP tools**.
 | 11.9  | `export_changes` — empty | Invoke with no changes | `"No changes to export."` |
 | 11.10 | `get_screenshot` — viewport | Invoke without selector/elementId | Returns base64 PNG of the visible viewport |
 | 11.11 | `get_screenshot` — element | Pass `selector` or `elementId` (`dm-*`) | Returns base64 PNG of just that element; ambiguous selectors fail with a candidate list |
+| 11.11b | `get_screenshot` — comment region | Draw a region comment → from `get_changes` take its `id` → `get_screenshot({ commentId })` | Returns a PNG cropped to the region rectangle (or the element for element comments), as an image block, with **no DM overlays/bands/pins**. Off-screen region → friendly "scroll into view" error |
+| 11.11c | `get_screenshot` — clean capture | Select an element with margin/padding (bands showing) → `get_screenshot` | The PNG contains no red/green bands, selection outline, guides, or pins |
 | 11.12 | `get_changes` — comments carry id/region | Add an element comment + a region comment, then invoke | `comments[]` entries include `id`; the region comment has a `region: {x,y,w,h}` and `selector: "region"` |
 | 11.13 | `mark_comment_resolved` | Pass a comment `id` from `get_changes` with `resolved: true` | Returns success; the page pin turns grey + struck-through, the Changes-tab row shows Resolved, with no panel reload |
 | 11.14 | `mark_comment_resolved` — unknown id | Pass a non-existent id | `isError` with "No comment found with id …" |

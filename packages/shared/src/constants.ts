@@ -19,7 +19,6 @@ export const Z_INDEX = {
   HOVER_OVERLAY: 2147483640,
   SELECT_OVERLAY: 2147483641,
   COMMENT_PIN: 2147483642,
-  ANNOTATION_PIN: 2147483643,
   DRAWING_CANVAS: 2147483644,
   SNAP_GUIDE: 2147483645,
   RESIZE_HANDLE: 2147483646,
@@ -38,30 +37,6 @@ export const STYLE_CATEGORIES = {
   EFFECTS: 'Effects',
   ANIMATION: 'Animation & Motion',
 } as const;
-
-// Phase 1: Annotation intent options
-export const INTENT_OPTIONS = [
-  { value: 'fix', label: 'Fix', icon: 'wrench', color: '#EF4444' },
-  { value: 'change', label: 'Change', icon: 'pencil', color: '#F59E0B' },
-  { value: 'question', label: 'Question', icon: 'help-circle', color: '#3B82F6' },
-  { value: 'approve', label: 'Approve', icon: 'check-circle', color: '#10B981' },
-  { value: 'note', label: 'Note', icon: 'sticky-note', color: '#8B5CF6' },
-] as const;
-
-export const SEVERITY_OPTIONS = [
-  { value: 'blocking', label: 'Blocking', icon: 'alert-octagon', color: '#EF4444' },
-  { value: 'important', label: 'Important', icon: 'alert-triangle', color: '#F59E0B' },
-  { value: 'suggestion', label: 'Suggestion', icon: 'lightbulb', color: '#3B82F6' },
-  { value: 'info', label: 'Info', icon: 'info', color: '#6B7280' },
-] as const;
-
-export const STATUS_OPTIONS = [
-  { value: 'pending', label: 'Pending', icon: 'clock', color: '#F59E0B' },
-  { value: 'acknowledged', label: 'Acknowledged', icon: 'eye', color: '#3B82F6' },
-  { value: 'in_progress', label: 'In Progress', icon: 'loader', color: '#8B5CF6' },
-  { value: 'resolved', label: 'Resolved', icon: 'check-circle-2', color: '#10B981' },
-  { value: 'dismissed', label: 'Dismissed', icon: 'x-circle', color: '#6B7280' },
-] as const;
 
 // Phase 4: Animation presets
 export const SPRING_PRESETS = [

@@ -221,70 +221,6 @@ export interface Comment {
 }
 
 // ============================================================
-// Phase 1: Annotation & Feedback System
-// ============================================================
-
-export type AnnotationIntent = 'fix' | 'change' | 'question' | 'approve' | 'note';
-export type AnnotationSeverity = 'blocking' | 'important' | 'suggestion' | 'info';
-export type AnnotationStatus = 'pending' | 'acknowledged' | 'in_progress' | 'resolved' | 'dismissed';
-
-export interface ThreadMessage {
-  id: string;
-  author: string;
-  authorType: 'human' | 'agent';
-  text: string;
-  timestamp: number;
-}
-
-export interface DrawingStroke {
-  id: string;
-  points: Array<{ x: number; y: number; pressure?: number }>;
-  color: string;
-  width: number;
-  opacity: number;
-}
-
-export interface Annotation {
-  id: string;
-  // Element targeting
-  elementId: string;
-  elementPath: string; // CSS selector path
-  boundingBox: ElementRect;
-  // Content
-  comment: string;
-  intent: AnnotationIntent;
-  severity: AnnotationSeverity;
-  status: AnnotationStatus;
-  // Context
-  selectedText?: string; // Text selection annotation
-  nearbyText?: string;
-  cssClasses: string[];
-  computedStyles?: PartialElementStyle;
-  fullPath: string; // Full DOM path
-  nearbyElements?: Array<{ selector: string; relation: string; gap?: number }>;
-  accessibility?: AccessibilityInfo;
-  // Multi-select
-  isMultiSelect: boolean;
-  multiSelectIds?: string[];
-  // Threading
-  thread: ThreadMessage[];
-  // Drawing
-  drawings?: DrawingStroke[];
-  drawingDataUrl?: string;
-  // Framework
-  reactComponents?: string[];
-  sourceFile?: string;
-  // Meta
-  pageUrl: string;
-  pageTitle: string;
-  timestamp: number;
-  updatedAt: number;
-  author: string;
-  // Session
-  sessionId: string;
-}
-
-// ============================================================
 // Phase 2: Spatial & Context Intelligence
 // ============================================================
 
@@ -418,7 +354,6 @@ export type OutputDetailLevel = 'compact' | 'standard' | 'detailed' | 'forensic'
 
 export interface StructuredOutput {
   level: OutputDetailLevel;
-  annotations: Annotation[];
   changes: StyleChange[];
   domChanges: any[];
   pageContext: {
@@ -445,7 +380,6 @@ export interface MCPSession {
   pageTitle: string;
   startedAt: number;
   lastActivity: number;
-  annotations: Annotation[];
   changes: StyleChange[];
   textChanges: TextChange[];
   domChanges: any[];
@@ -484,7 +418,6 @@ export interface ChangeSession {
   styleChanges: StyleChange[];
   textChanges: TextChange[];
   comments: Comment[];
-  annotations: Annotation[];
 }
 
 // --- MCP Tool Responses ---
@@ -513,24 +446,6 @@ export interface CommentReport {
     author: string;
     timestamp: string;
     resolved: boolean;
-  }>;
-}
-
-export interface AnnotationReport {
-  pageUrl: string;
-  annotations: Array<{
-    id: string;
-    selector: string;
-    comment: string;
-    intent: AnnotationIntent;
-    severity: AnnotationSeverity;
-    status: AnnotationStatus;
-    selectedText?: string;
-    thread: ThreadMessage[];
-    reactComponents?: string[];
-    sourceFile?: string;
-    spatialContext?: SpatialContext;
-    accessibility?: AccessibilityInfo;
   }>;
 }
 

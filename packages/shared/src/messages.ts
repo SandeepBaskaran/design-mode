@@ -4,9 +4,8 @@
 
 import type {
   ElementInfo, DomTreeNode, PartialElementStyle, Comment,
-  StyleChange, TextChange, ChangeSession, Annotation, ChangeStatus,
-  AnnotationIntent, AnnotationSeverity, AnnotationStatus,
-  ThreadMessage, DrawingStroke, SpringConfig, EasingConfig,
+  StyleChange, TextChange, ChangeSession, ChangeStatus,
+  SpringConfig, EasingConfig,
   AnimationState, ComponentPalette, PageSection, RearrangeNote,
   OutputDetailLevel, StructuredOutput, MCPSession,
   KeyboardShortcut, NamedPreset, SpatialContext, AccessibilityInfo,
@@ -28,13 +27,6 @@ export type PanelMessage =
   // Navigation
   | { type: 'HIGHLIGHT_ELEMENT'; payload: { id: string } }
   | { type: 'SCROLL_TO_ELEMENT'; payload: { id: string } }
-  // Phase 1: Annotations
-  | { type: 'ANNOTATION_CREATED'; payload: Annotation }
-  | { type: 'ANNOTATION_UPDATED'; payload: Annotation }
-  | { type: 'ANNOTATION_DELETED'; payload: { id: string } }
-  | { type: 'ANNOTATIONS_LIST'; payload: Annotation[] }
-  | { type: 'TEXT_SELECTED'; payload: { text: string; elementId: string; rect: ElementInfo['rect'] } }
-  | { type: 'DRAWING_UPDATED'; payload: { annotationId: string; strokes: DrawingStroke[]; dataUrl: string } }
   // Phase 2: Spatial
   | { type: 'SPATIAL_CONTEXT'; payload: { elementId: string; context: SpatialContext } }
   | { type: 'ACCESSIBILITY_INFO'; payload: { elementId: string; info: AccessibilityInfo } }
@@ -65,7 +57,6 @@ export type BackgroundMessage =
   | { type: 'SYNC_CHANGE'; payload: StyleChange | TextChange }
   | { type: 'SYNC_COMMENT'; payload: Comment }
   | { type: 'SYNC_SESSION'; payload: ChangeSession }
-  | { type: 'SYNC_ANNOTATION'; payload: Annotation }
   // Data requests from server (via background)
   | { type: 'REQUEST_ELEMENT_INFO'; payload: { selector: string } }
   | { type: 'ELEMENT_INFO_RESPONSE'; payload: ElementInfo | null }
@@ -91,18 +82,10 @@ export type ServerMessage =
   | { type: 'CHANGES_RESPONSE'; payload: ChangeSession }
   | { type: 'COMMENTS_RESPONSE'; payload: Comment[] }
   | { type: 'ELEMENT_RESPONSE'; payload: ElementInfo | null }
-  // Phase 1: Annotations via server
-  | { type: 'ANNOTATION_CREATED'; payload: Annotation }
-  | { type: 'ANNOTATION_UPDATED'; payload: Annotation }
-  | { type: 'ANNOTATION_DELETED'; payload: { id: string } }
-  | { type: 'REQUEST_ANNOTATIONS'; payload?: { pageUrl?: string; status?: AnnotationStatus } }
-  | { type: 'ANNOTATIONS_RESPONSE'; payload: Annotation[] }
   // Phase 4: Animation
   | { type: 'FREEZE_ANIMATIONS'; payload: { freeze: boolean } }
   | { type: 'UPDATE_SPRING'; payload: { elementId: string; config: SpringConfig } }
   | { type: 'UPDATE_EASING'; payload: { elementId: string; config: EasingConfig } }
   | { type: 'ANIMATION_STATE_RESPONSE'; payload: AnimationState }
   // Phase 8: Enhanced MCP
-  | { type: 'SESSION_LIST'; payload: MCPSession[] }
-  | { type: 'WATCH_ANNOTATIONS'; payload: { sessionId: string; since?: number } }
-  | { type: 'ANNOTATIONS_BATCH'; payload: Annotation[] };
+  | { type: 'SESSION_LIST'; payload: MCPSession[] };

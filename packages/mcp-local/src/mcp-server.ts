@@ -111,6 +111,9 @@ export function createMcpServer(): McpServer {
         timestamp: new Date(c.timestamp).toISOString(),
         pageUrl: c.pageUrl,
         resolved: c.resolved || false,
+        // Each comment has a picture: call get_screenshot({ commentId }) to see
+        // the flagged region (or element) as an image.
+        screenshot: `get_screenshot({ commentId: "${c.id}" })`,
       }));
       // Flat, id-addressable view so the agent can target set_change_status.
       report.items = [
@@ -241,12 +244,13 @@ export function createMcpServer(): McpServer {
   // ── 7. get_screenshot ─────────────────────────────────────────────
   server.tool(
     'get_screenshot',
-    'Capture a PNG screenshot of the page. Pass the unique `selector` string from `get_changes` output (e.g. "main > section.hero > button:nth-of-type(2)") or a Design Mode element id (dm-*) to crop to one element; otherwise the visible viewport is returned. A generic selector like "button" or "h1" matches multiple elements and will fail with a list of candidate unique paths to pick from.',
+    'Capture a PNG screenshot of the page. Pass the unique `selector` string from `get_changes` output (e.g. "main > section.hero > button:nth-of-type(2)") or a Design Mode element id (dm-*) to crop to one element; pass a `commentId` from get_changes to crop to that comment\'s flagged region (or its element); otherwise the visible viewport is returned. A generic selector like "button" or "h1" matches multiple elements and will fail with a list of candidate unique paths to pick from.',
     {
       selector: z.string().optional().describe('Unique CSS path for the element. Use the path list_layers returns, or the `selector` value from get_changes. Mutually exclusive with elementId.'),
       elementId: z.string().optional().describe('Design Mode element id (dm-*). Mutually exclusive with selector.'),
+      commentId: z.string().optional().describe('A comment id from get_changes — crops to that comment\'s region rectangle (or its element). Takes precedence over selector/elementId.'),
     },
-    async ({ selector, elementId }) => {
+    async ({ selector, elementId, commentId }) => {
       if (!isExtensionConnected()) {
         return { content: [{ type: 'text' as const, text: 'Error: Extension not connected.' }], isError: true };
       }
@@ -255,7 +259,7 @@ export function createMcpServer(): McpServer {
           dataUrl?: string;
           error?: string;
           candidates?: Array<{ path: string; label: string }>;
-        }>('CAPTURE_SCREENSHOT', { selector, elementId });
+        }>('CAPTURE_SCREENSHOT', { selector, elementId, commentId });
         if (payload?.error || !payload?.dataUrl) {
           let text = `Screenshot failed: ${payload?.error || 'no data returned'}`;
           if (payload?.candidates && payload.candidates.length > 0) {
@@ -279,7 +283,7 @@ export function createMcpServer(): McpServer {
           };
         }
         const [, mimeType, base64] = m;
-        const target = elementId ? `element ${elementId}` : selector ? `selector ${selector}` : 'viewport';
+        const target = commentId ? `comment ${commentId}` : elementId ? `element ${elementId}` : selector ? `selector ${selector}` : 'viewport';
         return {
           content: [
             { type: 'text' as const, text: `Captured screenshot of ${target}.` },

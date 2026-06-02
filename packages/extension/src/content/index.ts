@@ -464,6 +464,7 @@ function dispatchCloudMessage(msg: any) {
             region: (c as any).region,
             timestamp: new Date(c.timestamp).toISOString(),
             pageUrl: (c as any).pageUrl, resolved: !!(c as any).resolved,
+            screenshot: `get_screenshot({ commentId: "${c.id}" })`,
           }));
         } catch { report.comments = []; }
         sendRelayResponse(msg.requestId, report);

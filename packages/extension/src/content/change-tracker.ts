@@ -6,7 +6,8 @@
 import { getElementById, generateSelector, getComputedStyleSubset, reserveIdsAtLeast } from './helpers';
 import { DEFAULT_WS_PORT, DATA_ATTR } from '../shared';
 import { BUILTIN_KEYFRAMES } from './keyframes-library';
-import { captureElementScreenshot, captureViewportScreenshot } from './screenshots';
+import { captureElementScreenshot, captureViewportScreenshotClean, captureRegionScreenshot } from './screenshots';
+import { loadComments } from './comments';
 
 // Lifecycle a coding agent drives over MCP: untouched → working → done.
 // Absent ⇒ 'todo'. Mirrors @design-mode/shared ChangeStatus.
@@ -1180,13 +1181,26 @@ export function isConnected() {
 // candidate paths so the agent can re-query with a specific one.
 async function handleScreenshotRequest(
   requestId: string,
-  payload: { selector?: string; elementId?: string }
+  payload: { selector?: string; elementId?: string; commentId?: string }
 ) {
   let dataUrl: string | null = null;
   let error: string | undefined;
   let candidates: Array<{ path: string; label: string }> | undefined;
   try {
-    if (payload.elementId) {
+    if (payload.commentId) {
+      const comment = (await loadComments()).find(c => c.id === payload.commentId);
+      if (!comment) {
+        error = `Comment "${payload.commentId}" not found`;
+      } else if (comment.region) {
+        dataUrl = await captureRegionScreenshot(comment.region);
+        if (!dataUrl) error = 'Region is off-screen — scroll it into view and retry';
+      } else if (comment.elementId) {
+        dataUrl = await captureElementScreenshot(comment.elementId);
+        if (!dataUrl) error = `Comment's element "${comment.elementId}" not found`;
+      } else {
+        error = 'Comment has no region or element to capture';
+      }
+    } else if (payload.elementId) {
       dataUrl = await captureElementScreenshot(payload.elementId);
       if (!dataUrl) error = `Element with id "${payload.elementId}" not found`;
     } else if (payload.selector) {
@@ -1216,7 +1230,7 @@ async function handleScreenshotRequest(
         }
       }
     } else {
-      dataUrl = await captureViewportScreenshot();
+      dataUrl = await captureViewportScreenshotClean();
       if (!dataUrl) error = 'Failed to capture viewport';
     }
   } catch (e: any) {

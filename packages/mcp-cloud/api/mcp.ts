@@ -139,16 +139,17 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'get_screenshot',
-    description: 'Capture a PNG screenshot of the page. Pass a unique selector or an elementId to crop, or omit both for the viewport.',
+    description: 'Capture a PNG screenshot of the page. Pass a unique selector or an elementId to crop, a commentId from get_changes to crop to that comment\'s region/element, or omit all for the viewport.',
     inputSchema: {
       type: 'object',
       properties: {
         selector: { type: 'string' },
         elementId: { type: 'string' },
+        commentId: { type: 'string' },
       },
       additionalProperties: false,
     },
-    buildRequest: (args) => ({ type: 'CAPTURE_SCREENSHOT', payload: { selector: args.selector, elementId: args.elementId } }),
+    buildRequest: (args) => ({ type: 'CAPTURE_SCREENSHOT', payload: { selector: args.selector, elementId: args.elementId, commentId: args.commentId } }),
     toContent: (reply, args) => {
       if (reply?.error || !reply?.dataUrl) {
         let text = `Screenshot failed: ${reply?.error || 'no data returned'}`;
@@ -160,7 +161,7 @@ const TOOLS: ToolDef[] = [
       }
       const m = reply.dataUrl.match(/^data:(image\/[a-z+]+);base64,(.+)$/);
       if (!m) return [{ type: 'text', text: 'Screenshot returned an unexpected data URL format.' }];
-      const target = args.elementId ? `element ${args.elementId}` : args.selector ? `selector ${args.selector}` : 'viewport';
+      const target = args.commentId ? `comment ${args.commentId}` : args.elementId ? `element ${args.elementId}` : args.selector ? `selector ${args.selector}` : 'viewport';
       return [
         { type: 'text', text: `Captured screenshot of ${target}.` },
         { type: 'image', data: m[2], mimeType: m[1] },
