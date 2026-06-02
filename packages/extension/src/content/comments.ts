@@ -326,10 +326,17 @@ async function repositionAll() {
 window.addEventListener('scroll', () => { void repositionAll(); }, { passive: true, capture: true });
 window.addEventListener('resize', () => { void repositionAll(); }, { passive: true });
 
-// Hide every comment pin out of a screenshot capture, then restore.
+// Hide every comment pin AND region box out of a screenshot capture, then
+// restore. `display` (not `visibility`) so any pin/region transition can't
+// defer the hide past the capture frame.
+const pinCapturePrevDisplay = new WeakMap<HTMLElement, string>();
 export function setPinsHiddenForCapture(hidden: boolean) {
-  const v = hidden ? 'hidden' : '';
-  document.querySelectorAll<HTMLElement>('.dm-comment-pin').forEach((pin) => {
-    pin.style.visibility = v;
+  document.querySelectorAll<HTMLElement>('.dm-comment-pin, .dm-comment-region').forEach((el) => {
+    if (hidden) {
+      pinCapturePrevDisplay.set(el, el.style.display);
+      el.style.display = 'none';
+    } else {
+      el.style.display = pinCapturePrevDisplay.get(el) ?? '';
+    }
   });
 }

@@ -189,6 +189,12 @@ export const icons = {
   panelTop: `<svg ${S}><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg>`,
   panelBottom: `<svg ${S}><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 15h18"/></svg>`,
   panelLeft: `<svg ${S}><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>`,
+  // Spacing side-icons — margin (gallery-thumbnails, oriented per side) + padding (panel-*-dashed)
+  galleryThumbnails: `<svg ${S}><rect width="18" height="14" x="3" y="3" rx="2"/><path d="M4 21h1"/><path d="M9 21h1"/><path d="M14 21h1"/><path d="M19 21h1"/></svg>`,
+  panelTopDashed: `<svg ${S}><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M14 9h1"/><path d="M19 9h2"/><path d="M3 9h2"/><path d="M9 9h1"/></svg>`,
+  panelBottomDashed: `<svg ${S}><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M14 15h1"/><path d="M19 15h2"/><path d="M3 15h2"/><path d="M9 15h1"/></svg>`,
+  panelLeftDashed: `<svg ${S}><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 14v1"/><path d="M9 19v2"/><path d="M9 3v2"/><path d="M9 9v1"/></svg>`,
+  panelRightDashed: `<svg ${S}><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 14v1"/><path d="M15 19v2"/><path d="M15 3v2"/><path d="M15 9v1"/></svg>`,
 
   // ── Typography spacing/casing/align/list ──
   moveVertical: `<svg ${S}><polyline points="8 18 12 22 16 18"/><polyline points="8 6 12 2 16 6"/><line x1="12" y1="2" x2="12" y2="22"/></svg>`,

@@ -342,8 +342,6 @@ let sprStiffness = 100, sprDamping = 10, sprMass = 1;
 let borderWidthLinked = true;
 let borderStyleLinked = true;
 let borderColorLinked = true;
-let paddingLinked = true;
-let marginLinked = true;
 
 // Stroke style intent — tracks user's chosen style (solid / dashed) per
 // selected element. Needed because Inside mode (box-shadow inset) can't
@@ -799,6 +797,17 @@ async function applyStyle(property: string, value: string) {
   if (property === '__stroke_color' || property === '__stroke_weight' || property === '__stroke_style') {
     applyStrokeProperty(property, value);
     return;
+  }
+  // Margin / padding shorthand from the uniform field → write the four
+  // longhands instead. A standalone `margin` shorthand rule wouldn't override
+  // an existing per-side longhand override (so one differing side would stay),
+  // and would later reset all sides when one side is edited. Writing the four
+  // longhands sets every side and keeps per-side editing independent.
+  if (property === 'margin' || property === 'padding') {
+    return applyStylesBatch(
+      ['Top', 'Right', 'Bottom', 'Left'].map((side) => ({ property: property + side, value })),
+      property === 'margin' ? 'Margin' : 'Padding',
+    );
   }
   // Aspect-ratio lock: when the W:H ratio is pinned (the link2 icon is
   // active in the Layout section), editing one dimension drives the
@@ -1352,7 +1361,11 @@ function showCaptureToast(kind: 'success' | 'error', text: string) {
 }
 
 async function takeScreenshot() {
-  const target = info ? 'element' : 'viewport';
+  // The panel auto-selects <body> as the "Page" context, which isn't a real
+  // selection — capture the current viewport (no scroll) rather than crop+scroll
+  // to body. Only a real element selection takes the element-crop path.
+  const isPage = !info || classifyTag((info.tagName || '').toLowerCase()) === 'page';
+  const target = isPage ? 'viewport' : 'element';
   const res = await send({ type: 'SP_SCREENSHOT', target });
   if (!res.dataUrl) { showCaptureToast('error', 'Capture failed'); return; }
   const filename = target + '-' + Date.now() + '.png';
@@ -2954,25 +2967,51 @@ function spacingPrimary(s: Record<string, string>, kind: 'margin' | 'padding'): 
   return (t === r && r === b && b === l) ? t : 'Mixed';
 }
 
+// Uniform margin / padding field. Always numeric so editing it — including
+// typing a number over the 'Mixed' placeholder — writes the shorthand
+// (`margin` / `padding`) and sets all four sides at once.
+function spacingUniformField(label: string, kind: 'margin' | 'padding', s: Record<string, string>): string {
+  const primary = spacingPrimary(s, kind);
+  const isMixed = primary === 'Mixed';
+  const formatted = formatPxValueForDisplay(isMixed ? '0px' : primary);
+  return '<div class="dm-field">' +
+    '<label class="dm-field-label">' + label + '</label>' +
+    '<div class="dm-input-shell">' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + kind + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" placeholder="' + (isMixed ? 'Mixed' : '0') + '" value="' + escapeAttr(isMixed ? '' : formatted.display) + '"/>' +
+    '<span class="dm-input-unit">' + formatted.unit + '</span>' +
+    '</div></div>';
+}
+
+// Per-side icon for the expanded editor. Margin uses gallery-thumbnails
+// oriented toward each side; padding uses the panel-*-dashed set.
+function spacingSideIcon(kind: 'margin' | 'padding', side: 'top' | 'right' | 'bottom' | 'left'): string {
+  if (kind === 'margin') {
+    const tf = side === 'top' ? 'scaleY(-1)' : side === 'right' ? 'rotate(90deg)' : side === 'left' ? 'rotate(-90deg)' : '';
+    return '<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;flex-shrink:0;color:var(--dm-text-muted);' + (tf ? 'transform:' + tf + ';' : '') + '">' + icon('galleryThumbnails', 13) + '</span>';
+  }
+  const name = side === 'top' ? 'panelTopDashed' : side === 'bottom' ? 'panelBottomDashed' : side === 'left' ? 'panelLeftDashed' : 'panelRightDashed';
+  return '<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;flex-shrink:0;color:var(--dm-text-muted);">' + icon(name as keyof typeof icons, 13) + '</span>';
+}
+
 // Expanded per-side editor for margin / padding (top / right / bottom / left),
-// dropping below the uniform row when the user clicks the expand button.
-// Mirrors cornerRadius2x2: each cell writes its long-form property directly.
+// dropping below the uniform field. Two columns so each cell is 3 of the 12
+// layout cols (half of its 6-col region). Each cell writes its longhand.
 function spacing2x2(s: Record<string, string>, kind: 'margin' | 'padding'): string {
-  const cells: Array<{ glyph: string; prop: string; val: string; label: string }> = [
-    { glyph: '↑', prop: kind + 'Top',    val: s[kind + 'Top']    || '0px', label: kind + ' top' },
-    { glyph: '→', prop: kind + 'Right',  val: s[kind + 'Right']  || '0px', label: kind + ' right' },
-    { glyph: '↓', prop: kind + 'Bottom', val: s[kind + 'Bottom'] || '0px', label: kind + ' bottom' },
-    { glyph: '←', prop: kind + 'Left',   val: s[kind + 'Left']   || '0px', label: kind + ' left' },
+  const cells: Array<{ side: 'top' | 'right' | 'bottom' | 'left'; prop: string; val: string; label: string }> = [
+    { side: 'top',    prop: kind + 'Top',    val: s[kind + 'Top']    || '0px', label: kind + ' top' },
+    { side: 'right',  prop: kind + 'Right',  val: s[kind + 'Right']  || '0px', label: kind + ' right' },
+    { side: 'bottom', prop: kind + 'Bottom', val: s[kind + 'Bottom'] || '0px', label: kind + ' bottom' },
+    { side: 'left',   prop: kind + 'Left',   val: s[kind + 'Left']   || '0px', label: kind + ' left' },
   ];
   const cell = (c: typeof cells[0]): string => {
     const formatted = formatPxValueForDisplay(c.val);
     return '<div style="display:flex;align-items:center;gap:4px;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:4px 6px;">' +
-      '<span style="font-family:SF Mono,Monaco,monospace;font-size:11px;color:var(--dm-text-muted);width:14px;flex-shrink:0;text-align:center;">' + c.glyph + '</span>' +
+      spacingSideIcon(kind, c.side) +
       '<input class="dm-input" data-dm-prop="' + c.prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" value="' + escapeAttr(formatted.display) + '" placeholder="0" title="' + escapeAttr(c.label) + '" aria-label="' + escapeAttr(c.label) + '" style="background:none;border:none;padding:2px;flex:1;min-width:0;font-size:11px;"/>' +
       '<span style="font-size:9px;color:var(--dm-text-dim);flex-shrink:0;">' + formatted.unit + '</span>' +
     '</div>';
   };
-  return '<div class="dm-corner-grid">' + cells.map(cell).join('') + '</div>';
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">' + cells.map(cell).join('') + '</div>';
 }
 
 function inferStrokePosition(s: Record<string, string>): 'inside' | 'outside' | 'center' {
@@ -5436,7 +5475,9 @@ function renderActionRow(): string {
   return '<div style="display:flex;align-items:center;gap:3px;padding:6px 12px;border-bottom:1px solid var(--dm-separator);flex-shrink:0;">' +
     '<button data-dm-action="select-parent" title="Parent" style="' + bs() + '">' + icon('arrowUp', 14) + '</button>' +
     '<button data-dm-action="select-child" title="Child" style="' + bs() + '">' + icon('arrowDown', 14) + '</button>' +
-    '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
+    // Spacer + the spacer before Undo flank the middle cluster, centering it as
+    // the panel widens (Parent/Child pinned left, Undo/Redo pinned right).
+    '<div style="flex:1;"></div>' +
     '<button data-dm-action="duplicate" title="Duplicate" style="' + bs() + '">' + icon('copy', 14) + '</button>' +
     '<button data-dm-action="delete" title="Remove" style="' + bs('var(--dm-danger)') + '">' + icon('trash', 14) + '</button>' +
     '<button data-dm-action="comment" title="Comment" style="' + bs() + '">' + icon('messageSquare', 14) + '</button>' +
@@ -6331,16 +6372,20 @@ function renderDesignTab(): string {
       { span: 3, content: inp('Min H', 'minHeight', s.minHeight || '0') },
       { span: 3, content: inp('Max H', 'maxHeight', s.maxHeight || 'none') },
     ]) + sp() +
+    // Margin (4 field + 2 expand) and Padding (4 field + 2 expand) share one
+    // row; each expander drops below its own half independently.
     grid12([
-      { span: 10, content: inp('Margin', 'margin', spacingPrimary(s, 'margin')) },
+      { span: 4, content: spacingUniformField('Margin', 'margin', s) },
       { span: 2, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">&middot;</label><button class="dm-icon-row-button" data-dm-spacing-expand="margin" title="' + (marginExpanded ? 'Collapse sides' : 'Edit each side separately') + '" data-active="' + (marginExpanded ? 'true' : 'false') + '" style="width:100%;">' + icon('scan', 14) + '</button></div>' },
-    ]) + sp() +
-    (marginExpanded ? spacing2x2(s, 'margin') + sp() : '') +
-    grid12([
-      { span: 10, content: inp('Padding', 'padding', spacingPrimary(s, 'padding')) },
+      { span: 4, content: spacingUniformField('Padding', 'padding', s) },
       { span: 2, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">&middot;</label><button class="dm-icon-row-button" data-dm-spacing-expand="padding" title="' + (paddingExpanded ? 'Collapse sides' : 'Edit each side separately') + '" data-active="' + (paddingExpanded ? 'true' : 'false') + '" style="width:100%;">' + icon('scan', 14) + '</button></div>' },
     ]) + sp() +
-    (paddingExpanded ? spacing2x2(s, 'padding') + sp() : '') +
+    ((marginExpanded || paddingExpanded)
+      ? grid12([
+          { span: 6, content: marginExpanded ? spacing2x2(s, 'margin') : '' },
+          { span: 6, content: paddingExpanded ? spacing2x2(s, 'padding') : '' },
+        ]) + sp()
+      : '') +
     // Children align (6) + Col/Row gap stacked (6) \u2014 top-aligned so the
     // gap fields start at the same Y as the children-align pad.
     ((isFlex || isGrid) ? '<div style="display:grid;grid-template-columns:repeat(12, 1fr);gap:6px;align-items:start;">' +
@@ -9391,8 +9436,6 @@ function setupDelegation() {
       else if (key === 'style') borderStyleLinked = !borderStyleLinked;
       else if (key === 'color') borderColorLinked = !borderColorLinked;
       else if (key === 'radius') cornerRadiusLinked = !cornerRadiusLinked;
-      else if (key === 'padding') paddingLinked = !paddingLinked;
-      else if (key === 'margin') marginLinked = !marginLinked;
       render(); return;
     }
 
@@ -10960,19 +11003,9 @@ function setupDelegation() {
       }
       const borderWidths = ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'];
       const borderRadii = ['borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius'];
-      const paddingSides = ['paddingTop','paddingRight','paddingBottom','paddingLeft'];
-      const marginSides = ['marginTop','marginRight','marginBottom','marginLeft'];
-      // Primary linked inputs fan out to all 4 sides.
-      if (paddingLinked && (paddingSides.includes(prop) || prop === 'padding')) {
-        Promise.all(paddingSides.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
-          const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();
-        }); return;
-      }
-      if (marginLinked && (marginSides.includes(prop) || prop === 'margin')) {
-        Promise.all(marginSides.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
-          const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();
-        }); return;
-      }
+      // Margin / padding: the uniform field writes the `margin`/`padding`
+      // shorthand (which applyStyle fans out to the four longhands); per-side
+      // inputs write their own longhand only. No side-edit fan-out here.
       if (borderWidthLinked && borderWidths.includes(prop)) {
         Promise.all(borderWidths.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
           const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();

@@ -24,13 +24,14 @@ export async function captureViewportScreenshot(): Promise<string | null> {
 
 // Hide every Design Mode overlay (selection / hover outlines, margin & padding
 // bands, axis / distance / resize guides, comment pins) for the duration of a
-// capture so the screenshot shows only the page, then restore them. Waits one
-// frame after hiding so the browser paints the hidden state before we capture.
+// capture so the screenshot shows only the page, then restore them. A single
+// rAF fires *before* the hidden state composites, so captureVisibleTab would
+// still grab the old frame — wait TWO frames so the hidden state is painted.
 export async function withDmOverlaysHidden<T>(fn: () => Promise<T>): Promise<T> {
   setOverlaysHiddenForCapture(true);
   setGuidesHiddenForCapture(true);
   setPinsHiddenForCapture(true);
-  await new Promise<void>((r) => requestAnimationFrame(() => r()));
+  await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
   try {
     return await fn();
   } finally {

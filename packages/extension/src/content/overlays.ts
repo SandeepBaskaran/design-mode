@@ -301,13 +301,23 @@ export function hideSelect() {
 }
 
 // Toggle every hover/select outline, dimension label, and box-model band out
-// of the captured frame for a screenshot, then back. `visibility` keeps each
-// element's display state intact so the inspector resumes unchanged.
+// of the captured frame for a screenshot, then back. Uses `display` (not
+// `visibility`) because these elements carry `transition: all 80ms`, which
+// would defer a `visibility:hidden` flip ~80ms — long enough that the capture
+// (a couple of frames later) still grabs them. `display` isn't transitionable,
+// so it hides instantly. Prior display is snapshotted so the inspector resumes
+// in exactly the state it was in.
+const capturePrevDisplay = new WeakMap<HTMLElement, string>();
 export function setOverlaysHiddenForCapture(hidden: boolean) {
-  const v = hidden ? 'hidden' : '';
   for (const el of [hoverOverlay, selectOverlay, dimensionLabel,
     hoverMarginBand, hoverPaddingBand, selectMarginBand, selectPaddingBand]) {
-    if (el) el.style.visibility = v;
+    if (!el) continue;
+    if (hidden) {
+      capturePrevDisplay.set(el, el.style.display);
+      el.style.display = 'none';
+    } else {
+      el.style.display = capturePrevDisplay.get(el) ?? '';
+    }
   }
 }
 
