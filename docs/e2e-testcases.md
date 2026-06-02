@@ -59,6 +59,7 @@ unless noted otherwise.
 | 0.5.11| Reset to defaults | Click Reset | Theme back to system, colour format to HEX, all four overlay colours (hover / selection / margin / padding) to defaults, MCP port to default |
 | 0.5.12| Inspector margin overlay colour | Pick a custom colour | Margin bands on the hover/selection overlay render in it and repaint live (default `#FF6363`) |
 | 0.5.13| Inspector padding overlay colour | Pick a custom colour | Padding bands render in it and repaint live (default `#7CC886`); the ↺ Reset link beside the overlay colours restores all four |
+| 0.5.14| Nudge amount | Change to e.g. `25` | Persists (`dm-nudge-amount`); Shift+Arrow on a px field now steps by 25 (default `10`); invalid / ≤0 reverts to the last valid value |
 
 ---
 
@@ -106,7 +107,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 0.10.14 | Shift+click on a Layers row (range) | Click layer A with no modifier → Shift+click layer C three rows down | All visible rows from A to C are selected; the multi-select badge reflects the count |
 | 0.10.15 | Arrow Up/Down in Layers | Switch to Layers tab → press ↓ several times | Selection moves down one visible row per press, wraps at the end; the row stays in view (`scrollIntoView` keeps it visible) |
 | 0.10.16 | Enter to collapse/expand a container row | In Layers tab, select a container row with children → Enter | Children collapse; press Enter again → re-expand |
-| 0.10.17 | Numeric Arrow stepping (px props) | Click any pixel input (e.g. font-size) → ↑ | Value increments by 1; Shift+↑ by 10 |
+| 0.10.17 | Numeric Arrow stepping (px props) | Click any pixel input (e.g. font-size) → ↑ | Value increments by 1; Shift+↑ by the Settings → Nudge amount (default 10) |
 | 0.10.18 | Numeric Arrow stepping (unitless props) | Click a unitless input (e.g. line-height) → ↑ | Value increments by 0.1; Shift+↑ by 1 |
 | 0.10.19 | Esc priority | With multi-select active AND inspect on AND something selected, press Esc three times | First press tears down multi-select; second turns inspect off; third clears the selection |
 | 0.10.20 | Ctrl/⌘+Enter on comment textarea | Focus a comment textarea → Ctrl/⌘+Enter | Comment submits |
@@ -185,8 +186,9 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
-| 3.1  | Spacing box layout | Select an element with margin and padding | Figma-style box shown: outer dashed (margin) → inner solid (padding) → centre dimension pill (`W × H`) |
-| 3.2  | Edit padding via box | Click padding-top in the box, type `24`, blur | Element padding-top becomes `24px`; change recorded |
+| 3.1  | Computed box layout | Select an element with margin and padding → expand Layout → Advanced | Chrome-DevTools box shown: outer dashed (margin) → inner solid (padding) → centre dimension pill (`W × H`) |
+| 3.2  | Edit padding via computed box | In Layout → Advanced, click padding-top in the box, type `24`, blur | Element padding-top becomes `24px`; change recorded |
+| 3.2a | Figma margin/padding expand | In Layout, type a uniform Margin value; click the expand (scan) button on the Margin row | Uniform writes the `margin` shorthand; expand reveals 4 side inputs (↑→↓←) writing `margin-top/right/bottom/left`; per-side edits land in Changes. Same for Padding |
 | 3.3  | Border width 4 sides | Set top / right / bottom / left widths | All 4 borders update independently |
 | 3.4  | Border link button | Click the round link icon in the centre of the 2×2 grid | Icon turns blue (linked); editing one side updates all four |
 | 3.5  | Border unlink | Click again | Icon reverts to grey outline; edits are independent |
@@ -194,6 +196,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 3.7  | Stroke position (Inside / Outside / Center) | Change in Stroke section | Inside renders via inset box-shadow chain; Outside via `border-*` (single) or outer box-shadow (multi); Center via `outline-*` |
 | 3.8  | Display flex sub-controls | Set display to flex | Flex direction / wrap / justify / align / gap controls appear |
 | 3.9  | Display grid sub-controls | Set display to grid | Grid template columns/rows + gap controls appear |
+| 3.9a | Gap Fixed / Auto mode | On a flex/grid container, Col/Row gap shows a Fixed/Auto dropdown. Type a px value in Fixed; switch to Auto | Fixed writes `column-gap`/`row-gap`; Auto spreads children via `space-between` (justify-content, or align-content for grid rows), field goes read-only showing the measured gap; switching back to Fixed restores an editable px value. Container whose CSS already has `space-between` opens in Auto |
 | 3.10 | Position offsets | Set position to `relative`, top `10` | Element shifts down 10px |
 | 3.11 | Z-index strict numeric | Type `10.5` in z-index | Allowed (2 decimals); type letters → blocked |
 | 3.12 | Opacity / transform | Set `opacity: 0.5`, transform `rotate(3deg)` | Both apply visually |
@@ -305,6 +308,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 8.16 | Cross-tab filters + search | Click filter chips (All / Colours / Type / Spacing / Radius / Shadow / Other) and type in the search box | Filters and search filter the active tab's rows; semantics adapt per tab |
 | 8.17 | "Used on this page" toggle | Toggle on | Active tab filters to entries actually consumed by viewport-visible elements |
 | 8.18 | Markdown exporter — Tokens changed | Edit a `:root` var → Copy Prompt | Output contains a focused **`## Tokens changed`** section listing only edited tokens (original → current). With no root-var edits, the section is omitted |
+| 8.18a | Token edits show in Changes tab | Edit a `:root` var → open the Changes tab | A row appears under a `:root` / Design-tokens group showing `--var: original → current`; the **Tokens** filter chip counts it; the row's Revert restores the original; "Clear all" removes it. Parity with the Copy Prompt's Tokens-changed section |
 | 8.19 | Pre-rework presets read back | If you had presets from before this rework | They load into the Defined tab without migration; `groupId` continues to work |
 
 ---

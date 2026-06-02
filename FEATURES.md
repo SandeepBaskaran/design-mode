@@ -153,6 +153,13 @@ hovered) element. Every field updates the page live.
 - Flex section *(when display is flex)*: Direction, Wrap, Justify, Align,
   Gap, Grow, Shrink.
 - Grid section *(when display is grid)*: Template Cols/Rows, Col/Row Gap.
+- Col/Row gap fields have a **Fixed / Auto** mode (like Width/Height): Fixed
+  takes a typed px value; Auto spreads the children evenly via
+  `space-between` and shows the measured effective gap read-only.
+- **Margin** and **Padding** rows (Figma-style): a uniform value with an
+  expand button that drops a 4-side editor (top / right / bottom / left),
+  mirroring the corner-radius pattern. The Chrome-DevTools computed box
+  (padding nested in margin) now lives under Layout → **Advanced**.
 
 ### 2.8 Position
 
@@ -352,6 +359,16 @@ Every edit you've made grouped by element.
 - **Time-ago** — `5m ago` mono chip. When `updatedAt > timestamp`, appends `· edited 1m ago`.
 - **Per-row checkbox** — comments participate in the bulk-revert toolbar like every other change kind.
 - **Click body** — switches to expanded "viewing" state and scrolls the page to the pin.
+
+### 4.4b Token change row
+
+- Design-system **token edits** (made in the Design-system / Tokens panel) now
+  appear here, grouped under a synthetic `:root` group. Each row shows
+  `--var: <original> → <current>` with a swatch-book icon.
+- **Revert** restores the token to its original value (clears the `:root`
+  override). The **Tokens** filter chip narrows to just these rows. They are
+  sourced from the same store the Copy Prompt reads, so tab and prompt always
+  agree; "Clear all" wipes them too.
 
 ### 4.5 Group header
 
@@ -563,6 +580,7 @@ Open via the gear icon in the header.
 | **Inspector padding overlay color** | Colour of the padding band drawn between the border and content. Persisted + broadcast; the overlay repaints live. | `#7CC886` |
 | **Color format** | Display colours in the editor as `HEX` / `RGBA` / `HSL`. | `HEX` |
 | **Screenshot capture** | What the camera button does. `Clipboard` copies the PNG; `Download` saves it; `Both` does both. | `Clipboard` |
+| **Nudge amount** | Shift+Arrow step for numeric fields in the Design panel (Figma-style big-nudge). Plain Arrow keys still nudge by 1. Persisted to `chrome.storage.local`. | `10` |
 | **Theme** | `System` / `Dark` / `Light`. | `System` |
 | **Keyboard shortcuts** (button) | Toasts a one-line summary of the active shortcuts (`Alt+D`, `Ctrl/⌘+Z`, `Ctrl/⌘+⇧Z`, `Esc`). | — |
 | **Reset settings** (button) | Wipes every setting above back to its default. Toasts on success. | — |

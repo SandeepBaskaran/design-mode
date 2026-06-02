@@ -32,6 +32,7 @@ const compareSlugs = [
   "design-mode-vs-chrome-devtools",
   "design-mode-vs-figma-dev-mode",
   "design-mode-vs-visbug",
+  "design-mode-vs-figma-make",
 ];
 
 const docsSlugs = [

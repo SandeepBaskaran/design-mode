@@ -17,6 +17,15 @@ export function clearRootVarEdit(cssVar: string): void {
   rootVarOriginals.delete(cssVar);
 }
 
+// Drop every tracked :root edit and remove its inline override — used by the
+// Changes-tab "Clear all" so token edits are wiped alongside style/text/DOM.
+export function clearAllRootVarEdits(): void {
+  for (const cssVar of rootVarOriginals.keys()) {
+    document.documentElement.style.removeProperty(cssVar);
+  }
+  rootVarOriginals.clear();
+}
+
 // Returns one entry per :root variable the user has edited, with the
 // original value (captured the first time they touched it) and the
 // current value the page is resolving to. Tokens whose current value

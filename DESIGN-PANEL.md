@@ -380,14 +380,24 @@ Visible only on flex / grid containers.
 | Field | What |
 |---|---|
 | **9-cell pad** | Picks where children sit on both axes. Writes `justify-content` (column from the cell) + `align-items` (row from the cell). For grid containers, writes `justify-items` instead of `justify-content`. |
-| **Col gap** | `column-gap` — horizontal gap between children. Visible on grid + horizontal-stack flex. |
-| **Row gap** | `row-gap` — vertical gap. Visible on grid + vertical-stack flex. |
+| **Col gap** | `column-gap` — horizontal gap between children. Visible on grid + horizontal-stack flex. Has a **Fixed / Auto** mode (like W/H): Fixed = a typed px value; Auto spreads children via `justify-content: space-between` and shows the measured effective gap read-only. |
+| **Row gap** | `row-gap` — vertical gap. Visible on grid + vertical-stack flex. Same **Fixed / Auto** mode: Auto writes `justify-content: space-between` on a vertical-stack flex, or `align-content: space-between` on a grid. |
+
+Gap mode defaults to **Fixed** unless the element's CSS already reads as a spread distribution (`space-between` / `space-around` / `space-evenly`), in which case it opens in **Auto**.
 
 **Figma equivalent**: Alignment 9-cell pad + spacing-between-items.
 
-### Padding + Margin (Chrome DevTools-style nested box)
+### Margin + Padding (Figma-style uniform + per-side)
 
-Visualises the box-model:
+Two rows in the Layout section: a uniform value with an expand button at the
+row end that reveals a 4-side editor (top / right / bottom / left) — the same
+uniform-or-expand pattern as Corner radius. Uniform writes the `margin` /
+`padding` shorthand; expanded cells write the long-form sides
+(`margin-top`, `padding-left`, …). Shows `Mixed` when the four sides differ.
+
+### Padding + Margin computed box (Chrome DevTools-style nested box)
+
+Lives in Layout → **Advanced**. Visualises the box-model:
 - Outer (dashed border) = margin.
 - Inner = padding.
 - Each side has its own input.

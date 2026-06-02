@@ -176,6 +176,9 @@ let styleChanges: StyleChange[] = [];
 let textChanges: TextChange[] = [];
 let domChanges: DomChange[] = [];
 let comments: CommentEntry[] = [];
+// Design-system :root token edits, synced from the content change payload
+// (same source the Copy Prompt reads) so they appear in the Changes tab.
+let tokenChanges: Array<{ cssVar: string; original: string; current: string }> = [];
 let batchAppliedChanges: Set<string> = new Set();
 let mediaInfo: { kind: string; src: string; alt?: string; naturalWidth?: number; naturalHeight?: number; filename?: string; markup?: string; isObjectUrl?: boolean; poster?: string; bytes?: number } | null = null;
 let lastMediaElementId: string | null = null;
@@ -236,7 +239,7 @@ let layersFilter: LayersFilter = 'all';
 // Phase 4: Changes tab UI state.
 const changesGroupCollapsed = new Set<string>();
 // Filter narrows the visible items to one change kind.
-type ChangesFilter = 'all' | 'style' | 'text' | 'dom' | 'comment';
+type ChangesFilter = 'all' | 'style' | 'text' | 'dom' | 'comment' | 'token';
 let changesFilter: ChangesFilter = 'all';
 // Free-text search across selector / property / value / comment text.
 let changesSearch = '';
@@ -331,6 +334,8 @@ const strokeStyleByElement = new Map<string, 'solid' | 'dashed'>();
 // Figma-style Design tab state
 let cornerRadiusLinked = true;
 let cornerRadiusExpanded = false;
+let marginExpanded = false;
+let paddingExpanded = false;
 const CORNER_RADIUS_PROPS = new Set([
   'borderRadius',
   'borderTopLeftRadius',
@@ -414,6 +419,9 @@ let overlayPaddingColor = OVERLAY_PADDING_DEFAULT;
 // renders without re-reading getComputedStyle each time.
 let inputUnit: 'px' | 'rem' = 'px';
 let remRootPx = 16;
+// Figma-style nudge: Shift+Arrow steps a numeric field by this amount
+// (plain Arrow steps by 1). User-editable in Settings.
+let nudgeAmount = 10;
 
 chrome.storage?.local?.get?.([
   'dm-theme', 'dm-color-format', 'dm-capture-mode',
@@ -422,6 +430,7 @@ chrome.storage?.local?.get?.([
   'dm-inspector-hover-color', 'dm-inspector-select-color',
   'dm-overlay-margin-color', 'dm-overlay-padding-color',
   'dm-input-unit',
+  'dm-nudge-amount',
   'dm-a11y-category', 'dm-a11y-level',
 ], (result: any) => {
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
@@ -438,6 +447,7 @@ chrome.storage?.local?.get?.([
   if (typeof result?.['dm-overlay-margin-color'] === 'string') overlayMarginColor = result['dm-overlay-margin-color'];
   if (typeof result?.['dm-overlay-padding-color'] === 'string') overlayPaddingColor = result['dm-overlay-padding-color'];
   if (result?.['dm-input-unit'] === 'rem' || result?.['dm-input-unit'] === 'px') inputUnit = result['dm-input-unit'];
+  if (typeof result?.['dm-nudge-amount'] === 'number' && result['dm-nudge-amount'] > 0) nudgeAmount = result['dm-nudge-amount'];
   const cat = result?.['dm-a11y-category'];
   if (cat === 'auto' || cat === 'large' || cat === 'normal' || cat === 'graphics') a11yCategory = cat;
   const lvl = result?.['dm-a11y-level'];
@@ -506,7 +516,7 @@ window.addEventListener('beforeunload', signalPanelClosing);
 /* ── Async actions ── */
 async function refreshMcpStatus() { const res = await send({ type: 'SP_GET_MCP_STATUS' }); if (res.mcpState) mcpState = res.mcpState; else if (res.connected && res.agentConnected) mcpState = 'connected'; else if (res.connected) mcpState = 'running'; else mcpState = 'offline'; render(); }
 async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
-async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; render(); }
+async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; render(); }
 async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
@@ -1348,7 +1358,7 @@ function startComment() { if (!info) return; commentMode = true; commentText = '
 function editComment(comment: CommentEntry) { commentMode = true; commentText = comment.text; editingCommentId = comment.id; viewingCommentId = null; commentDirty = false; render(); }
 async function deleteCommentEntry(commentId: string) { await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + commentId }); comments = comments.filter(c => c.id !== commentId); render(); }
 async function removeChange(changeId: string) { styleChanges = styleChanges.filter(c => (c.id || 'style-' + styleChanges.indexOf(c)) !== changeId); textChanges = textChanges.filter(c => c.id !== changeId); domChanges = domChanges.filter(c => (c.id || 'dom-' + c.action) !== changeId); batchAppliedChanges.delete(changeId); render(); await send({ type: 'SP_REMOVE_CHANGE', changeId }); await refreshChanges(); await refreshDomTree(); await refreshState(); }
-async function clearAllChanges() { await send({ type: 'SP_CLEAR_CHANGES' }); styleChanges = []; textChanges = []; domChanges = []; comments = []; batchAppliedChanges.clear(); render(); }
+async function clearAllChanges() { await send({ type: 'SP_CLEAR_CHANGES' }); styleChanges = []; textChanges = []; domChanges = []; comments = []; tokenChanges = []; editedTokens.clear(); batchAppliedChanges.clear(); render(); }
 
 // Tiny markdown-ish renderer for comment bodies. Supports inline code,
 // bold (`**text**`), italic (`*text*`), links (`[text](url)`), and
@@ -1392,6 +1402,13 @@ async function revertGroup(groupKey: string) {
   textChanges  = textChanges.filter(c => !inGroup(c));
   domChanges   = domChanges.filter(c => !inGroup(c));
   for (const id of [...styleIds, ...textIds, ...domIds]) batchAppliedChanges.delete(id);
+  // Token edits live under the synthetic ':root' group — reset each via the
+  // root-var path so the page repaints and the prompt drops them too.
+  if (groupKey === ':root') {
+    for (const t of tokenChanges) { editedTokens.delete(t.cssVar); await send({ type: 'SP_RESET_ROOT_VAR', cssVar: t.cssVar }); }
+    tokenChanges = [];
+    designSystem = null;
+  }
   render();
   await refreshChanges();
   await refreshState();
@@ -1549,7 +1566,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     multiSelectActive = multiSelectIds.length > 0;
     render();
   }
-  if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; render(); }
+  if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; render(); }
   if (msg.type === 'AGENT_PRESENCE_UPDATE') {
     // Transport state is implicit from current mcpState — if we were
     // 'offline' an AGENT_PRESENCE_UPDATE shouldn't suddenly say
@@ -1912,6 +1929,52 @@ function sizeInput(label: string, prop: 'width' | 'height', resolvedValue: strin
       '<option value="fixed"' + (mode === 'fixed' ? ' selected' : '') + '>Fixed</option>' +
       '<option value="hug"' + (mode === 'hug' ? ' selected' : '') + '>Hug</option>' +
       '<option value="fill"' + (mode === 'fill' ? ' selected' : '') + '>Fill</option>' +
+    '</select>' +
+    '</div></div>';
+}
+
+// Which distribution property a gap field's "Auto" mode drives. The visible
+// gap field is always the container's spread target: Col gap → the inline
+// axis (justify-content for flex row and grid), Row gap → the block axis
+// (align-content for grid, but justify-content for a vertical flex column,
+// whose main axis is vertical).
+function gapDistProp(field: 'col' | 'row', s: Record<string, string>): string {
+  const display = (s.display || '').toLowerCase();
+  const isGrid = display === 'grid' || display === 'inline-grid';
+  return field === 'col' ? 'justifyContent' : (isGrid ? 'alignContent' : 'justifyContent');
+}
+
+function inferGapMode(field: 'col' | 'row', s: Record<string, string>): 'fixed' | 'auto' {
+  const v = (s[gapDistProp(field, s)] || '').toLowerCase();
+  if (v === 'space-between' || v === 'space-around' || v === 'space-evenly') return 'auto';
+  return 'fixed';
+}
+
+// Gap field modelled on sizeInput: a number input + unit suffix + a two-mode
+// dropdown. Fixed is editable and writes column-gap / row-gap; Auto spreads
+// the children via space-between and shows the measured effective spacing
+// (info.childGap) read-only.
+function gapInput(label: string, field: 'col' | 'row', s: Record<string, string>, iconName: string): string {
+  const prop = field === 'col' ? 'columnGap' : 'rowGap';
+  const mode = inferGapMode(field, s);
+  const isFixed = mode === 'fixed';
+  const rawGap = s[prop] || '';
+  const fixedVal = rawGap === 'normal' ? '' : rawGap;
+  const formatted = formatPxValueForDisplay(fixedVal || '0');
+  const measured = field === 'col' ? info?.childGap?.col : info?.childGap?.row;
+  const autoDisplay = (measured === null || measured === undefined) ? '—' : String(measured);
+  const labelHtml = '<label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + icon(iconName, 11) + ' ' + label + '</label>';
+  const valueCell = isFixed
+    ? '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" data-dm-kw="normal" inputmode="decimal" placeholder="0" value="' + escapeAttr(fixedVal ? formatted.display : '') + '"/>'
+    : '<span class="dm-input-readonly" data-dm-gap-readonly="' + prop + '" title="Auto (space-between) — switch to Fixed to enter a value">' + escapeAttr(autoDisplay) + '</span>';
+  const unit = isFixed && fixedVal ? formatted.unit : 'px';
+  return '<div class="dm-field">' + labelHtml +
+    '<div class="dm-input-shell">' +
+    valueCell +
+    '<span class="dm-input-unit">' + unit + '</span>' +
+    '<select class="dm-size-mode" data-dm-gap-mode="' + field + '" title="Gap mode" aria-label="' + label + ' mode">' +
+      '<option value="fixed"' + (mode === 'fixed' ? ' selected' : '') + '>Fixed</option>' +
+      '<option value="auto"' + (mode === 'auto' ? ' selected' : '') + '>Auto</option>' +
     '</select>' +
     '</div></div>';
 }
@@ -2808,6 +2871,37 @@ function cornerRadius2x2(s: Record<string, string>): string {
     '</div>';
   };
   return '<div class="dm-corner-grid">' + cells.map(cornerCell).join('') + '</div>';
+}
+
+// Figma-style uniform value for margin / padding — the shared value when all
+// four sides match, else 'Mixed'. Mirrors cornerRadiusPrimary.
+function spacingPrimary(s: Record<string, string>, kind: 'margin' | 'padding'): string {
+  const t = s[kind + 'Top'] || '0px';
+  const r = s[kind + 'Right'] || '0px';
+  const b = s[kind + 'Bottom'] || '0px';
+  const l = s[kind + 'Left'] || '0px';
+  return (t === r && r === b && b === l) ? t : 'Mixed';
+}
+
+// Expanded per-side editor for margin / padding (top / right / bottom / left),
+// dropping below the uniform row when the user clicks the expand button.
+// Mirrors cornerRadius2x2: each cell writes its long-form property directly.
+function spacing2x2(s: Record<string, string>, kind: 'margin' | 'padding'): string {
+  const cells: Array<{ glyph: string; prop: string; val: string; label: string }> = [
+    { glyph: '↑', prop: kind + 'Top',    val: s[kind + 'Top']    || '0px', label: kind + ' top' },
+    { glyph: '→', prop: kind + 'Right',  val: s[kind + 'Right']  || '0px', label: kind + ' right' },
+    { glyph: '↓', prop: kind + 'Bottom', val: s[kind + 'Bottom'] || '0px', label: kind + ' bottom' },
+    { glyph: '←', prop: kind + 'Left',   val: s[kind + 'Left']   || '0px', label: kind + ' left' },
+  ];
+  const cell = (c: typeof cells[0]): string => {
+    const formatted = formatPxValueForDisplay(c.val);
+    return '<div style="display:flex;align-items:center;gap:4px;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:4px 6px;">' +
+      '<span style="font-family:SF Mono,Monaco,monospace;font-size:11px;color:var(--dm-text-muted);width:14px;flex-shrink:0;text-align:center;">' + c.glyph + '</span>' +
+      '<input class="dm-input" data-dm-prop="' + c.prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" value="' + escapeAttr(formatted.display) + '" placeholder="0" title="' + escapeAttr(c.label) + '" aria-label="' + escapeAttr(c.label) + '" style="background:none;border:none;padding:2px;flex:1;min-width:0;font-size:11px;"/>' +
+      '<span style="font-size:9px;color:var(--dm-text-dim);flex-shrink:0;">' + formatted.unit + '</span>' +
+    '</div>';
+  };
+  return '<div class="dm-corner-grid">' + cells.map(cell).join('') + '</div>';
 }
 
 function inferStrokePosition(s: Record<string, string>): 'inside' | 'outside' | 'center' {
@@ -6126,8 +6220,8 @@ function renderDesignTab(): string {
 
   // Gap fields (column / row) \u2014 context-gated by layout mode.
   // Horizontal stack \u2192 only Col gap. Vertical stack \u2192 only Row gap. Grid \u2192 both.
-  const colGapField = '<div class="dm-field"><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + icon('alignHorizontalSpaceAround', 11) + ' Col gap</label>' + inpKw('', 'columnGap', s.columnGap === 'normal' ? '' : (s.columnGap || ''), 'px', 'normal') + '</div>';
-  const rowGapField = '<div class="dm-field"><label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + icon('alignVerticalSpaceAround', 11) + ' Row gap</label>' + inpKw('', 'rowGap', s.rowGap === 'normal' ? '' : (s.rowGap || ''), 'px', 'normal') + '</div>';
+  const colGapField = gapInput('Col gap', 'col', s, 'alignHorizontalSpaceAround');
+  const rowGapField = gapInput('Row gap', 'row', s, 'alignVerticalSpaceAround');
   const flexDir = s.flexDirection || 'row';
   const isHStackFlex = isFlex && (flexDir === 'row' || flexDir === 'row-reverse');
   const isVStackFlex = isFlex && (flexDir === 'column' || flexDir === 'column-reverse');
@@ -6156,19 +6250,29 @@ function renderDesignTab(): string {
       { span: 3, content: inp('Min H', 'minHeight', s.minHeight || '0') },
       { span: 3, content: inp('Max H', 'maxHeight', s.maxHeight || 'none') },
     ]) + sp() +
+    grid12([
+      { span: 10, content: inp('Margin', 'margin', spacingPrimary(s, 'margin')) },
+      { span: 2, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">&middot;</label><button class="dm-icon-row-button" data-dm-spacing-expand="margin" title="' + (marginExpanded ? 'Collapse sides' : 'Edit each side separately') + '" data-active="' + (marginExpanded ? 'true' : 'false') + '" style="width:100%;">' + icon('scan', 14) + '</button></div>' },
+    ]) + sp() +
+    (marginExpanded ? spacing2x2(s, 'margin') + sp() : '') +
+    grid12([
+      { span: 10, content: inp('Padding', 'padding', spacingPrimary(s, 'padding')) },
+      { span: 2, content: '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">&middot;</label><button class="dm-icon-row-button" data-dm-spacing-expand="padding" title="' + (paddingExpanded ? 'Collapse sides' : 'Edit each side separately') + '" data-active="' + (paddingExpanded ? 'true' : 'false') + '" style="width:100%;">' + icon('scan', 14) + '</button></div>' },
+    ]) + sp() +
+    (paddingExpanded ? spacing2x2(s, 'padding') + sp() : '') +
     // Children align (6) + Col/Row gap stacked (6) \u2014 top-aligned so the
     // gap fields start at the same Y as the children-align pad.
     ((isFlex || isGrid) ? '<div style="display:grid;grid-template-columns:repeat(12, 1fr);gap:6px;align-items:start;">' +
       '<div style="grid-column:span 6;min-width:0;display:flex;flex-direction:column;gap:3px;"><label class="dm-field-label">Children align</label>' + childrenAlignPad(s) + '</div>' +
       '<div style="grid-column:span 6;min-width:0;">' + gapsBlock + '</div>' +
     '</div>' + sp() : '') +
-    // Chrome DevTools-style box: padding nested inside margin.
-    spacingBox(s, displayInfo) +
     // Advanced disclosure: clip / overflow / box-sizing live here now —
     // they're rarely-toggled box-model fine-tuning that crowds the top
     // of the panel when always visible. Flex / grid container + item
     // details still live below them in this same disclosure.
     advancedDisclosure('layout', layoutAdvOpen,
+      sub('Computed box') +
+      spacingBox(s, displayInfo) + sp() +
       sub('Clip + overflow') +
       // Clip content (6) + Clip path (6) — sit side-by-side but they're
       // independent CSS features. `overflow: hidden` clips children that
@@ -7032,12 +7136,16 @@ function renderChangesTab(): string {
     | { type: 'style'; data: StyleChange; idx: number }
     | { type: 'text'; data: TextChange; idx: number }
     | { type: 'dom'; data: DomChange; idx: number }
-    | { type: 'comment'; data: CommentEntry; idx: number };
+    | { type: 'comment'; data: CommentEntry; idx: number }
+    | { type: 'token'; data: { cssVar: string; original: string; current: string; selector: string; elementId: string }; idx: number };
   const allItemsRaw: ChangeItem[] = [
     ...styleChanges.map((c, idx) => ({ type: 'style' as const, data: c, idx })),
     ...textChanges.map((c, idx) => ({ type: 'text' as const, data: c, idx })),
     ...domChanges.map((c, idx) => ({ type: 'dom' as const, data: c, idx })),
     ...comments.map((c, idx) => ({ type: 'comment' as const, data: c, idx })),
+    // Token edits group under a synthetic `:root` selector so they share one
+    // "Design tokens" group header in the by-element view.
+    ...tokenChanges.map((c, idx) => ({ type: 'token' as const, data: { ...c, selector: ':root', elementId: '' }, idx })),
   ];
   // Compute the first-touched timestamp per group so the by-element sort
   // can keep all of an element's edits together while preserving relative
@@ -7102,6 +7210,9 @@ function renderChangesTab(): string {
     }
     if (item.type === 'dom') return item.data.action.toLowerCase().includes(q) || item.data.tagName.toLowerCase().includes(q);
     if (item.type === 'comment') return (item.data.text || '').toLowerCase().includes(q);
+    if (item.type === 'token') return item.data.cssVar.toLowerCase().includes(q) ||
+      (item.data.original || '').toLowerCase().includes(q) ||
+      (item.data.current || '').toLowerCase().includes(q);
     return false;
   };
   const items = allItems.filter(matches);
@@ -7186,6 +7297,7 @@ function renderChangesTab(): string {
     text: allItems.filter(i => i.type === 'text').length,
     dom: allItems.filter(i => i.type === 'dom').length,
     comment: allItems.filter(i => i.type === 'comment').length,
+    token: allItems.filter(i => i.type === 'token').length,
   };
   const fchip = (f: ChangesFilter, label: string) => {
     const active = changesFilter === f;
@@ -7197,7 +7309,7 @@ function renderChangesTab(): string {
       label + ' <span style="opacity:0.6;">' + n + '</span></button>';
   };
   const filterChipsRow = '<div style="display:flex;gap:4px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--dm-separator);flex-wrap:wrap;">' +
-    fchip('all', 'All') + fchip('style', 'Styles') + fchip('text', 'Text') + fchip('dom', 'DOM') + fchip('comment', 'Comments') +
+    fchip('all', 'All') + fchip('style', 'Styles') + fchip('text', 'Text') + fchip('dom', 'DOM') + fchip('comment', 'Comments') + fchip('token', 'Tokens') +
     '</div>';
 
   // Comments sub-filter — only renders when the kind filter is 'all' (and
@@ -7439,6 +7551,14 @@ function renderChangesTab(): string {
           '<div style="font-size:10px;color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';">' + c.action.toUpperCase() + ' &lt;' + c.tagName + '&gt;</div>' +
           origLine + destLine +
           '</div><button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
+      } else if (item.type === 'token') {
+        const c = item.data;
+        const shortOld = escapeAttr((c.original || '').slice(0, 20));
+        const shortNew = escapeAttr((c.current || '').slice(0, 20));
+        return '<div class="dm-change-item"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px ' + indentLeft + 'px;border-bottom:1px solid var(--dm-separator);">' +
+          '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;">' + icon('swatchBook', 10) + '</span>' +
+          '<div style="flex:1;min-width:0;"><div style="font-size:10px;"><span style="color:var(--dm-text-muted);font-family:SF Mono,Monaco,monospace;">' + escapeAttr(c.cssVar) + '</span>: <span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + shortOld + '</span> → <span style="color:var(--dm-success);">' + shortNew + '</span></div></div>' +
+          '<button class="dm-change-revert" data-dm-token-reset="' + escapeAttr(c.cssVar) + '" title="Revert token to original" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else {
         const c = item.data;
         const isViewing = c.id === viewingCommentId;
@@ -7683,6 +7803,12 @@ function renderSettingsView(): string {
     '<div style="display:flex;gap:4px;">' +
     '<button data-dm-input-unit="px" style="' + (inputUnit === 'px' ? activeBtn : inactiveBtn) + '">PX</button>' +
     '<button data-dm-input-unit="rem" style="' + (inputUnit === 'rem' ? activeBtn : inactiveBtn) + '">REM</button>' +
+    '</div></div>' +
+    '<div style="' + sS + '"><div style="' + sT + '">Nudge amount</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Shift+Arrow step for number fields in the Design panel. Arrow keys alone nudge by 1.</div>' +
+    '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<input type="text" data-dm-setting="nudge-amount" data-dm-numeric="1" inputmode="decimal" value="' + escapeAttr(String(nudgeAmount)) + '" style="width:64px;padding:6px 8px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;color:var(--dm-text);font-family:inherit;font-size:11px;"/>' +
+    '<span style="font-size:10px;color:var(--dm-text-dim);">px</span>' +
     '</div></div>' +
     '<div style="' + sS + '"><div style="' + sT + '">Screenshot Capture</div>' +
     '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button does</div>' +
@@ -8853,7 +8979,8 @@ function setupDelegation() {
     if (resetTokenBtn) {
       const cssVar = resetTokenBtn.dataset.dmTokenReset!;
       editedTokens.delete(cssVar);
-      send({ type: 'SP_RESET_ROOT_VAR', cssVar }).then(() => {
+      send({ type: 'SP_RESET_ROOT_VAR', cssVar }).then((r: any) => {
+        if (r?.tokenChanges) tokenChanges = r.tokenChanges;
         designSystem = null;
         refreshDesignSystem();
       });
@@ -9006,6 +9133,14 @@ function setupDelegation() {
     // Section action toggles (corner expand/link, advanced toggle, sides /
     // effects popovers, eye toggles). Stop propagation so clicking an
     // action doesn't also fire the surrounding section's collapse/expand.
+    const spacingExpandBtn = target.closest<HTMLElement>('[data-dm-spacing-expand]');
+    if (spacingExpandBtn) {
+      e.stopPropagation();
+      if (spacingExpandBtn.dataset.dmSpacingExpand === 'margin') marginExpanded = !marginExpanded;
+      else paddingExpanded = !paddingExpanded;
+      render();
+      return;
+    }
     const cornerExpandBtn = target.closest<HTMLElement>('[data-dm-corner-expand]');
     if (cornerExpandBtn) { e.stopPropagation(); cornerRadiusExpanded = !cornerRadiusExpanded; render(); return; }
 
@@ -10051,6 +10186,39 @@ function setupDelegation() {
       return;
     }
 
+    // Gap mode (Fixed / Auto) for the Col/Row gap fields. Auto spreads the
+    // children via space-between on the relevant distribution axis and clears
+    // the explicit gap; Fixed restores a concrete gap (the measured effective
+    // spacing, for visual continuity) and resets the distribution.
+    const gapModeSel = target.closest<HTMLSelectElement>('[data-dm-gap-mode]');
+    if (gapModeSel) {
+      const field = gapModeSel.dataset.dmGapMode as 'col' | 'row';
+      const s = (info?.computedStyles || {}) as Record<string, string>;
+      const distProp = gapDistProp(field, s);
+      const gapProp = field === 'col' ? 'columnGap' : 'rowGap';
+      if (gapModeSel.value === 'auto') {
+        applyStylesBatch([
+          { property: distProp, value: 'space-between' },
+          { property: gapProp, value: 'normal' },
+        ], 'Auto gap');
+      } else {
+        const measured = field === 'col' ? info?.childGap?.col : info?.childGap?.row;
+        let px: number;
+        if (measured != null && measured > 0) {
+          px = Math.round(measured);
+        } else {
+          const parsed = parseNumeric(s[gapProp] || '');
+          px = parsed && (parsed.unit === 'px' || !parsed.unit) ? Math.round(parsed.num) : 16;
+        }
+        const val = inputUnit === 'rem' ? (Math.round((px / remRootPx) * 10000) / 10000) + 'rem' : px + 'px';
+        applyStylesBatch([
+          { property: distProp, value: 'normal' },
+          { property: gapProp, value: val },
+        ], 'Fixed gap');
+      }
+      return;
+    }
+
     // Select property change
     const propSelect = target.closest<HTMLSelectElement>('select[data-dm-prop]');
     if (propSelect) {
@@ -10814,7 +10982,7 @@ function setupDelegation() {
       const cssVar = tokenEditInput.dataset.dmTokenEdit!;
       const newValue = tokenEditInput.value;
       editedTokens.set(cssVar, newValue);
-      send({ type: 'SP_SET_ROOT_VAR', cssVar, value: newValue });
+      send({ type: 'SP_SET_ROOT_VAR', cssVar, value: newValue }).then((r: any) => { if (r?.tokenChanges) tokenChanges = r.tokenChanges; });
       return;
     }
 
@@ -10832,6 +11000,15 @@ function setupDelegation() {
       if (key === 'autoConnect') {
         mcpAutoConnect = settingInput.checked;
         chrome.storage?.local?.set?.({ 'dm-mcp-auto-connect': mcpAutoConnect });
+        return;
+      }
+      if (key === 'nudge-amount') {
+        const n = parseFloat(settingInput.value);
+        if (isFinite(n) && n > 0) {
+          nudgeAmount = n;
+          chrome.storage?.local?.set?.({ 'dm-nudge-amount': nudgeAmount });
+        }
+        settingInput.value = String(nudgeAmount);
         return;
       }
       if (key === 'hoverColor') {
@@ -11141,7 +11318,7 @@ function setupDelegation() {
         const isFractional = !unit && !integerUnitless;
         const step = isFractional
           ? (e.shiftKey ? 1 : 0.1)
-          : (e.shiftKey ? 10 : 1);
+          : (e.shiftKey ? nudgeAmount : 1);
         const current = parseFloat(propInput.value) || 0;
         let newVal = e.key === 'ArrowUp' ? current + step : current - step;
         // Non-negative numerics (corner radius, stroke weight) floor at

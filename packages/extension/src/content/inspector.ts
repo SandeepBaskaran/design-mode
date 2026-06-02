@@ -63,6 +63,42 @@ function detectIconInfo(el: HTMLElement): IconInfo | undefined {
   return undefined;
 }
 
+// Effective spacing between a flex/grid container's children, per axis.
+// `space-between` distribution leaves the computed gap as `normal`, so the
+// Design panel's "Auto" gap read-out needs the actual rendered distance.
+function measureChildGap(el: HTMLElement): { col: number | null; row: number | null } {
+  if (!/flex|grid/.test(window.getComputedStyle(el).display)) return { col: null, row: null };
+  const kids = (Array.from(el.children) as HTMLElement[]).filter(
+    (c) => !(c.id && c.id.startsWith('dm-')),
+  );
+  const rects = kids
+    .map((k) => k.getBoundingClientRect())
+    .filter((r) => r.width > 0 || r.height > 0);
+  if (rects.length < 2) return { col: null, row: null };
+  const round = (n: number) => Math.max(0, Math.round(n * 10) / 10);
+  let col: number | null = null;
+  const byLeft = [...rects].sort((a, b) => a.left - b.left);
+  for (let i = 0; i < byLeft.length - 1; i++) {
+    const a = byLeft[i];
+    const b = byLeft[i + 1];
+    if (Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0) {
+      col = round(b.left - a.right);
+      break;
+    }
+  }
+  let row: number | null = null;
+  const byTop = [...rects].sort((a, b) => a.top - b.top);
+  for (let i = 0; i < byTop.length - 1; i++) {
+    const a = byTop[i];
+    const b = byTop[i + 1];
+    if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0) {
+      row = round(b.top - a.bottom);
+      break;
+    }
+  }
+  return { col, row };
+}
+
 export function buildElementInfo(el: HTMLElement): ElementInfo {
   const id = getOrAssignId(el);
   const attrs: Record<string, string> = {};
@@ -95,6 +131,7 @@ export function buildElementInfo(el: HTMLElement): ElementInfo {
     parentJustifyContent: pcs?.justifyContent || '',
     parentAlignItems: pcs?.alignItems || '',
     parentGap: pcs?.gap || '',
+    childGap: measureChildGap(el),
   };
 }
 

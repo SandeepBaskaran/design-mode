@@ -625,6 +625,61 @@ export const comparisons: Comparison[] = [
       "design-mode-vs-cursor-design-mode",
     ],
   },
+  {
+    slug: "design-mode-vs-figma-make",
+    competitor: "Figma Make",
+    title: "Design Mode vs Figma Make",
+    metaTitle:
+      "Design Mode vs Figma Make — open live-page editing vs credit-metered Figma generation",
+    metaDescription:
+      "Figma Make generates UIs and now references local / GitHub repos — but it's locked to Figma, needs a paid seat plus metered Make credits. Design Mode is free, open-source, edits your live deployed page, and hands off to any AI agent.",
+    keywords: [
+      "Design Mode vs Figma Make",
+      "Figma Make alternative",
+      "Figma Make pricing credits",
+      "Figma Make vs open source",
+    ],
+    oneLiner:
+      "Figma Make generates UIs inside Figma on metered credits; Design Mode edits your live deployed page for free and hands the diff to any agent.",
+    positioning:
+      "Figma Make has grown well past basic colours and typography — it now generates whole working UIs and can even reference local or GitHub repos. The catch is where it lives: inside Figma, on a paid seat, metered by Make credits that Figma bills separately from whatever LLM you already pay for. Design Mode runs in your browser on the real deployed page, is MIT-licensed and free, and brings your own agent over MCP.",
+    whenToPickDesignMode: [
+      "You want to edit the actual deployed page, not regenerate it in a canvas.",
+      "You don't want a second metered bill (Make credits) on top of your LLM provider.",
+      "You want open source, no vendor lock-in, and a bring-your-own agent (Claude Code, Cursor, …).",
+    ],
+    whenToPickCompetitor: [
+      "Your team already lives in Figma and wants generation native to the canvas.",
+      "You're spinning up a fresh prototype from a prompt rather than refining a shipped page.",
+    ],
+    table: [
+      ...baseFeatures({
+        editing:
+          "Generates UIs in Figma's canvas/files (and from local / GitHub repos) — not your live deployed page",
+        mcp: "No open MCP handoff — output stays in Figma or its export",
+        history: "Figma version history (inside the file)",
+        os: "Proprietary — vendor-locked to Figma",
+        price:
+          "Paid Figma seat + metered Make credits, billed by Figma separately from your LLM provider",
+        export: "Code export within Figma's ecosystem",
+        fit: "Teams who live in Figma and accept credit-metered generation",
+      }),
+      {
+        feature: "Works from your local / GitHub repo",
+        designMode:
+          "Edits the live rendered page; the diff plus file:line hints go to your agent to apply in the repo with the model you already pay for",
+        competitor:
+          "Yes — but generation is metered by Make credits and the workflow stays anchored in Figma",
+      },
+    ],
+    honesty:
+      "Figma Make is genuinely powerful inside Figma's ecosystem, and the local / GitHub-repo support is real. But it's a paid, credit-metered, Figma-locked generator. Design Mode is the opposite trade: free, open, bring-your-own-LLM, and pointed at the live page you've already shipped.",
+    related: [
+      "design-mode-vs-figma-dev-mode",
+      "design-mode-vs-builder-io-visual-copilot",
+      "design-mode-vs-locofy",
+    ],
+  },
 ];
 
 export function getComparison(slug: string): Comparison | undefined {

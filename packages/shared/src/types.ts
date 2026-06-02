@@ -166,6 +166,9 @@ export interface ElementInfo {
   reactComponents?: string[];
   // Phase 2: Smart name
   smartName?: string;
+  // Effective inter-child spacing for flex/grid containers, in px, measured
+  // from child rects. Per-axis null when not measurable (e.g. < 2 children).
+  childGap?: { col: number | null; row: number | null };
 }
 
 // --- Style Change ---

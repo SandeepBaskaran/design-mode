@@ -18,7 +18,7 @@ import {
   getCustomPresets, saveCustomPreset, deleteCustomPreset,
   type PresetKind,
 } from './presets';
-import { captureOriginalIfNew, clearRootVarEdit } from './root-var-store';
+import { captureOriginalIfNew, clearRootVarEdit, clearAllRootVarEdits, getRootVarEdits } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
 import { buildDomTree } from './dom-tree';
 import { addComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments } from './comments';
@@ -326,6 +326,7 @@ async function getChangesPayload() {
     textChanges: getTextChanges(),
     comments: pageComments,
     domChanges: getDomChanges(),
+    tokenChanges: getRootVarEdits(),
   };
 }
 
@@ -1301,6 +1302,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       getPageComments().then(async (pageComments) => {
         for (const c of pageComments) await deleteComment(c.id);
         clearAllChanges();
+        clearAllRootVarEdits();
         clearAllLayoutGuides();
         undoStack.length = 0;
         redoStack.length = 0;
@@ -1331,8 +1333,8 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       if (msg.cssVar && msg.value != null) {
         captureOriginalIfNew(msg.cssVar);
         document.documentElement.style.setProperty(msg.cssVar, msg.value);
-        sendResponse({ ok: true });
-        return false;
+        getChangesPayload().then(p => sendResponse({ ok: true, ...p }));
+        return true;
       }
       sendResponse({ ok: false }); break;
     }
@@ -1340,8 +1342,8 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       if (msg.cssVar) {
         document.documentElement.style.removeProperty(msg.cssVar);
         clearRootVarEdit(msg.cssVar);
-        sendResponse({ ok: true });
-        return false;
+        getChangesPayload().then(p => sendResponse({ ok: true, ...p }));
+        return true;
       }
       sendResponse({ ok: false }); break;
     }
