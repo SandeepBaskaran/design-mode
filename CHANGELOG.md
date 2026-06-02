@@ -6,6 +6,82 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] — 2026-06-02
+
+### Added
+
+- **Region comments.** Drop a freeform rectangle anywhere on the page
+  (drag or click) to attach a comment to an area rather than a single
+  element; persists until you Add or Cancel. Shortcut **Alt+R**.
+- **Pop-out window.** Detach Design Mode into its own window that
+  coexists with the side panel; background message routing is rebound
+  per-tab (`targetTabId`) and content broadcasts are tab-scoped.
+- **Agent command.** A `/design-mode` agent workflow command plus a
+  "Set up your agent" section in Settings with copy buttons.
+- **Two new MCP tools** (local + cloud): `mark_comment_resolved` and
+  `set_change_status` — the agent marks changes/comments
+  to-do / in_progress / resolved as it implements them. `get_changes`
+  now exposes per-item `id` + `status`, and the Changes tab gains a
+  WIP/DONE badge per row and a Status sub-filter.
+- **`get_screenshot` region/element capture.** The tool accepts a
+  `commentId` and returns a clean, cropped image of the comment's
+  region or element as an MCP image content block.
+- **Layout: gap Fixed/Auto.** Column/row gap fields gain a Fixed/Auto
+  mode mirroring Width/Height — Auto spreads children via space-between
+  and shows the measured effective gap.
+- **Margin & Padding rows.** Figma-style uniform value with a per-side
+  (T/R/B/L) expander, mirroring corner radius.
+- **Nudge-amount setting.** Configurable Shift+Arrow step (default 10,
+  persisted); plain Arrow stays at 1.
+- **Design tokens in Changes.** `:root` variable edits appear in the
+  Changes tab under a Design-tokens group with original → current and a
+  Revert, plus a Tokens filter chip.
+- **Shortcuts popover** with a non-remappable Fixed group and
+  platform-correct modifiers (Alt+C comment, Alt+R region, Alt+P pause,
+  Alt+X export; Alt+D remains the lone `chrome.command`).
+- **Comparison pages**: Design Mode vs Figma Make, and Design Mode vs
+  Drawbridge.
+
+### Changed
+
+- **Clean screenshot capture.** Every Design Mode overlay (hover/select
+  outlines, margin/padding bands, guides, comment pins/regions) is
+  hidden for the capture frame, then restored; the no-selection shot
+  captures the current viewport overlay-free.
+- **"Copy Prompt" → "Copy as Prompt"** (label only).
+- **Single IDE-agnostic MCP config snippet** (`mcpServers` +
+  `type: "http"`) replaces the per-IDE Claude/Cursor variants that
+  omitted the transport type. Local snippet now reflects clone +
+  `npm start` (no published npm package).
+- **Freeze/pause-motion toggle** moved from the action row to the Motion
+  section header (now shown for the page context too).
+- **Computed box** (Chrome-DevTools view) moved into Layout → Advanced.
+
+### Fixed
+
+- MCP version drift — relay `initialize`, SSE hello, and the local
+  `McpServer` were stuck reporting 1.2.0.
+- `get_session_summary.activeSessions` is now populated.
+- `/demo` accent token and several undefined demo tokens that degraded
+  blue accents and hid the active nav number.
+
+### Security
+
+- Cloud relay: per-tenant 15-calls/10s burst guard.
+- Malformed inbound JSON is logged instead of silently dropped.
+- Removed the unused `DM_TOKEN_SECRET` from `.env.example` (cloud auth
+  is a hash-lookup of random `dm_` tokens; nothing signs).
+
+### Internal
+
+- Removed dead Annotation/ThreadMessage/Severity/Status types and their
+  message-union members, fields, and relay allow-list entries (no
+  runtime consumers; region comments supersede them).
+- Dependabot consolidated to a single root/workspace entry.
+- Dependency bumps: `ws` 8.21.0, `sass` 1.100.0, `lucide-react` 1.x
+  (inline GitHub-mark SVG replaces the dropped brand icon),
+  `eslint-plugin-prettier`, `prettier-plugin-tailwindcss`.
+
 ## [1.6.0] — 2026-05-29
 
 ### Added

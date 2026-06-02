@@ -195,16 +195,18 @@ Opens at `http://localhost:3000`.
 
 ## MCP tools
 
-The server exposes 6 tools your agent can call:
+The server exposes 8 tools your agent can call:
 
 | Tool | What it does |
 |---|---|
-| `get_changes` | Read all style/text/DOM changes + comments + a ready-to-paste CSS block. Each change carries the element's unique CSS `selector` — feed that back into `get_screenshot` or `apply_changes` to address the exact element. |
+| `get_changes` | Read all style/text/DOM changes + comments + a ready-to-paste CSS block. Each change/comment carries a unique `id` and `status`, and each change the element's unique CSS `selector` — feed that back into `get_screenshot` or `apply_changes` to address the exact element. |
 | `apply_changes` | Push CSS back to the browser for live preview (single change or batch — pass an array of `{ elementId, styles }`) |
 | `clear_changes` | Reset the session |
+| `set_change_status` | Mark a change or comment `to-do`, `in_progress`, or `resolved` as you implement it |
+| `mark_comment_resolved` | Flip a comment's resolved flag by `id` |
 | `get_session_summary` | Connection status, active sessions, counts (use as a health check before `apply_changes`) |
 | `export_changes` | Emit changes as `css`, `tailwind`, `scss`, or `jsx` (camelCase inline style objects) |
-| `get_screenshot` | Capture a PNG of the viewport, or pass a unique `selector` / `elementId` to crop to one element. Generic selectors that match >1 element fail with a list of candidate paths. Returned as an MCP image block. |
+| `get_screenshot` | Capture a PNG of the viewport, or pass a unique `selector` / `elementId` to crop to one element, or a `commentId` to crop to a comment's region/element. Generic selectors that match >1 element fail with a list of candidate paths. Returned as an MCP image block. |
 
 Spring physics and cubic-bezier easing curves come through inside the underlying CSS
 values (`transition: all 0.3s cubic-bezier(...)`) — there's no separate "apply spring"
