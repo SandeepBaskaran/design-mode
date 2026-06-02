@@ -6,6 +6,10 @@
 // background-image URLs, or external fonts — most real pages came out blank.
 // ============================================================
 
+import { setOverlaysHiddenForCapture } from './overlays';
+import { setGuidesHiddenForCapture } from './measure-guides';
+import { setPinsHiddenForCapture } from './comments';
+
 export async function captureViewportScreenshot(): Promise<string | null> {
   return new Promise((resolve) => {
     try {
@@ -18,6 +22,28 @@ export async function captureViewportScreenshot(): Promise<string | null> {
   });
 }
 
+// Hide every Design Mode overlay (selection / hover outlines, margin & padding
+// bands, axis / distance / resize guides, comment pins) for the duration of a
+// capture so the screenshot shows only the page, then restore them. Waits one
+// frame after hiding so the browser paints the hidden state before we capture.
+export async function withDmOverlaysHidden<T>(fn: () => Promise<T>): Promise<T> {
+  setOverlaysHiddenForCapture(true);
+  setGuidesHiddenForCapture(true);
+  setPinsHiddenForCapture(true);
+  await new Promise<void>((r) => requestAnimationFrame(() => r()));
+  try {
+    return await fn();
+  } finally {
+    setOverlaysHiddenForCapture(false);
+    setGuidesHiddenForCapture(false);
+    setPinsHiddenForCapture(false);
+  }
+}
+
+export async function captureViewportScreenshotClean(): Promise<string | null> {
+  return withDmOverlaysHidden(() => captureViewportScreenshot());
+}
+
 export async function captureElementScreenshot(elementId: string): Promise<string | null> {
   const el = document.querySelector(`[data-dm-id="${elementId}"]`) as HTMLElement | null;
   if (!el) return null;
@@ -28,10 +54,13 @@ export async function captureElementScreenshot(elementId: string): Promise<strin
   el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-  const viewportDataUrl = await captureViewportScreenshot();
+  // Capture with every Design Mode overlay hidden so the crop shows only the
+  // element — no selection outline, margin/padding bands, guides, or pins.
+  const viewportDataUrl = await withDmOverlaysHidden(() => captureViewportScreenshot());
   if (!viewportDataUrl) return null;
 
-  // Get the rect after scroll has settled.
+  // Get the rect after scroll has settled (overlays are visible again here,
+  // but they never affect the element's own box).
   const rect = el.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return null;
 

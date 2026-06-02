@@ -219,7 +219,7 @@ export const STEPS: Step[] = [
     title: "Design tokens",
     body: [
       "When the page exposes a design system — CSS custom properties / theme tokens — every colour picker in the Design tab surfaces them in a Tokens row. A fill, stroke, text, or shadow colour can be set straight from the system palette instead of a raw hex.",
-      "Picking a token stores the variable reference, so the exported diff and Copy Prompt carry the token name, not a frozen value — your agent writes `var(--brand-500)`, not `#2480ed`.",
+      "Picking a token stores the variable reference, so the exported diff and Copy as Prompt carry the token name, not a frozen value — your agent writes `var(--brand-500)`, not `#2480ed`.",
     ],
     tryIt:
       "Select the swatch below and open its Fill colour picker. Look for the Tokens row at the top of the picker, pick a token, and watch the Changes entry record the variable name.",
@@ -291,19 +291,19 @@ export const STEPS: Step[] = [
   },
   {
     id: "copy-prompt",
-    title: "Copy Prompt",
+    title: "Copy as Prompt",
     body: [
-      "At the bottom of the side panel, Copy Prompt builds a markdown summary of every tracked change — element selectors, before/after CSS, text edits, DOM operations, and any comments — and copies it to the clipboard. Paste into your agent or chat of choice.",
+      "At the bottom of the side panel, Copy as Prompt builds a markdown summary of every tracked change — element selectors, before/after CSS, text edits, DOM operations, and any comments — and copies it to the clipboard. Paste into your agent or chat of choice.",
       "When source detection finds a React component, the prompt also includes a file:line hint so the agent can land on the right source.",
     ],
     tryIt:
-      "After making a few edits in this demo, click Copy Prompt at the bottom of the panel. Paste into a text editor to see the markdown payload.",
+      "After making a few edits in this demo, click Copy as Prompt at the bottom of the panel. Paste into a text editor to see the markdown payload.",
   },
   {
     id: "send-to-agent",
     title: "Send to Agent",
     body: [
-      "Send to Agent pushes the same Copy Prompt payload directly to a connected coding agent over MCP — no clipboard round-trip. Enabled when MCP is running AND an agent is connected. The button's tooltip names the specific blocker if either is missing.",
+      "Send to Agent pushes the same Copy as Prompt payload directly to a connected coding agent over MCP — no clipboard round-trip. Enabled when MCP is running AND an agent is connected. The button's tooltip names the specific blocker if either is missing.",
       "This is the fastest path from 'I just designed it in the browser' to 'the source code is now updated'.",
       "Haven't set up an agent yet? The MCP tour walks you through all three connection modes (Local, Cloud, Self-hosted) with copy-paste config snippets for Claude Desktop, Cursor, and Claude Code — `Set up your agent →` link below.",
     ],

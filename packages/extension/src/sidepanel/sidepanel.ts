@@ -5502,7 +5502,7 @@ function renderStickyBottom(): string {
   const sendS = 'flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;' +
     (sendDis ? 'background:var(--dm-btn-bg-disabled);border:1px solid var(--dm-btn-border-disabled);color:var(--dm-text-dim);cursor:not-allowed;opacity:0.5;' : 'background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);color:var(--dm-accent);cursor:pointer;');
   return '<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;bottom:0;z-index:10;">' +
-    '<button id="dm-copy-prompt-btn" data-dm-action="copy-prompt" title="' + escapeAttr(copyTitle) + '" style="' + copyS + '">' + icon('clipboard', 13) + ' Copy Prompt</button>' +
+    '<button id="dm-copy-prompt-btn" data-dm-action="copy-prompt" title="' + escapeAttr(copyTitle) + '" style="' + copyS + '">' + icon('clipboard', 13) + ' Copy as Prompt</button>' +
     '<button id="dm-send-agent-btn" data-dm-action="send-to-agent"' + (sendDis ? ' disabled aria-disabled="true"' : '') + ' title="' + escapeAttr(sendTitle) + '" style="' + sendS + '">' + icon('send', 13) + ' Send to Agent</button></div>';
 }
 

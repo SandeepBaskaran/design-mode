@@ -407,7 +407,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'SP_SCREENSHOT') {
     if (msg.target === 'viewport') {
-      chrome.tabs.captureVisibleTab({ format: 'png' }, (dataUrl) => sendResponse({ dataUrl }));
+      // Route through the content script so it can hide Design Mode overlays
+      // (selection outline, margin/padding bands, guides, pins) before the
+      // capture, then restore them — same clean shot as the element path.
+      forwardToPinnedTab({ type: 'SCREENSHOT_VIEWPORT' }, sendResponse);
       return true;
     } else {
       forwardToPinnedTab({ type: 'SCREENSHOT_ELEMENT' }, sendResponse);

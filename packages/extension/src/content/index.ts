@@ -12,7 +12,7 @@ import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, s
 import type { ElementInfo } from './inspector';
 import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
-import { captureElementScreenshot, downloadDataUrl } from './screenshots';
+import { captureElementScreenshot, captureViewportScreenshotClean, downloadDataUrl } from './screenshots';
 import {
   getPageTokens, detectScales, annotateDrift, findTokenUsages,
   getCustomPresets, saveCustomPreset, deleteCustomPreset,
@@ -1704,6 +1704,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
 
     case 'SCREENSHOT_ELEMENT': { const sid = getSelectedElementId(); if (sid) { captureElementScreenshot(sid).then(dataUrl => sendResponse({ dataUrl })); return true; } sendResponse({ dataUrl: null }); break; }
+    case 'SCREENSHOT_VIEWPORT': { captureViewportScreenshotClean().then(dataUrl => sendResponse({ dataUrl })); return true; }
     case 'UPLOAD_IMAGE': { const sid = getSelectedElementId(); if (sid && msg.dataUrl) { const el = getElementById(sid); if (el?.tagName === 'IMG') (el as HTMLImageElement).src = msg.dataUrl; else if (el) { el.style.backgroundImage = `url(${msg.dataUrl})`; el.style.backgroundSize = 'cover'; } if (el) sendResponse({ info: { ...buildElementInfo(el), element: undefined } }); } sendResponse({ ok: true }); break; }
 
     // ── Source detection ──

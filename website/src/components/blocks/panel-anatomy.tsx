@@ -34,7 +34,7 @@ const topItems: Item[] = [
   {
     title: "Bottom buttons — ship your edits.",
     description:
-      "Two buttons collapse every change in the session into a shippable diff. Copy Prompt goes to the clipboard; Send to Agent goes over MCP to a connected coding agent.",
+      "Two buttons collapse every change in the session into a shippable diff. Copy as Prompt goes to the clipboard; Send to Agent goes over MCP to a connected coding agent.",
     image: {
       src: "/panel-anatomy/bottom-row.png",
       alt: "Bottom buttons of the side panel",

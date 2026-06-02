@@ -115,6 +115,15 @@ export function hideAxisGuides() {
   axisLayer?.replaceChildren();
 }
 
+// Hide the axis / distance / resize-dot layers for a screenshot capture, then
+// restore. `visibility` preserves their contents so they resume unchanged.
+export function setGuidesHiddenForCapture(hidden: boolean) {
+  const v = hidden ? 'hidden' : '';
+  for (const layer of [axisLayer, distanceLayer, dotsLayer]) {
+    if (layer) layer.style.visibility = v;
+  }
+}
+
 // ── Distance measurement between two rects ──
 
 export interface DistanceLine { x1: number; y1: number; x2: number; y2: number; }

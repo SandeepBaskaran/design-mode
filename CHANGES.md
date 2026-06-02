@@ -42,7 +42,7 @@ Split into two clusters: primary actions on the left, file-IO on the right.
 When the Changes toggle is in **previewing-original** state:
 - A banner appears: "Previewing original — click Changes to see your edits."
 - The Design tab still shows tracked values (so you can keep editing while previewing).
-- The **Copy Prompt** and **Send to Agent** buttons in the sticky bottom are disabled — pause-then-send is a footgun.
+- The **Copy as Prompt** and **Send to Agent** buttons in the sticky bottom are disabled — pause-then-send is a footgun.
 
 ### Row 2 — Search row
 
@@ -242,13 +242,13 @@ The expanded card uses a purple-tinted background (or muted grey when resolved).
 
 ---
 
-## Sticky bottom (Copy Prompt + Send to Agent)
+## Sticky bottom (Copy as Prompt + Send to Agent)
 
 Same as the rest of the panel. Pinned at the bottom regardless of which tab is active.
 
 | Button | What | Disabled when |
 |---|---|---|
-| **Copy Prompt** (`clipboard` icon) | Builds a markdown prompt summarising every tracked change — element selector, before/after values for styles, text diffs, DOM operations, and any comments. Includes file:line / framework hints when source detection found them. Copies to clipboard. | The Changes toggle is in preview-original state, or no changes exist. |
+| **Copy as Prompt** (`clipboard` icon) | Builds a markdown prompt summarising every tracked change — element selector, before/after values for styles, text diffs, DOM operations, and any comments. Includes file:line / framework hints when source detection found them. Copies to clipboard. | The Changes toggle is in preview-original state, or no changes exist. |
 | **Send to Agent** (`send` icon) | Sends the same payload via the MCP `ws://localhost:9960` channel directly to a connected coding agent (Claude Code, Cursor, etc.). | The Changes toggle is in preview-original state, or no changes, or MCP is offline, or MCP is running but no agent is connected. The button's tooltip names the specific blocker. |
 
 Send to Agent uses an accent style to distinguish it from Copy as the higher-stakes action.
@@ -278,7 +278,7 @@ Items within a group are sorted by **timestamp** (creation order — earliest fi
 1. Make your edits via the Design tab.
 2. Switch to the Changes tab — every edit is here, grouped by element.
 3. Click the **Changes** toggle in the buttons row to see the original; click it again to restore your edits.
-4. Click **Copy Prompt**, paste into a coding agent, ship.
+4. Click **Copy as Prompt**, paste into a coding agent, ship.
 
 ### Mass-applying a style
 1. Select one element, edit a property in the Design tab.
@@ -292,7 +292,7 @@ Items within a group are sorted by **timestamp** (creation order — earliest fi
 
 ### Documenting design decisions
 1. Use the comment action button (`message-square` in the action row) to add yellow sticky-note comments to layers.
-2. Comments persist in the Changes tab and ship with **Copy Prompt** so the agent gets context.
+2. Comments persist in the Changes tab and ship with **Copy as Prompt** so the agent gets context.
 
 ---
 

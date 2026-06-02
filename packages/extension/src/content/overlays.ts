@@ -300,6 +300,17 @@ export function hideSelect() {
   hideBands(selectMarginBand, selectPaddingBand);
 }
 
+// Toggle every hover/select outline, dimension label, and box-model band out
+// of the captured frame for a screenshot, then back. `visibility` keeps each
+// element's display state intact so the inspector resumes unchanged.
+export function setOverlaysHiddenForCapture(hidden: boolean) {
+  const v = hidden ? 'hidden' : '';
+  for (const el of [hoverOverlay, selectOverlay, dimensionLabel,
+    hoverMarginBand, hoverPaddingBand, selectMarginBand, selectPaddingBand]) {
+    if (el) el.style.visibility = v;
+  }
+}
+
 export function updateSelectPosition(el: HTMLElement) {
   if (selectOverlay?.style.display !== 'none') showSelect(el);
 }

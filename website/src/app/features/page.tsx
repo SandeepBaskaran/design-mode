@@ -34,7 +34,7 @@ export const metadata = {
   title:
     "Features — Visual controls for any live website (Layers, Design, Changes)",
   description:
-    "Every control inside the Design Mode side panel: header icons, action toolbar, the Layers / Design / Changes tabs, and the Copy Prompt + Send to Agent handoff. Visual editing for live websites — no devtools fork.",
+    "Every control inside the Design Mode side panel: header icons, action toolbar, the Layers / Design / Changes tabs, and the Copy as Prompt + Send to Agent handoff. Visual editing for live websites — no devtools fork.",
   keywords: [
     "Design Mode features",
     "side panel design editor",
@@ -52,7 +52,7 @@ export const metadata = {
     title:
       "Design Mode features — every visual control inside the side panel",
     description:
-      "Header icons, action toolbar, Layers / Design / Changes panels, and the Copy Prompt + Send-to-Agent handoff.",
+      "Header icons, action toolbar, Layers / Design / Changes panels, and the Copy as Prompt + Send-to-Agent handoff.",
     url: "https://designmode.app/features",
     images: ["/og-image.png"],
   },
@@ -322,7 +322,7 @@ export default function FeaturesPage() {
                 <CardContent className="flex flex-col gap-2 p-6">
                   <div className="flex items-center gap-2">
                     <Copy className="text-foreground size-5" />
-                    <h3 className="text-lg font-semibold">Copy Prompt</h3>
+                    <h3 className="text-lg font-semibold">Copy as Prompt</h3>
                   </div>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     Bundles every change into a Markdown export

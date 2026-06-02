@@ -325,3 +325,11 @@ async function repositionAll() {
 }
 window.addEventListener('scroll', () => { void repositionAll(); }, { passive: true, capture: true });
 window.addEventListener('resize', () => { void repositionAll(); }, { passive: true });
+
+// Hide every comment pin out of a screenshot capture, then restore.
+export function setPinsHiddenForCapture(hidden: boolean) {
+  const v = hidden ? 'hidden' : '';
+  document.querySelectorAll<HTMLElement>('.dm-comment-pin').forEach((pin) => {
+    pin.style.visibility = v;
+  });
+}

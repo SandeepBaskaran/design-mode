@@ -316,8 +316,8 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 8.15 | Export / Import | **Export** → file downloads with kind marker `design-mode-design-system`; **Import** the same file | Re-imports cleanly; a foreign JSON (missing the marker) is rejected with a toast |
 | 8.16 | Cross-tab filters + search | Click filter chips (All / Colours / Type / Spacing / Radius / Shadow / Other) and type in the search box | Filters and search filter the active tab's rows; semantics adapt per tab |
 | 8.17 | "Used on this page" toggle | Toggle on | Active tab filters to entries actually consumed by viewport-visible elements |
-| 8.18 | Markdown exporter — Tokens changed | Edit a `:root` var → Copy Prompt | Output contains a focused **`## Tokens changed`** section listing only edited tokens (original → current). With no root-var edits, the section is omitted |
-| 8.18a | Token edits show in Changes tab | Edit a `:root` var → open the Changes tab | A row appears under a `:root` / Design-tokens group showing `--var: original → current`; the **Tokens** filter chip counts it; the row's Revert restores the original; "Clear all" removes it. Parity with the Copy Prompt's Tokens-changed section |
+| 8.18 | Markdown exporter — Tokens changed | Edit a `:root` var → Copy as Prompt | Output contains a focused **`## Tokens changed`** section listing only edited tokens (original → current). With no root-var edits, the section is omitted |
+| 8.18a | Token edits show in Changes tab | Edit a `:root` var → open the Changes tab | A row appears under a `:root` / Design-tokens group showing `--var: original → current`; the **Tokens** filter chip counts it; the row's Revert restores the original; "Clear all" removes it. Parity with the Copy as Prompt's Tokens-changed section |
 | 8.19 | Pre-rework presets read back | If you had presets from before this rework | They load into the Defined tab without migration; `groupId` continues to work |
 
 ---
@@ -340,19 +340,19 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 
 ---
 
-## Phase 10 — Bottom bar (Copy Prompt / Send to Agent)
+## Phase 10 — Bottom bar (Copy as Prompt / Send to Agent)
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 10.1 | Disabled with no changes | Open a fresh page | Both buttons disabled |
 | 10.2 | Disabled while previewing | Click View Original | Both buttons disabled (banner explains) |
-| 10.3 | Copy Prompt format — header | Make any change → Copy Prompt | Clipboard's first line is exactly `here are the changes in {{page title}} {{page url}}` (single space between title and URL, no boilerplate above) |
-| 10.4 | Copy Prompt format — body | Make 3 style + 1 text + 1 DOM change → Copy Prompt | Each change is one bullet `- {label}: {detail}` ordered chronologically. No headings, no code fences, no "How to apply" prose, no framework section |
+| 10.3 | Copy as Prompt format — header | Make any change → Copy as Prompt | Clipboard's first line is exactly `here are the changes in {{page title}} {{page url}}` (single space between title and URL, no boilerplate above) |
+| 10.4 | Copy as Prompt format — body | Make 3 style + 1 text + 1 DOM change → Copy as Prompt | Each change is one bullet `- {label}: {detail}` ordered chronologically. No headings, no code fences, no "How to apply" prose, no framework section |
 | 10.5 | Style grouping per element | Edit two properties on the same `.btn` | Single bullet groups them: `- button.btn: padding 8px → 12px; border-radius 4px → 8px` |
 | 10.6 | Text change format | Edit a heading's text | Bullet reads `- {label} text: "{old}" → "{new}"` (truncated to ~60 chars per side) |
 | 10.7 | DOM change format | Duplicate / delete / move an element | Bullet reads `- {label} duplicated` (or `deleted` / `moved` / `inserted`) |
 | 10.8 | Comment lines | Add a comment | Bullet reads `- note on {selector}: {text}` |
-| 10.9 | Empty state | Copy Prompt with no changes | Output is the header line + `(no changes recorded yet)` |
+| 10.9 | Empty state | Copy as Prompt with no changes | Output is the header line + `(no changes recorded yet)` |
 | 10.10 | Send to Agent — connected | MCP connected | Button shows "Sent!" briefly |
 | 10.11 | Send to Agent — running, no agent | Server running but no agent | Toast / alert: "MCP running but no agent connected" |
 | 10.12 | Send to Agent — local offline | No local server in Local mode | Alert: "MCP server is not running. Start it with: `npm start` in `packages/mcp-local`" |
@@ -450,7 +450,7 @@ bleeding to duplicates and back.
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 14.1 | Build clean | `npm run build:website` | No type errors |
-| 14.2 | Landing page | Visit `/` | Header (icon + "Design Mode" + GitHub button + Add to Chrome), divider, hero, then sections: How you use it, Three panels, Other features, Copy Prompt, MCP, Install, Licensing |
+| 14.2 | Landing page | Visit `/` | Header (icon + "Design Mode" + GitHub button + Add to Chrome), divider, hero, then sections: How you use it, Three panels, Other features, Copy as Prompt, MCP, Install, Licensing |
 | 14.3 | Demo route | Visit `/demo` | Interactive demo loads with left nav and step targets |
 | 14.4 | MCP route | Visit `/mcp` | MCP setup / docs page |
 | 14.5 | Anchor scroll | Click "Add to Chrome" | Page scrolls to `#install` |
