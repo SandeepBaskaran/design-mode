@@ -8,11 +8,32 @@
 const tabStates = new Map<number, { enabled: boolean; connected: boolean }>();
 let pinnedTabId: number | null = null;
 let pinnedTabUrl: string | null = null;
-// Tracks whether a side-panel port is currently connected. Source of truth
-// for content-script heartbeats (`IS_PANEL_OPEN`). Cleared the moment the
-// panel disconnects, so a heartbeat racing the disconnect handler still
-// sees the right state.
-let sidepanelOpen = false;
+
+// Every connected panel surface (the native Chrome side panel AND any popped-out
+// floating window) opens a `sidepanel` port. We bind each port to the browser
+// TAB it controls, so multiple surfaces across tabs/windows route correctly.
+// "Is a panel open for tab X" = any port in this map bound to X.
+const panelPorts = new Map<chrome.runtime.Port, number>();
+function panelsForTab(tabId: number): number {
+  let n = 0;
+  for (const t of panelPorts.values()) if (t === tabId) n++;
+  return n;
+}
+
+// Tabs mid-swap between surfaces (side panel ⇄ floating window). While a tab
+// is here, the disconnect of the OLD surface must NOT deactivate it — the new
+// surface is about to (or just did) connect. Cleared when any port re-binds
+// the tab, or after a safety timeout.
+const transitioningTabs = new Set<number>();
+// windowId → bound tabId, for floating pop-out windows we created.
+const popoutWindows = new Map<number, number>();
+
+// The target tab for the message currently being handled. Set synchronously
+// at the top of the onMessage listener from `msg.targetTabId` (the panel
+// stamps every SP_* with the tab it's bound to), and read synchronously at
+// the top of `forwardToPinnedTab` before any await — so concurrent messages
+// can't corrupt each other's routing.
+let currentTargetTab: number | null = null;
 
 // Open side panel when extension icon is clicked. setPanelBehavior is a
 // Promise; in transient SW restart conditions Chrome will reject it with
@@ -42,55 +63,71 @@ function isScriptableUrl(url: string | undefined | null): boolean {
   return true;
 }
 
-// When side panel connects, pin the current tab and auto-activate
+// A panel surface connected. Bind it to a tab and auto-activate that tab.
+// The native side panel connects as `sidepanel` (binds to the active tab in
+// the current window). A popped-out floating window connects as
+// `sidepanel:<tabId>` (binds to the tab it was popped out from).
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === 'sidepanel') {
-    sidepanelOpen = true;
-    chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
-      if (tab?.id) {
-        pinnedTabId = tab.id;
-        pinnedTabUrl = tab.url || null;
-        const scriptable = isScriptableUrl(tab.url);
-        if (!scriptable) {
-          // Chrome internal pages / Web Store / devtools — extension can't
-          // script these. Quietly ship a disabled INIT_STATE so the side
-          // panel renders without retrying.
-          try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: pinnedTabUrl }); } catch {}
-          return;
-        }
-        try {
-          await injectContentScript(tab.id);
-        } catch {}
-        setTimeout(async () => {
-          try {
-            await chrome.tabs.sendMessage(tab.id!, { type: 'ACTIVATE_DESIGN_MODE' });
-            const state = await chrome.tabs.sendMessage(tab.id!, { type: 'GET_STATE' });
-            try { port.postMessage({ type: 'INIT_STATE', ...state, pinnedUrl: pinnedTabUrl }); } catch {}
-          } catch (err) {
-            // "Could not establish connection" on unscriptable / racing tabs
-            // is expected — don't pollute the console. Anything else is
-            // worth flagging.
-            const msg = String((err as any)?.message || err);
-            if (!/Could not establish connection|Receiving end does not exist/i.test(msg)) {
-              console.error('[DM] Auto-activate failed:', err);
-            }
-            try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: pinnedTabUrl }); } catch {}
-          }
-        }, 300);
-      }
-    }).catch(() => { /* tab query racing SW teardown — no point logging */ });
+  if (port.name !== 'sidepanel' && !port.name.startsWith('sidepanel:')) return;
 
-    port.onDisconnect.addListener(() => {
-      sidepanelOpen = false;
-      if (pinnedTabId) {
-        try {
-          chrome.tabs.sendMessage(pinnedTabId, { type: 'DEACTIVATE_DESIGN_MODE' }).catch(() => {});
-        } catch {}
+  const explicitTab = port.name.startsWith('sidepanel:')
+    ? parseInt(port.name.slice('sidepanel:'.length), 10)
+    : NaN;
+
+  (async () => {
+    let tabId: number | null = Number.isInteger(explicitTab) ? explicitTab : null;
+    let tabUrl: string | null = null;
+    if (tabId != null) {
+      try { tabUrl = (await chrome.tabs.get(tabId)).url || null; } catch { tabId = null; }
+    }
+    if (tabId == null) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      tabId = tab?.id ?? null;
+      tabUrl = tab?.url ?? null;
+    }
+    if (tabId == null) {
+      try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false }); } catch {}
+      return;
+    }
+
+    panelPorts.set(port, tabId);
+    transitioningTabs.delete(tabId); // a surface re-bound — swap complete
+    pinnedTabId = tabId; pinnedTabUrl = tabUrl; // legacy fallback for forward routing
+
+    if (!isScriptableUrl(tabUrl)) {
+      try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: tabUrl, tabId }); } catch {}
+      return;
+    }
+    try { await injectContentScript(tabId); } catch {}
+    setTimeout(async () => {
+      try {
+        await chrome.tabs.sendMessage(tabId!, { type: 'ACTIVATE_DESIGN_MODE' });
+        const state = await chrome.tabs.sendMessage(tabId!, { type: 'GET_STATE' });
+        try { port.postMessage({ type: 'INIT_STATE', ...state, pinnedUrl: tabUrl, tabId }); } catch {}
+      } catch (err) {
+        const m = String((err as any)?.message || err);
+        if (!/Could not establish connection|Receiving end does not exist/i.test(m)) {
+          console.error('[DM] Auto-activate failed:', err);
+        }
+        try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: tabUrl, tabId }); } catch {}
       }
-      pinnedTabId = null;
-      pinnedTabUrl = null;
-    });
-  }
+    }, 300);
+  })().catch(() => { /* tab query racing SW teardown — no point logging */ });
+
+  port.onDisconnect.addListener(() => {
+    const tabId = panelPorts.get(port);
+    panelPorts.delete(port);
+    // Only deactivate the tab when its LAST surface closes AND it isn't
+    // mid-swap (pop-out / dock-back), so the transition never tears it down.
+    if (tabId != null && panelsForTab(tabId) === 0 && !transitioningTabs.has(tabId)) {
+      try { chrome.tabs.sendMessage(tabId, { type: 'DEACTIVATE_DESIGN_MODE' }).catch(() => {}); } catch {}
+    }
+    if (pinnedTabId === tabId) {
+      const remaining = [...panelPorts.values()];
+      pinnedTabId = remaining.length ? remaining[remaining.length - 1] : null;
+      if (pinnedTabId == null) pinnedTabUrl = null;
+    }
+  });
 });
 
 // Toggle via keyboard command
@@ -107,9 +144,11 @@ chrome.commands.onCommand.addListener(async (command) => {
   }
 });
 
-// Helper: forward message to pinned tab (or active tab as fallback)
+// Helper: forward message to the tab the sending panel is bound to. Captures
+// `currentTargetTab` synchronously (before any await) so concurrent messages
+// don't cross-route; falls back to the last pinned tab, then the active tab.
 async function forwardToPinnedTab(message: any, sendResponse: (response?: any) => void) {
-  const tabId = pinnedTabId;
+  const tabId = currentTargetTab ?? pinnedTabId;
   if (!tabId) {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -132,6 +171,10 @@ async function forwardToPinnedTab(message: any, sendResponse: (response?: any) =
 
 // Message handling — relay between content script and side panel
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Resolve which tab this panel message targets (panel stamps every SP_*).
+  // Read synchronously here and again at the top of forwardToPinnedTab.
+  currentTargetTab = (typeof msg?.targetTabId === 'number') ? msg.targetTabId : null;
+
   // Messages FROM content script — just let them propagate to side panel
   if (msg.type === 'ELEMENT_SELECTED' || msg.type === 'STATE_UPDATE' ||
       msg.type === 'CHANGES_UPDATE' || msg.type === 'STYLE_APPLIED' ||
@@ -143,21 +186,75 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return false;
   }
 
-  // Side panel is closing — immediately deactivate design mode on the pinned tab
+  // Panel surface unloading. The authoritative cleanup is the port's
+  // onDisconnect (it knows which tab the port was bound to and only
+  // deactivates on the LAST surface for that tab). This is just a hint —
+  // we let onDisconnect do the work to avoid tearing down a tab that still
+  // has another surface open.
   if (msg.type === 'SP_PANEL_CLOSING') {
-    sidepanelOpen = false;
-    if (pinnedTabId) {
-      try { chrome.tabs.sendMessage(pinnedTabId, { type: 'DEACTIVATE_DESIGN_MODE' }).catch(() => {}); } catch {}
-    }
     return false;
   }
 
-  // Heartbeat from content scripts — answers "is the panel still open?"
-  // so the content side can self-disable if the panel-close → DEACTIVATE
-  // chain ever drops a message (e.g. SW spinning down). Keeps the page
-  // clean even on the rare race.
+  // Heartbeat from content scripts — answers "is a panel open for THIS tab?"
+  // (per-tab now). `sender.tab.id` is the content script's own tab. Lets the
+  // content side self-disable if the close → DEACTIVATE chain drops a message.
   if (msg.type === 'IS_PANEL_OPEN') {
-    sendResponse({ open: sidepanelOpen });
+    const tabId = sender.tab?.id;
+    sendResponse({ open: tabId != null && panelsForTab(tabId) > 0 });
+    return true;
+  }
+
+  // A content script asking which tab it lives in, so it can stamp its
+  // broadcasts and let each panel surface filter to its own bound tab.
+  if (msg.type === 'GET_MY_TAB_ID') {
+    sendResponse({ tabId: sender.tab?.id ?? null });
+    return true;
+  }
+
+  // Pop the panel out into a floating window bound to the sender's tab.
+  // windows.create needs no user gesture (unlike sidePanel.open), so it runs
+  // here in the background. The side panel closes itself after we ack.
+  if (msg.type === 'SP_POP_OUT') {
+    const tabId = currentTargetTab;
+    if (tabId == null) { sendResponse({ ok: false }); return true; }
+    (async () => {
+      transitioningTabs.add(tabId);
+      setTimeout(() => transitioningTabs.delete(tabId), 6000); // safety net
+      let b: any = {};
+      try {
+        const saved: any = (await chrome.storage.local.get('dm-popout-bounds'))['dm-popout-bounds'];
+        if (saved && typeof saved.width === 'number') b = saved;
+      } catch {}
+      try {
+        const win = await chrome.windows.create({
+          url: chrome.runtime.getURL('sidepanel/index.html') + '?tab=' + tabId,
+          type: 'popup',
+          focused: true,
+          width: b.width || 420,
+          height: b.height || 760,
+          ...(typeof b.left === 'number' ? { left: b.left } : {}),
+          ...(typeof b.top === 'number' ? { top: b.top } : {}),
+        });
+        if (win?.id != null) popoutWindows.set(win.id, tabId);
+        sendResponse({ ok: true, windowId: win?.id });
+      } catch (e) {
+        transitioningTabs.delete(tabId);
+        sendResponse({ ok: false, error: String(e) });
+      }
+    })();
+    return true;
+  }
+
+  // The dock-back flow (sidePanel.open) must run in the popup to keep the user
+  // gesture; it pings this first so the popup's imminent close doesn't
+  // deactivate the tab before the side panel re-binds it.
+  if (msg.type === 'SP_TRANSITION_BEGIN') {
+    const tabId = currentTargetTab;
+    if (tabId != null) {
+      transitioningTabs.add(tabId);
+      setTimeout(() => transitioningTabs.delete(tabId), 6000);
+    }
+    sendResponse({ ok: true });
     return true;
   }
 
@@ -227,6 +324,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'SP_SET_TEXT') { forwardToPinnedTab({ type: 'SET_TEXT', text: msg.text }, sendResponse); return true; }
   if (msg.type === 'SP_ADD_COMMENT') {
     forwardToPinnedTab({ type: 'ADD_COMMENT', text: msg.text }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_SET_INSPECT') {
+    forwardToPinnedTab({ type: 'SET_INSPECT', on: msg.on }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_START_REGION_COMMENT') {
+    forwardToPinnedTab({ type: 'START_REGION_COMMENT' }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_CANCEL_REGION_COMMENT') {
+    forwardToPinnedTab({ type: 'CANCEL_REGION_COMMENT' }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_ADD_REGION_COMMENT') {
+    forwardToPinnedTab({ type: 'ADD_REGION_COMMENT', text: msg.text }, sendResponse);
     return true;
   }
   if (msg.type === 'SP_SET_COMMENT_RESOLVED') {
@@ -358,6 +471,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   return false;
+});
+
+// Remember a floating window's size/position so the next pop-out restores it.
+chrome.windows.onBoundsChanged?.addListener((win) => {
+  if (win.id != null && popoutWindows.has(win.id)) {
+    const { left, top, width, height } = win;
+    chrome.storage.local.set({ 'dm-popout-bounds': { left, top, width, height } }).catch(() => {});
+  }
+});
+chrome.windows.onRemoved.addListener((windowId) => {
+  popoutWindows.delete(windowId);
+});
+// If a tab that a floating window is bound to closes, the window can no longer
+// control anything — close it.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  for (const [winId, boundTab] of popoutWindows) {
+    if (boundTab === tabId) { try { void chrome.windows.remove(winId).catch(() => {}); } catch {} }
+  }
 });
 
 function updateBadge(tabId: number, enabled: boolean) {

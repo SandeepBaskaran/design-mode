@@ -64,14 +64,18 @@ The side panel has three rows.
 
 ## MCP — Model Context Protocol
 
-MCP is Anthropic's open standard that lets AI agents safely call external tools. Design Mode exposes six MCP tools:
+MCP is Anthropic's open standard that lets AI agents safely call external tools. Design Mode exposes eight MCP tools:
 
-- `get_changes` — return the structured list of style/text/DOM changes for the current session.
+- `get_changes` — return the structured list of style/text/DOM changes and pinned comments for the current session. Comments carry an `id`, a `selector`, and — for region comments — a `region` box.
 - `apply_changes` — apply a patch from the agent back to the page.
+- `set_change_status` — mark tracked changes/comments to-do, in-progress, or resolved as the agent works through them.
 - `clear_changes` — wipe the buffer between iterations.
 - `get_session_summary` — high-level diff: what selectors changed, by how many properties.
 - `export_changes` — Markdown export with selector → property → value lines.
 - `get_screenshot` — visible-tab PNG of the page in its current edited state.
+- `mark_comment_resolved` — mark a pinned comment done (or reopen it) once the agent has acted on it.
+
+Drop the `/design-mode` slash command into your coding tool (Claude Code, Cursor, Codex, Windsurf) and it drives these tools end to end: read the changes and comments, apply them, and resolve each comment as it goes. Copy it from the extension's Settings → "Set up your agent".
 
 **Three connection modes:**
 

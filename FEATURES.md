@@ -60,13 +60,16 @@ outline). The side panel mirrors whatever you have selected.
   exit. (While inspecting, native text selection is suppressed so shift-click
   never highlights page text.)
 
-### 1.4 Animation freeze (toolbar)
+### 1.4 Animation freeze (Motion section)
 
 - **What it does**: pauses every CSS animation, transition, Web Animations
   API instance, and `<video>` on the page so you can inspect a mid-flight
-  state.
-- **Use**: click the **circle-pause** icon in the toolbar (top of the side
-  panel). Icon flips to **circle-play** when frozen — click again to resume.
+  state. Page-wide, not element-scoped.
+- **Use**: click the **circle-pause** icon in the **Motion** section header
+  (Design tab), next to the `+` add-motion menu. Icon flips to
+  **circle-play** when frozen — click again to resume. Also bound to `Alt+P`.
+  The Motion section is shown for the page context too, so the toggle is
+  reachable even when nothing is selected (freeze is page-wide).
 
 ### 1.5 Screenshot (camera button)
 
@@ -79,6 +82,7 @@ outline). The side panel mirrors whatever you have selected.
 Comments anchor a sticky note to a specific element. Each comment renders as a draggable pin on top of the page, and as a row in the Changes tab.
 
 - **Add**: select an element, click the toolbar's **message-square** icon, type the body, click Add.
+- **Region comment** (Figma-style drop): click the toolbar's **dashed-square** icon (or press `Alt+R`) to enter drop mode, then **drag a box** anywhere on the page — or just **click to drop** a default-sized box — without selecting any DOM element. The yellow box **stays on the page while you compose** and only goes away when you **Add** (it becomes the committed region box + numbered pin) or **Cancel** (it's removed). A region comment flags an *area* (e.g. "this empty space needs a CTA"), stores its geometry in document coordinates so it scrolls with the page, and shows a `region` badge in the Changes tab. Region geometry rides along in `get_changes` so an agent can `get_screenshot` the area.
 - **Pin number**: pins are numbered in creation order (`1`, `2`, `3` …). The number renders inside the pin (replacing the `💬` emoji) and on the matching panel row's `#N` badge so the user can match overlay ↔ panel at a glance.
 - **Drag-to-reposition**: click and drag the pin to move it relative to the element. The offset is persisted; subsequent renders honour it. Click without dragging still opens the panel card.
 - **Resolve**: click the green **Resolve** button on the comment row. The pin fades to grey + 60% opacity; the body strikes through. Resolving keeps the comment (it's not a delete) — click **Reopen** to restore.
@@ -220,6 +224,10 @@ of the picked kind with sensible defaults.
 
 Split from Effects so the visual-decoration and time-based-motion
 controls don't compete for the same row list. Starts collapsed.
+
+The section header carries two actions: a **pause/resume** toggle
+(circle-pause / circle-play) that freezes all motion page-wide (see §1.4),
+and the `+` **add-motion** menu.
 
 - **Transition** — Property dropdown, Duration, Timing curve, Delay + a
   ▶ Preview button that flashes a contrast value so you can see the curve.
@@ -416,6 +424,21 @@ Every edit you've made grouped by element.
   the project), **Help** (`?` — opens the Help overlay with "Report
   an issue" and "Copy diagnostics"), and **Settings** (gear). All
   three full-page overlays are mutually exclusive.
+- **Pop out / Dock back** — the panel runs in two surfaces:
+  - Default: Chrome's native **side panel** (docked to the browser).
+  - **Pop out** (`external-link` icon) opens the same panel as a free-floating
+    window that can sit anywhere on screen, including over the browser chrome.
+    It's bound to the tab it was popped out from and keeps controlling that tab
+    even as you switch browser tabs. The window's size/position is remembered
+    (`dm-popout-bounds`) and restored on the next pop-out.
+  - In the floating window, **Dock back** (`panel-right` icon) returns the UI
+    to the native side panel.
+  - Each panel surface is bound to a specific tab (the background routes every
+    `SP_*` message by `targetTabId`), so multiple surfaces across tabs/windows
+    never cross-talk. Closing the last surface for a tab deactivates design
+    mode on just that tab. (A detached window can only be a separate OS window —
+    Chrome's side panel itself can't be moved; this is why pop-out is a window,
+    not a draggable in-page panel.)
 
 ### 5.2 Action toolbar (between header and tabs)
 
@@ -423,7 +446,6 @@ Every edit you've made grouped by element.
 - **Duplicate** / **Delete** → DOM mutation, recorded as a change.
 - **Comment** → drop a yellow pin sticky note on the selected element. Pins are numbered in creation order; resolving a comment fades its pin to grey.
 - **Hide all pins** (`eye` / `eye-off`) → toggles every comment pin on the page in one click. The Changes-tab list still works — only the page overlay is muted. Persisted across sessions via `chrome.storage.local`.
-- **Freeze animations** (circle-pause / circle-play) → see §1.4.
 - **Screenshot** → see §1.5.
 - **Presets** → opens the Presets view (see §6).
 - **Undo** / **Redo** → step through every style/text/DOM/visibility action.
@@ -582,7 +604,7 @@ Open via the gear icon in the header.
 | **Screenshot capture** | What the camera button does. `Clipboard` copies the PNG; `Download` saves it; `Both` does both. | `Clipboard` |
 | **Nudge amount** | Shift+Arrow step for numeric fields in the Design panel (Figma-style big-nudge). Plain Arrow keys still nudge by 1. Persisted to `chrome.storage.local`. | `10` |
 | **Theme** | `System` / `Dark` / `Light`. | `System` |
-| **Keyboard shortcuts** (button) | Toasts a one-line summary of the active shortcuts (`Alt+D`, `Ctrl/⌘+Z`, `Ctrl/⌘+⇧Z`, `Esc`). | — |
+| **Keyboard shortcuts** (button) | Opens a popover card listing every shortcut grouped by category (driven by `DEFAULT_SHORTCUTS`), keys shown as `<kbd>` chips. Backdrop click / ✕ / `Esc` closes it. | — |
 | **Reset settings** (button) | Wipes every setting above back to its default. Toasts on success. | — |
 
 ---
@@ -620,7 +642,7 @@ Open via the gear icon in the header.
 ## 11. MCP server — agent-facing tools
 
 Run the server with `npm start` from the repo root. It boots a WebSocket
-bridge on `ws://localhost:9960` and exposes 6 MCP tools over stdio.
+bridge on `ws://localhost:9960` and exposes 8 MCP tools over stdio.
 
 | Tool | Inputs | What it returns |
 |---|---|---|
@@ -631,6 +653,7 @@ bridge on `ws://localhost:9960` and exposes 6 MCP tools over stdio.
 | **`get_session_summary`** | none | Connection status, active sessions, counts. Use this as a health check before `apply_changes`. |
 | **`export_changes`** | `format: 'css' | 'tailwind' | 'scss' | 'jsx'` | Emits the change set in the requested format. Spring / cubic-bezier values pass through inside the underlying CSS strings — no separate animation tool. |
 | **`get_screenshot`** | `selector?: string` OR `elementId?: string` | A PNG of the viewport, or cropped to one element. Pass the unique selector you got from `get_changes` (e.g. `"main > section.hero > button:nth-of-type(2)"`). Generic selectors that match many elements fail with a list of candidate unique paths. Returned as an MCP image content block — vision-capable agents read it directly. |
+| **`mark_comment_resolved`** | `commentId: string`, `resolved?: boolean` | Marks a pinned comment resolved (done) or reopens it. Pass the comment `id` from `get_changes`. Converges on the same path as the UI's Resolve toggle, so the page pin recolours and the Changes tab updates — closing the loop after the agent implements what a comment asked for. |
 
 ### Example agent flow
 
@@ -647,7 +670,19 @@ bridge on `ws://localhost:9960` and exposes 6 MCP tools over stdio.
 4. agent: apply_changes({ changes: [{ elementId: "dm-7",
             styles: { backgroundColor: "var(--accent-hover)" } }] })
    server: "Applied 1 style change to 1 element."
+
+5. agent: mark_comment_resolved({ commentId: "…", resolved: true })
+   server: "Comment … marked resolved."
 ```
+
+### `/design-mode` agent command
+
+Settings → **Set up your agent** copies a ready-made `/design-mode` workflow
+command for Claude Code, Cursor, Codex, or Windsurf (it names the save path
+for each). The command drives the live MCP tools end to end — read the changes
+and comments, apply them, and `mark_comment_resolved` as it goes — with
+optional step / batch / yolo processing modes. The body is tool-agnostic; only
+the install path differs.
 
 ---
 

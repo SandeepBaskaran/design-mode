@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import {
   Camera,
+  CheckCircle2,
   Cloud,
   Eraser,
   FileDown,
@@ -47,7 +48,7 @@ export const metadata = {
     title:
       "MCP setup — Connect Claude Code, Cursor, Claude Desktop, Windsurf & more",
     description:
-      "Three connection modes (Cloud, Local, Self-hosted) and the seven MCP tools your agent gets.",
+      "Three connection modes (Cloud, Local, Self-hosted) and the eight MCP tools your agent gets.",
     url: "https://designmode.app/mcp",
     images: ["/og-image.png"],
   },
@@ -173,6 +174,11 @@ const tools = [
     icon: Camera,
     description: "Visible-tab PNG of the page in its current edited state.",
   },
+  {
+    name: "mark_comment_resolved",
+    icon: CheckCircle2,
+    description: "Mark a pinned comment done (or reopen it) once the agent has acted on it.",
+  },
 ];
 
 export default function McpPage() {
@@ -200,10 +206,10 @@ export default function McpPage() {
                 call external tools safely. A &quot;tool&quot; is anything
                 the agent can read from or write to — a database, a
                 filesystem, a web service, or in this case, the design
-                state of your live page. Design Mode exposes seven MCP tools
+                state of your live page. Design Mode exposes eight MCP tools
                 so your agent can read every edit you made in the side
-                panel, push patches back to the page, and grab
-                screenshots — all without copy-paste.
+                panel, push patches back to the page, grab screenshots, and
+                mark your comments resolved — all without copy-paste.
               </p>
               <p>
                 <strong className="text-foreground">
@@ -319,12 +325,12 @@ export default function McpPage() {
           <DashedLine className="container max-w-5xl" />
           <div className="container mt-16 max-w-5xl">
             <h2 className="text-2xl tracking-tight md:text-3xl">
-              The seven MCP tools
+              The eight MCP tools
             </h2>
             <p className="text-muted-foreground mt-2 max-w-2xl">
-              Every mode exposes the same seven tools — your agent can read
-              the current page diff, push patches back, and grab
-              screenshots.
+              Every mode exposes the same eight tools — your agent can read
+              the current page diff, push patches back, grab screenshots,
+              track change status, and resolve your comments as it works.
             </p>
 
             <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">

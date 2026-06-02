@@ -87,6 +87,7 @@ export type ServerMessage =
   | { type: 'REQUEST_ELEMENT'; payload: { selector: string } }
   | { type: 'APPLY_CHANGES'; payload: { elementId: string; styles: PartialElementStyle } }
   | { type: 'SET_CHANGE_STATUS'; payload: { status: ChangeStatus; ids?: string[] } }
+  | { type: 'MARK_COMMENT_RESOLVED'; requestId?: string; payload: { commentId: string; resolved: boolean } }
   | { type: 'CHANGES_RESPONSE'; payload: ChangeSession }
   | { type: 'COMMENTS_RESPONSE'; payload: Comment[] }
   | { type: 'ELEMENT_RESPONSE'; payload: ElementInfo | null }

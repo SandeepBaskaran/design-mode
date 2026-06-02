@@ -102,17 +102,25 @@ export const OUTPUT_DETAIL_LEVELS = [
 ] as const;
 
 // Phase 9: Default keyboard shortcuts
+// Hardcoded defaults. `toggle-design-mode` is the one Chrome-configurable
+// command (declared in manifest `commands`, rebindable at
+// chrome://extensions/shortcuts); the rest are page/panel shortcuts handled
+// in-extension. Keys lean on Figma conventions (C = comment, R = region/rect)
+// and a single Alt modifier, deliberately avoiding combos the browser/OS
+// claim — notably Alt+F / Alt+E (Chrome menu) and Alt+D address-bar (the last
+// is safe only because it's a real chrome.command that overrides the default).
 export const DEFAULT_SHORTCUTS = [
   { key: 'i', modifiers: ['alt'], action: 'toggle-inspect', label: 'Toggle Inspect', category: 'General' },
-  { key: 'a', modifiers: ['alt'], action: 'add-annotation', label: 'Add Annotation', category: 'Annotations' },
-  { key: 'd', modifiers: ['alt'], action: 'toggle-drawing', label: 'Toggle Drawing', category: 'Drawing' },
-  { key: 'f', modifiers: ['alt'], action: 'freeze-animations', label: 'Freeze Animations', category: 'Animation' },
+  { key: 'c', modifiers: ['alt'], action: 'add-annotation', label: 'Comment', category: 'Annotations' },
+  { key: 'r', modifiers: ['alt'], action: 'region-comment', label: 'Region comment', category: 'Annotations' },
+  { key: 'd', modifiers: ['alt'], action: 'toggle-design-mode', label: 'Toggle Design Mode', category: 'General' },
+  { key: 'p', modifiers: ['alt'], action: 'freeze-animations', label: 'Pause motion', category: 'Animation' },
   { key: 'Escape', modifiers: [], action: 'deselect', label: 'Deselect', category: 'General' },
   { key: 'Delete', modifiers: [], action: 'delete-element', label: 'Delete Element', category: 'Editing' },
   { key: 'z', modifiers: ['ctrl'], action: 'undo', label: 'Undo', category: 'Editing' },
   { key: 'z', modifiers: ['ctrl', 'shift'], action: 'redo', label: 'Redo', category: 'Editing' },
   { key: 's', modifiers: ['alt'], action: 'screenshot', label: 'Screenshot', category: 'Export' },
-  { key: 'e', modifiers: ['alt'], action: 'export-css', label: 'Export CSS', category: 'Export' },
+  { key: 'x', modifiers: ['alt'], action: 'export-css', label: 'Export CSS', category: 'Export' },
   { key: '1', modifiers: ['alt'], action: 'tab-layers', label: 'Layers Tab', category: 'Navigation' },
   { key: '2', modifiers: ['alt'], action: 'tab-design', label: 'Design Tab', category: 'Navigation' },
   { key: '3', modifiers: ['alt'], action: 'tab-changes', label: 'Changes Tab', category: 'Navigation' },

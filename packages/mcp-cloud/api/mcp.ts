@@ -1,6 +1,6 @@
 // ============================================================
 // POST /api/mcp
-// Streamable HTTP MCP transport. Mirrors the 6 tools from
+// Streamable HTTP MCP transport. Mirrors the tools from
 // packages/mcp-local/src/mcp-server.ts but routes every call through
 // the per-tenant Redis bus to the extension and awaits its reply.
 //
@@ -81,6 +81,25 @@ const TOOLS: ToolDef[] = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     buildRequest: () => ({ type: 'CLOUD_CLEAR_CHANGES', payload: {} }),
     toContent: () => [{ type: 'text', text: 'All changes cleared.' }],
+  },
+  {
+    name: 'mark_comment_resolved',
+    description: 'Mark a pinned comment resolved (done) or reopen it. Pass the comment `id` from get_changes output. Call this after implementing what the comment asked for so the user sees the loop close in the Changes tab.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        commentId: { type: 'string', description: 'Comment id from get_changes (the `id` field)' },
+        resolved: { type: 'boolean', description: 'true = resolve/done, false = reopen' },
+      },
+      required: ['commentId'],
+    },
+    buildRequest: (args) => ({ type: 'CLOUD_MARK_COMMENT_RESOLVED', payload: { commentId: args.commentId, resolved: args.resolved !== false } }),
+    toContent: (reply, args) => {
+      const text = reply?.ok
+        ? `Comment ${args.commentId} marked ${args.resolved === false ? 'open' : 'resolved'}.`
+        : `No comment found with id ${args.commentId}.`;
+      return [{ type: 'text', text }];
+    },
   },
   {
     name: 'get_session_summary',

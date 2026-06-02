@@ -107,6 +107,7 @@ export function createMcpServer(): McpServer {
         id: c.id,
         selector: c.selector,
         text: c.text,
+        region: c.region,
         timestamp: new Date(c.timestamp).toISOString(),
         pageUrl: c.pageUrl,
         resolved: c.resolved || false,
@@ -170,7 +171,31 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  // ── 5. get_session_summary ────────────────────────────────────────
+  // ── mark_comment_resolved ─────────────────────────────────────────
+  server.tool(
+    'mark_comment_resolved',
+    'Mark a pinned comment resolved (done) or reopen it. Pass the comment `id` from get_changes output. Call this after you have implemented the change the comment asked for so the user sees the loop close in the Changes tab.',
+    {
+      commentId: z.string().describe('Comment id from get_changes (the `id` field)'),
+      resolved: z.boolean().default(true).describe('true = resolve/done, false = reopen'),
+    },
+    async ({ commentId, resolved }) => {
+      if (!isExtensionConnected()) {
+        return { content: [{ type: 'text' as const, text: 'Error: Extension not connected.' }], isError: true };
+      }
+      try {
+        const res = await requestFromExtension<{ ok?: boolean }>('MARK_COMMENT_RESOLVED', { commentId, resolved });
+        if (!res?.ok) {
+          return { content: [{ type: 'text' as const, text: `No comment found with id ${commentId}.` }], isError: true };
+        }
+        return { content: [{ type: 'text' as const, text: `Comment ${commentId} marked ${resolved ? 'resolved' : 'open'}.` }] };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Failed to update comment: ${e?.message || e}` }], isError: true };
+      }
+    }
+  );
+
+  // ── get_session_summary ───────────────────────────────────────────
   server.tool(
     'get_session_summary',
     'Connection status, active sessions, and counts. Use this for a quick health check before calling apply_changes.',

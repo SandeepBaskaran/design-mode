@@ -98,11 +98,11 @@ step('Manifest sanity', () => {
 });
 
 // ── 4. MCP tool count check (catch accidental tool deletions) ─────────────
-step('Local MCP server has all 7 tools', () => {
+step('Local MCP server has all 8 tools', () => {
   const mcp = readFileSync(resolve(root, 'packages/mcp-local/src/mcp-server.ts'), 'utf8');
   const matches = mcp.match(/server\.tool\(/g) || [];
-  if (matches.length < 7) {
-    throw new Error(`Expected ≥7 tools registered in mcp-server.ts, found ${matches.length}`);
+  if (matches.length < 8) {
+    throw new Error(`Expected ≥8 tools registered in mcp-server.ts, found ${matches.length}`);
   }
 });
 

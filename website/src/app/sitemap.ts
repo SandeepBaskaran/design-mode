@@ -21,6 +21,7 @@ const useCaseSlugs = [
 const compareSlugs = [
   "design-mode-vs-stagewise",
   "design-mode-vs-pls-fix",
+  "design-mode-vs-drawbridge",
   "design-mode-vs-agentation",
   "design-mode-vs-dialkit",
   "design-mode-vs-ui-inspector",

@@ -10,7 +10,7 @@ import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLay
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, downloadDataUrl } from './screenshots';
 import {
@@ -21,7 +21,8 @@ import {
 import { captureOriginalIfNew, clearRootVarEdit, clearAllRootVarEdits, getRootVarEdits } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
 import { buildDomTree } from './dom-tree';
-import { addComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments } from './comments';
+import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments } from './comments';
+import { startRegionDraw, cancelRegionDraw, clearPendingRegionBox, type Region } from './region-annotate';
 // Source detection — kept; surfaced in the prompt + Design tab
 import { getSourceLocation, getComponentHierarchy, openInVSCode } from './source-detection';
 // Animation controls — kept (freeze/preview helpers)
@@ -44,6 +45,23 @@ import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } fr
 import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts } from './keyboard-shortcuts';
 
 let on = false;
+// Region pending a comment — set when the user finishes drawing a freeform
+// rectangle, consumed by ADD_REGION_COMMENT once they type the note.
+let pendingRegion: Region | null = null;
+// True for Design Mode's own injected pins/boxes so a region's centre-point
+// hit-test resolves the underlying page element, not our overlay.
+function isOverlayLike(el: HTMLElement): boolean {
+  return !!el.closest('.dm-comment-pin,.dm-comment-region');
+}
+// Enter region draw mode; on release stash the region and tell the panel to
+// open its comment composer (shared by the SP message and the shortcut).
+function beginRegionDraw() {
+  clearPendingRegionBox(); // drop any leftover box from a prior, uncommitted draw
+  startRegionDraw((region) => {
+    if (region) { pendingRegion = region; notifyPanel('REGION_DRAWN', {}); }
+    else { pendingRegion = null; notifyPanel('REGION_CANCELLED', {}); }
+  });
+}
 // Heartbeat to background — fires every 4s while design-mode is active to
 // confirm the side panel is still around. If background reports the panel
 // closed (or the SW is asleep / context invalidated), we self-disable so
@@ -350,6 +368,18 @@ function resolveResourceBytes(src: string): number | undefined {
   return undefined;
 }
 
+// This content script's own tab id, fetched once from the background. Used to
+// stamp panel broadcasts so each panel surface (side panel / floating window)
+// only reacts to the tab it's bound to — otherwise a panel for tab B would
+// pick up tab A's ELEMENT_SELECTED etc.
+let selfTabId: number | null = null;
+function refreshSelfTabId() {
+  if (!chrome.runtime?.id) return;
+  try {
+    chrome.runtime.sendMessage({ type: 'GET_MY_TAB_ID' }, (r) => { selfTabId = r?.tabId ?? null; });
+  } catch {}
+}
+
 function notifyPanel(type: string, payload?: any) {
   // chrome.runtime.id goes undefined the moment the extension is reloaded
   // / disabled / removed while a content script is still alive on a page.
@@ -357,7 +387,7 @@ function notifyPanel(type: string, payload?: any) {
   // invalidated". Guard so the orphan content script just no-ops.
   if (!chrome.runtime?.id) return;
   try {
-    chrome.runtime.sendMessage({ type, ...payload });
+    chrome.runtime.sendMessage({ type, ...payload, _dmTab: selfTabId });
   } catch {}
 }
 
@@ -431,6 +461,7 @@ function dispatchCloudMessage(msg: any) {
           const pageComments = await getPageComments();
           report.comments = pageComments.map(c => ({
             id: c.id, selector: c.selector, text: c.text,
+            region: (c as any).region,
             timestamp: new Date(c.timestamp).toISOString(),
             pageUrl: (c as any).pageUrl, resolved: !!(c as any).resolved,
           }));
@@ -472,6 +503,21 @@ function dispatchCloudMessage(msg: any) {
     case 'CLOUD_EXPORT_CHANGES':
       sendRelayResponse(msg.requestId, { text: renderExportText(msg.payload?.format || 'css') });
       return;
+    // Agent marks a comment resolved/open. Local (MARK_COMMENT_RESOLVED) and
+    // cloud (CLOUD_MARK_COMMENT_RESOLVED) converge on the same UI-driven path,
+    // so the pin recolours and the Changes tab updates exactly as if the user
+    // had clicked Resolve. Sync the new state back so the server's view agrees.
+    case 'MARK_COMMENT_RESOLVED':
+    case 'CLOUD_MARK_COMMENT_RESOLVED': {
+      const commentId = msg.payload?.commentId;
+      const resolved = msg.payload?.resolved !== false;
+      if (!commentId) { sendRelayResponse(msg.requestId, { ok: false }); return; }
+      setCommentResolved(commentId, resolved).then(c => {
+        if (c) { void showCommentPins(); syncCommentChange(c); notifyPanel('CHANGES_UPDATE', {}); }
+        sendRelayResponse(msg.requestId, { ok: !!c });
+      });
+      return;
+    }
   }
 }
 
@@ -536,6 +582,7 @@ async function openConfiguredTransport() {
 function enable() {
   if (on) return;
   on = true;
+  refreshSelfTabId();
   resetOverlayTeardown();
   resetMeasureTeardown();
   showCommentPins();         // surface saved comment pins on the page
@@ -623,6 +670,9 @@ function registerAllShortcuts() {
     if (!sid) return;
     notifyPanel('OPEN_COMMENT_FOR_SELECTED', { elementId: sid });
   });
+  // Alt+R — drag a freeform rectangle to comment on a region of the page
+  // that isn't tied to a single element.
+  registerShortcut('region-comment', () => { beginRegionDraw(); });
   // Alt+1 / Alt+2 / Alt+3 — jump to a side-panel tab without reaching
   // for the mouse. The panel owns its own `tab` state; we just emit
   // an inbound SWITCH_TAB message and the panel handler updates +
@@ -657,6 +707,16 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       else enableInspect((i: ElementInfo) => onElementSelected(i));
       sendResponse({ inspecting: isInspectActive() });
       break;
+
+    // Explicit on/off (vs toggle) — used to suspend inspect while a comment
+    // composer is open, then restore it. Idempotent.
+    case 'SET_INSPECT': {
+      const want = !!(msg as any).on;
+      if (want && !isInspectActive()) enableInspect((i: ElementInfo) => onElementSelected(i));
+      else if (!want && isInspectActive()) disableInspect();
+      sendResponse({ inspecting: isInspectActive() });
+      break;
+    }
 
     case 'GET_STATE': sendResponse(getFullState()); break;
     // Side panel asked us to drop the active transport and open a fresh
@@ -917,6 +977,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const el = getElementById(sid);
         const selector = el ? (el.id ? `#${el.id}` : el.tagName.toLowerCase()) : sid;
         addComment(sid, selector, msg.text).then(comment => {
+          syncCommentChange(comment);
           sendResponse({ comment });
         });
         return true;
@@ -925,15 +986,54 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
+    // Enter region (freeform rectangle) draw mode. The user drags a box;
+    // on release we stash the region and tell the panel to open its comment
+    // composer. The geometry stays in the content script — the panel just
+    // sends back the typed text via ADD_REGION_COMMENT.
+    case 'START_REGION_COMMENT': {
+      beginRegionDraw();
+      sendResponse({ ok: true });
+      break;
+    }
+
+    case 'CANCEL_REGION_COMMENT': {
+      cancelRegionDraw();
+      clearPendingRegionBox();
+      pendingRegion = null;
+      sendResponse({ ok: true });
+      break;
+    }
+
+    case 'ADD_REGION_COMMENT': {
+      if (pendingRegion && msg.text) {
+        const region = pendingRegion;
+        pendingRegion = null;
+        const cx = region.x - window.scrollX + region.w / 2;
+        const cy = region.y - window.scrollY + region.h / 2;
+        const hit = document.elementFromPoint(cx, cy) as HTMLElement | null;
+        const selector = hit && !isOverlayLike(hit) ? generateSelector(hit) : 'region';
+        addRegionComment(region, selector, msg.text).then(comment => {
+          syncCommentChange(comment);
+          clearPendingRegionBox(); // committed box (showCommentPins) replaces the pending one
+          void showCommentPins();
+          sendResponse({ comment });
+        });
+        return true;
+      }
+      sendResponse({ error: 'No region drawn or no text' });
+      break;
+    }
+
     // Toggle / set the resolved flag on a comment.
     case 'SET_COMMENT_RESOLVED': {
       const cid = (msg as any).commentId;
       const resolved = !!(msg as any).resolved;
       if (cid) {
-        setCommentResolved(cid, resolved).then(() => {
+        setCommentResolved(cid, resolved).then((c) => {
           // After mutation, ensure pins re-render with the new ordinal /
           // colour. showCommentPins is idempotent.
           void showCommentPins();
+          if (c) syncCommentChange(c);
           sendResponse({ ok: true });
         });
         return true;
@@ -961,7 +1061,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'REMOVE_CHANGE': {
       if (msg.changeId?.startsWith('comment-')) {
         const commentId = msg.changeId.replace('comment-', '');
-        deleteComment(commentId).then(async () => { const p = await getChangesPayload(); sendResponse({ ok: true, ...p }); });
+        deleteComment(commentId).then(async () => { syncCommentDeleted(commentId); const p = await getChangesPayload(); sendResponse({ ok: true, ...p }); });
         return true;
       }
       const styleChange = getStyleChanges().find(c => c.id === msg.changeId);

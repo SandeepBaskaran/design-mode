@@ -1255,6 +1255,17 @@ export function syncAllChanges() {
   transportSend({ type: 'SESSION_UPDATE', payload: getChangeReport() });
 }
 
+// Comments live in content/comments.ts, not in this module's change report,
+// so they need their own sync push to reach the local MCP server's state
+// (the cloud path reads comments live, so this is a no-op there). Without
+// this the agent's get_changes would never see comments in local mode.
+export function syncCommentChange(comment: { id: string }) {
+  transportSend({ type: 'COMMENT_ADDED', payload: comment });
+}
+export function syncCommentDeleted(id: string) {
+  transportSend({ type: 'COMMENT_DELETED', payload: { id } });
+}
+
 export function disconnectFromServer() {
   if (ws) { try { ws.close(); } catch {} ws = null; }
   if (sseAbort) { try { sseAbort.abort(); } catch {} sseAbort = null; }

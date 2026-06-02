@@ -215,6 +215,9 @@ export interface Comment {
   position: { x: number; y: number };
   resolved: boolean;
   pageUrl: string;
+  // Freeform region comments (not anchored to a DOM element) carry their
+  // rectangle in document coordinates. Absent for element-anchored comments.
+  region?: { x: number; y: number; w: number; h: number };
 }
 
 // ============================================================

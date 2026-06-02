@@ -101,7 +101,7 @@ const groups: Group[] = [
       {
         question: "What is MCP (Model Context Protocol)?",
         answer:
-          "MCP is Anthropic's open standard that lets AI agents safely call external tools. Design Mode exposes seven MCP tools so your agent can read every edit you made (get_changes), push patches back to the page (apply_changes), mark changes to-do/in-progress/resolved as it works (set_change_status), wipe the buffer between iterations (clear_changes), get a high-level summary (get_session_summary), export markdown (export_changes), and grab a screenshot of the current page state (get_screenshot).",
+          "MCP is Anthropic's open standard that lets AI agents safely call external tools. Design Mode exposes eight MCP tools so your agent can read every edit you made (get_changes), push patches back to the page (apply_changes), mark changes to-do/in-progress/resolved as it works (set_change_status), wipe the buffer between iterations (clear_changes), get a high-level summary (get_session_summary), export markdown (export_changes), grab a screenshot of the current page state (get_screenshot), and mark your pinned comments resolved (mark_comment_resolved).",
       },
       {
         question: "Which AI coding agents does Design Mode work with?",

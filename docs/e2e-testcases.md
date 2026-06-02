@@ -91,11 +91,13 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 
 | #      | Test | Steps | Expected |
 |--------|------|-------|----------|
+| 0.10.0 | Shortcuts popover | Help (`?`) → **Keyboard shortcuts** | A popover card opens listing every shortcut grouped by category (General / Annotations / Animation / Editing / Export / Navigation), keys as `<kbd>` chips. Backdrop click, ✕, and `Esc` each close it; clicking inside the card does not |
 | 0.10.1 | Alt+I — Toggle inspect | Press | Inspect crosshair toggles on/off |
-| 0.10.2 | Alt+A — Add comment for selected element | Select an element → press | Side panel switches to comment-add mode with the textarea focused; if nothing is selected, no-op |
-| 0.10.3 | Alt+F — Freeze animations | Press | Toggles a global freeze: CSS animations + transitions + Web-Animations API instances + `<video>` elements pause; press again to resume |
+| 0.10.2 | Alt+C — Comment on selected element | Select an element → press | Side panel switches to comment-add mode with the textarea focused; if nothing is selected, no-op |
+| 0.10.2b | Alt+R — Comment on a region | Press | Crosshair draw mode activates; drag a rectangle → side panel opens the comment composer in "region" mode; Esc mid-draw cancels |
+| 0.10.3 | Alt+P — Pause motion | Press | Toggles a global freeze: CSS animations + transitions + Web-Animations API instances + `<video>` elements pause; press again to resume |
 | 0.10.4 | Alt+S — Element screenshot | Select element → press | PNG of the cropped element downloads with timestamp filename |
-| 0.10.5 | Alt+E — Export CSS | Make any change → press | Generated CSS block copied to clipboard |
+| 0.10.5 | Alt+X — Export CSS | Make any change → press | Generated CSS block copied to clipboard |
 | 0.10.6 | Esc — Deselect / cancel | While selected | Multi-select tears down first if active, then inspect, then plain selection |
 | 0.10.7 | Delete — Remove selected element | Select element → press | Element removed; "delete" entry in Changes tab |
 | 0.10.8 | Ctrl/⌘+Z, Ctrl/⌘+⇧+Z — Undo/Redo | Make change → undo → redo | Style/text/DOM/visibility all reversible; works from anywhere except a focused input |
@@ -242,13 +244,20 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | #   | Test | Steps | Expected |
 |-----|------|-------|----------|
 | 6.1 | Add a comment | Select element → comment icon → type → Add | Yellow pin appears on the element; comment row in Changes tab |
-| 6.2 | Add via Alt+A | Select element → press `Alt+A` | Comment textarea appears focused (same as clicking the comment icon) |
+| 6.2 | Add via Alt+C | Select element → press `Alt+C` | Comment textarea appears focused (same as clicking the comment icon) |
 | 6.3 | Pin position | Add a comment | Pin sits at the top-right of the element |
 | 6.4 | Pin click | Click the pin on the page | Side panel switches to Changes tab and opens the comment for editing |
 | 6.5 | Edit / delete | Edit text and Save / Delete | Updates / removes the comment + pin |
 | 6.6 | Mark as resolved | Click the resolved toggle on a comment row | `resolved: true` set; row moves under the Resolved sub-filter (Phase 7) |
 | 6.7 | Persistence | Reload page | Comment + pin re-appear (resolved state preserved) |
 | 6.8 | Pin not inspectable | Hover a pin in inspect mode | Pin is transparent to the inspector |
+| 6.9 | Region comment — drop (drag) | Click the dashed-square button (or `Alt+R`) → drag a box over empty page space | Dashed yellow box stays on the page; composer opens in "region" mode. The box persists while you type |
+| 6.9b | Region comment — drop (click) | Region mode → single click on the canvas (no drag) | A default-sized (~180×110) yellow box drops at the click point and stays; composer opens — no DOM element needs selecting |
+| 6.9c | Region comment — box persists then commits | With the pending box showing, type → Add | The pending box is replaced by the committed region box + numbered pin; comment row shows a region badge |
+| 6.10 | Region comment — scroll/persist | Drop a box, scroll the page (while composing and after Add), then reload | The box (pending and committed) stays anchored to the document position; committed box + pin survive reload |
+| 6.11 | Region comment — cancel removes box | Drop a box → click Cancel in the composer | The pending yellow box disappears; no comment created. (Pressing `Esc` mid-drag, before release, also exits with no box) |
+| 6.12 | Inspect suspended while composing | Turn Inspect on → select an element → open the comment composer (add), then hover/click other elements on the page | Inspect is off while the composer is open (no hover outlines, clicks don't reselect); on Add/Cancel inspect returns to its prior on state. Same for **editing** a comment and for **region** compose |
+| 6.13 | Inspect stays off if it was off | With Inspect off, open a composer then close it | Inspect remains off throughout (prior state restored, not force-enabled) |
 
 ---
 
@@ -326,7 +335,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 9.6  | Multi-select toggle | Click multi-select icon → click 3 elements on the page | Each selected element gets a dashed outline; header shows `3 selected` chip |
 | 9.7  | Multi-select fan-out | With 3 selected, edit a property | Property applied to all 3 elements; Changes tab shows ONE row labelled `multi-select` with count `3 elements` |
 | 9.8  | Multi-select Esc | Press Esc with multi-select active | Multi-select tears down first; second Esc deselects |
-| 9.9  | Freeze animations | Click the freeze toggle in the toolbar (or `Alt+F`) | Active state in the toolbar; CSS animations + transitions + WAAPI instances + `<video>` pause across the page; toggle again to resume |
+| 9.9  | Freeze animations | Select an element → Design tab → **Motion** section header → click the circle-pause toggle (or `Alt+P` from anywhere) | The Motion-section toggle shows active state; CSS animations + transitions + WAAPI instances + `<video>` pause across the page; toggle again to resume |
 | 9.10 | Undo / Redo | Make change → `Ctrl/⌘+Z` → `Ctrl/⌘+⇧+Z` | Reverts then re-applies (style, DOM, text, visibility all reversible) |
 
 ---
@@ -359,7 +368,7 @@ at `https://mcp.designmode.app`). Both expose the **same seven MCP tools**.
 
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
-| 11.1  | Server starts | `cd packages/mcp-local && npm start` | ASCII banner; seven tools listed: `get_changes`, `apply_changes`, `set_change_status`, `clear_changes`, `get_session_summary`, `export_changes`, `get_screenshot`; WebSocket bridge on `ws://localhost:9960` (or the configured port) |
+| 11.1  | Server starts | `cd packages/mcp-local && npm start` | ASCII banner; eight tools listed: `get_changes`, `apply_changes`, `set_change_status`, `mark_comment_resolved`, `clear_changes`, `get_session_summary`, `export_changes`, `get_screenshot`; WebSocket bridge on `ws://localhost:9960` (or the configured port) |
 | 11.2  | Port conflict | Another process on 9960 | Clean error suggesting a different port or to kill the conflict |
 | 11.3  | Extension connects | Side panel open + auto-connect on (default) | Green dot in MCP indicator |
 | 11.4  | `get_changes` | Invoke from agent | Returns `{ pageUrl, pageTitle, styleChanges[], textChanges[], domChanges[], cssBlock, comments[] }` |
@@ -372,6 +381,9 @@ at `https://mcp.designmode.app`). Both expose the **same seven MCP tools**.
 | 11.9  | `export_changes` — empty | Invoke with no changes | `"No changes to export."` |
 | 11.10 | `get_screenshot` — viewport | Invoke without selector/elementId | Returns base64 PNG of the visible viewport |
 | 11.11 | `get_screenshot` — element | Pass `selector` or `elementId` (`dm-*`) | Returns base64 PNG of just that element; ambiguous selectors fail with a candidate list |
+| 11.12 | `get_changes` — comments carry id/region | Add an element comment + a region comment, then invoke | `comments[]` entries include `id`; the region comment has a `region: {x,y,w,h}` and `selector: "region"` |
+| 11.13 | `mark_comment_resolved` | Pass a comment `id` from `get_changes` with `resolved: true` | Returns success; the page pin turns grey + struck-through, the Changes-tab row shows Resolved, with no panel reload |
+| 11.14 | `mark_comment_resolved` — unknown id | Pass a non-existent id | `isError` with "No comment found with id …" |
 
 ### 11.B — Cloud mode
 
@@ -414,6 +426,22 @@ bleeding to duplicates and back.
 | 13.3 | Reload extension mid-session | `chrome://extensions` → reload Design Mode | Extension reloads cleanly; saved session changes still replay |
 | 13.4 | CSP-strict site | Open a site with strict CSP (e.g. github.com) | Side panel still works; hover / select / inline edits succeed |
 | 13.5 | Color picker preserves cursor | Type partial hex in the inline picker | Cursor stays in the input; morphdom doesn't blur it on render |
+
+---
+
+## Phase 15 — Floating panel window (pop-out / dock-back)
+
+| #    | Test | Steps | Expected |
+|------|------|-------|----------|
+| 15.1 | Pop out | In the side panel header click the **external-link** icon | A chrome-less floating window opens with the full panel UI, bound to the originating tab; the side panel closes (best-effort). Design mode stays active on the tab — no overlay flicker |
+| 15.2 | Floating edits target the bound tab | In the floating window, select an element / apply a style / add a comment | Changes apply to the bound tab's page and show in its Changes tab |
+| 15.3 | Survives browser-tab switch | With the floating window open, switch to a different browser tab, then act in the floating window | It still controls the original bound tab (not the now-active tab) |
+| 15.4 | Bounds remembered | Resize/move the floating window, close it, pop out again | The new window restores the last size/position (`dm-popout-bounds`) |
+| 15.5 | Dock back | In the floating window click the **panel-right** icon | The native side panel reopens for the bound tab and the floating window closes; design mode stays active (no flicker) |
+| 15.6 | Close floating window | Close the floating window via its OS close button (no dock-back) | Design mode deactivates on the bound tab only (other tabs/surfaces unaffected) |
+| 15.7 | Bound tab closed | Pop out for tab A, then close tab A | The orphaned floating window closes automatically |
+| 15.8 | No cross-talk (multi-surface) | Side panel controlling tab A in window 1 + a floating window for tab B | Selecting in tab A updates only tab A's panel; the tab-B window is unaffected (per-tab `targetTabId` routing + `_dmTab` broadcast filter) |
+| 15.9 | MCP in floating mode | With an agent connected, run `get_changes`/`apply_changes` while popped out | They target the bound tab exactly as in the docked side panel |
 
 ---
 

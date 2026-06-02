@@ -98,10 +98,12 @@ Design Mode brings a coding agent inside the page through a small bridge called 
   `chrome.storage.sync`.
 - **Compact prompt format** — `Copy Prompt` produces an LLM-optimised, ~8× smaller markdown
   format with framework + styling-system detection, source-file hints, and grep-ready selectors.
-- **MCP server** — Real-time WebSocket bridge between extension and 6 MCP tools your agent
-  can call: `get_changes`, `apply_changes`, `clear_changes`, `get_session_summary`,
-  `export_changes` (CSS / Tailwind / SCSS / JSX), and `get_screenshot` (PNG of the viewport
-  or a single element via a unique CSS path, returned as an MCP image block). Spring +
+- **MCP server** — Real-time WebSocket bridge between extension and 8 MCP tools your agent
+  can call: `get_changes`, `apply_changes`, `set_change_status` (to-do / in-progress /
+  resolved), `clear_changes`, `get_session_summary`, `export_changes` (CSS / Tailwind /
+  SCSS / JSX), `get_screenshot` (PNG of the viewport or a single element via a unique CSS
+  path, returned as an MCP image block), and `mark_comment_resolved` (close the loop on a
+  pinned comment once the agent acts on it). Spring +
   easing curves come through inside the underlying CSS values, so they ship in the regular
   change stream.
 - **Keyboard-first** — Strict numeric inputs, arrow stepping (+1 / +10 with Shift), Ctrl+Z / Ctrl+Shift+Z.
@@ -214,13 +216,14 @@ Run `npm start` for the full ASCII banner.
 
 | Shortcut | Action |
 |---|---|
-| `Alt+D` | Toggle the side panel |
+| `Alt+D` | Toggle the side panel (rebindable at `chrome://extensions/shortcuts`) |
 | `Alt+I` | Toggle inspect mode |
 | `Alt+1` / `Alt+2` / `Alt+3` | Jump to Layers / Design / Changes tab |
-| `Alt+A` | Add a comment on the selected element |
-| `Alt+F` | Freeze / resume animations on the page |
+| `Alt+C` | Comment on the selected element |
+| `Alt+R` | Region comment (drag a box anywhere) |
+| `Alt+P` | Pause / resume all motion on the page |
 | `Alt+S` | Screenshot the selected element |
-| `Alt+E` | Copy generated CSS to clipboard |
+| `Alt+X` | Copy generated CSS to clipboard |
 | `Delete` | Remove the selected element |
 | `Ctrl+Z` / `Cmd+Z` | Undo last change |
 | `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |

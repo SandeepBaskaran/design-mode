@@ -126,6 +126,9 @@
 
     html, body {
       width: 100%; height: 100%; overflow: hidden;
+      /* Floor the width so the layout holds when popped out into a freely
+         resizable window (the native side panel is always wide enough). */
+      min-width: 320px;
       background: var(--dm-bg);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       font-size: 13px;

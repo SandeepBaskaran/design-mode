@@ -24,6 +24,7 @@ export interface Comment {
   id: string; elementId: string; selector: string;
   text: string; timestamp: number; updatedAt: number;
   pageUrl: string; resolved?: boolean;
+  region?: { x: number; y: number; w: number; h: number };
 }
 
 export interface ChangeSession {

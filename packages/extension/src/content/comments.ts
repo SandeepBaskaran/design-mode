@@ -15,10 +15,17 @@ export interface CommentData {
   // The values are absolute offsets in CSS pixels relative to the
   // element's `getBoundingClientRect().top` / `.left + width`.
   pinOffset?: { x: number; y: number };
+  // Region (freeform rectangle) comments aren't anchored to a DOM element.
+  // Geometry is stored in *document* coordinates (page-relative, scroll-
+  // independent) so the box stays put as the page scrolls. When `region`
+  // is set, `elementId` is empty and `selector` holds the nearest container
+  // for agent context only.
+  region?: { x: number; y: number; w: number; h: number };
 }
 
 const STORAGE_KEY = 'dm-comments';
 const pinElements = new Map<string, HTMLDivElement>();
+const regionBoxes = new Map<string, HTMLDivElement>();
 
 export async function loadComments(): Promise<CommentData[]> {
   try {
@@ -40,6 +47,18 @@ export async function addComment(elementId: string, selector: string, text: stri
   all.push(comment);
   await saveComments(all);
   showCommentPin(comment);
+  return comment;
+}
+
+export async function addRegionComment(region: { x: number; y: number; w: number; h: number }, selector: string, text: string): Promise<CommentData> {
+  const comment: CommentData = {
+    id: crypto.randomUUID(), elementId: '', selector, text, region,
+    timestamp: Date.now(), updatedAt: Date.now(), pageUrl: window.location.href,
+  };
+  const all = await loadComments();
+  all.push(comment);
+  await saveComments(all);
+  showCommentPin(comment, getPinOrdinal(comment.id, all));
   return comment;
 }
 
@@ -91,13 +110,52 @@ export async function deleteComment(id: string) {
   await saveComments(all.filter(x => x.id !== id));
   const pin = pinElements.get(id);
   if (pin) { pin.remove(); pinElements.delete(id); }
+  const box = regionBoxes.get(id);
+  if (box) { box.remove(); regionBoxes.delete(id); }
+}
+
+// Resolve the anchor rect in viewport coordinates for either kind of
+// comment: an element's live bounding box, or a region's document-space
+// rectangle translated by the current scroll offset.
+function commentAnchorRect(comment: CommentData): DOMRect | null {
+  if (comment.region) {
+    const r = comment.region;
+    return new DOMRect(r.x - window.scrollX, r.y - window.scrollY, r.w, r.h);
+  }
+  const el = getElementById(comment.elementId);
+  return el ? el.getBoundingClientRect() : null;
 }
 
 export function showCommentPin(comment: CommentData, ordinal?: number) {
-  const el = getElementById(comment.elementId);
-  if (!el) return;
+  const rect0 = commentAnchorRect(comment);
+  if (!rect0) return;
   const PIN_SIZE = 28;
   const MARGIN = 8;
+  const isResolvedColor = !!comment.resolved;
+
+  // Region comments draw a translucent outline box behind the pin so the
+  // flagged area is visible. Element comments rely on the element itself.
+  if (comment.region) {
+    let box = regionBoxes.get(comment.id);
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'dm-comment-region';
+      Object.assign(box.style, {
+        position: 'fixed', zIndex: String(Z_INDEX.COMMENT_PIN - 1),
+        boxSizing: 'border-box', borderRadius: '4px', pointerEvents: 'none',
+      });
+      document.documentElement.appendChild(box);
+      regionBoxes.set(comment.id, box);
+    }
+    const accent = isResolvedColor ? '#A3A3A3' : '#FBBF24';
+    box.style.border = '1.5px dashed ' + accent;
+    box.style.background = isResolvedColor ? 'rgba(163,163,163,0.08)' : 'rgba(251,191,36,0.10)';
+    box.style.left = rect0.left + 'px';
+    box.style.top = rect0.top + 'px';
+    box.style.width = rect0.width + 'px';
+    box.style.height = rect0.height + 'px';
+  }
+
   let pin = pinElements.get(comment.id);
   // Pin colour by status — resolved pins fade to grey-green; open pins
   // stay yellow. Both keep the tear-drop shape so they're recognisable
@@ -140,7 +198,7 @@ export function showCommentPin(comment: CommentData, ordinal?: number) {
         const dy = mv.clientY - startY;
         if (!dragged && Math.abs(dx) + Math.abs(dy) < 4) return; // small-jitter threshold
         dragged = true;
-        const rect = el.getBoundingClientRect();
+        const rect = commentAnchorRect(comment) || new DOMRect(mv.clientX, mv.clientY, 0, 0);
         const offX = (mv.clientX - (rect.left + rect.width)) + PIN_SIZE / 2;
         const offY = (mv.clientY - rect.top) + PIN_SIZE / 2;
         (pin as HTMLElement).style.top = Math.max(MARGIN, Math.min(mv.clientY - PIN_SIZE / 2, window.innerHeight - PIN_SIZE - MARGIN)) + 'px';
@@ -172,8 +230,8 @@ export function showCommentPin(comment: CommentData, ordinal?: number) {
   pin.innerHTML = '<span style="transform:rotate(45deg);pointer-events:none;font-family:SF Mono,Monaco,monospace;">' + (label || '💬') + '</span>';
   pin.title = (label ? '#' + label + ' ' : '') + (isResolved ? '✓ ' : '') + (comment.text.slice(0, 60));
   // Position. Honours pinOffset when present; otherwise auto-positions at
-  // the top-right corner of the element.
-  const rect = el.getBoundingClientRect();
+  // the top-right corner of the anchor (element box or region rect).
+  const rect = rect0;
   let top: number, left: number;
   if (comment.pinOffset) {
     left = rect.left + rect.width - PIN_SIZE / 2 + comment.pinOffset.x;
@@ -204,6 +262,8 @@ export function hideAllPins() {
   pinsActive = false;
   pinElements.forEach(pin => pin.remove());
   pinElements.clear();
+  regionBoxes.forEach(box => box.remove());
+  regionBoxes.clear();
 }
 
 export async function getPageComments(): Promise<CommentData[]> {
@@ -248,6 +308,8 @@ export async function replacePageComments(incoming: CommentData[]): Promise<void
   await saveComments([...others, ...stamped]);
   pinElements.forEach(p => p.remove());
   pinElements.clear();
+  regionBoxes.forEach(b => b.remove());
+  regionBoxes.clear();
   if (pinsActive) await showAllPins();
 }
 

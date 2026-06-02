@@ -29,7 +29,7 @@ const baseFeatures = (competitorBlanks: Record<string, string>): ComparisonRow[]
   {
     feature: "MCP (Model Context Protocol) handoff to AI agents",
     designMode:
-      "Yes — Cloud, Local, and Self-hosted modes; seven MCP tools",
+      "Yes — Cloud, Local, and Self-hosted modes; eight MCP tools",
     competitor: competitorBlanks.mcp ?? "No",
   },
   {
@@ -105,7 +105,7 @@ export const comparisons: Comparison[] = [
     related: [
       "design-mode-vs-cursor-design-mode",
       "design-mode-vs-pls-fix",
-      "design-mode-vs-chrome-devtools",
+      "design-mode-vs-drawbridge",
     ],
   },
   {
@@ -148,9 +148,57 @@ export const comparisons: Comparison[] = [
     honesty:
       "If you only need to pin comments on a deployed page, pls-fix is purpose-built. If you also want to make the fix, ship the spec to engineering, or run a full design review, Design Mode covers more ground.",
     related: [
+      "design-mode-vs-drawbridge",
       "design-mode-vs-ui-inspector",
-      "design-mode-vs-hover-inspector",
       "design-mode-vs-stagewise",
+    ],
+  },
+  {
+    slug: "design-mode-vs-drawbridge",
+    competitor: "Drawbridge",
+    title: "Design Mode vs Drawbridge",
+    metaTitle:
+      "Design Mode vs Drawbridge — visual edits to AI agents without folder lock-in",
+    metaDescription:
+      "Comparison: Drawbridge captures annotations and writes task files into one connected project folder. Design Mode edits the live page, hands off over MCP with no folder binding, and closes the loop by letting the agent resolve your comments.",
+    keywords: [
+      "Design Mode vs Drawbridge",
+      "Drawbridge alternative",
+      "visual annotation for AI agents",
+      "drawbridge moat tasks",
+      "AI coding visual feedback",
+    ],
+    oneLiner:
+      "Drawbridge captures annotations and drops task files into your project folder; Design Mode edits the live page and hands off over MCP — no folder binding, so it works across parallel agents and worktrees.",
+    positioning:
+      "Both turn visual feedback into work for an AI coding agent. Drawbridge is annotate-and-queue: you comment or draw a box, it writes screenshots + `.moat/` task files into one connected project directory, and the agent reads them via a `/bridge` command. Design Mode is a live two-way loop: you edit the page directly (or pin element/region comments), and the agent pulls the diff over MCP and pushes changes back — then marks your comments resolved.",
+    whenToPickDesignMode: [
+      "You run multiple agents or git worktrees at once — Design Mode's MCP attaches per session with no folder binding, so nothing pins you to a single directory or risks writing tasks into the wrong tree.",
+      "You want to actually edit the design (typography, colour, layout, motion, effects), not just describe the change.",
+      "You want the loop to close: the agent applies changes to the live page and marks your comments resolved (mark_comment_resolved), instead of a one-way file drop.",
+      "You want a persistent, searchable Changes history and CSS / Tailwind / SCSS / JSX export.",
+      "You'd rather not grant a browser persistent write access to your project folder.",
+    ],
+    whenToPickCompetitor: [
+      "You never run the MCP companion and want a zero-server flow — Drawbridge writes plain files an agent reads on its own.",
+      "You want annotations checked into git as `.moat/` task files for an async, review-later workflow.",
+      "Drawbridge's `/bridge` step/batch/yolo command already fits your team's habits.",
+    ],
+    table: baseFeatures({
+      editing: "Annotate only — comment pins + freeform rectangles, no live editing",
+      mcp: "No — writes .moat/ task files via the File System Access API",
+      history: "Task files (to do / doing / done) in the connected folder",
+      os: "Check current licence",
+      price: "Check current pricing",
+      export: "Markdown + JSON task files",
+      fit: "Annotate-and-queue for AI coding agents",
+    }),
+    honesty:
+      "Drawbridge is a clean, focused tool, and its no-server file handoff is genuinely simpler if you never run a companion: annotations land as git-friendly task files an agent reads on its own. The trade-off is the folder binding — it persists one project directory handle, which gets awkward when you're juggling parallel agents or worktrees, and it captures intent rather than letting you make the change. Design Mode deliberately skipped file handoff for exactly that reason and leans on a live MCP connection instead. If you want async, checked-in task files, Drawbridge fits; if you want to edit directly and close the loop live across many sessions, Design Mode does.",
+    related: [
+      "design-mode-vs-pls-fix",
+      "design-mode-vs-stagewise",
+      "design-mode-vs-agentation",
     ],
   },
   {

@@ -10,6 +10,7 @@
 import morphdom from 'morphdom';
 import { icon, icons } from '../content/icons';
 import { escapeAttr, rgbToHex } from '../content/helpers';
+import { AGENT_COMMAND_MARKDOWN, AGENT_TOOLS } from './agent-workflow';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
   isTransparent, resolveCategory, thresholdFor,
@@ -104,6 +105,7 @@ import {
   ANIMATION_PLAY_STATE_OPTIONS,
   TIMING_FUNCTION_OPTIONS,
   TRANSITION_PROPERTY_OPTIONS,
+  DEFAULT_SHORTCUTS,
 } from '@shared/constants';
 
 /* ── Types ── */
@@ -149,7 +151,7 @@ interface DomChange {
   origin?: { parentSelector: string; index: number };
   status?: ChangeStatus;
 }
-interface CommentEntry { id: string; elementId: string; text: string; selector: string; timestamp: number; updatedAt?: number; resolved?: boolean; pinOffset?: { x: number; y: number } }
+interface CommentEntry { id: string; elementId: string; text: string; selector: string; timestamp: number; updatedAt?: number; resolved?: boolean; pinOffset?: { x: number; y: number }; region?: { x: number; y: number; w: number; h: number } }
 interface DomNode {
   id: string; tagName: string; displayName: string;
   depth: number; childCount: number; isVisible: boolean; hasText: boolean;
@@ -168,9 +170,14 @@ type ColorFormat = 'hex' | 'rgba' | 'hsl';
 let tab: Tab = 'design';
 let settingsOpen = false;
 let helpOpen = false;
+let shortcutsOpen = false;
 let contributeOpen = false;
 let enabled = false;
 let inspecting = true;
+// While a comment composer is open (add / edit / region) we suspend inspect
+// so page clicks don't hijack what the user is annotating, then restore it.
+let inspectSuspendedForComment = false;
+let inspectWasOnBeforeComment = false;
 let mcpState: McpState = 'offline';
 let pinnedDomain = '';
 let info: ElementInfo | null = null;
@@ -220,6 +227,11 @@ let captureToast: { kind: 'success' | 'error'; text: string } | null = null;
 let captureToastTimer: ReturnType<typeof setTimeout> | null = null;
 let commentMode = false;
 let commentText = '';
+// Region-comment flow: `awaitingRegionDraw` is true between clicking the
+// region button and finishing the drag on the page; `regionCommentPending`
+// is true while the composer is open for the just-drawn region.
+let awaitingRegionDraw = false;
+let regionCommentPending = false;
 let editingCommentId: string | null = null;
 let viewingCommentId: string | null = null;
 // Inline-confirm overlay for deleting a comment (mirrors Clear All).
@@ -493,15 +505,32 @@ function parseNumeric(val: string): { num: number; unit: string } | null {
   return null;
 }
 
+// The browser tab this panel controls. The native side panel learns it from
+// INIT_STATE; a popped-out window gets it up front from its `?tab=` URL param.
+// Every SP_* message is stamped with it so the background routes to the right
+// tab even when several panel surfaces (side panel + floating windows) are open.
+const popoutTabParam = (() => {
+  const t = parseInt(new URLSearchParams(location.search).get('tab') || '', 10);
+  return Number.isInteger(t) ? t : null;
+})();
+const isPopout = popoutTabParam != null;
+let myTabId: number | null = popoutTabParam;
+
 function send(msg: any): Promise<any> {
-  return new Promise((resolve) => chrome.runtime.sendMessage(msg, (r) => resolve(r || {})));
+  const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
+    ? { ...msg, targetTabId: myTabId }
+    : msg;
+  return new Promise((resolve) => chrome.runtime.sendMessage(stamped, (r) => resolve(r || {})));
 }
 
 /* ── Chrome Port ── */
-const port = chrome.runtime.connect({ name: 'sidepanel' });
+// Popped-out windows announce their bound tab in the port name so the
+// background binds correctly even before INIT_STATE.
+const port = chrome.runtime.connect({ name: isPopout ? 'sidepanel:' + popoutTabParam : 'sidepanel' });
 port.onMessage.addListener((msg) => {
   if (msg.type === 'INIT_STATE') {
     enabled = msg.enabled ?? false; inspecting = msg.inspecting ?? true;
+    if (typeof msg.tabId === 'number') myTabId = msg.tabId;
     mcpState = !msg.connected ? 'offline' : msg.agentConnected ? 'connected' : 'running';
     if (msg.pinnedUrl) { try { pinnedDomain = new URL(msg.pinnedUrl).hostname; } catch { pinnedDomain = msg.pinnedUrl; } }
     render(); refreshMcpStatus(); refreshDomTree(); refreshChanges(); refreshDesignTokens(); refreshPageFonts();
@@ -1359,10 +1388,25 @@ async function takeScreenshot() {
 async function submitComment() {
   const text = commentText.trim(); if (!text) return;
   if (editingCommentId) { await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + editingCommentId }); editingCommentId = null; }
-  await send({ type: 'SP_ADD_COMMENT', text }); commentMode = false; commentText = ''; await refreshChanges();
+  if (regionCommentPending) { await send({ type: 'SP_ADD_REGION_COMMENT', text }); regionCommentPending = false; }
+  else await send({ type: 'SP_ADD_COMMENT', text });
+  commentMode = false; commentText = ''; await refreshChanges();
 }
-function cancelComment() { commentMode = false; commentText = ''; editingCommentId = null; viewingCommentId = null; commentDirty = false; render(); }
+function cancelComment() {
+  // If we're composing for a freshly-drawn region, drop it on the content side.
+  if (regionCommentPending) { void send({ type: 'SP_CANCEL_REGION_COMMENT' }); }
+  commentMode = false; commentText = ''; editingCommentId = null; viewingCommentId = null;
+  commentDirty = false; regionCommentPending = false; awaitingRegionDraw = false; render();
+}
 function startComment() { if (!info) return; commentMode = true; commentText = ''; editingCommentId = null; viewingCommentId = null; commentDirty = false; render(); }
+// Region comment: ask the content script to enter draw mode. The composer
+// opens later, when the REGION_DRAWN message arrives.
+function startRegionComment() {
+  if (awaitingRegionDraw) { awaitingRegionDraw = false; void send({ type: 'SP_CANCEL_REGION_COMMENT' }); render(); return; }
+  commentMode = false; regionCommentPending = false; awaitingRegionDraw = true;
+  void send({ type: 'SP_START_REGION_COMMENT' });
+  render();
+}
 function editComment(comment: CommentEntry) { commentMode = true; commentText = comment.text; editingCommentId = comment.id; viewingCommentId = null; commentDirty = false; render(); }
 async function deleteCommentEntry(commentId: string) { await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + commentId }); comments = comments.filter(c => c.id !== commentId); render(); }
 async function removeChange(changeId: string) { styleChanges = styleChanges.filter(c => (c.id || 'style-' + styleChanges.indexOf(c)) !== changeId); textChanges = textChanges.filter(c => c.id !== changeId); domChanges = domChanges.filter(c => (c.id || 'dom-' + c.action) !== changeId); batchAppliedChanges.delete(changeId); render(); await send({ type: 'SP_REMOVE_CHANGE', changeId }); await refreshChanges(); await refreshDomTree(); await refreshState(); }
@@ -1485,6 +1529,25 @@ function dropZoneAt(target: HTMLElement, clientY: number): 'before' | 'inside' |
 
 /* ── Message handling ── */
 chrome.runtime.onMessage.addListener((msg) => {
+  // Content scripts broadcast to every panel context. Ignore broadcasts from
+  // a tab this surface isn't bound to (multiple side panels / floating windows
+  // can be open at once). Messages without `_dmTab` (or before we know our
+  // tab) pass through.
+  if (msg && msg._dmTab != null && myTabId != null && msg._dmTab !== myTabId) return;
+
+  // Region draw finished on the page — open the comment composer for it.
+  if (msg.type === 'REGION_DRAWN') {
+    awaitingRegionDraw = false; regionCommentPending = true;
+    commentMode = true; commentText = ''; editingCommentId = null;
+    viewingCommentId = null; commentDirty = false; render();
+    return;
+  }
+  if (msg.type === 'REGION_CANCELLED') {
+    awaitingRegionDraw = false; regionCommentPending = false;
+    if (commentMode) { commentMode = false; commentText = ''; }
+    render();
+    return;
+  }
   if (msg.type === 'ELEMENT_SELECTED') {
     info = msg.payload; hoverInfo = null; commentMode = false;
     hydrateLayoutGuidesFromPayload(info);
@@ -5357,6 +5420,9 @@ function renderHeader(): string {
     '<button data-dm-action="toggle-theme" title="Toggle theme" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon(themeIcon as keyof typeof icons, 15) + '</button>' +
     '<button data-dm-action="contribute" title="Contribute" aria-label="Open contribute panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('heartHandshake', 15) + '</button>' +
     '<button data-dm-action="help" title="Help" aria-label="Open help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('helpCircle', 15) + '</button>' +
+    (isPopout
+      ? '<button data-dm-action="dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
+      : '<button data-dm-action="pop-out" title="Pop out into a floating window" aria-label="Pop out into a floating window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('externalLink', 15) + '</button>') +
     '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button></div>';
 }
 
@@ -5374,7 +5440,7 @@ function renderActionRow(): string {
     '<button data-dm-action="duplicate" title="Duplicate" style="' + bs() + '">' + icon('copy', 14) + '</button>' +
     '<button data-dm-action="delete" title="Remove" style="' + bs('var(--dm-danger)') + '">' + icon('trash', 14) + '</button>' +
     '<button data-dm-action="comment" title="Comment" style="' + bs() + '">' + icon('messageSquare', 14) + '</button>' +
-    '<button data-dm-action="toggle-freeze" title="' + (animationsFrozen ? 'Resume animations' : 'Pause every animation, transition and video on the page') + '" style="' + bs(undefined, true) + ';' + (animationsFrozen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon(animationsFrozen ? 'circlePlay' : 'circlePause', 14) + '</button>' +
+    '<button data-dm-action="region-comment" title="Comment on a region — drag a box anywhere on the page" style="' + bs(undefined, true) + ';' + (awaitingRegionDraw ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('squareDashed', 14) + '</button>' +
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
     '<button data-dm-action="open-tokens" title="Design system" style="' + bs(undefined, true) + ';' + (tokensOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('swatchBook', 14) + '</button>' +
@@ -5386,7 +5452,9 @@ function renderActionRow(): string {
 function renderCommentCard(): string {
   if (!commentMode) return '';
   const isEditing = !!editingCommentId;
-  const tagLabel = info ? '&lt;' + escapeAttr(info.tagName?.toLowerCase() || 'div') + '&gt;' : '';
+  const tagLabel = regionCommentPending
+    ? '<span style="display:inline-flex;align-items:center;gap:3px;">' + icon('squareDashed', 9) + 'region</span>'
+    : (info ? '&lt;' + escapeAttr(info.tagName?.toLowerCase() || 'div') + '&gt;' : '');
   return '<div style="padding:10px 12px;border-bottom:1px solid var(--dm-separator-strong);background:var(--dm-purple-bg);">' +
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
     '<span style="color:var(--dm-purple);display:flex;">' + icon('messageSquare', 14) + '</span>' +
@@ -5663,7 +5731,9 @@ function visibleSections(kind: LayerKind): SectionVisibility {
     return { position: true, layout: false, appearance: true, typography: true, fill: true, stroke: true, effects: true, motion: true, layoutGuide: false };
   }
   if (kind === 'page') {
-    return { position: false, layout: true, appearance: true, typography: false, fill: true, stroke: false, effects: false, motion: false, layoutGuide: true };
+    // Motion is on for the page context so the page-wide freeze toggle (in the
+    // Motion section header) is reachable even when nothing is selected.
+    return { position: false, layout: true, appearance: true, typography: false, fill: true, stroke: false, effects: false, motion: true, layoutGuide: true };
   }
   if (kind === 'container') {
     return { position: true, layout: true, appearance: true, typography: false, fill: true, stroke: true, effects: true, motion: true, layoutGuide: true };
@@ -6018,7 +6088,10 @@ function renderDesignTab(): string {
     icon(visibilityOff ? 'eyeOff' : 'eye', 12) + '</button>';
   const appearanceActionsHtml = visEyeBtn + advancedToggleBtn('appearance', appearanceAdvOpen);
   const effectsActionsHtml = effectsAddMenuTrigger(effectsMenuOpen);
-  const motionActionsHtml = motionAddMenuTrigger(motionMenuOpen);
+  // Freeze toggle lives in the Motion section header (moved out of the action
+  // row). Page-wide: pauses every animation / transition / video on the page.
+  const freezeBtn = '<button class="dm-section-action" data-dm-action="toggle-freeze" data-active="' + (animationsFrozen ? 'true' : 'false') + '" title="' + (animationsFrozen ? 'Resume all motion on the page' : 'Pause every animation, transition and video on the page') + '">' + icon(animationsFrozen ? 'circlePlay' : 'circlePause', 12) + '</button>';
+  const motionActionsHtml = freezeBtn + motionAddMenuTrigger(motionMenuOpen);
 
   // Position content \u2014 laid out on a 12-col grid:
   //   \u2022 alignment row: 6 buttons \u00d7 2 cols
@@ -7607,6 +7680,8 @@ function renderChangesTab(): string {
         const c = item.data;
         const isViewing = c.id === viewingCommentId;
         const isResolved = !!c.resolved;
+        const isRegion = !!c.region;
+        const kindIcon = isRegion ? 'squareDashed' : 'messageSquare';
         // Pin ordinal — same algorithm the content script uses (creation
         // order). The displayed `#N` matches the number painted on the
         // pin, so users can reference the same comment in panel + page.
@@ -7630,8 +7705,8 @@ function renderChangesTab(): string {
           return '<div class="dm-change-item" style="border-bottom:1px solid var(--dm-separator);background:' + (isResolved ? 'var(--dm-bg-secondary)' : 'var(--dm-purple-bg)') + ';opacity:' + (isResolved ? '0.85' : '1') + ';">' +
             '<div style="display:flex;align-items:center;gap:6px;padding:8px 12px 6px 28px;">' +
             pinBadge +
-            '<span style="color:var(--dm-yellow);display:flex;flex-shrink:0;">' + icon('messageSquare', 10) + '</span>' +
-            '<span style="font-size:10px;font-weight:600;color:var(--dm-text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(c.selector || '') + '</span>' +
+            '<span style="color:var(--dm-yellow);display:flex;flex-shrink:0;">' + icon(kindIcon, 10) + '</span>' +
+            '<span style="font-size:10px;font-weight:600;color:var(--dm-text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (isRegion ? 'region' : escapeAttr(c.selector || '')) + '</span>' +
             tsInfo +
             '<button data-dm-action="close-viewing-comment" aria-label="Close" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('x', 10) + '</button>' +
             '</div>' +
@@ -7645,7 +7720,7 @@ function renderChangesTab(): string {
         return '<div class="dm-change-item" data-dm-comment-item="' + c.id + '" style="display:flex;align-items:start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);background:' + (isResolved ? 'var(--dm-bg-secondary)' : 'var(--dm-purple-bg)') + ';cursor:pointer;opacity:' + (isResolved ? '0.85' : '1') + ';">' +
           checkbox('comment-' + c.id) +
           pinBadge +
-          '<span style="color:var(--dm-yellow);display:flex;flex-shrink:0;margin-top:2px;">' + icon('messageSquare', 10) + '</span>' +
+          '<span style="color:var(--dm-yellow);display:flex;flex-shrink:0;margin-top:2px;" title="' + (isRegion ? 'Region comment' : 'Element comment') + '">' + icon(kindIcon, 10) + '</span>' +
           '<div style="flex:1;min-width:0;">' +
           '<div style="' + bodyStyleCompact + '">' + renderCommentMarkdown(c.text) + '</div>' +
           '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">' +
@@ -7802,6 +7877,23 @@ function changeStatusBadge(s?: ChangeStatus): string {
   return '';
 }
 
+// "Set up your agent" — copies the /design-mode workflow command into your
+// coding tool. The command body is identical across tools (it drives the
+// live MCP tools); only the save path differs, so each row copies the same
+// text and names where to drop it.
+function renderAgentCommandCard(sS: string, sT: string, lS: string): string {
+  const rows = AGENT_TOOLS.map(t =>
+    '<div style="display:flex;align-items:center;gap:8px;justify-content:space-between;">' +
+    '<div style="min-width:0;"><div style="font-size:11px;color:var(--dm-text-secondary);">' + escapeAttr(t.label) + '</div>' +
+    '<code style="font-size:9px;color:var(--dm-text-dimmer);font-family:SF Mono,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + escapeAttr(t.path) + '</code></div>' +
+    '<button data-dm-action="copy-agent-command" data-dm-tool="' + t.key + '" style="flex-shrink:0;padding:5px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:4px;">' + icon('copy', 10) + ' Copy</button>' +
+    '</div>'
+  ).join('');
+  return '<div style="' + sS + '"><div style="' + sT + '">Set up your agent</div>' +
+    '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-bottom:8px;line-height:1.4;">Copy the <code style="font-family:SF Mono,monospace;">/design-mode</code> command into your coding tool, then run it after editing. It reads your changes and comments over MCP and resolves them as it works.</div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px;">' + rows + '</div></div>';
+}
+
 function renderSettingsView(): string {
   const cfHex = colorFormat === 'hex';
   const cfRgba = colorFormat === 'rgba';
@@ -7819,6 +7911,7 @@ function renderSettingsView(): string {
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Settings</span></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px;">' +
     renderMcpServerCard(sS, sT, lS, activeBtn, inactiveBtn) +
+    renderAgentCommandCard(sS, sT, lS) +
     (() => {
       const swatch = (key: string, val: string) =>
         '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -7921,6 +8014,74 @@ function buildDiagnostics(): string {
     pad('Theme') + resolvedTheme,
   ];
   return lines.join('\n');
+}
+
+// Mac shows modifier glyphs (⌘ ⌥ ⇧); other platforms show text chips.
+// `ctrl` maps to ⌘ on mac because matchShortcut treats ctrl as ctrlKey||metaKey
+// (keyboard-shortcuts.ts), so mac users press Cmd for these.
+const IS_MAC = /mac/i.test(
+  (navigator as any).userAgentData?.platform || navigator.platform || navigator.userAgent || ''
+);
+
+// Format one shortcut's modifiers + key as a row of <kbd> chips.
+function shortcutChips(sc: { key: string; modifiers: readonly string[] }): string {
+  const modLabel: Record<string, string> = IS_MAC
+    ? { alt: '⌥', ctrl: '⌘', meta: '⌘', shift: '⇧' }
+    : { alt: 'Alt', ctrl: 'Ctrl', meta: '⌘', shift: 'Shift' };
+  const keyLabel: Record<string, string> = { Escape: 'Esc', Delete: 'Del', ArrowUp: '↑', ArrowDown: '↓', Enter: 'Enter' };
+  const parts = [...(sc.modifiers || []).map(m => modLabel[m] || m), keyLabel[sc.key] || sc.key.toUpperCase()];
+  const kbd = 'display:inline-flex;align-items:center;min-width:18px;height:20px;padding:0 6px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-bottom-width:2px;border-radius:4px;font-size:10px;font-weight:600;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);justify-content:center;';
+  // Mac uses glyphs with no separator (⌘⇧Z); other platforms join with "+".
+  const sep = IS_MAC ? '<span style="display:inline-block;width:2px;"></span>' : '<span style="color:var(--dm-text-dim);font-size:9px;margin:0 1px;">+</span>';
+  return parts.map(p => '<kbd style="' + kbd + '">' + escapeAttr(p) + '</kbd>').join(sep);
+}
+
+// Popover card listing every keyboard shortcut, grouped by category — driven
+// by DEFAULT_SHORTCUTS so new shortcuts show up automatically. Renders empty
+// unless `shortcutsOpen`; the backdrop and ✕ both close it.
+// Keys that can't become Chrome-configurable commands: bare keys (Esc/Delete)
+// and the page-native undo/redo combos. They render in a separate, clearly
+// non-remappable "Fixed" group.
+const FIXED_SHORTCUT_ACTIONS = new Set(['deselect', 'delete-element', 'undo', 'redo']);
+
+function renderShortcutsPopover(): string {
+  if (!shortcutsOpen) return '';
+  const row = (sc: typeof DEFAULT_SHORTCUTS[number]) =>
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:5px 0;">' +
+    '<span style="font-size:11px;color:var(--dm-text);">' + escapeAttr(sc.label) + '</span>' +
+    '<span style="display:inline-flex;align-items:center;flex-shrink:0;">' + shortcutChips(sc) + '</span>' +
+    '</div>';
+  // Remappable shortcuts, grouped by category.
+  const cats: string[] = [];
+  const byCat = new Map<string, typeof DEFAULT_SHORTCUTS[number][]>();
+  for (const sc of DEFAULT_SHORTCUTS) {
+    if (FIXED_SHORTCUT_ACTIONS.has(sc.action)) continue;
+    if (!byCat.has(sc.category)) { byCat.set(sc.category, []); cats.push(sc.category); }
+    byCat.get(sc.category)!.push(sc);
+  }
+  const groups = cats.map(cat =>
+    '<div style="margin-bottom:12px;">' +
+    '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--dm-text-dim);margin-bottom:6px;">' + escapeAttr(cat) + '</div>' +
+    byCat.get(cat)!.map(row).join('') +
+    '</div>'
+  ).join('');
+  // Fixed group — built-in keys that aren't remappable.
+  const fixed = DEFAULT_SHORTCUTS.filter(sc => FIXED_SHORTCUT_ACTIONS.has(sc.action));
+  const fixedGroup = fixed.length
+    ? '<div style="border-top:1px solid var(--dm-separator);padding-top:10px;">' +
+      '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--dm-text-dim);margin-bottom:2px;">Fixed</div>' +
+      '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-bottom:6px;line-height:1.4;">Built-in keys — not remappable.</div>' +
+      fixed.map(row).join('') +
+      '</div>'
+    : '';
+  return '<div data-dm-action="close-shortcuts" style="position:fixed;inset:0;z-index:50;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;padding:16px;">' +
+    '<div data-dm-action="noop" data-dm-shortcuts-card style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);width:100%;max-width:340px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--dm-separator);flex-shrink:0;">' +
+    '<span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--dm-text);">' + icon('keyboard', 13) + ' Keyboard shortcuts</span>' +
+    '<button data-dm-action="close-shortcuts" aria-label="Close" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;">' + icon('x', 14) + '</button>' +
+    '</div>' +
+    '<div style="padding:12px 14px;overflow-y:auto;">' + groups + fixedGroup + '</div>' +
+    '</div></div>';
 }
 
 function renderHelpView(): string {
@@ -8045,7 +8206,25 @@ function captureTabScroll(): void {
   if (el) tabScrollPositions[tab] = el.scrollTop;
 }
 
+// Keep inspect suspended while a comment composer is open (add / edit /
+// region — all gated by `commentMode`), and restore the prior state when it
+// closes. Idempotent and driven from render(), so it catches every transition
+// without each composer-open/close site having to call it. Only emits a
+// message when actually crossing the boundary.
+function reconcileInspectWithComment() {
+  const composerOpen = commentMode;
+  if (composerOpen && !inspectSuspendedForComment) {
+    inspectSuspendedForComment = true;
+    inspectWasOnBeforeComment = inspecting;
+    if (inspecting) { inspecting = false; void send({ type: 'SP_SET_INSPECT', on: false }); }
+  } else if (!composerOpen && inspectSuspendedForComment) {
+    inspectSuspendedForComment = false;
+    if (inspectWasOnBeforeComment) { inspecting = true; void send({ type: 'SP_SET_INSPECT', on: true }); }
+  }
+}
+
 function render() {
+  reconcileInspectWithComment();
   // Capture scroll for the current tab before morphdom runs. morphdom's
   // diff temporarily drops scrollHeight while adding/removing children,
   // which makes the browser clamp scrollTop downward — usually to 0 if a
@@ -8077,6 +8256,9 @@ function render() {
       '<div id="dm-tab-body" style="flex:1;overflow-y:auto;overflow-x:hidden;">' + tabContent + '</div>' +
       renderStickyBottom() + renderComputedCssOverlay() + renderCaptureToast() + '</div>';
   }
+
+  // Shortcuts popover floats above whichever view is active.
+  html += renderShortcutsPopover();
 
   // Use morphdom for efficient DOM diffing
   const newRoot = document.createElement('div');
@@ -8195,6 +8377,7 @@ function setupDelegation() {
         case 'duplicate': domAction('duplicate'); break;
         case 'delete': domAction('delete'); break;
         case 'comment': startComment(); break;
+        case 'region-comment': startRegionComment(); break;
         case 'screenshot': takeScreenshot(); break;
         case 'download-media': downloadMedia(); break;
         case 'copy-svg-markup': copySvgMarkup(); break;
@@ -8358,7 +8541,33 @@ function setupDelegation() {
           );
           break;
         }
-        case 'show-shortcuts': showCaptureToast('success', 'Alt+D toggle · Ctrl/⌘+Z undo · Ctrl/⌘+⇧Z redo · Esc deselect / cancel'); break;
+        case 'copy-agent-command': {
+          const toolKey = actionBtn.dataset.dmTool;
+          const tool = AGENT_TOOLS.find(t => t.key === toolKey);
+          navigator.clipboard.writeText(AGENT_COMMAND_MARKDOWN).then(
+            () => showCaptureToast('success', tool ? 'Copied — save as ' + tool.path : 'Command copied'),
+            () => showCaptureToast('error', 'Copy failed'),
+          );
+          break;
+        }
+        case 'pop-out': {
+          // Open the floating window (background does windows.create), then
+          // close this side panel. The tab keeps design mode — background
+          // guards the swap so the close doesn't deactivate it.
+          send({ type: 'SP_POP_OUT' }).then((r) => { if (r && r.ok) { try { window.close(); } catch {} } });
+          break;
+        }
+        case 'dock-back': {
+          // chrome.sidePanel.open needs the click's user gesture, so call it
+          // FIRST (synchronously, before any await). Then guard the swap and
+          // close this popup window.
+          if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
+          send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { window.close(); } catch {} });
+          break;
+        }
+        case 'show-shortcuts': shortcutsOpen = true; render(); break;
+        case 'close-shortcuts': shortcutsOpen = false; render(); break;
+        case 'noop': break;
         // Cloud-mode auth flow. Register mints a fresh device token via
         // the cloud server's /auth/register endpoint and stores it locally.
         case 'mcp-cloud-register': {
@@ -11226,6 +11435,14 @@ function setupDelegation() {
   // Keydown handler
   root.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
+
+    // Escape closes the keyboard-shortcuts popover first.
+    if (shortcutsOpen && e.key === 'Escape') {
+      e.preventDefault();
+      shortcutsOpen = false;
+      render();
+      return;
+    }
 
     // Escape dismisses confirmation overlays (Clear All / Delete comment).
     if ((clearAllConfirming || deletingCommentId) && e.key === 'Escape') {
