@@ -626,6 +626,7 @@ bridge on `ws://localhost:9960` and exposes 6 MCP tools over stdio.
 |---|---|---|
 | **`get_changes`** | none | All style / text / DOM changes + pinned comments + a ready-to-paste CSS block. Each style change carries the unique `selector` for the element. |
 | **`apply_changes`** | `changes: Array<{ elementId, styles }>` | Pushes CSS back to the browser for live preview. Single-edit calls use a one-element array. The browser routes these through the same managed-stylesheet path as user edits, so they show up in the Changes tab and survive reload. |
+| **`set_change_status`** | `status: 'todo' \| 'in_progress' \| 'resolved'`, `ids?: string[]` | Marks tracked changes (and comments) as the agent works through them. Omit `ids` to apply to all. Surfaces as a per-row WIP/DONE badge + a Status sub-filter in the Changes tab; resolved comments flip their resolved flag. |
 | **`clear_changes`** | none | Reset the session. Drops every tracked change. |
 | **`get_session_summary`** | none | Connection status, active sessions, counts. Use this as a health check before `apply_changes`. |
 | **`export_changes`** | `format: 'css' | 'tailwind' | 'scss' | 'jsx'` | Emits the change set in the requested format. Spring / cubic-bezier values pass through inside the underlying CSS strings — no separate animation tool. |

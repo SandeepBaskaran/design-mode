@@ -10,7 +10,7 @@ import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLay
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, downloadDataUrl } from './screenshots';
 import {
@@ -399,6 +399,29 @@ function onElementSelected(info: ElementInfo) {
 // here in the content script because cloud has no server-side state — we
 // answer queries straight from the live page.
 function dispatchCloudMessage(msg: any) {
+  // Status round-trip. Arrives with a requestId from the cloud relay
+  // (CLOUD_SET_CHANGE_STATUS) or fire-and-forget from the local server
+  // (SET_CHANGE_STATUS) — handle both before the requestId guard.
+  if (msg?.type === 'SET_CHANGE_STATUS' || msg?.type === 'CLOUD_SET_CHANGE_STATUS') {
+    (async () => {
+      const status = msg.payload?.status;
+      if (status !== 'todo' && status !== 'in_progress' && status !== 'resolved') {
+        if (msg.requestId) sendRelayResponse(msg.requestId, { error: 'invalid status' });
+        return;
+      }
+      const ids: string[] | undefined = Array.isArray(msg.payload?.ids) ? msg.payload.ids : undefined;
+      let count = setChangesStatus(status, ids);
+      try {
+        const pageComments = await getPageComments();
+        for (const c of pageComments) {
+          if (!ids || ids.includes(c.id)) { await setCommentResolved(c.id, status === 'resolved'); count++; }
+        }
+      } catch { /* comment store unavailable — changes still updated */ }
+      try { notifyPanel('CHANGES_UPDATE', await getChangesPayload()); } catch { /* panel closed */ }
+      if (msg.requestId) sendRelayResponse(msg.requestId, { ok: true, count });
+    })();
+    return;
+  }
   if (!msg?.requestId) return;
   switch (msg.type) {
     case 'CLOUD_GET_CHANGES':
@@ -407,7 +430,7 @@ function dispatchCloudMessage(msg: any) {
         try {
           const pageComments = await getPageComments();
           report.comments = pageComments.map(c => ({
-            selector: c.selector, text: c.text,
+            id: c.id, selector: c.selector, text: c.text,
             timestamp: new Date(c.timestamp).toISOString(),
             pageUrl: (c as any).pageUrl, resolved: !!(c as any).resolved,
           }));

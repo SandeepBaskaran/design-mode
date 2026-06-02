@@ -353,19 +353,21 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 ## Phase 11 — MCP server (local + cloud)
 
 The local server lives in `packages/mcp-local`; the cloud relay in `packages/mcp-cloud` (deployed
-at `https://mcp.designmode.app`). Both expose the **same six MCP tools**.
+at `https://mcp.designmode.app`). Both expose the **same seven MCP tools**.
 
 ### 11.A — Local mode (`npm start` in `packages/mcp-local`)
 
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
-| 11.1  | Server starts | `cd packages/mcp-local && npm start` | ASCII banner; six tools listed: `get_changes`, `apply_changes`, `clear_changes`, `get_session_summary`, `export_changes`, `get_screenshot`; WebSocket bridge on `ws://localhost:9960` (or the configured port) |
+| 11.1  | Server starts | `cd packages/mcp-local && npm start` | ASCII banner; seven tools listed: `get_changes`, `apply_changes`, `set_change_status`, `clear_changes`, `get_session_summary`, `export_changes`, `get_screenshot`; WebSocket bridge on `ws://localhost:9960` (or the configured port) |
 | 11.2  | Port conflict | Another process on 9960 | Clean error suggesting a different port or to kill the conflict |
 | 11.3  | Extension connects | Side panel open + auto-connect on (default) | Green dot in MCP indicator |
 | 11.4  | `get_changes` | Invoke from agent | Returns `{ pageUrl, pageTitle, styleChanges[], textChanges[], domChanges[], cssBlock, comments[] }` |
 | 11.5  | `apply_changes` | Push styles from agent: `{ changes: [{ elementId, styles: { color: 'red' } }] }` | Styles apply live on the page; row appears in Changes tab |
+| 11.5a | `get_changes` exposes ids | After an edit, invoke `get_changes` | `items[]` lists each change with a stable `id` + `status: "todo"` |
+| 11.5b | `set_change_status` | `{ status: 'in_progress' }` then `{ status: 'resolved', ids: ['<id>'] }` | Changes tab shows a WIP/DONE badge per row; resolved rows dim; Status sub-filter (To-do / In progress / Resolved) narrows the list; resolving a comment id flips it to resolved |
 | 11.6  | `clear_changes` | Invoke | All changes cleared; Changes tab empties |
-| 11.7  | `get_session_summary` | Invoke | Returns `{ extensionConnected, activeSessions, sessions[], totalStyleChanges, totalTextChanges, totalComments }` |
+| 11.7  | `get_session_summary` | Invoke (side panel open on a page) | Returns `{ extensionConnected, activeSessions ≥ 1, sessions[] (non-empty), totalStyleChanges, totalTextChanges, totalComments }` |
 | 11.8  | `export_changes` — formats | Invoke each: `format: 'css'` / `'tailwind'` / `'scss'` / `'jsx'` | Each returns the equivalent format of the current changes |
 | 11.9  | `export_changes` — empty | Invoke with no changes | `"No changes to export."` |
 | 11.10 | `get_screenshot` — viewport | Invoke without selector/elementId | Returns base64 PNG of the visible viewport |

@@ -58,7 +58,14 @@ When the Changes toggle is in **previewing-original** state:
 
 When the active filter / search produces zero matches, the list is replaced with a small "No changes match this filter / search" notice and a *Clear filter* link that resets both the chip and the search box.
 
-> **Below the sticky band**: the comments sub-filter (open / resolved), the bulk-revert toolbar (when 2+ rows are checked), and the "previewing original" banner all sit *below* the pinned rows — they're contextual, not navigation, and including them in the pinned region would push the actual list too far down on a narrow panel.
+> **Below the sticky band**: the comments sub-filter (open / resolved), the status sub-filter (see below), the bulk-revert toolbar (when 2+ rows are checked), and the "previewing original" banner all sit *below* the pinned rows — they're contextual, not navigation, and including them in the pinned region would push the actual list too far down on a narrow panel.
+
+### Status sub-filter + badges (agent-driven)
+
+A connected coding agent can mark changes as it implements them, via the `set_change_status` MCP tool: **to-do** (default) → **in-progress** → **resolved**. Two things surface this in the Changes tab:
+
+- **Row badge** — a small `WIP` (amber) or `DONE` (green) pill on each style / text / DOM row once the agent moves it off the default *to-do*. Resolved rows also dim. To-do rows show no badge, so solo editing (no agent) looks exactly as before.
+- **Status sub-filter** — a **To-do / In progress / Resolved / All** chip row that appears once any change is in-progress or resolved, narrowing the list by status. Comments keep their own open/resolved filter; the agent can resolve a comment through the same tool.
 
 ### Clear All — confirmation dialog
 

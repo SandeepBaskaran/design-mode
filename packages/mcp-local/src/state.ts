@@ -3,15 +3,21 @@
 // Stores style/text/DOM changes, comments, and active sessions.
 // ============================================================
 
+// Lifecycle a coding agent drives over MCP. Mirrors @design-mode/shared
+// ChangeStatus. Absent ⇒ 'todo'.
+export type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
+
 export interface StyleChange {
   id: string; elementId: string; selector: string;
   property: string; oldValue: string; newValue: string;
   timestamp: number;
+  status?: ChangeStatus;
 }
 
 export interface TextChange {
   id: string; elementId: string; selector: string;
   oldText: string; newText: string; timestamp: number;
+  status?: ChangeStatus;
 }
 
 export interface Comment {
@@ -69,6 +75,17 @@ class DesignModeState {
   }
 
   deleteComment(id: string) { this.comments = this.comments.filter(c => c.id !== id); }
+
+  // Flip status on style/text changes (and resolved on comments) by id.
+  // Omit `ids` to apply to everything. Returns how many items matched.
+  setChangeStatus(status: ChangeStatus, ids?: string[]): number {
+    const match = (id: string) => !ids || ids.includes(id);
+    let count = 0;
+    for (const c of this.styleChanges) if (match(c.id)) { c.status = status; count++; }
+    for (const c of this.textChanges) if (match(c.id)) { c.status = status; count++; }
+    for (const c of this.comments) if (match(c.id)) { c.resolved = status === 'resolved'; count++; }
+    return count;
+  }
 
   // Session management
   getOrCreateSession(pageUrl: string, pageTitle: string): MCPSession {

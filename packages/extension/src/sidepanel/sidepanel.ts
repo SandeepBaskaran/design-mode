@@ -128,6 +128,7 @@ interface ElementInfo {
   parentAlignItems?: string;
   parentGap?: string;
 }
+type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
 interface StyleChange {
   id?: string; elementId: string; selector: string;
   property: string; oldValue: string; newValue: string; timestamp?: number;
@@ -138,13 +139,15 @@ interface StyleChange {
   groupId?: string;
   groupKind?: 'preset' | 'multi-select' | 'visibility';
   groupLabel?: string;
+  status?: ChangeStatus;
 }
-interface TextChange { id: string; elementId: string; selector: string; oldText: string; newText: string; timestamp?: number; }
+interface TextChange { id: string; elementId: string; selector: string; oldText: string; newText: string; timestamp?: number; status?: ChangeStatus; }
 interface DomChange {
   id?: string; action: string; tagName: string; selector: string;
   elementId?: string; timestamp?: number;
   destination?: { parentSelector: string; index: number };
   origin?: { parentSelector: string; index: number };
+  status?: ChangeStatus;
 }
 interface CommentEntry { id: string; elementId: string; text: string; selector: string; timestamp: number; updatedAt?: number; resolved?: boolean; pinOffset?: { x: number; y: number } }
 interface DomNode {
@@ -254,6 +257,11 @@ const changesSelected = new Set<string>();
 // items; other change kinds always pass.
 type CommentsResolvedFilter = 'all' | 'open' | 'resolved';
 let commentsResolvedFilter: CommentsResolvedFilter = 'all';
+// Sub-filter for the agent-driven status on style/text/DOM changes
+// (to-do / in-progress / resolved). Comments use their own resolved
+// filter above; this narrows the non-comment kinds.
+type ChangesStatusFilter = 'all' | 'todo' | 'in_progress' | 'resolved';
+let changesStatusFilter: ChangesStatusFilter = 'all';
 // Inline confirmation overlay state for the destructive Clear All button.
 let clearAllConfirming = false;
 // Anchored popover for the sort icon. Three options live inside it; clicking
@@ -7195,6 +7203,11 @@ function renderChangesTab(): string {
       if (commentsResolvedFilter === 'open' && r) return false;
       if (commentsResolvedFilter === 'resolved' && !r) return false;
     }
+    // Status sub-filter — narrows style/text/DOM items by the agent-driven
+    // status. Comments (filtered above) and tokens always pass.
+    if (changesStatusFilter !== 'all' && (item.type === 'style' || item.type === 'text' || item.type === 'dom')) {
+      if (((item.data as any).status || 'todo') !== changesStatusFilter) return false;
+    }
     if (!q) return true;
     const sel = (item.data as any).selector || '';
     if (sel.toLowerCase().includes(q)) return true;
@@ -7337,6 +7350,35 @@ function renderChangesTab(): string {
       '</div>'
     : '';
 
+  // Status sub-filter — the agent-driven lifecycle on style/text/DOM
+  // changes. Stays hidden until an agent actually moves something off the
+  // default 'todo', so it doesn't clutter the solo-editing flow.
+  const statusOf = (i: ChangeItem) => (i.data as any).status || 'todo';
+  const hasStatus = (i: ChangeItem) => i.type === 'style' || i.type === 'text' || i.type === 'dom';
+  const sCounts = {
+    all: allItems.filter(hasStatus).length,
+    todo: allItems.filter(i => hasStatus(i) && statusOf(i) === 'todo').length,
+    in_progress: allItems.filter(i => hasStatus(i) && statusOf(i) === 'in_progress').length,
+    resolved: allItems.filter(i => hasStatus(i) && statusOf(i) === 'resolved').length,
+  };
+  const showStatusSub = (sCounts.in_progress + sCounts.resolved) > 0 && changesFilter !== 'comment' && changesFilter !== 'token';
+  const sLabel: Record<ChangesStatusFilter, string> = { all: 'All', todo: 'To-do', in_progress: 'In progress', resolved: 'Resolved' };
+  const schip = (f: ChangesStatusFilter) => {
+    const active = changesStatusFilter === f;
+    const n = sCounts[f];
+    return '<button data-dm-changes-status="' + f + '" style="padding:3px 9px;background:' + (active ? 'var(--dm-accent-bg)' : 'transparent') +
+      ';border:1px solid ' + (active ? 'var(--dm-accent-border)' : 'var(--dm-separator)') +
+      ';border-radius:9999px;color:' + (active ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') +
+      ';cursor:pointer;font-size:9px;font-family:inherit;font-weight:' + (active ? '600' : '400') + ';">' +
+      sLabel[f] + ' <span style="opacity:0.6;">' + n + '</span></button>';
+  };
+  const statusSubRow = showStatusSub
+    ? '<div style="display:flex;gap:4px;align-items:center;padding:4px 10px;border-bottom:1px solid var(--dm-separator);flex-wrap:wrap;background:var(--dm-bg);">' +
+        '<span style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-right:4px;">Status:</span>' +
+        schip('all') + schip('todo') + schip('in_progress') + schip('resolved') +
+      '</div>'
+    : '';
+
   // Inline confirmation overlay for Clear All. Mirrors the per-comment
   // delete pattern so the destructive action is one extra click, not
   // a system dialog.
@@ -7386,7 +7428,7 @@ function renderChangesTab(): string {
   // contextual, not navigation, and including them in the pinned region
   // would push the actual list rows too far down on small panels.
   const stickyHeader = '<div style="position:sticky;top:0;z-index:5;background:var(--dm-bg);">' + topRow + searchRow + filterChipsRow + '</div>';
-  const headerHtml = stickyHeader + commentsSubRow + bulkBar + previewBanner;
+  const headerHtml = stickyHeader + commentsSubRow + statusSubRow + bulkBar + previewBanner;
 
   // Char-level diff for text changes — Myers-style longest common
   // subsequence, then collapse identical runs into <span>'s. Cheap enough
@@ -7506,10 +7548,11 @@ function renderChangesTab(): string {
         const rowIcon = isVisToggle
           ? '<span style="color:' + (c.newValue === 'none' ? 'var(--dm-danger)' : 'var(--dm-success)') + ';display:flex;flex-shrink:0;">' + icon(c.newValue === 'none' ? 'eyeClosed' : 'eye', 10) + '</span>'
           : '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;">' + icon('sliders', 10) + '</span>';
-        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '" data-dm-change-prop="' + escapeAttr(c.property) + '"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px ' + indentLeft + 'px;border-bottom:1px solid var(--dm-separator);cursor:pointer;">' +
+        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '" data-dm-change-prop="' + escapeAttr(c.property) + '"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px ' + indentLeft + 'px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           rowIcon +
           '<div style="flex:1;min-width:0;">' + innerLabel + '</div>' +
+          changeStatusBadge((c as any).status) +
           '<button data-dm-batch-apply="' + cid + '" title="' + zapTitle + '" style="' + zapStyle + '" aria-label="Batch apply">' + icon('zap', 10) + countBadge + '</button>' +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else if (item.type === 'text') {
@@ -7521,10 +7564,11 @@ function renderChangesTab(): string {
         const inner = diffHtml
           ? '<div style="font-size:10px;line-height:1.5;font-family:SF Mono,Monaco,monospace;word-break:break-word;"><span style="color:var(--dm-text-muted);">text:</span> ' + diffHtml + '</div>'
           : '<div style="font-size:10px;"><span style="color:var(--dm-text-muted);">text</span>: <span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + escapeAttr((c.oldText || '').slice(0, 20)) + '</span> \u2192 <span style="color:var(--dm-success);">' + escapeAttr((c.newText || '').slice(0, 20)) + '</span></div>';
-        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;">' +
+        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;margin-top:2px;">' + icon('type', 10) + '</span>' +
           '<div style="flex:1;min-width:0;">' + inner + '</div>' +
+          changeStatusBadge((c as any).status) +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else if (item.type === 'dom') {
         const c = item.data;
@@ -7544,13 +7588,13 @@ function renderChangesTab(): string {
         const destLine = c.action === 'move' && c.destination
           ? '<div style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;margin-top:2px;line-height:1.4;"><span style="color:var(--dm-text-muted);">to</span> ' + fmt(c.destination) + '</div>'
           : '';
-        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;">' +
+        return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           '<span style="color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';display:flex;flex-shrink:0;margin-top:2px;">' + icon(ic[c.action] || 'sparkles', 10) + '</span>' +
           '<div style="flex:1;min-width:0;">' +
           '<div style="font-size:10px;color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';">' + c.action.toUpperCase() + ' &lt;' + c.tagName + '&gt;</div>' +
           origLine + destLine +
-          '</div><button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
+          '</div>' + changeStatusBadge((c as any).status) + '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else if (item.type === 'token') {
         const c = item.data;
         const shortOld = escapeAttr((c.original || '').slice(0, 20));
@@ -7715,13 +7759,14 @@ function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: stri
     if (!hasToken) {
       body = urlField +
         '<button data-dm-action="mcp-cloud-register" style="margin-top:8px;padding:8px 10px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px;"' + (mcpCloudRegistering ? ' disabled' : '') + '>' + icon('zap', 11) + (mcpCloudRegistering ? ' Connecting…' : ' Connect to Cloud') + '</button>' +
-        '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-top:6px;line-height:1.4;">A device token is generated on the server. Copy a config snippet, paste it into Claude Desktop or Cursor, restart the agent.</div>';
+        '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-top:6px;line-height:1.4;">A device token is generated on the server. Copy the config, paste it into your agent (Claude Code, Cursor, VS Code, …), restart the agent.</div>';
     } else {
-      const claudeConfig = JSON.stringify({
+      // One reasonable, IDE-agnostic snippet. The `mcpServers` wrapper +
+      // `type: "http"` is what Claude Code / Claude Desktop / VS Code /
+      // current Cursor all accept; users trim the wrapper if their client
+      // wants the bare object.
+      const mcpConfig = JSON.stringify({
         mcpServers: { 'design-mode': { type: 'http', url: mcpEndpoint, headers: { Authorization: 'Bearer ' + mcpCloudToken } } },
-      }, null, 2);
-      const cursorConfig = JSON.stringify({
-        'design-mode': { url: mcpEndpoint, headers: { Authorization: 'Bearer ' + mcpCloudToken } },
       }, null, 2);
       const tenantBadge = mcpCloudTenantId
         ? '<span style="font-size:9px;color:var(--dm-text-dimmer);font-family:SF Mono,monospace;">' + escapeAttr(mcpCloudTenantId) + '</span>'
@@ -7729,9 +7774,8 @@ function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: stri
       body = urlField +
         '<div style="display:flex;align-items:center;gap:6px;justify-content:space-between;"><span style="' + lS + '">Token</span>' + tenantBadge + '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:6px;padding:6px 8px;"><code style="font-size:10px;font-family:SF Mono,monospace;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + escapeAttr(maskToken(mcpCloudToken)) + '</code><button data-dm-action="mcp-cloud-copy-token" title="Copy token" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:2px;">' + icon('copy', 11) + '</button></div>' +
-        '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">' +
-        '<button data-dm-action="mcp-cloud-copy-claude" data-dm-payload="' + escapeAttr(claudeConfig) + '" style="flex:1;padding:6px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('copy', 10) + ' Claude Desktop config</button>' +
-        '<button data-dm-action="mcp-cloud-copy-cursor" data-dm-payload="' + escapeAttr(cursorConfig) + '" style="flex:1;padding:6px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('copy', 10) + ' Cursor config</button>' +
+        '<div style="display:flex;gap:6px;margin-top:6px;">' +
+        '<button data-dm-action="mcp-cloud-copy-config" data-dm-payload="' + escapeAttr(mcpConfig) + '" style="flex:1;padding:6px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('copy', 10) + ' Copy MCP config</button>' +
         '</div>' +
         '<button data-dm-action="mcp-cloud-revoke" style="margin-top:6px;padding:6px 8px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:5px;color:var(--dm-danger);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('trash', 10) + ' Revoke token</button>' +
         '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-top:6px;line-height:1.4;">Side panel must stay open for the agent to reach this browser. Closing the panel pauses cloud calls until you reopen it.</div>';
@@ -7748,6 +7792,14 @@ function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: stri
 function maskToken(t: string): string {
   if (t.length <= 12) return t;
   return t.slice(0, 6) + '…' + t.slice(-4);
+}
+
+// Small pill shown on a change row once an agent moves it off 'todo'.
+// 'todo' renders nothing so the default solo-editing view stays clean.
+function changeStatusBadge(s?: ChangeStatus): string {
+  if (s === 'in_progress') return '<span title="Agent is implementing this" style="background:rgba(245,158,11,0.18);color:#f59e0b;font-size:8px;font-weight:700;padding:1px 5px;border-radius:9999px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.3px;">WIP</span>';
+  if (s === 'resolved') return '<span title="Agent marked this done" style="background:rgba(34,197,94,0.18);color:rgb(34,197,94);font-size:8px;font-weight:700;padding:1px 5px;border-radius:9999px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.3px;">DONE</span>';
+  return '';
 }
 
 function renderSettingsView(): string {
@@ -8340,15 +8392,14 @@ function setupDelegation() {
             showCaptureToast('success', 'Token copied.')
           ).catch(() => showCaptureToast('error', 'Clipboard blocked.'));
           break;
-        case 'mcp-cloud-copy-claude':
-        case 'mcp-cloud-copy-cursor': {
+        case 'mcp-cloud-copy-config': {
           const payload = actionBtn.getAttribute('data-dm-payload') || '';
           if (!payload) break;
           // The `escapeAttr` helper produces `&quot;` / `&amp;` / `&lt;` /
           // `&gt;`. Reverse those before pasting into the clipboard.
           const decoded = payload.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
           navigator.clipboard.writeText(decoded).then(() =>
-            showCaptureToast('success', act === 'mcp-cloud-copy-claude' ? 'Claude Desktop config copied.' : 'Cursor config copied.')
+            showCaptureToast('success', 'MCP config copied.')
           ).catch(() => showCaptureToast('error', 'Clipboard blocked.'));
           break;
         }
@@ -8777,6 +8828,13 @@ function setupDelegation() {
     if (commentsFilterBtn) {
       e.stopPropagation();
       commentsResolvedFilter = commentsFilterBtn.dataset.dmCommentsFilter as CommentsResolvedFilter;
+      render();
+      return;
+    }
+    const statusFilterBtn = target.closest<HTMLElement>('[data-dm-changes-status]');
+    if (statusFilterBtn) {
+      e.stopPropagation();
+      changesStatusFilter = statusFilterBtn.dataset.dmChangesStatus as ChangesStatusFilter;
       render();
       return;
     }

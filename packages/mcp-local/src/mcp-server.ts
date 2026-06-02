@@ -1,8 +1,9 @@
 // ============================================================
 // Design Mode Server — MCP Server
-// 6 tools for coding agents:
+// 7 tools for coding agents:
 //   - get_changes        : read everything the user edited
 //   - apply_changes      : push CSS back to the browser (single or batch)
+//   - set_change_status  : mark changes/comments todo / in_progress / resolved
 //   - clear_changes      : reset the session
 //   - get_session_summary: status + counts + active sessions
 //   - export_changes     : emit CSS / Tailwind / SCSS / JSX
@@ -92,7 +93,9 @@ function renderExport(format: ExportFormat): string {
 }
 
 export function createMcpServer(): McpServer {
-  const server = new McpServer({ name: 'design-mode', version: '1.2.0' });
+  // Keep in sync with APP_VERSION in packages/shared/src/constants.ts
+  // (also mirrored in bin/cli.ts and websocket-server.ts HELLO).
+  const server = new McpServer({ name: 'design-mode', version: '1.6.0' });
 
   // ── 1. get_changes ────────────────────────────────────────────────
   server.tool(
@@ -100,14 +103,20 @@ export function createMcpServer(): McpServer {
     'Read everything the user has edited in this session: style changes, text changes, DOM changes, and pinned comments, plus a ready-to-paste CSS block. Spring/easing curves come through inside the style values (e.g. `transition: all 0.3s cubic-bezier(...)`).',
     async () => {
       const report: any = state.getChangeReport();
-      const comments = state.getComments().map(c => ({
+      report.comments = state.getComments().map(c => ({
+        id: c.id,
         selector: c.selector,
         text: c.text,
         timestamp: new Date(c.timestamp).toISOString(),
         pageUrl: c.pageUrl,
         resolved: c.resolved || false,
       }));
-      report.comments = comments;
+      // Flat, id-addressable view so the agent can target set_change_status.
+      report.items = [
+        ...state.getStyleChanges().map(c => ({ id: c.id, kind: 'style', selector: c.selector, property: c.property, status: c.status || 'todo' })),
+        ...state.getTextChanges().map(c => ({ id: c.id, kind: 'text', selector: c.selector, status: c.status || 'todo' })),
+        ...state.getComments().map(c => ({ id: c.id, kind: 'comment', selector: c.selector, status: c.resolved ? 'resolved' : 'todo' })),
+      ];
       return { content: [{ type: 'text' as const, text: JSON.stringify(report, null, 2) }] };
     }
   );
@@ -134,7 +143,24 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  // ── 3. clear_changes ──────────────────────────────────────────────
+  // ── 3. set_change_status ──────────────────────────────────────────
+  server.tool(
+    'set_change_status',
+    "Update the status of tracked changes/comments as you work: 'in_progress' when you start implementing them in code, 'resolved' once shipped, or 'todo' to reset. Pass the `id`s from get_changes (see the `items` array); omit `ids` to apply to everything. Resolved items dim in the user's Changes tab so they can see what you've handled.",
+    {
+      status: z.enum(['todo', 'in_progress', 'resolved']).describe('New status'),
+      ids: z.array(z.string()).optional().describe('Change or comment ids from get_changes. Omit to apply to all tracked items.'),
+    },
+    async ({ status, ids }) => {
+      const count = state.setChangeStatus(status, ids);
+      if (isExtensionConnected()) {
+        sendToExtension({ type: 'SET_CHANGE_STATUS', payload: { status, ids } });
+      }
+      return { content: [{ type: 'text' as const, text: `Marked ${count} item${count === 1 ? '' : 's'} as ${status}.` }] };
+    }
+  );
+
+  // ── 4. clear_changes ──────────────────────────────────────────────
   server.tool(
     'clear_changes',
     'Clear all tracked changes and comments for the current session.',
@@ -144,7 +170,7 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  // ── 4. get_session_summary ────────────────────────────────────────
+  // ── 5. get_session_summary ────────────────────────────────────────
   server.tool(
     'get_session_summary',
     'Connection status, active sessions, and counts. Use this for a quick health check before calling apply_changes.',
@@ -171,7 +197,7 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  // ── 5. export_changes ─────────────────────────────────────────────
+  // ── 6. export_changes ─────────────────────────────────────────────
   server.tool(
     'export_changes',
     'Emit the user\'s style changes in your preferred format: plain CSS, Tailwind utility classes, nested SCSS, or camelCase JSX inline-style objects. Spring/easing values pass through verbatim because they\'re part of the underlying CSS values.',
@@ -187,7 +213,7 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  // ── 6. get_screenshot ─────────────────────────────────────────────
+  // ── 7. get_screenshot ─────────────────────────────────────────────
   server.tool(
     'get_screenshot',
     'Capture a PNG screenshot of the page. Pass the unique `selector` string from `get_changes` output (e.g. "main > section.hero > button:nth-of-type(2)") or a Design Mode element id (dm-*) to crop to one element; otherwise the visible viewport is returned. A generic selector like "button" or "h1" matches multiple elements and will fail with a list of candidate unique paths to pick from.',

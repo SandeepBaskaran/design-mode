@@ -74,6 +74,7 @@ async function boot() {
     log(`${bold('\ud83d\udee0  AVAILABLE MCP TOOLS')}`);
     log(`  ${dim('\u2022')} get_changes         ${dim('\u2014 All edits + comments + ready-to-paste CSS block')}`);
     log(`  ${dim('\u2022')} apply_changes       ${dim('\u2014 Push CSS to the browser (single change or batch)')}`);
+    log(`  ${dim('\u2022')} set_change_status   ${dim('\u2014 Mark changes/comments todo | in_progress | resolved')}`);
     log(`  ${dim('\u2022')} clear_changes       ${dim('\u2014 Reset the session')}`);
     log(`  ${dim('\u2022')} get_session_summary ${dim('\u2014 Status, sessions, counts')}`);
     log(`  ${dim('\u2022')} export_changes      ${dim('\u2014 Emit as css | tailwind | scss | jsx')}`);

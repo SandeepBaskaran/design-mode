@@ -8,10 +8,15 @@ import { DEFAULT_WS_PORT, DATA_ATTR } from '../shared';
 import { BUILTIN_KEYFRAMES } from './keyframes-library';
 import { captureElementScreenshot, captureViewportScreenshot } from './screenshots';
 
+// Lifecycle a coding agent drives over MCP: untouched → working → done.
+// Absent ⇒ 'todo'. Mirrors @design-mode/shared ChangeStatus.
+export type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
+
 export interface StyleChange {
   id: string; elementId: string; selector: string;
   property: string; oldValue: string; newValue: string;
   timestamp: number;
+  status?: ChangeStatus;
   // Optional grouping envelope. Multiple StyleChanges sharing a `groupId`
   // collapse into one row in the Changes tab. `groupKind` shapes the row
   // label (`PRESET`, `APPLIED to N`, `HIDE`). When `groupKind` is set
@@ -33,6 +38,7 @@ export interface TextChange {
   // When true, oldText/newText carry HTML (innerHTML); revert paths must
   // use el.innerHTML, not el.textContent. Set by applyHtmlChange.
   isHtml?: boolean;
+  status?: ChangeStatus;
 }
 
 export interface DomChange {
@@ -51,6 +57,7 @@ export interface DomChange {
   // regardless of how many times it was dragged.
   origin?: { parentSelector: string; index: number; parentId?: string };
   timestamp: number;
+  status?: ChangeStatus;
 }
 
 const styleChanges: StyleChange[] = [];
@@ -912,6 +919,19 @@ export function recordDomChange(
   return change;
 }
 
+// Flip status on style/text/DOM changes by id. Omit `ids` ⇒ all. Returns
+// the count touched. Comments are resolved separately by the content
+// script, which owns the comment store.
+export function setChangesStatus(status: ChangeStatus, ids?: string[]): number {
+  const match = (id: string) => !ids || ids.includes(id);
+  let count = 0;
+  for (const c of styleChanges) if (match(c.id)) { c.status = status; count++; }
+  for (const c of textChanges) if (match(c.id)) { c.status = status; count++; }
+  for (const c of domChanges) if (match(c.id)) { c.status = status; count++; }
+  if (count) persistSession();
+  return count;
+}
+
 export function generateCSSBlock(): string {
   const bySelector = new Map<string, Map<string, string>>();
   for (const c of styleChanges) {
@@ -936,14 +956,17 @@ export function getChangeReport() {
     pageUrl: window.location.href,
     pageTitle: document.title,
     styleChanges: styleChanges.map(c => ({
+      id: c.id, status: c.status || 'todo',
       selector: c.selector, property: c.property,
       oldValue: c.oldValue, newValue: c.newValue,
       cssRule: `${c.selector} { ${c.property.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}: ${c.newValue}; }`,
     })),
     textChanges: textChanges.map(c => ({
+      id: c.id, status: c.status || 'todo',
       selector: c.selector, oldText: c.oldText, newText: c.newText,
     })),
     domChanges: domChanges.map(c => ({
+      id: c.id, status: c.status || 'todo',
       selector: c.selector, action: c.action, tagName: c.tagName,
     })),
     cssBlock: generateCSSBlock(),

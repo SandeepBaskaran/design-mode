@@ -6,6 +6,7 @@ import {
   Eraser,
   FileDown,
   GitCompareArrows,
+  ListChecks,
   ListTree,
   Monitor,
   Server,
@@ -46,29 +47,27 @@ export const metadata = {
     title:
       "MCP setup — Connect Claude Code, Cursor, Claude Desktop, Windsurf & more",
     description:
-      "Three connection modes (Cloud, Local, Self-hosted) and the six MCP tools your agent gets.",
+      "Three connection modes (Cloud, Local, Self-hosted) and the seven MCP tools your agent gets.",
     url: "https://designmode.app/mcp",
     images: ["/og-image.png"],
   },
 };
 
-const localClaude = `{
+// One reasonable, IDE-agnostic snippet per mode. The `mcpServers`
+// wrapper + `type: "http"` is what Claude Code / Claude Desktop / VS Code
+// / current Cursor all accept; trim the wrapper if your client wants the
+// bare object.
+const localConfig = `{
   "mcpServers": {
     "design-mode": {
-      "command": "npx",
-      "args": ["-y", "@design-mode/mcp-local"]
+      "command": "npm",
+      "args": ["start"],
+      "cwd": "/absolute/path/to/design-mode"
     }
   }
 }`;
 
-const localCursor = `{
-  "design-mode": {
-    "command": "npx",
-    "args": ["-y", "@design-mode/mcp-local"]
-  }
-}`;
-
-const cloudClaude = `{
+const cloudConfig = `{
   "mcpServers": {
     "design-mode": {
       "type": "http",
@@ -78,27 +77,13 @@ const cloudClaude = `{
   }
 }`;
 
-const cloudCursor = `{
-  "design-mode": {
-    "url": "https://mcp.designmode.app/mcp",
-    "headers": { "Authorization": "Bearer dm_<your-token>" }
-  }
-}`;
-
-const selfClaude = `{
+const selfConfig = `{
   "mcpServers": {
     "design-mode": {
       "type": "http",
       "url": "https://<your-deploy>/mcp",
       "headers": { "Authorization": "Bearer dm_<your-token>" }
     }
-  }
-}`;
-
-const selfCursor = `{
-  "design-mode": {
-    "url": "https://<your-deploy>/mcp",
-    "headers": { "Authorization": "Bearer dm_<your-token>" }
   }
 }`;
 
@@ -110,11 +95,8 @@ type Mode = {
   description: string;
   bestFor: string;
   highlight?: boolean;
-  configs: {
-    claudeDesktop: string;
-    cursor: string;
-    claudeCode?: string;
-  };
+  config: string;
+  note?: string;
 };
 
 const modes: Mode[] = [
@@ -128,7 +110,7 @@ const modes: Mode[] = [
     bestFor:
       "Best for: anyone who'd rather not run a local process — including agents that can't reach localhost (sandboxed CI, remote VSCode tunnels, web-based agents).",
     highlight: true,
-    configs: { claudeDesktop: cloudClaude, cursor: cloudCursor },
+    config: cloudConfig,
   },
   {
     id: "local",
@@ -139,7 +121,8 @@ const modes: Mode[] = [
       "Run the companion MCP server on your own machine. Nothing leaves the laptop.",
     bestFor:
       "Best for: power users with a terminal who want zero network egress and the lowest possible latency.",
-    configs: { claudeDesktop: localClaude, cursor: localCursor },
+    config: localConfig,
+    note: "No npm package to install — clone the repo, run npm install, and point cwd at the absolute path of the repo root. npm start launches the local companion server.",
   },
   {
     id: "self-hosted",
@@ -150,7 +133,7 @@ const modes: Mode[] = [
       "Fork packages/mcp-cloud and deploy on any Node.js host with Redis — Vercel, Railway, Fly, your own VM. Point the extension at your URL and issue your own bearer tokens.",
     bestFor:
       "Best for: teams that want the Cloud-mode ergonomics but on infrastructure they operate.",
-    configs: { claudeDesktop: selfClaude, cursor: selfCursor },
+    config: selfConfig,
   },
 ];
 
@@ -164,6 +147,11 @@ const tools = [
     name: "apply_changes",
     icon: Wand2,
     description: "Apply a structured patch back to the page from the agent.",
+  },
+  {
+    name: "set_change_status",
+    icon: ListChecks,
+    description: "Mark changes/comments to-do, in-progress, or resolved as you implement them — the user sees the status in their Changes tab.",
   },
   {
     name: "clear_changes",
@@ -212,7 +200,7 @@ export default function McpPage() {
                 call external tools safely. A &quot;tool&quot; is anything
                 the agent can read from or write to — a database, a
                 filesystem, a web service, or in this case, the design
-                state of your live page. Design Mode exposes six MCP tools
+                state of your live page. Design Mode exposes seven MCP tools
                 so your agent can read every edit you made in the side
                 panel, push patches back to the page, and grab
                 screenshots — all without copy-paste.
@@ -301,16 +289,21 @@ export default function McpPage() {
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-6 pt-2">
-                    <Snippet label="Claude Desktop — claude_desktop_config.json">
-                      {mode.configs.claudeDesktop}
+                    <Snippet label="MCP config — Claude Code · Claude Desktop · Cursor · VS Code">
+                      {mode.config}
                     </Snippet>
-                    <Snippet label="Cursor — ~/.cursor/mcp.json (per-server map)">
-                      {mode.configs.cursor}
-                    </Snippet>
+                    {mode.note && (
+                      <p className="text-muted-foreground text-sm">
+                        {mode.note}
+                      </p>
+                    )}
                     <p className="text-muted-foreground text-sm">
-                      Claude Code uses the same JSON as Claude Desktop;
-                      add it under <code>mcpServers</code> in your project's{" "}
-                      <code>.claude/settings.json</code>.
+                      Same JSON everywhere: under <code>mcpServers</code> in
+                      Claude Desktop / Claude Code{" "}
+                      (<code>.claude/settings.json</code>), or your editor's
+                      MCP config. Some clients want the bare{" "}
+                      <code>design-mode</code> object without the{" "}
+                      <code>mcpServers</code> wrapper.
                     </p>
                   </div>
                 </AccordionContent>
@@ -326,10 +319,10 @@ export default function McpPage() {
           <DashedLine className="container max-w-5xl" />
           <div className="container mt-16 max-w-5xl">
             <h2 className="text-2xl tracking-tight md:text-3xl">
-              The six MCP tools
+              The seven MCP tools
             </h2>
             <p className="text-muted-foreground mt-2 max-w-2xl">
-              Every mode exposes the same six tools — your agent can read
+              Every mode exposes the same seven tools — your agent can read
               the current page diff, push patches back, and grab
               screenshots.
             </p>

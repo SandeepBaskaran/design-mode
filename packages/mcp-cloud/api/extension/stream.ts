@@ -35,7 +35,7 @@ export async function GET(req: Request): Promise<Response> {
       const send = (event: string, data: string) => {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`));
       };
-      send('hello', JSON.stringify({ tenantId, version: '1.2.0' }));
+      send('hello', JSON.stringify({ tenantId, version: '1.6.0' }));
 
       // Initial presence snapshot so the side panel doesn't wait
       // up to 30s for the first poll tick.

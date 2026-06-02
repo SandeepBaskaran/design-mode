@@ -17,6 +17,7 @@
 // ============================================================
 
 import { kv } from './kv.js';
+import { logEvent } from './log.js';
 
 export const STREAM_TTL_S = 60;
 export const POLL_INTERVAL_MS = 250;
@@ -62,7 +63,7 @@ export async function* readInbound(opts: {
       for (const item of items) {
         if (typeof item !== 'string') continue;
         try { yield JSON.parse(item) as RelayMessage; }
-        catch { /* skip malformed entry */ }
+        catch { logEvent('relay.inbound.malformed', { tenantId: opts.tenantId, byteCount: item.length }); }
       }
       drained = items.length === 0;
     } catch {

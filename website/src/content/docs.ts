@@ -172,7 +172,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "MCP status chip stays offline",
-        body: "Cloud mode: confirm your bearer token is pasted in Settings and the same token is in your agent's config. Local mode: confirm npx @design-mode/mcp-local is reachable. Self-hosted: confirm the relay URL is correct and Redis is healthy.",
+        body: "Cloud mode: confirm your bearer token is pasted in Settings and the same token is in your agent's config. Local mode: confirm the companion server is running (clone the repo, npm install, npm start) and your config's cwd points at the repo root. Self-hosted: confirm the relay URL is correct and Redis is healthy.",
       },
       {
         heading: "Send to Agent button is greyed out",

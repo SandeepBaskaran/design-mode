@@ -29,7 +29,7 @@ const baseFeatures = (competitorBlanks: Record<string, string>): ComparisonRow[]
   {
     feature: "MCP (Model Context Protocol) handoff to AI agents",
     designMode:
-      "Yes — Cloud, Local, and Self-hosted modes; six MCP tools",
+      "Yes — Cloud, Local, and Self-hosted modes; seven MCP tools",
     competitor: competitorBlanks.mcp ?? "No",
   },
   {

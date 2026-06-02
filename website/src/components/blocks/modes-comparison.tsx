@@ -51,7 +51,7 @@ const comparisonFeatures: FeatureSection[] = [
     features: [
       {
         name: "Install command",
-        local: "npx @design-mode/mcp-local",
+        local: "clone repo + npm start",
         cloud: "no install",
         selfHosted: "deploy anywhere",
       },

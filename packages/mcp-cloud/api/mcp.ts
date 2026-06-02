@@ -15,7 +15,7 @@ import { authenticate } from '../lib/auth.js';
 import { awaitResponse, publishInbound } from '../lib/store.js';
 import { logEvent } from '../lib/log.js';
 import { bumpPresence } from '../lib/presence.js';
-import { consumeQuota } from '../lib/quota.js';
+import { consumeQuota, consumeBurst, BURST_LIMIT, BURST_WINDOW_S } from '../lib/quota.js';
 import { corsHeaders, preflight, withCors } from '../lib/cors.js';
 import { randomBytes } from 'node:crypto';
 
@@ -23,6 +23,8 @@ export const config = { runtime: 'nodejs' };
 
 const TOOL_TIMEOUT_MS = 12_000;
 const PROTOCOL_VERSION = '2024-11-05';
+// Keep in sync with APP_VERSION in packages/shared/src/constants.ts.
+const SERVER_VERSION = '1.6.0';
 
 interface ToolDef {
   name: string;
@@ -97,6 +99,24 @@ const TOOLS: ToolDef[] = [
     },
     buildRequest: (args) => ({ type: 'CLOUD_EXPORT_CHANGES', payload: { format: args.format } }),
     toContent: (reply) => [{ type: 'text', text: typeof reply?.text === 'string' ? reply.text : 'No changes to export.' }],
+  },
+  {
+    name: 'set_change_status',
+    description: "Update the status of tracked changes/comments as you work: 'in_progress' when you start implementing them in code, 'resolved' once shipped, or 'todo' to reset. Pass the `id`s from get_changes; omit `ids` to apply to everything. Resolved items dim in the user's Changes tab so they can see what you've handled.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['todo', 'in_progress', 'resolved'] },
+        ids: { type: 'array', items: { type: 'string' }, description: 'Change or comment ids from get_changes. Omit to apply to all tracked items.' },
+      },
+      required: ['status'],
+    },
+    buildRequest: (args) => ({ type: 'CLOUD_SET_CHANGE_STATUS', payload: { status: args.status, ids: args.ids } }),
+    toContent: (reply, args) => {
+      if (reply?.error) return [{ type: 'text', text: `Error: ${reply.error}` }];
+      const n = typeof reply?.count === 'number' ? reply.count : (args.ids?.length ?? 0);
+      return [{ type: 'text', text: `Marked ${n} item${n === 1 ? '' : 's'} as ${args.status}.` }];
+    },
   },
   {
     name: 'get_screenshot',
@@ -193,7 +213,7 @@ async function handle(req: Request): Promise<Response> {
     case 'initialize':
       response = rpcResult(id, {
         protocolVersion: PROTOCOL_VERSION,
-        serverInfo: { name: 'design-mode', version: '1.2.0' },
+        serverInfo: { name: 'design-mode', version: SERVER_VERSION },
         capabilities: { tools: {} },
       });
       break;
@@ -203,6 +223,20 @@ async function handle(req: Request): Promise<Response> {
       });
       break;
     case 'tools/call': {
+      // Burst guard first — a runaway loop gets a friendly slow-down
+      // without burning the day's quota on rejected calls.
+      const burstOk = await consumeBurst(row.tenantId);
+      if (!burstOk) {
+        logEvent('mcp.burst.exceeded', { tenantId: row.tenantId, status: 200 });
+        response = rpcResult(id, {
+          content: [{
+            type: 'text',
+            text: `Slow down — too many tool calls in a short window (max ${BURST_LIMIT} per ${BURST_WINDOW_S}s). Retry in a few seconds.`,
+          }],
+          isError: true,
+        });
+        break;
+      }
       // Quota gate runs BEFORE the relay so a capped tenant doesn't even
       // wake the extension. INCR is atomic, so two concurrent calls at
       // the boundary will see different counts — the second gets the

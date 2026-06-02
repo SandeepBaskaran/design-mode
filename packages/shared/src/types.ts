@@ -171,6 +171,12 @@ export interface ElementInfo {
   childGap?: { col: number | null; row: number | null };
 }
 
+// --- Change Status ---
+
+// Lifecycle a coding agent can drive over MCP: untouched → being worked on
+// → done. Absent ⇒ treated as 'todo'.
+export type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
+
 // --- Style Change ---
 
 export interface StyleChange {
@@ -181,6 +187,7 @@ export interface StyleChange {
   oldValue: string;
   newValue: string;
   timestamp: number;
+  status?: ChangeStatus;
 }
 
 // --- Text Change ---
@@ -192,6 +199,7 @@ export interface TextChange {
   oldText: string;
   newText: string;
   timestamp: number;
+  status?: ChangeStatus;
 }
 
 // --- Comment ---

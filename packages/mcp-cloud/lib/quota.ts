@@ -34,6 +34,20 @@ export interface QuotaResult {
   resetAt: number;
 }
 
+// Short-window burst guard, layered under the daily cap. The daily quota
+// bounds total cost; this bounds a runaway agent hammering the relay in a
+// tight loop (which would stack inbound entries and starve latency).
+export const BURST_LIMIT = 15;
+export const BURST_WINDOW_S = 10;
+
+export async function consumeBurst(tenantId: string): Promise<boolean> {
+  const c = await kv();
+  const key = `burst:${tenantId}`;
+  const used = await c.incr(key);
+  if (used === 1) { try { await c.expire(key, BURST_WINDOW_S); } catch { /* non-fatal */ } }
+  return used <= BURST_LIMIT;
+}
+
 // Atomic increment + read. EXPIRE only fires on the first call of the
 // day (when the counter just became 1) so we don't keep extending the
 // TTL — the day's bucket dies a few minutes after midnight either way.

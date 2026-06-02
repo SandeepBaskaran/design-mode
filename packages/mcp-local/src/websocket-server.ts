@@ -80,7 +80,14 @@ function handleMessage(msg: any) {
   switch (msg.type) {
     case 'STYLE_CHANGED': if (msg.payload) state.addStyleChange(msg.payload); break;
     case 'TEXT_CHANGED': if (msg.payload) state.addTextChange(msg.payload); break;
-    case 'SESSION_UPDATE': if (msg.payload) state.updateSession(msg.payload); break;
+    case 'SESSION_UPDATE':
+      if (msg.payload) {
+        state.updateSession(msg.payload);
+        // Also register it in the sessions map so listSessions() /
+        // get_session_summary.activeSessions actually reflect the page.
+        state.getOrCreateSession(msg.payload.pageUrl, msg.payload.pageTitle);
+      }
+      break;
     case 'COMMENT_ADDED': if (msg.payload) state.addComment(msg.payload); break;
     case 'COMMENT_UPDATED': if (msg.payload) state.addComment(msg.payload); break;
     case 'COMMENT_DELETED': if (msg.payload?.id) state.deleteComment(msg.payload.id); break;
