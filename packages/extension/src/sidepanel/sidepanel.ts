@@ -395,6 +395,10 @@ const previousStroke = new Map<string, { boxShadow?: string; outline?: string; o
 // Per-element stash for the Fill eye toggle so re-enabling restores the
 // authored backgroundColor instead of leaving it transparent.
 const previousFill = new Map<string, string>();
+// Per-element × axis stash so switching gap mode to Auto (space-between)
+// doesn't permanently clobber the alignment the user set via the 9-pad.
+// Key: `${elementId}:${distProp}`, value: the previous CSS value.
+const previousGapAlign = new Map<string, string>();
 
 // v1.2: Spacing expand state
 
@@ -2807,8 +2811,11 @@ function childrenAlignPad(s: Record<string, string>): string {
   const { xVal, yVal } = axesForContainer(s);
   const cssToH: Record<string, string> = { 'flex-start': 'left', start: 'left', center: 'center', 'flex-end': 'right', end: 'right' };
   const cssToV: Record<string, string> = { 'flex-start': 'top', start: 'top', center: 'center', 'flex-end': 'bottom', end: 'bottom' };
-  const curH = cssToH[xVal] || 'left';
-  const curV = cssToV[yVal] || 'top';
+  // When a distribution keyword (space-between etc.) is active on an axis
+  // — e.g. from the gap Auto mode — don't falsely highlight a dot; the
+  // distribution doesn't map to a single alignment position.
+  const curH: string | null = cssToH[xVal] ?? null;
+  const curV: string | null = cssToV[yVal] ?? null;
   const cells: { h: string; v: string }[] = [];
   for (const v of ['top','center','bottom'])
     for (const h of ['left','center','right'])
@@ -10506,7 +10513,15 @@ function setupDelegation() {
       const s = (info?.computedStyles || {}) as Record<string, string>;
       const distProp = gapDistProp(field, s);
       const gapProp = field === 'col' ? 'columnGap' : 'rowGap';
+      const elId = info?.id || '';
+      const stashKey = elId + ':' + distProp;
       if (gapModeSel.value === 'auto') {
+        // Stash the current alignment value so switching back to Fixed
+        // can restore it instead of resetting to 'normal'.
+        const curAlign = s[distProp] || '';
+        if (curAlign && curAlign !== 'space-between' && curAlign !== 'space-around' && curAlign !== 'space-evenly') {
+          previousGapAlign.set(stashKey, curAlign);
+        }
         applyStylesBatch([
           { property: distProp, value: 'space-between' },
           { property: gapProp, value: 'normal' },
@@ -10521,8 +10536,12 @@ function setupDelegation() {
           px = parsed && (parsed.unit === 'px' || !parsed.unit) ? Math.round(parsed.num) : 16;
         }
         const val = inputUnit === 'rem' ? (Math.round((px / remRootPx) * 10000) / 10000) + 'rem' : px + 'px';
+        // Restore the alignment the user had before switching to Auto,
+        // so the 9-pad isn't reset to 'normal'.
+        const restored = previousGapAlign.get(stashKey) || 'flex-start';
+        previousGapAlign.delete(stashKey);
         applyStylesBatch([
-          { property: distProp, value: 'normal' },
+          { property: distProp, value: restored },
           { property: gapProp, value: val },
         ], 'Fixed gap');
       }
