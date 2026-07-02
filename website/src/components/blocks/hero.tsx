@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Heart, MousePointer2, Palette, Ruler, Wand2 } from "lucide-react";
 
 import { ProductHunt } from "@/components/blocks/product-hunt";
+import { VisualEditorPill } from "@/components/blocks/visual-editor-pill";
 import { DashedLine } from "@/components/dashed-line";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,10 @@ export const Hero = () => {
       <div className="container max-w-4xl text-center">
         <div className="mb-6 flex justify-center">
           <ProductHunt />
+        </div>
+
+        <div className="mb-5 flex justify-center">
+          <VisualEditorPill />
         </div>
 
         <h1 className="text-foreground text-3xl tracking-tight md:text-4xl lg:text-5xl">

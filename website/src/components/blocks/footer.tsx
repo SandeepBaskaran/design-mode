@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 import { ProductHunt } from "@/components/blocks/product-hunt";
+import { VisualEditorPill } from "@/components/blocks/visual-editor-pill";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 import { Button } from "@/components/ui/button";
 
@@ -36,6 +37,9 @@ export function Footer() {
       <div className="container flex flex-col gap-4 text-center">
         <div className="mb-6 flex justify-center">
           <ProductHunt />
+        </div>
+        <div className="mb-2 flex justify-center">
+          <VisualEditorPill />
         </div>
         <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
           Design directly in your browser.
