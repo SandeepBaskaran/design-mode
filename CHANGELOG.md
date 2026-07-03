@@ -6,6 +6,27 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] — 2026-07-03
+
+### Added
+
+- **Website: "Visual editor that saves your tokens" pill** in the
+  homepage hero and the global footer, between the Product Hunt badge
+  and the heading.
+
+### Fixed
+
+- **Gap Auto mode no longer clobbers child alignment.** Switching a
+  column/row gap to Auto stashes the container's current alignment and
+  restores it on switching back to Fixed, instead of resetting the
+  Children-align 9-pad to top-left. While Auto (space-between) is
+  active the 9-pad no longer falsely highlights an alignment dot.
+
+### Internal
+
+- Dependency bumps: vite 6.4.3, tsx 4.22.4, next 15.5.19,
+  react / react-dom 19.2.7.
+
 ## [1.7.0] — 2026-06-02
 
 ### Added

@@ -1,6 +1,6 @@
 {
   "name": "@design-mode/extension",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "description": "Design Mode — Visual DOM editor Chrome extension",
   "scripts": {

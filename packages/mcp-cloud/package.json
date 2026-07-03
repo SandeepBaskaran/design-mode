@@ -1,6 +1,6 @@
 {
   "name": "@design-mode/mcp-cloud",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "type": "module",
   "description": "Hosted multi-tenant MCP server for Design Mode — deploys to Vercel, relays between coding agents and the browser extension via Upstash Redis Streams.",

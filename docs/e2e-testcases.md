@@ -199,6 +199,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 3.8  | Display flex sub-controls | Set display to flex | Flex direction / wrap / justify / align / gap controls appear |
 | 3.9  | Display grid sub-controls | Set display to grid | Grid template columns/rows + gap controls appear |
 | 3.9a | Gap Fixed / Auto mode | On a flex/grid container, Col/Row gap shows a Fixed/Auto dropdown. Type a px value in Fixed; switch to Auto | Fixed writes `column-gap`/`row-gap`; Auto spreads children via `space-between` (justify-content, or align-content for grid rows), field goes read-only showing the measured gap; switching back to Fixed restores an editable px value. Container whose CSS already has `space-between` opens in Auto |
+| 3.9b | Gap Auto preserves 9-pad alignment | Set a Children-align 9-pad position (e.g. center), switch gap to Auto, then back to Fixed | While Auto is active no 9-pad dot is falsely highlighted; switching back to Fixed restores the previously chosen alignment instead of resetting it |
 | 3.10 | Position offsets | Set position to `relative`, top `10` | Element shifts down 10px |
 | 3.11 | Z-index strict numeric | Type `10.5` in z-index | Allowed (2 decimals); type letters → blocked |
 | 3.12 | Opacity / transform | Set `opacity: 0.5`, transform `rotate(3deg)` | Both apply visually |
