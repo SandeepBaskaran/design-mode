@@ -2,6 +2,10 @@ import { FlatCompat } from "@eslint/eslintrc";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
 
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypescript from "eslint-config-next/typescript";
+import jsxA11y from "eslint-plugin-jsx-a11y";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -12,21 +16,22 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   {
-    ignores: ["node_modules/**"],
+    ignores: ["node_modules/**", ".next/**"],
   },
+  ...nextCoreWebVitals,
+  ...nextTypescript,
   ...compat.extends(
-    "next/core-web-vitals",
-    "next/typescript",
     "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
     "plugin:import/recommended",
     "plugin:import/typescript",
-    "next",
-    "plugin:jsx-a11y/recommended",
   ),
+  // eslint-config-next already registers the jsx-a11y plugin; re-registering
+  // it via FlatCompat throws "Cannot redefine plugin", so apply rules only.
+  { rules: jsxA11y.flatConfigs.recommended.rules },
   {
     rules: {
       "@next/next/no-html-link-for-pages": "off",
+      "react-hooks/set-state-in-effect": "off",
       "react/jsx-key": "off",
       "react/display-name": "off",
       "import/no-named-as-default-member": "off",

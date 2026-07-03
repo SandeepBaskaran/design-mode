@@ -131,7 +131,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body className={`${dmSans.variable} ${inter.variable} antialiased`}>
         <JsonLd data={organizationSchema} />
         <JsonLd data={websiteSchema} />
