@@ -501,6 +501,15 @@ function formatBytes(n: number): string {
   return (n / 1024 / 1024 / 1024).toFixed(1) + ' GB';
 }
 
+// Middle-truncates the name part to 20 chars so the extension and tail stay visible.
+function truncateFilename(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  const name = dot > 0 ? filename.slice(0, dot) : filename;
+  const ext = dot > 0 ? filename.slice(dot) : '';
+  if (name.length <= 20) return filename;
+  return name.slice(0, 10) + '…' + name.slice(-9) + ext;
+}
+
 function parseNumeric(val: string): { num: number; unit: string } | null {
   const m = val.match(/^(-?[\d.]+)\s*(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|deg|s|ms)?$/);
   if (m) return { num: parseFloat(m[1]), unit: m[2] || '' };
@@ -5373,7 +5382,7 @@ function renderMediaSection(displayInfo: any, s: Record<string, string>, isImg: 
     escapeAttr(metaParts.join(' · ')) +
     '</div>';
 
-  const downloadBtn = '<button data-dm-action="download-media" style="width:100%;padding:7px 10px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:500;">' + icon('download', 11) + ' Download ' + escapeAttr(m.filename || m.kind) + '</button>';
+  const downloadBtn = '<button data-dm-action="download-media" style="width:100%;padding:7px 10px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;font-weight:500;">' + icon('download', 11) + ' Download ' + escapeAttr(truncateFilename(m.filename || m.kind)) + '</button>';
 
   let extra = '';
   if (m.kind === 'image' || m.kind === 'background') {
