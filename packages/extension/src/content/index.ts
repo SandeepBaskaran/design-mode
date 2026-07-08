@@ -10,6 +10,7 @@ import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLay
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
+import { initCustomCursor, applyBaseCursor, clearBaseCursor } from './custom-cursor';
 import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, captureViewportScreenshotClean, downloadDataUrl } from './screenshots';
@@ -45,6 +46,9 @@ import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } fr
 import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts } from './keyboard-shortcuts';
 
 let on = false;
+// Lets the cursor module repaint correctly on a live settings toggle
+// without importing the inspector (which imports the cursor module).
+initCustomCursor(isInspectActive);
 // Region pending a comment — set when the user finishes drawing a freeform
 // rectangle, consumed by ADD_REGION_COMMENT once they type the note.
 let pendingRegion: Region | null = null;
@@ -586,6 +590,7 @@ function enable() {
   refreshSelfTabId();
   resetOverlayTeardown();
   resetMeasureTeardown();
+  applyBaseCursor();
   showCommentPins();         // surface saved comment pins on the page
   startPanelHeartbeat();     // detect a panel-close that the message chain missed
   void openConfiguredTransport();
@@ -628,9 +633,7 @@ function disable() {
   // catches the strays so the page goes back to a pristine state the moment
   // the panel closes.
   document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-axis-guides, #dm-distance, #dm-resize-dots, #dm-toolbar, .dm-multi-overlay, .dm-comment-pin').forEach(el => el.remove());
-  if (document.documentElement.style.cursor === 'crosshair') {
-    document.documentElement.style.cursor = '';
-  }
+  clearBaseCursor();
 }
 
 function registerAllShortcuts() {

@@ -6,6 +6,7 @@ import { getOrAssignId, getElementById, getElementRect, generateSelector, getBre
 import { showHover, hideHover, showSelect, updateSelectPosition, isOverlayElement } from './overlays';
 import { isMultiSelectActive, enableMultiSelect, toggleSelection, getSelectedIds } from './multi-select';
 import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag } from './measure-guides';
+import { baseCursor, restoreBaseCursor } from './custom-cursor';
 
 export type IconInfo = { library: string; name: string; availableIcons?: string[] };
 
@@ -155,7 +156,7 @@ function handleMouseOver(e: MouseEvent) {
   // multi-select set) to telegraph that the body of that element is draggable.
   // Falls back to the default inspect crosshair anywhere else.
   const isDragTarget = hovId === selectedId || (isMultiSelectActive() && getSelectedIds().includes(hovId));
-  document.documentElement.style.cursor = isDragTarget ? 'move' : 'crosshair';
+  document.documentElement.style.cursor = isDragTarget ? 'move' : baseCursor();
   const hovRect = getElementRect(t);
   showAxisGuides(hovRect, 'hover');
   // With a single element selected, hovering another shows the edge-to-edge
@@ -258,6 +259,9 @@ function handleClick(e: MouseEvent) {
       });
     } catch {}
     if (onSelect) onSelect(buildElementInfo(t));
+    // The mouse is still over the toggled element and no mouseover will
+    // re-fire until it crosses a boundary — paint the drag affordance now.
+    document.documentElement.style.cursor = getSelectedIds().includes(id) ? 'move' : baseCursor();
     return;
   }
   selectedId = id;
@@ -265,12 +269,13 @@ function handleClick(e: MouseEvent) {
   showResizeDots(t);
   hideDistance();
   if (onSelect) onSelect(buildElementInfo(t));
+  document.documentElement.style.cursor = 'move';
 }
 
 export function enableInspect(cb: SelectionCallback) {
   if (active) return;
   active = true; onSelect = cb;
-  document.documentElement.style.cursor = 'crosshair';
+  document.documentElement.style.cursor = baseCursor();
   document.addEventListener('mouseover', handleMouseOver, true);
   document.addEventListener('mouseout', handleMouseOut, true);
   document.addEventListener('mousedown', handleMouseDown, true);
@@ -280,7 +285,7 @@ export function enableInspect(cb: SelectionCallback) {
 export function disableInspect() {
   if (!active) return;
   active = false;
-  document.documentElement.style.cursor = '';
+  restoreBaseCursor();
   document.removeEventListener('mouseover', handleMouseOver, true);
   document.removeEventListener('mouseout', handleMouseOut, true);
   document.removeEventListener('mousedown', handleMouseDown, true);

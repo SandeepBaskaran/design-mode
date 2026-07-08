@@ -444,6 +444,9 @@ let remRootPx = 16;
 // Figma-style nudge: Shift+Arrow steps a numeric field by this amount
 // (plain Arrow steps by 1). User-editable in Settings.
 let nudgeAmount = 10;
+// App-icon cursor on the inspected page while the panel is open. The
+// content script reads the same key via chrome.storage.onChanged.
+let customCursor = true;
 
 chrome.storage?.local?.get?.([
   'dm-theme', 'dm-color-format', 'dm-capture-mode',
@@ -453,6 +456,7 @@ chrome.storage?.local?.get?.([
   'dm-overlay-margin-color', 'dm-overlay-padding-color',
   'dm-input-unit',
   'dm-nudge-amount',
+  'dm-custom-cursor',
   'dm-a11y-category', 'dm-a11y-level',
 ], (result: any) => {
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
@@ -470,6 +474,7 @@ chrome.storage?.local?.get?.([
   if (typeof result?.['dm-overlay-padding-color'] === 'string') overlayPaddingColor = result['dm-overlay-padding-color'];
   if (result?.['dm-input-unit'] === 'rem' || result?.['dm-input-unit'] === 'px') inputUnit = result['dm-input-unit'];
   if (typeof result?.['dm-nudge-amount'] === 'number' && result['dm-nudge-amount'] > 0) nudgeAmount = result['dm-nudge-amount'];
+  if (typeof result?.['dm-custom-cursor'] === 'boolean') customCursor = result['dm-custom-cursor'];
   const cat = result?.['dm-a11y-category'];
   if (cat === 'auto' || cat === 'large' || cat === 'normal' || cat === 'graphics') a11yCategory = cat;
   const lvl = result?.['dm-a11y-level'];
@@ -8007,6 +8012,12 @@ function renderSettingsView(): string {
     '<input type="text" data-dm-setting="nudge-amount" data-dm-numeric="1" inputmode="decimal" value="' + escapeAttr(String(nudgeAmount)) + '" style="width:64px;padding:6px 8px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;color:var(--dm-text);font-family:inherit;font-size:11px;"/>' +
     '<span style="font-size:10px;color:var(--dm-text-dim);">px</span>' +
     '</div></div>' +
+    '<div style="' + sS + '"><div style="' + sT + '">Page cursor</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Show the Design Mode icon as the mouse cursor on the page while the panel is open.</div>' +
+    '<div style="display:flex;gap:4px;">' +
+    '<button data-dm-custom-cursor="on" style="' + (customCursor ? activeBtn : inactiveBtn) + '">On</button>' +
+    '<button data-dm-custom-cursor="off" style="' + (!customCursor ? activeBtn : inactiveBtn) + '">Off</button>' +
+    '</div></div>' +
     '<div style="' + sS + '"><div style="' + sT + '">Screenshot Capture</div>' +
     '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button does</div>' +
     '<div style="display:flex;gap:4px;">' +
@@ -8692,10 +8703,12 @@ function setupDelegation() {
           captureMode = 'clipboard';
           mcpPort = 9960; mcpAutoConnect = true;
           inspectorHoverColor = '#4F9EFF'; inspectorSelectColor = '#FF6B35';
+          customCursor = true;
           chrome.storage?.local?.remove?.([
             'dm-theme', 'dm-color-format', 'dm-capture-mode',
             'dm-mcp-port', 'dm-mcp-auto-connect',
             'dm-inspector-hover-color', 'dm-inspector-select-color',
+            'dm-custom-cursor',
           ]);
           showCaptureToast('success', 'Settings reset to defaults');
           render();
@@ -9243,6 +9256,16 @@ function setupDelegation() {
     if (captureModeBtn) {
       captureMode = captureModeBtn.dataset.dmCaptureMode as CaptureMode;
       chrome.storage?.local?.set?.({ 'dm-capture-mode': captureMode });
+      render();
+      return;
+    }
+
+    // Page cursor (on / off) — the content script picks the key up via
+    // chrome.storage.onChanged, so writing it is the whole propagation.
+    const customCursorBtn = target.closest<HTMLElement>('[data-dm-custom-cursor]');
+    if (customCursorBtn) {
+      customCursor = customCursorBtn.dataset.dmCustomCursor === 'on';
+      chrome.storage?.local?.set?.({ 'dm-custom-cursor': customCursor });
       render();
       return;
     }
