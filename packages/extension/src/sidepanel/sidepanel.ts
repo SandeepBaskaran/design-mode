@@ -459,6 +459,7 @@ chrome.storage?.local?.get?.([
   'dm-nudge-amount',
   'dm-custom-cursor',
   'dm-a11y-category', 'dm-a11y-level',
+  'dm-pip-size', 'dm-pip-unsupported',
 ], (result: any) => {
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
   if (result?.['dm-color-format']) { colorFormat = result['dm-color-format']; }
@@ -480,6 +481,21 @@ chrome.storage?.local?.get?.([
   if (cat === 'auto' || cat === 'large' || cat === 'normal' || cat === 'graphics') a11yCategory = cat;
   const lvl = result?.['dm-a11y-level'];
   if (lvl === 'AA' || lvl === 'AAA') a11yLevel = lvl;
+  // PiP size must be in memory before the pin click: requestWindow()
+  // consumes the click's user gesture, so the handler cannot await storage.
+  const ps = result?.['dm-pip-size'];
+  if (ps && typeof ps.width === 'number' && typeof ps.height === 'number') pipSavedSize = ps;
+  if (result?.['dm-pip-unsupported'] === true) pipUnsupported = true;
+  // Launcher boot: try to go on top immediately. If Chrome insists on a user
+  // gesture this rejects with NotAllowedError and the fallback UI (with its
+  // own pin button) stays up — one extra click, nothing lost.
+  if (isPipIntent && !isPip) {
+    if (pipAvailable) openPipWindow();
+    else {
+      pipUnsupported = true;
+      chrome.storage?.local?.set?.({ 'dm-pip-unsupported': true });
+    }
+  }
   // Resolve the host page's rem root once so px → rem conversions are
   // accurate even when the page customises the root font-size.
   try {
@@ -533,6 +549,25 @@ const popoutTabParam = (() => {
 const isPopout = popoutTabParam != null;
 let myTabId: number | null = popoutTabParam;
 
+// Pin-on-top via Document Picture-in-Picture (Chrome 116+). The PiP window
+// hosts a fresh copy of this page in an iframe (`?pip=1`) instead of
+// migrating the live DOM — a PiP window dies the moment its opener document
+// unloads, so this page stays alive as the opener while pinned.
+const isPip = new URLSearchParams(location.search).get('pip') === '1';
+// Set when the side panel routed here to pin: this window is only a hidden
+// PiP launcher/keep-alive opener, so it auto-attempts requestWindow on boot.
+const isPipIntent = new URLSearchParams(location.search).get('pipIntent') === '1';
+const pipAvailable = 'documentPictureInPicture' in window;
+// Floor matches the panel's own min-width (index.html); Chrome has no API to
+// stop the user shrinking a PiP window below this afterwards — content then
+// scrolls horizontally instead of breaking.
+const PIP_MIN_WIDTH = 320;
+const PIP_MIN_HEIGHT = 400;
+let pipPinned = false;
+let pipWindow: Window | null = null;
+let pipUnsupported = false;
+let pipSavedSize: { width: number; height: number } | null = null;
+
 function send(msg: any): Promise<any> {
   const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
     ? { ...msg, targetTabId: myTabId }
@@ -580,6 +615,68 @@ function signalPanelClosing() {
 }
 window.addEventListener('pagehide', signalPanelClosing);
 window.addEventListener('beforeunload', signalPanelClosing);
+
+// Runs for every PiP close path — the PiP window's own ✕, the back-to-side-
+// panel button inside the iframe, or opener death — via pagehide. The
+// launcher has no user-facing life of its own, so it always self-closes: on
+// dock-back the side panel is already open (transition guard keeps design
+// mode alive); on a plain ✕ this was the last surface and the tab deactivates.
+function onPipClosed() {
+  pipWindow = null;
+  pipPinned = false;
+  try { window.close(); } catch {}
+  render();
+}
+let pipSizeTimer: ReturnType<typeof setTimeout> | null = null;
+function savePipSizeDebounced() {
+  if (pipSizeTimer) clearTimeout(pipSizeTimer);
+  pipSizeTimer = setTimeout(() => {
+    if (!pipWindow) return;
+    pipSavedSize = {
+      width: Math.max(pipWindow.innerWidth, PIP_MIN_WIDTH),
+      height: Math.max(pipWindow.innerHeight, PIP_MIN_HEIGHT),
+    };
+    chrome.storage?.local?.set?.({ 'dm-pip-size': pipSavedSize });
+  }, 300);
+}
+
+// Opens the always-on-top PiP window hosting a fresh panel iframe, then
+// minimizes this launcher out of the way. requestWindow() consumes any user
+// gesture, so nothing may run before it — no await, no storage reads
+// (pipSavedSize is preloaded at boot for exactly this reason). Rejections:
+// NotAllowedError just means "needs a click" (the boot auto-attempt has no
+// gesture) — stay in fallback UI; anything else marks PiP unsupported.
+function openPipWindow() {
+  const dpip = (window as any).documentPictureInPicture;
+  if (!dpip || myTabId == null || pipPinned) return;
+  dpip.requestWindow({
+    width: Math.max(pipSavedSize?.width || window.innerWidth, PIP_MIN_WIDTH),
+    height: Math.max(pipSavedSize?.height || window.innerHeight, PIP_MIN_HEIGHT),
+  }).then(async (pw: Window) => {
+    pipWindow = pw;
+    pw.document.body.style.margin = '0';
+    const frame = pw.document.createElement('iframe');
+    frame.src = chrome.runtime.getURL('sidepanel/index.html') + '?tab=' + myTabId + '&pip=1';
+    frame.style.cssText = 'border:0;display:block;width:100vw;height:100vh;';
+    frame.addEventListener('load', () => { try { frame.contentWindow?.focus(); } catch {} });
+    pw.document.body.appendChild(frame);
+    pw.addEventListener('pagehide', onPipClosed);
+    pw.addEventListener('resize', savePipSizeDebounced);
+    pipPinned = true;
+    render();
+    // This page must stay alive as the PiP opener — park it minimized.
+    try {
+      const win = await chrome.windows.getCurrent();
+      if (win?.id != null) await chrome.windows.update(win.id, { state: 'minimized' });
+    } catch {}
+  }).catch((err: any) => {
+    if (err?.name === 'NotAllowedError') { render(); return; }
+    pipUnsupported = true;
+    chrome.storage?.local?.set?.({ 'dm-pip-unsupported': true });
+    showCaptureToast('error', 'Pin on top isn’t available in this Chrome.');
+    render();
+  });
+}
 
 /* ── Async actions ── */
 async function refreshMcpStatus() { const res = await send({ type: 'SP_GET_MCP_STATUS' }); if (res.mcpState) mcpState = res.mcpState; else if (res.connected && res.agentConnected) mcpState = 'connected'; else if (res.connected) mcpState = 'running'; else mcpState = 'offline'; render(); }
@@ -5497,9 +5594,16 @@ function renderHeader(): string {
     '<button data-dm-action="toggle-theme" title="Toggle theme" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon(themeIcon as keyof typeof icons, 15) + '</button>' +
     '<button data-dm-action="contribute" title="Contribute" aria-label="Open contribute panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('heartHandshake', 15) + '</button>' +
     '<button data-dm-action="help" title="Help" aria-label="Open help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('helpCircle', 15) + '</button>' +
-    (isPopout
-      ? '<button data-dm-action="dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
-      : '<button data-dm-action="pop-out" title="Pop out into a floating window" aria-label="Pop out into a floating window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('externalLink', 15) + '</button>') +
+    (isPip
+      ? '<button data-dm-action="pip-dock-back" title="Back to the side panel" aria-label="Back to the side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
+      : isPopout
+        ? (pipAvailable && !pipUnsupported
+            ? '<button data-dm-action="pip-pin" title="Pin on top of every window" aria-label="Pin on top of every window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>'
+            : '') +
+          '<button data-dm-action="dock-back" title="Back to the side panel" aria-label="Back to the side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
+        : (!pipUnsupported
+            ? '<button data-dm-action="pip-pin" title="Pin on top of every window" aria-label="Pin on top of every window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>'
+            : '')) +
     '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button></div>';
 }
 
@@ -8347,7 +8451,15 @@ function render() {
 
   let html: string;
 
-  if (settingsOpen) {
+  if (pipPinned && !isPip) {
+    // While pinned, this page is only the PiP window's keep-alive opener —
+    // the real panel UI lives in the PiP iframe.
+    html = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:12px;color:var(--dm-text-secondary);">' +
+      '<span style="display:flex;color:var(--dm-text-dim);">' + icon('pictureInPicture2', 24) + '</span>' +
+      '<div style="font-size:12px;">Panel is pinned on top</div>' +
+      '<button data-dm-action="pip-dock-back-from-launcher" style="background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);padding:5px 12px;cursor:pointer;font-family:inherit;font-size:11px;">Back to side panel</button>' +
+      '</div>';
+  } else if (settingsOpen) {
     html = renderHeader() + renderSettingsView() + renderCaptureToast();
   } else if (helpOpen) {
     html = renderHeader() + renderHelpView() + renderCaptureToast();
@@ -8664,19 +8776,39 @@ function setupDelegation() {
           );
           break;
         }
-        case 'pop-out': {
-          // Open the floating window (background does windows.create), then
+        case 'pip-pin': {
+          if (isPopout) {
+            // Launcher fallback UI: this window IS the PiP opener — the click
+            // gesture flows straight into requestWindow inside openPipWindow.
+            openPipWindow();
+            break;
+          }
+          // Side panel: the PiP API doesn't exist here, so route through the
+          // hidden launcher window (background does windows.create), then
           // close this side panel. The tab keeps design mode — background
           // guards the swap so the close doesn't deactivate it.
-          send({ type: 'SP_POP_OUT' }).then((r) => { if (r && r.ok) { try { window.close(); } catch {} } });
+          send({ type: 'SP_POP_OUT', pipIntent: true }).then((r) => { if (r && r.ok) { try { window.close(); } catch {} } });
           break;
         }
         case 'dock-back': {
           // chrome.sidePanel.open needs the click's user gesture, so call it
           // FIRST (synchronously, before any await). Then guard the swap and
-          // close this popup window.
+          // close this launcher window.
           if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
           send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { window.close(); } catch {} });
+          break;
+        }
+        case 'pip-dock-back': {
+          // Runs inside the PiP iframe. sidePanel.open needs the gesture, so
+          // it goes first; closing the PiP window (same-extension parent)
+          // then makes the launcher self-close via its pagehide handler.
+          if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
+          send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { window.parent.close(); } catch {} });
+          break;
+        }
+        case 'pip-dock-back-from-launcher': {
+          if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
+          send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { pipWindow?.close(); } catch {} });
           break;
         }
         case 'show-shortcuts': shortcutsOpen = true; render(); break;
@@ -8755,11 +8887,13 @@ function setupDelegation() {
           mcpPort = 9960; mcpAutoConnect = true;
           inspectorHoverColor = '#4F9EFF'; inspectorSelectColor = '#FF6B35';
           customCursor = true;
+          pipSavedSize = null; pipUnsupported = false;
           chrome.storage?.local?.remove?.([
             'dm-theme', 'dm-color-format', 'dm-capture-mode',
             'dm-mcp-port', 'dm-mcp-auto-connect',
             'dm-inspector-hover-color', 'dm-inspector-select-color',
             'dm-custom-cursor',
+            'dm-pip-size', 'dm-pip-unsupported',
           ]);
           showCaptureToast('success', 'Settings reset to defaults');
           render();

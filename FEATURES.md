@@ -424,21 +424,30 @@ Every edit you've made grouped by element.
   the project), **Help** (`?` — opens the Help overlay with "Report
   an issue" and "Copy diagnostics"), and **Settings** (gear). All
   three full-page overlays are mutually exclusive.
-- **Pop out / Dock back** — the panel runs in two surfaces:
-  - Default: Chrome's native **side panel** (docked to the browser).
-  - **Pop out** (`external-link` icon) opens the same panel as a free-floating
-    window that can sit anywhere on screen, including over the browser chrome.
-    It's bound to the tab it was popped out from and keeps controlling that tab
-    even as you switch browser tabs. The window's size/position is remembered
-    (`dm-popout-bounds`) and restored on the next pop-out.
-  - In the floating window, **Dock back** (`panel-right` icon) returns the UI
-    to the native side panel.
+- **Pin on top** — the panel runs in two user-facing surfaces with one icon
+  each:
+  - Default: Chrome's native **side panel** (docked to the browser). Its
+    header shows the **Pin on top** icon (`picture-in-picture-2`).
+  - Clicking it moves the panel into an always-on-top Document
+    Picture-in-Picture window (Chrome 116+) that floats above the inspected
+    page and every other window — no ⌘`-switching while editing. The side
+    panel closes. In the PiP window, **Back to side panel** (`panel-right`
+    icon) returns the UI to the docked side panel; closing the PiP window via
+    its own ✕ ends the session (design mode deactivates on the tab).
+  - Under the hood a hidden popup window acts as the PiP's keep-alive opener
+    (a PiP window dies when its opener unloads). It parks minimized with a
+    "Panel is pinned on top" placeholder. If Chrome demands a user gesture
+    for the PiP hand-off, that window surfaces once with the full panel UI —
+    click its pin icon and continue.
+  - PiP size is remembered (`dm-pip-size`) and floors at 320×400 (the side
+    panel's own min width); Chrome has no API to stop manual resizing below
+    that, so a squeezed window scrolls horizontally instead of breaking. The
+    pin icon hides permanently on Chrome builds without the API
+    (`dm-pip-unsupported`).
   - Each panel surface is bound to a specific tab (the background routes every
     `SP_*` message by `targetTabId`), so multiple surfaces across tabs/windows
     never cross-talk. Closing the last surface for a tab deactivates design
-    mode on just that tab. (A detached window can only be a separate OS window —
-    Chrome's side panel itself can't be moved; this is why pop-out is a window,
-    not a draggable in-page panel.)
+    mode on just that tab.
 
 ### 5.2 Action toolbar (between header and tabs)
 

@@ -256,7 +256,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } catch {}
       try {
         const win = await chrome.windows.create({
-          url: chrome.runtime.getURL('sidepanel/index.html') + '?tab=' + tabId,
+          url: chrome.runtime.getURL('sidepanel/index.html') + '?tab=' + tabId + (msg.pipIntent ? '&pipIntent=1' : ''),
           type: 'popup',
           focused: true,
           width: b.width || 420,

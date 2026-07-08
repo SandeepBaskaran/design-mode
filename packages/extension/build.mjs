@@ -11,6 +11,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const entries = ['content', 'background', 'sidepanel'];
 
+// In a linked worktree, re-point dist/ at the primary worktree's copy before
+// building, so every build writes through to the single Chrome-loaded dist.
+// (Worktrees provisioned without a git checkout never ran the post-checkout
+// hook that normally creates this symlink.)
+try {
+  execSync(`node ${resolve(__dirname, '../../scripts/link-shared-dist.mjs')}`, { stdio: 'inherit' });
+} catch {}
+
 console.log('\n\u25c6 Building Design Mode extension...\n');
 
 for (const entry of entries) {
