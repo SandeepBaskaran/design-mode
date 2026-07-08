@@ -172,6 +172,7 @@ let settingsOpen = false;
 let helpOpen = false;
 let shortcutsOpen = false;
 let contributeOpen = false;
+let fileAccessBlocked = false;
 let enabled = false;
 let inspecting = true;
 // While a comment composer is open (add / edit / region) we suspend inspect
@@ -525,6 +526,18 @@ function send(msg: any): Promise<any> {
   return new Promise((resolve) => chrome.runtime.sendMessage(stamped, (r) => resolve(r || {})));
 }
 
+// file:// URLs have an empty hostname — show the file name instead.
+function domainLabel(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'file:') {
+      const name = decodeURIComponent(u.pathname.split('/').pop() || '');
+      return name || 'Local file';
+    }
+    return u.hostname;
+  } catch { return url; }
+}
+
 /* ── Chrome Port ── */
 // Popped-out windows announce their bound tab in the port name so the
 // background binds correctly even before INIT_STATE.
@@ -534,7 +547,9 @@ port.onMessage.addListener((msg) => {
     enabled = msg.enabled ?? false; inspecting = msg.inspecting ?? true;
     if (typeof msg.tabId === 'number') myTabId = msg.tabId;
     mcpState = !msg.connected ? 'offline' : msg.agentConnected ? 'connected' : 'running';
-    if (msg.pinnedUrl) { try { pinnedDomain = new URL(msg.pinnedUrl).hostname; } catch { pinnedDomain = msg.pinnedUrl; } }
+    if (msg.pinnedUrl) { pinnedDomain = domainLabel(msg.pinnedUrl); }
+    fileAccessBlocked = !!msg.fileAccessBlocked;
+    if (fileAccessBlocked) { render(); return; }
     render(); refreshMcpStatus(); refreshDomTree(); refreshChanges(); refreshDesignTokens(); refreshPageFonts();
   }
 });
@@ -1634,6 +1649,8 @@ chrome.runtime.onMessage.addListener((msg) => {
     }
   }
   if (msg.type === 'STATE_UPDATE') {
+    // Only a live content script sends this, so the page is reachable.
+    fileAccessBlocked = false;
     enabled = msg.enabled ?? enabled;
     inspecting = msg.inspecting ?? inspecting;
     undoCount = msg.undoCount ?? undoCount;
@@ -8163,6 +8180,28 @@ function renderHelpView(): string {
     '</div>';
 }
 
+function renderFileAccessView(): string {
+  const card = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:14px;';
+  const primaryBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px 12px;background:var(--dm-text);border:1px solid var(--dm-text);border-radius:6px;color:var(--dm-bg);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;';
+  const step = (text: string) =>
+    '<li style="margin:0 0 8px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">' + text + '</li>';
+
+  return '<div style="padding:16px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
+    '<span style="display:flex;color:var(--dm-text-secondary);">' + icon('fileText', 14) + '</span>' +
+    '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Local file</span></div>' +
+    '<div style="' + card + '">' +
+    '<p style="margin:0 0 12px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">Chrome blocks extensions from local files by default. To edit this file, allow Design Mode to access file URLs:</p>' +
+    '<ol style="margin:0 0 12px 0;padding-left:18px;">' +
+    step('Open Design Mode’s extension settings — the button below takes you there.') +
+    step('Turn on <strong style="color:var(--dm-text);">“Allow access to file URLs”</strong>.') +
+    step('Chrome reloads the extension — come back to this tab and reopen the panel.') +
+    '</ol>' +
+    '<button data-dm-action="open-file-access-settings" style="' + primaryBtn + '">Open extension settings ' + icon('externalLink', 12) + '</button>' +
+    '</div>' +
+    '</div>';
+}
+
 function renderContributeView(): string {
   const card = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:14px;';
   const primaryBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px 12px;background:var(--dm-text);border:1px solid var(--dm-text);border-radius:6px;color:var(--dm-bg);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;text-decoration:none;';
@@ -8297,6 +8336,8 @@ function render() {
   } else if (tokensOpen) {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
       renderHeader() + renderTokensView() + renderCaptureToast() + '</div>';
+  } else if (fileAccessBlocked) {
+    html = renderHeader() + renderFileAccessView() + renderCaptureToast();
   } else {
     let tabContent = '';
     if (tab === 'layers') tabContent = renderLayersTab();
@@ -8562,6 +8603,7 @@ function setupDelegation() {
         case 'back-from-help': helpOpen = false; render(); break;
         case 'help': settingsOpen = false; contributeOpen = false; helpOpen = !helpOpen; render(); break;
         case 'back-from-contribute': contributeOpen = false; render(); break;
+        case 'open-file-access-settings': chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id }); break;
         case 'contribute': settingsOpen = false; helpOpen = false; contributeOpen = !contributeOpen; render(); break;
         case 'copy-diagnostics': {
           const payload = buildDiagnostics();

@@ -16,6 +16,8 @@ A free, open-source Chromium extension that turns any website into a live design
 
 That's it. Pin the extension to your toolbar, open any website, click the toolbar icon to open the side panel. Hover any element to highlight it; click to edit. Everything you change is tracked in the Changes tab and can be sent to your AI coding agent with one click.
 
+> **Editing a local HTML file?** Chrome blocks extensions from `file://` pages by default. Enable **"Allow access to file URLs"** for Design Mode in `chrome://extensions` — the side panel walks you through it when needed.
+
 ---
 
 ## What is it?
