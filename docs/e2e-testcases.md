@@ -56,10 +56,11 @@ unless noted otherwise.
 | 0.5.8 | MCP — auto-connect | Toggle off | Side panel doesn't auto-dial on open; the indicator stays grey until manually connected |
 | 0.5.9 | MCP — mode (Cloud / Local / Self-hosted) | Switch each | Cloud (default for fresh installs) uses `https://mcp.designmode.app` (or the configured URL); Local uses `ws://localhost:<port>`; Self-hosted exposes a URL field |
 | 0.5.10| MCP — cloud token & tenant | Enter a registered token + tenant ID | Stored in `chrome.storage.local`; shown masked; clearing re-disconnects |
-| 0.5.11| Reset to defaults | Click Reset | Theme back to system, colour format to HEX, all four overlay colours (hover / selection / margin / padding) to defaults, MCP port to default |
+| 0.5.11| Reset to defaults | Click Reset | Theme back to system, colour format to HEX, all four overlay colours (hover / selection / margin / padding) to defaults, MCP port to default, page cursor back to On |
 | 0.5.12| Inspector margin overlay colour | Pick a custom colour | Margin bands on the hover/selection overlay render in it and repaint live (default `#FF6363`) |
 | 0.5.13| Inspector padding overlay colour | Pick a custom colour | Padding bands render in it and repaint live (default `#7CC886`); the ↺ Reset link beside the overlay colours restores all four |
 | 0.5.14| Nudge amount | Change to e.g. `25` | Persists (`dm-nudge-amount`); Shift+Arrow on a px field now steps by 25 (default `10`); invalid / ≤0 reverts to the last valid value |
+| 0.5.15| Page cursor | Toggle Off with the panel open, then On again | Page cursor swaps **live** (no reload): app-icon cursor (default, On) ↔ plain crosshair; `move` over a selected element stays either way; closing the panel restores the normal cursor |
 
 ---
 
