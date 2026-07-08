@@ -43,6 +43,14 @@ if (chrome.sidePanel) {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 }
 
+// storage.session defaults to trusted (extension-page) contexts only; the
+// change-tracker's session persistence runs in content scripts, which count
+// as untrusted. Without this, every persist/load rejects with "Access to
+// storage is not allowed from this context".
+if (chrome.storage?.session?.setAccessLevel) {
+  chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }).catch(() => {});
+}
+
 // Returns false for URLs Chrome blocks extensions from scripting —
 // chrome:// internal pages, the Web Store, devtools, etc. Used to skip
 // inject + activate cleanly so the console stays quiet on those tabs.
@@ -61,6 +69,20 @@ function isScriptableUrl(url: string | undefined | null): boolean {
     if (u.hostname === 'chrome.google.com' && u.pathname.startsWith('/webstore')) return false;
   } catch {}
   return true;
+}
+
+// file:// pages are scriptable only when the user enables the per-extension
+// "Allow access to file URLs" toggle — no manifest key can grant it.
+async function isFileAccessBlocked(url: string | undefined | null): Promise<boolean> {
+  if (!url?.startsWith('file:')) return false;
+  try {
+    return !(await chrome.extension.isAllowedFileSchemeAccess());
+  } catch {
+    // Deprecated namespace — if it ever disappears from the SW, fall
+    // through to injection; the unreachable-content-script path below
+    // still flags file: tabs as blocked.
+    return false;
+  }
 }
 
 // A panel surface connected. Bind it to a tab and auto-activate that tab.
@@ -98,6 +120,10 @@ chrome.runtime.onConnect.addListener((port) => {
       try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: tabUrl, tabId }); } catch {}
       return;
     }
+    if (await isFileAccessBlocked(tabUrl)) {
+      try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, fileAccessBlocked: true, pinnedUrl: tabUrl, tabId }); } catch {}
+      return;
+    }
     try { await injectContentScript(tabId); } catch {}
     setTimeout(async () => {
       try {
@@ -109,7 +135,11 @@ chrome.runtime.onConnect.addListener((port) => {
         if (!/Could not establish connection|Receiving end does not exist/i.test(m)) {
           console.error('[DM] Auto-activate failed:', err);
         }
-        try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: tabUrl, tabId }); } catch {}
+        // Unreachable content script on a file: tab means Chrome denied
+        // injection — the file-access toggle is off, whatever the
+        // isAllowedFileSchemeAccess pre-check said.
+        const blocked = !!tabUrl?.startsWith('file:');
+        try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, fileAccessBlocked: blocked, pinnedUrl: tabUrl, tabId }); } catch {}
       }
     }, 300);
   })().catch(() => { /* tab query racing SW teardown — no point logging */ });
@@ -533,6 +563,13 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== 'complete') return;
   pinnedTabUrl = tab.url || pinnedTabUrl;
   if (!isScriptableUrl(tab.url)) return;
+  if (await isFileAccessBlocked(tab.url)) {
+    for (const [port, boundTab] of panelPorts) {
+      if (boundTab !== tabId) continue;
+      try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, fileAccessBlocked: true, pinnedUrl: tab.url, tabId }); } catch {}
+    }
+    return;
+  }
   try {
     await injectContentScript(tabId);
     setTimeout(async () => {

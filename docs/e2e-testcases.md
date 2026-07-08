@@ -449,6 +449,20 @@ bleeding to duplicates and back.
 
 ---
 
+## Phase 16 — Local files (file://)
+
+Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome://extensions` (the default).
+
+| #    | Test | Steps | Expected |
+|------|------|-------|----------|
+| 16.1 | Blocked guidance card | Open a local `.html` file (`file://`) and open the side panel | A "Local file" card with numbered steps replaces the editing UI (no Layers/Design/Changes tabs); Settings/Help still open from the header |
+| 16.2 | Settings shortcut button | Click **Open extension settings** on the card | A new tab opens at `chrome://extensions/?id=<extension id>` |
+| 16.3 | Editing after enabling | Turn the toggle ON (extension reloads), reopen the panel on the file tab | Full editing UI; inspect/select/edit/undo work; header shows the file name (e.g. `test.html`) |
+| 16.4 | Navigate pinned tab to file:// | Toggle OFF again. Open the panel on an http(s) tab, then navigate that tab to the file URL | The guidance card appears; navigating back to the http(s) page restores the editing UI |
+| 16.5 | Pop-out parity | Repeat 16.1 in the floating pop-out window | Same guidance card behaviour |
+
+---
+
 ## Phase 14 — Website (docs site)
 
 | #    | Test | Steps | Expected |

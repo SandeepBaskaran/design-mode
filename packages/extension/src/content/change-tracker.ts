@@ -366,7 +366,9 @@ export function persistSession() {
     try {
       const payload = { styleChanges, textChanges, domChanges, savedAt: Date.now() };
       const storage: any = (chrome.storage as any).session || chrome.storage.local;
-      storage.set({ [sessionKey()]: payload });
+      // Callback form: reading lastError swallows the rejection that the
+      // sync try/catch can't reach (e.g. access level not yet granted).
+      storage.set({ [sessionKey()]: payload }, () => void chrome.runtime.lastError);
     } catch {}
   }, 100);
 }
@@ -376,6 +378,7 @@ export function loadSession(): Promise<{ styleChanges: StyleChange[]; textChange
     try {
       const storage: any = (chrome.storage as any).session || chrome.storage.local;
       storage.get(sessionKey(), (data: any) => {
+        if (chrome.runtime.lastError) return resolve(null);
         const payload = data?.[sessionKey()];
         if (!payload) return resolve(null);
         resolve({
