@@ -1,6 +1,6 @@
 {
   "name": "@design-mode/mcp-local",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Local MCP companion server — bridges the Design Mode extension to coding agents over a localhost WebSocket.",
   "license": "MIT",
   "bin": {

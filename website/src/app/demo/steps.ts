@@ -26,6 +26,26 @@ export const STEPS: Step[] = [
       "Pin Design Mode in your Chrome toolbar, then click its icon to open the side panel on the right.",
   },
   {
+    id: "panel-modes",
+    title: "Three panel modes",
+    body: [
+      "The panel runs wherever you want it. Docked (the default) lives in Chrome's native side panel. Pop out (the external-link icon in the header) detaches it into a free-floating window you can move anywhere — it stays bound to the tab it came from, even while you browse other tabs.",
+      "From the floating window, the picture-in-picture icon pins the panel on top of everything — a true always-on-top window (Chrome 116+), floating above the page and every other app, so you never Cmd-` between windows while editing. While pinned, the same icon renders in the accent style: click it to drop back to the floating window, or hit the side-panel icon to dock straight home. All three states are one click apart.",
+    ],
+    tryIt:
+      "Open the side panel, click the pop-out icon in its header, then click the picture-in-picture icon in the floating window. Drag the pinned panel over this page — it stays on top. Click the accent picture-in-picture icon to unpin, then the side-panel icon to dock back.",
+  },
+  {
+    id: "local-files",
+    title: "Local HTML files",
+    body: [
+      "Design Mode also edits pages served from your disk — open any local HTML file via file:// and the whole toolkit works: inspect, restyle, comment, export the diff.",
+      "Chrome blocks extensions from file:// pages by default, so there's a one-time switch: enable 'Allow access to file URLs' for Design Mode in chrome://extensions. If it's off, the side panel detects it and walks you through exactly that step.",
+    ],
+    tryIt:
+      "Save any web page (or a scrappy prototype) as an .html file, open it in Chrome via file://, and pop the side panel open. If Chrome blocks it, follow the panel's built-in instructions to flip the file-access toggle.",
+  },
+  {
     id: "inspector",
     title: "Inspector mode",
     body: [

@@ -433,23 +433,28 @@ bleeding to duplicates and back.
 
 ---
 
-## Phase 15 — Pin on top (Document PiP)
+## Phase 15 — Floating panel window (pop-out / pin on top / dock-back)
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
-| 15.1 | Pin from side panel | In the side panel header click the **picture-in-picture** icon | The side panel closes and an always-on-top PiP window opens with the full panel UI, bound to the originating tab. Design mode stays active — no overlay flicker. (If Chrome demands a gesture for the hand-off, a launcher window surfaces once with the panel UI — clicking its pin icon completes the pin.) |
-| 15.2 | Launcher parks minimized | After 15.1, look for the hidden launcher window (Dock/taskbar) | A minimized popup window shows a "Panel is pinned on top" placeholder with a **Back to side panel** button |
-| 15.3 | Pinned edits target the bound tab | In the PiP window, select an element / apply a style / add a comment | Changes apply to the bound tab's page and show in its Changes tab |
-| 15.4 | Survives browser-tab switch | With the PiP window open, switch to a different browser tab, then act in the PiP window | It still controls the original bound tab (not the now-active tab), and stays on top |
-| 15.5 | Back to side panel | In the PiP window click the **panel-right** icon | The native side panel reopens for the bound tab; the PiP window and launcher close; design mode stays active (no flicker) |
-| 15.6 | Back to side panel from placeholder | Restore the minimized launcher and click **Back to side panel** | Same as 15.5 |
-| 15.7 | Close PiP window | Close the PiP window via its own ✕ | The launcher self-closes; design mode deactivates on the bound tab only (other tabs/surfaces unaffected) |
-| 15.8 | Launcher killed while pinned | Close the minimized launcher window from the Dock/taskbar while pinned | The PiP window dies with it (its opener unloaded); design mode deactivates on the bound tab only |
-| 15.9 | Bound tab closed | Pin for tab A, then close tab A | The launcher (and with it the PiP window) closes automatically |
-| 15.10 | Size remembered + floor | Resize the PiP window, close, pin again | The new PiP window restores the last size (`dm-pip-size`), never smaller than 320×400; squeezing it narrower scrolls horizontally instead of breaking layout |
-| 15.11 | No cross-talk (multi-surface) | Side panel controlling tab A in window 1 + a PiP window for tab B | Selecting in tab A updates only tab A's panel; the tab-B PiP is unaffected (per-tab `targetTabId` routing + `_dmTab` broadcast filter) |
-| 15.12 | MCP while pinned | With an agent connected, run `get_changes`/`apply_changes` while pinned | They target the bound tab exactly as in the docked side panel |
-| 15.13 | Unsupported Chrome | On a Chrome build without Document PiP | Pinning falls back to a plain window with a toast, and the pin icon disappears permanently (`dm-pip-unsupported`) |
+| 15.1 | Pop out | In the side panel header click the **external-link** icon | A chrome-less floating window opens with the full panel UI, bound to the originating tab; the side panel closes (best-effort). Design mode stays active on the tab — no overlay flicker |
+| 15.2 | Floating edits target the bound tab | In the floating window, select an element / apply a style / add a comment | Changes apply to the bound tab's page and show in its Changes tab |
+| 15.3 | Survives browser-tab switch | With the floating window open, switch to a different browser tab, then act in the floating window | It still controls the original bound tab (not the now-active tab) |
+| 15.4 | Bounds remembered | Resize/move the floating window, close it, pop out again | The new window restores the last size/position (`dm-popout-bounds`) |
+| 15.5 | Dock back | In the floating window click the **panel-right** icon | The native side panel reopens for the bound tab and the floating window closes; design mode stays active (no flicker) |
+| 15.6 | Close floating window | Close the floating window via its OS close button (no dock-back) | Design mode deactivates on the bound tab only (other tabs/surfaces unaffected) |
+| 15.7 | Bound tab closed | Pop out for tab A, then close tab A | The orphaned floating window closes automatically |
+| 15.8 | No cross-talk (multi-surface) | Side panel controlling tab A in window 1 + a floating window for tab B | Selecting in tab A updates only tab A's panel; the tab-B window is unaffected (per-tab `targetTabId` routing + `_dmTab` broadcast filter) |
+| 15.9 | MCP in floating mode | With an agent connected, run `get_changes`/`apply_changes` while popped out | They target the bound tab exactly as in the docked side panel |
+| 15.10 | Pin on top | In the floating window header click the **picture-in-picture** icon | An always-on-top PiP window opens with the full panel UI; the floating window minimizes and shows a "Panel is pinned on top" placeholder. The PiP window stays above the inspected page and other apps |
+| 15.11 | Pinned edits target the bound tab | In the PiP window, select an element / apply a style / add a comment | Changes apply to the bound tab's page exactly as in the floating window |
+| 15.12 | Unpin to floating | Click the accent-styled **picture-in-picture** icon in the PiP header (or close the PiP via its own ✕) | The PiP window closes; the floating window un-minimizes with the full panel UI; design mode stays active (no flicker) |
+| 15.13 | Dock back from PiP | Click the **panel-right** icon in the PiP header | The native side panel reopens for the bound tab; the PiP window AND the floating window close; design mode stays active (no flicker) |
+| 15.14 | Back to side panel from placeholder | Restore the minimized floating window while pinned and click **Back to side panel** | Same as 15.13 |
+| 15.15 | Size remembered + floor | Resize the PiP window, unpin, pin again | The new PiP window restores the last size (`dm-pip-size`), never smaller than 320×400; squeezing it narrower scrolls horizontally instead of breaking layout |
+| 15.16 | Opener killed while pinned | Close the minimized floating window from the Dock/taskbar while pinned | The PiP window dies with it (its opener unloaded); design mode deactivates on the bound tab only |
+| 15.17 | Minimize doesn't clobber bounds | Pin (floating window minimizes), unpin, dock back, pop out again | The floating window restores its pre-pin size/position — the minimize never overwrote `dm-popout-bounds` |
+| 15.18 | Unsupported Chrome | On a Chrome build without Document PiP | The Pin on top button is absent from the floating header; if `requestWindow` throws, a toast explains and the button disappears permanently (`dm-pip-unsupported`) |
 
 ---
 

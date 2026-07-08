@@ -6,6 +6,53 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] — 2026-07-08
+
+### Added
+
+- **Pin on top (Document Picture-in-Picture).** The floating panel
+  window gains a `picture-in-picture` header icon that moves the panel
+  into a true always-on-top window (Chrome 116+) floating above the
+  inspected page and every other app — no more window-switching while
+  editing. The panel now has three one-click-apart modes: **docked**
+  (side panel), **floating** (pop-out), and **pinned** (PiP). While
+  pinned, the accent-styled PiP icon (or the PiP window's own ✕)
+  returns to the floating window; the side-panel icon docks straight
+  back. PiP size is remembered (`dm-pip-size`, floored at 320×400);
+  the button hides permanently on Chrome builds without the API
+  (`dm-pip-unsupported`).
+- **Local `file://` page editing.** The side panel now works on HTML
+  files opened from disk. Chrome gates this behind the per-extension
+  "Allow access to file URLs" toggle — when it's off, the panel
+  detects it and shows the exact steps to enable it.
+- **Page cursor.** While the side panel is open, the page shows a
+  Design-Mode app-icon cursor so it's obvious the page is an editable
+  surface. Toggleable in Settings (`dm-custom-cursor`).
+- **Website: demo-page steps** for the three panel modes and local
+  `file://` editing.
+
+### Fixed
+
+- **Per-page edit sessions persist again.** Content scripts were
+  denied `chrome.storage.session` access (it defaults to
+  trusted-contexts-only), so saving/restoring a page's edit session
+  silently failed. The background now grants untrusted-context access
+  on boot.
+- **Long media filenames** no longer overflow the Media section's
+  Download button — the label truncates in the middle.
+
+### Internal
+
+- Website upgraded to **Next 16.2.10** (Turbopack builds,
+  `eslint-config-next` flat config, ESLint CLI replaces the removed
+  `next lint`).
+- Dependency bumps: the Dependabot patch-and-minor group (16 updates,
+  incl. vite 6.4.3 and react 19.2.7) and `actions/checkout` v7 across
+  all workflows.
+- `build.mjs` re-links the extension `dist/` to the primary worktree
+  before building, so parallel-agent worktrees share one
+  Chrome-loaded build.
+
 ## [1.7.1] — 2026-07-03
 
 ### Added

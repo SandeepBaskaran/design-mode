@@ -424,25 +424,29 @@ Every edit you've made grouped by element.
   the project), **Help** (`?` — opens the Help overlay with "Report
   an issue" and "Copy diagnostics"), and **Settings** (gear). All
   three full-page overlays are mutually exclusive.
-- **Pin on top** — the panel runs in two user-facing surfaces with one icon
-  each:
+- **Pop out / Pin on top / Dock back** — the panel runs in three surfaces:
   - Default: Chrome's native **side panel** (docked to the browser). Its
-    header shows the **Pin on top** icon (`picture-in-picture-2`).
-  - Clicking it moves the panel into an always-on-top Document
+    header shows **Pop out** (`external-link` icon).
+  - **Pop out** opens the same panel as a free-floating window bound to the
+    tab it was popped from; size/position are remembered
+    (`dm-popout-bounds`). Its header shows **Pin on top**
+    (`picture-in-picture-2` icon) and **Dock back** (`panel-right` icon).
+  - **Pin on top** (floating window only — Chrome's PiP API requires the
+    gesture there) moves the panel into an always-on-top Document
     Picture-in-Picture window (Chrome 116+) that floats above the inspected
-    page and every other window — no ⌘`-switching while editing. The side
-    panel closes. In the PiP window, **Back to side panel** (`panel-right`
-    icon) returns the UI to the docked side panel; closing the PiP window via
-    its own ✕ ends the session (design mode deactivates on the tab).
-  - Under the hood a hidden popup window acts as the PiP's keep-alive opener
-    (a PiP window dies when its opener unloads). It parks minimized with a
-    "Panel is pinned on top" placeholder. If Chrome demands a user gesture
-    for the PiP hand-off, that window surfaces once with the full panel UI —
-    click its pin icon and continue.
+    page and every other window — no ⌘`-switching while editing. The
+    floating window parks minimized as the PiP's keep-alive opener (a PiP
+    window dies when its opener unloads) with a "Panel is pinned on top"
+    placeholder.
+  - In the PiP window the same `picture-in-picture-2` icon renders in the
+    active (accent) style — clicking it (or the PiP's own ✕) toggles the pin
+    off, back to the floating window. **Dock back** (`panel-right` icon)
+    next to it returns straight to the docked side panel — from PiP, both
+    other states are one click away.
   - PiP size is remembered (`dm-pip-size`) and floors at 320×400 (the side
     panel's own min width); Chrome has no API to stop manual resizing below
     that, so a squeezed window scrolls horizontally instead of breaking. The
-    pin icon hides permanently on Chrome builds without the API
+    pin button hides permanently on Chrome builds without the API
     (`dm-pip-unsupported`).
   - Each panel surface is bound to a specific tab (the background routes every
     `SP_*` message by `targetTabId`), so multiple surfaces across tabs/windows

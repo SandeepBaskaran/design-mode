@@ -256,7 +256,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } catch {}
       try {
         const win = await chrome.windows.create({
-          url: chrome.runtime.getURL('sidepanel/index.html') + '?tab=' + tabId + (msg.pipIntent ? '&pipIntent=1' : ''),
+          url: chrome.runtime.getURL('sidepanel/index.html') + '?tab=' + tabId,
           type: 'popup',
           focused: true,
           width: b.width || 420,
@@ -507,7 +507,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Remember a floating window's size/position so the next pop-out restores it.
 chrome.windows.onBoundsChanged?.addListener((win) => {
-  if (win.id != null && popoutWindows.has(win.id)) {
+  // Skip non-normal states so a minimize (e.g. while pinned to PiP) doesn't
+  // clobber the remembered floating-window bounds.
+  if (win.id != null && win.state === 'normal' && popoutWindows.has(win.id)) {
     const { left, top, width, height } = win;
     chrome.storage.local.set({ 'dm-popout-bounds': { left, top, width, height } }).catch(() => {});
   }

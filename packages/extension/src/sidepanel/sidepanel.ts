@@ -486,16 +486,6 @@ chrome.storage?.local?.get?.([
   const ps = result?.['dm-pip-size'];
   if (ps && typeof ps.width === 'number' && typeof ps.height === 'number') pipSavedSize = ps;
   if (result?.['dm-pip-unsupported'] === true) pipUnsupported = true;
-  // Launcher boot: try to go on top immediately. If Chrome insists on a user
-  // gesture this rejects with NotAllowedError and the fallback UI (with its
-  // own pin button) stays up — one extra click, nothing lost.
-  if (isPipIntent && !isPip) {
-    if (pipAvailable) openPipWindow();
-    else {
-      pipUnsupported = true;
-      chrome.storage?.local?.set?.({ 'dm-pip-unsupported': true });
-    }
-  }
   // Resolve the host page's rem root once so px → rem conversions are
   // accurate even when the page customises the root font-size.
   try {
@@ -554,9 +544,6 @@ let myTabId: number | null = popoutTabParam;
 // migrating the live DOM — a PiP window dies the moment its opener document
 // unloads, so this page stays alive as the opener while pinned.
 const isPip = new URLSearchParams(location.search).get('pip') === '1';
-// Set when the side panel routed here to pin: this window is only a hidden
-// PiP launcher/keep-alive opener, so it auto-attempts requestWindow on boot.
-const isPipIntent = new URLSearchParams(location.search).get('pipIntent') === '1';
 const pipAvailable = 'documentPictureInPicture' in window;
 // Floor matches the panel's own min-width (index.html); Chrome has no API to
 // stop the user shrinking a PiP window below this afterwards — content then
@@ -565,6 +552,11 @@ const PIP_MIN_WIDTH = 320;
 const PIP_MIN_HEIGHT = 400;
 let pipPinned = false;
 let pipWindow: Window | null = null;
+let pipMinimizedSelf = false;
+// Dock-back was requested from inside the PiP (side panel is taking over) —
+// on PiP close, this floating window must close itself instead of restoring.
+let pipDockingBack = false;
+let pipChannel: BroadcastChannel | null = null;
 let pipUnsupported = false;
 let pipSavedSize: { width: number; height: number } | null = null;
 
@@ -616,15 +608,27 @@ function signalPanelClosing() {
 window.addEventListener('pagehide', signalPanelClosing);
 window.addEventListener('beforeunload', signalPanelClosing);
 
-// Runs for every PiP close path — the PiP window's own ✕, the back-to-side-
-// panel button inside the iframe, or opener death — via pagehide. The
-// launcher has no user-facing life of its own, so it always self-closes: on
-// dock-back the side panel is already open (transition guard keeps design
-// mode alive); on a plain ✕ this was the last surface and the tab deactivates.
+// Runs for every PiP close path — the PiP window's own ✕, the Unpin button,
+// or a dock-back from inside the iframe — via pagehide. Unpin/✕ restore this
+// floating window; dock-back (flagged over the BroadcastChannel) closes it,
+// since the side panel is taking over (transition guard keeps design mode
+// alive across the swap).
 function onPipClosed() {
   pipWindow = null;
   pipPinned = false;
-  try { window.close(); } catch {}
+  try { pipChannel?.close(); } catch {}
+  pipChannel = null;
+  if (pipDockingBack) {
+    pipDockingBack = false;
+    try { window.close(); } catch {}
+    return;
+  }
+  if (pipMinimizedSelf) {
+    pipMinimizedSelf = false;
+    chrome.windows?.getCurrent?.().then((win) => {
+      if (win?.id != null) return chrome.windows.update(win.id, { state: 'normal', focused: true });
+    }).catch(() => {});
+  }
   render();
 }
 let pipSizeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -641,11 +645,10 @@ function savePipSizeDebounced() {
 }
 
 // Opens the always-on-top PiP window hosting a fresh panel iframe, then
-// minimizes this launcher out of the way. requestWindow() consumes any user
-// gesture, so nothing may run before it — no await, no storage reads
-// (pipSavedSize is preloaded at boot for exactly this reason). Rejections:
-// NotAllowedError just means "needs a click" (the boot auto-attempt has no
-// gesture) — stay in fallback UI; anything else marks PiP unsupported.
+// minimizes this floating window out of the way (it must stay alive as the
+// PiP's opener). requestWindow() consumes the click's user gesture, so
+// nothing may run before it — no await, no storage reads (pipSavedSize is
+// preloaded at boot for exactly this reason).
 function openPipWindow() {
   const dpip = (window as any).documentPictureInPicture;
   if (!dpip || myTabId == null || pipPinned) return;
@@ -662,15 +665,20 @@ function openPipWindow() {
     pw.document.body.appendChild(frame);
     pw.addEventListener('pagehide', onPipClosed);
     pw.addEventListener('resize', savePipSizeDebounced);
+    try {
+      pipChannel = new BroadcastChannel('dm-pip-' + myTabId);
+      pipChannel.onmessage = (e) => { if (e.data === 'dock-back') pipDockingBack = true; };
+    } catch {}
     pipPinned = true;
     render();
-    // This page must stay alive as the PiP opener — park it minimized.
     try {
       const win = await chrome.windows.getCurrent();
-      if (win?.id != null) await chrome.windows.update(win.id, { state: 'minimized' });
+      if (win?.id != null) {
+        pipMinimizedSelf = true;
+        await chrome.windows.update(win.id, { state: 'minimized' });
+      }
     } catch {}
-  }).catch((err: any) => {
-    if (err?.name === 'NotAllowedError') { render(); return; }
+  }).catch(() => {
     pipUnsupported = true;
     chrome.storage?.local?.set?.({ 'dm-pip-unsupported': true });
     showCaptureToast('error', 'Pin on top isn’t available in this Chrome.');
@@ -5595,15 +5603,14 @@ function renderHeader(): string {
     '<button data-dm-action="contribute" title="Contribute" aria-label="Open contribute panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('heartHandshake', 15) + '</button>' +
     '<button data-dm-action="help" title="Help" aria-label="Open help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('helpCircle', 15) + '</button>' +
     (isPip
-      ? '<button data-dm-action="pip-dock-back" title="Back to the side panel" aria-label="Back to the side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
+      ? '<button data-dm-action="pip-unpin" title="Pinned on top — click to unpin back to the floating window" aria-label="Pinned on top — click to unpin back to the floating window" style="background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>' +
+        '<button data-dm-action="pip-dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
       : isPopout
         ? (pipAvailable && !pipUnsupported
             ? '<button data-dm-action="pip-pin" title="Pin on top of every window" aria-label="Pin on top of every window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>'
             : '') +
-          '<button data-dm-action="dock-back" title="Back to the side panel" aria-label="Back to the side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
-        : (!pipUnsupported
-            ? '<button data-dm-action="pip-pin" title="Pin on top of every window" aria-label="Pin on top of every window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>'
-            : '')) +
+          '<button data-dm-action="dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
+        : '<button data-dm-action="pop-out" title="Pop out into a floating window" aria-label="Pop out into a floating window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('externalLink', 15) + '</button>') +
     '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button></div>';
 }
 
@@ -8776,38 +8783,49 @@ function setupDelegation() {
           );
           break;
         }
-        case 'pip-pin': {
-          if (isPopout) {
-            // Launcher fallback UI: this window IS the PiP opener — the click
-            // gesture flows straight into requestWindow inside openPipWindow.
-            openPipWindow();
-            break;
-          }
-          // Side panel: the PiP API doesn't exist here, so route through the
-          // hidden launcher window (background does windows.create), then
+        case 'pop-out': {
+          // Open the floating window (background does windows.create), then
           // close this side panel. The tab keeps design mode — background
           // guards the swap so the close doesn't deactivate it.
-          send({ type: 'SP_POP_OUT', pipIntent: true }).then((r) => { if (r && r.ok) { try { window.close(); } catch {} } });
+          send({ type: 'SP_POP_OUT' }).then((r) => { if (r && r.ok) { try { window.close(); } catch {} } });
+          break;
+        }
+        case 'pip-pin': {
+          // Floating window only: this window IS the PiP opener — the click
+          // gesture flows straight into requestWindow inside openPipWindow.
+          openPipWindow();
+          break;
+        }
+        case 'pip-unpin': {
+          // Runs inside the PiP iframe. Closing the PiP (same-extension
+          // parent) fires the opener's pagehide handler, which restores the
+          // floating window.
+          try { window.parent.close(); } catch {}
           break;
         }
         case 'dock-back': {
           // chrome.sidePanel.open needs the click's user gesture, so call it
           // FIRST (synchronously, before any await). Then guard the swap and
-          // close this launcher window.
+          // close this floating window.
           if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
           send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { window.close(); } catch {} });
           break;
         }
         case 'pip-dock-back': {
           // Runs inside the PiP iframe. sidePanel.open needs the gesture, so
-          // it goes first; closing the PiP window (same-extension parent)
-          // then makes the launcher self-close via its pagehide handler.
+          // it goes first. The broadcast tells the floating-window opener to
+          // close itself instead of restoring when the PiP dies; the small
+          // delay lets that flag land before pagehide fires.
           if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
-          send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { window.parent.close(); } catch {} });
+          try { new BroadcastChannel('dm-pip-' + myTabId).postMessage('dock-back'); } catch {}
+          send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => {
+            setTimeout(() => { try { window.parent.close(); } catch {} }, 50);
+          });
           break;
         }
         case 'pip-dock-back-from-launcher': {
           if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
+          pipDockingBack = true;
           send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { pipWindow?.close(); } catch {} });
           break;
         }
