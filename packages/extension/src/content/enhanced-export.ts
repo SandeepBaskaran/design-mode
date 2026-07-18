@@ -10,7 +10,8 @@ import { getElementById, generateSelector } from './helpers';
 import { getStyleChanges, getTextChanges, getDomChanges } from './change-tracker';
 import { getSourceLocation } from './source-detection';
 import type { CommentData } from './comments';
-import { getRootVarEdits } from './root-var-store';
+import { getTokenEdits } from './root-var-store';
+import { getTokenIndex, type PageToken } from './token-engine';
 
 interface ElementContext {
   selector: string;
@@ -70,12 +71,10 @@ function gatherElementContext(elementId: string, selector: string): ElementConte
   return { selector, tagName, smartLabel, ambiguous, sourceFile, componentName, framework, line };
 }
 
-// ── Page design tokens (CSS custom properties on :root) ──
+// ── Page design tokens ──
 // Build a value→name map so we can rewrite raw values in the changes list to
 // `var(--name)` references — the agent then preserves the design system
 // instead of inlining hex colors and px sizes.
-
-interface TokenInfo { name: string; value: string; }
 
 // Emit a focused list of CSS variable changes the user made in this
 // session. Only fires when the user has actually modified at least one
@@ -83,33 +82,18 @@ interface TokenInfo { name: string; value: string; }
 // Returns an empty string when no edits exist, so the caller can skip
 // the section without producing trailing whitespace.
 function buildTokenChangesSection(): string {
-  const edits = getRootVarEdits();
+  const edits = getTokenEdits();
   if (edits.length === 0) return '';
   const lines: string[] = [];
   lines.push('## Tokens changed');
   for (const e of edits) {
-    lines.push(`- \`${e.cssVar}\`: ${e.original} → ${e.current}`);
+    const scope = e.scopeSelector !== ':root' ? ` (scope \`${e.scopeSelector}\`)` : '';
+    const system = e.system ? ` [${e.system}]` : '';
+    lines.push(`- \`${e.cssVar}\`${system}${scope}: ${e.original || '(unset)'} → ${e.current}`);
   }
+  lines.push('');
+  lines.push('These redefine CSS custom properties. Find each token\'s definition in the codebase (SCSS variable, theme file, Tailwind @theme block, or CSS rule on the scope selector) and change it at the source — do not restyle individual components.');
   return lines.join('\n');
-}
-
-function detectRootTokens(): TokenInfo[] {
-  const tokens = new Map<string, string>();
-  for (const sheet of Array.from(document.styleSheets)) {
-    try {
-      for (const rule of Array.from(sheet.cssRules)) {
-        if (rule instanceof CSSStyleRule && (rule.selectorText === ':root' || rule.selectorText === 'html')) {
-          for (let i = 0; i < rule.style.length; i++) {
-            const name = rule.style[i];
-            if (name.startsWith('--')) {
-              tokens.set(name, rule.style.getPropertyValue(name).trim());
-            }
-          }
-        }
-      }
-    } catch {}
-  }
-  return Array.from(tokens.entries()).map(([name, value]) => ({ name, value }));
 }
 
 // Normalize a value for comparison: strip spaces, lower-case, collapse
@@ -119,11 +103,12 @@ function normalize(v: string): string {
   return v.trim().toLowerCase().replace(/\s+/g, '');
 }
 
-function buildTokenLookup(tokens: TokenInfo[]): Map<string, string> {
+function buildTokenLookup(tokens: PageToken[]): Map<string, string> {
   const lookup = new Map<string, string>();
   for (const t of tokens) {
-    if (!t.value) continue;
-    lookup.set(normalize(t.value), t.name);
+    const v = t.resolvedValue || t.value;
+    if (!v) continue;
+    lookup.set(normalize(v), t.cssVar);
   }
   return lookup;
 }
@@ -151,7 +136,7 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
   const textChanges = getTextChanges();
   const domChanges = getDomChanges();
 
-  const tokens = detectRootTokens();
+  const tokens = getTokenIndex().tokens;
   const tokenLookup = buildTokenLookup(tokens);
   const tokensUsed = new Set<string>();
 
@@ -299,9 +284,9 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
   if (tokensUsed.size > 0) {
     lines.push('');
     lines.push('## Design tokens used');
-    const usedList = tokens.filter(t => tokensUsed.has(t.name));
+    const usedList = tokens.filter(t => tokensUsed.has(t.cssVar));
     for (const t of usedList) {
-      lines.push(`- \`${t.name}\`: ${t.value}`);
+      lines.push(`- \`${t.cssVar}\`: ${t.value}`);
     }
   }
 

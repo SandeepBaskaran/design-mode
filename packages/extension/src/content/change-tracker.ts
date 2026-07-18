@@ -8,6 +8,7 @@ import { DEFAULT_WS_PORT, DATA_ATTR } from '../shared';
 import { BUILTIN_KEYFRAMES } from './keyframes-library';
 import { captureElementScreenshot, captureViewportScreenshotClean, captureRegionScreenshot } from './screenshots';
 import { loadComments } from './comments';
+import { getTokenEdits } from './root-var-store';
 
 // Lifecycle a coding agent drives over MCP: untouched → working → done.
 // Absent ⇒ 'todo'. Mirrors @design-mode/shared ChangeStatus.
@@ -23,13 +24,13 @@ export interface StyleChange {
   // label (`PRESET`, `APPLIED to N`, `HIDE`). When `groupKind` is set
   // without a `groupId`, it's a single-row label override (visibility).
   groupId?: string;
-  groupKind?: 'preset' | 'multi-select' | 'visibility';
+  groupKind?: 'preset' | 'multi-select' | 'visibility' | 'consolidate';
   groupLabel?: string;
 }
 
 export interface StyleChangeMeta {
   groupId?: string;
-  groupKind?: 'preset' | 'multi-select' | 'visibility';
+  groupKind?: 'preset' | 'multi-select' | 'visibility' | 'consolidate';
   groupLabel?: string;
 }
 
@@ -977,7 +978,18 @@ export function generateCSSBlock(): string {
   return rules.join('\n\n');
 }
 
+const TOKEN_GUIDANCE =
+  'Token changes redefine CSS custom properties. Locate each token\'s definition in the codebase ' +
+  '(SCSS variable, theme file, Tailwind @theme block, or the CSS rule on its scopeSelector) and change ' +
+  'it at the source — do not restyle individual components. A style change whose newValue is var(--x) ' +
+  'means the element should reference that token, not the resolved literal.';
+
 export function getChangeReport() {
+  const tokenChanges = getTokenEdits().map(t => ({
+    cssVar: t.cssVar, scopeSelector: t.scopeSelector,
+    oldValue: t.original, newValue: t.current, system: t.system,
+    cssRule: `${t.scopeSelector} { ${t.cssVar}: ${t.current}; }`,
+  }));
   // Selectors are regenerated from the live DOM at report time — recorded
   // selectors are positional (nth-of-type) and go stale once layers are
   // reordered, sending the agent to whatever sibling now sits in the old
@@ -990,6 +1002,8 @@ export function getChangeReport() {
   return {
     pageUrl: window.location.href,
     pageTitle: document.title,
+    tokenChanges,
+    ...(tokenChanges.length > 0 ? { tokenGuidance: TOKEN_GUIDANCE } : {}),
     styleChanges: styleChanges.map(c => {
       const selector = liveSelector(c.elementId, c.selector);
       return {

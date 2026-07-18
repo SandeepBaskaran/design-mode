@@ -509,11 +509,6 @@
       width: 24px;
       padding: 0;
     }
-    .dm-token-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-    }
     .dm-token-chip {
       display: inline-flex;
       align-items: center;
@@ -742,6 +737,27 @@
     }
     .dm-token-row:hover { background: var(--dm-bg-secondary); }
     .dm-token-row-readonly:hover { background: transparent; cursor: default; }
+    /* Row jumped to from a field's "Edit token globally" action. */
+    .dm-token-row[data-dm-token-focused="true"] {
+      background: var(--dm-accent-bg);
+      box-shadow: inset 2px 0 0 var(--dm-accent);
+    }
+    /* Selector a token is declared on — shown when it isn't :root. */
+    .dm-token-scope-chip {
+      flex-shrink: 0;
+      max-width: 84px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 0 4px;
+      border-radius: 3px;
+      background: var(--dm-bg-tertiary, var(--dm-bg-secondary));
+      color: var(--dm-text-muted);
+      font-family: SF Mono, Monaco, monospace;
+      font-size: 8px;
+      line-height: 1.6;
+    }
+    .dm-token-scope-chip[data-inactive="true"] { opacity: 0.5; font-style: italic; }
     .dm-token-name {
       flex: 0 0 30%;
       min-width: 0;
@@ -772,6 +788,11 @@
       cursor: pointer;
     }
     .dm-token-uses:hover { color: var(--dm-accent); border-color: var(--dm-accent-border); }
+    .dm-token-uses[data-active="true"] {
+      color: var(--dm-accent);
+      background: var(--dm-accent-bg);
+      border-color: var(--dm-accent);
+    }
     .dm-token-reset {
       flex-shrink: 0;
       width: 20px;
@@ -950,7 +971,34 @@
        Design tab used to ship its own ~10-property inline `style="…"` blob.
        These classes back the `inp` / `inpKw` / `sel` / `sub` / `grid` / `sp`
        helpers — same visuals, ~1.5k fewer lines of generated markup. */
-    .dm-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .dm-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; position: relative; }
+    /* Token badge — the ◆ pill on fields whose value comes from a design
+       token. Opens the swap / edit-globally / detach menu. */
+    .dm-token-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      flex-shrink: 0;
+      max-width: 96px;
+      margin-right: 4px;
+      padding: 1px 4px;
+      border: none;
+      border-radius: 4px;
+      background: var(--dm-accent-bg);
+      color: var(--dm-accent);
+      font-size: 8px;
+      line-height: 1.4;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .dm-token-badge-open { outline: 1px solid var(--dm-accent); }
+    .dm-token-badge-name {
+      font-family: SF Mono, Monaco, monospace;
+      font-size: 9px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .dm-field-label {
       font-size: 10px;
       color: var(--dm-text-muted);

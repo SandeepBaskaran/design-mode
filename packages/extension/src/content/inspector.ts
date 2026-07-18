@@ -3,6 +3,7 @@
 // ============================================================
 
 import { getOrAssignId, getElementById, getElementRect, generateSelector, getBreadcrumbs, getComputedStyleSubset } from './helpers';
+import { getAuthoredVarsForElement, type PropToken } from './token-engine';
 import { showHover, hideHover, showSelect, updateSelectPosition, isOverlayElement } from './overlays';
 import { isMultiSelectActive, enableMultiSelect, toggleSelection, getSelectedIds } from './multi-select';
 import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag } from './measure-guides';
@@ -13,6 +14,9 @@ export type IconInfo = { library: string; name: string; availableIcons?: string[
 export type ElementInfo = {
   id: string; tagName: string; className: string; elementId: string;
   breadcrumbs: string[]; computedStyles: Record<string, string>;
+  // camelCase prop → the token it's authored from (var name + the scope
+  // this element resolves it through). Drives the token badges.
+  styleTokens: Record<string, PropToken>;
   rect: { top: number; left: number; width: number; height: number; bottom: number; right: number };
   textContent: string | null; innerHTML: string;
   attributes: Record<string, string>; selector: string;
@@ -100,7 +104,9 @@ function measureChildGap(el: HTMLElement): { col: number | null; row: number | n
   return { col, row };
 }
 
-export function buildElementInfo(el: HTMLElement): ElementInfo {
+// `skipTokens` keeps the debounced hover path cheap — var attribution
+// walks matched rules and is only needed once an element is selected.
+export function buildElementInfo(el: HTMLElement, skipTokens = false): ElementInfo {
   const id = getOrAssignId(el);
   const attrs: Record<string, string> = {};
   for (const a of Array.from(el.attributes)) {
@@ -122,6 +128,7 @@ export function buildElementInfo(el: HTMLElement): ElementInfo {
     className: typeof el.className === 'string' ? el.className : '',
     elementId: el.id || '', breadcrumbs: getBreadcrumbs(el),
     computedStyles: getComputedStyleSubset(el),
+    styleTokens: skipTokens ? {} : getAuthoredVarsForElement(el),
     rect: getElementRect(el),
     textContent: el.textContent?.slice(0, 500) || null,
     innerHTML,
@@ -173,7 +180,7 @@ function handleMouseOver(e: MouseEvent) {
   if (hoverDebounceTimer) clearTimeout(hoverDebounceTimer);
   hoverDebounceTimer = setTimeout(() => {
     if (!active) return;
-    const info = buildElementInfo(t);
+    const info = buildElementInfo(t, true);
     try {
       chrome.runtime.sendMessage({
         type: 'ELEMENT_HOVERED_INFO',

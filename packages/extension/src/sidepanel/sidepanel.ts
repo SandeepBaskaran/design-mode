@@ -112,6 +112,9 @@ import {
 interface ElementInfo {
   id: string; tagName: string; className: string;
   computedStyles: Record<string, string>;
+  // camelCase prop → the token it's authored from (var name + the scope
+  // this element resolves it through).
+  styleTokens?: Record<string, { cssVar: string; scope: string }>;
   boundingRect: { x: number; y: number; width: number; height: number };
   breadcrumbs: string[]; element?: any; imgSrc?: string;
   textContent?: string; hasChildElements?: boolean;
@@ -195,7 +198,7 @@ let domChanges: DomChange[] = [];
 let comments: CommentEntry[] = [];
 // Design-system :root token edits, synced from the content change payload
 // (same source the Copy Prompt reads) so they appear in the Changes tab.
-let tokenChanges: Array<{ cssVar: string; original: string; current: string }> = [];
+let tokenChanges: Array<{ cssVar: string; scopeSelector: string; original: string; current: string; system?: string }> = [];
 let batchAppliedChanges: Set<string> = new Set();
 let mediaInfo: { kind: string; src: string; alt?: string; naturalWidth?: number; naturalHeight?: number; filename?: string; markup?: string; isObjectUrl?: boolean; poster?: string; bytes?: number } | null = null;
 let lastMediaElementId: string | null = null;
@@ -225,6 +228,9 @@ type CaptureMode = 'clipboard' | 'download' | 'both';
 let captureMode: CaptureMode = 'clipboard';
 let multiSelectActive = false;
 let multiSelectIds: string[] = [];
+// The token whose consumers are currently highlighted via the "×N uses"
+// chip. Clicking the same chip again clears the highlight (toggle).
+let tokenUsesActiveVar: string | null = null;
 // Anchor for Shift-click range selection — the last layer the user
 // single-clicked (without a modifier). Mirrors how Finder / Figma anchor
 // shift-extends; Cmd-clicks leave the anchor alone.
@@ -287,8 +293,8 @@ let clearAllConfirming = false;
 // one writes to changesSort and closes the popover.
 let changesSortMenuOpen = false;
 
-// Phase 5: Design tokens
-interface DesignToken { name: string; value: string; category: 'color' | 'spacing' | 'font' | 'shadow' | 'other'; }
+// Phase 5: Design tokens — same unified DesignToken shape as the Tokens
+// panel (declared below); populated from the shared content-side engine.
 let designTokens: DesignToken[] = [];
 let pageFonts: Array<{ value: string; label: string }> = [];
 
@@ -301,11 +307,20 @@ let dragLayerId: string | null = null;
 // Radius / Shadow / Other), plus the implicit scales detected from
 // computed styles of viewport-visible elements.
 type TokenGroup = 'colour' | 'typography' | 'spacing' | 'radius' | 'shadow' | 'other';
-interface DesignToken { cssVar: string; value: string; resolvedValue: string; group: TokenGroup; usageCount: number }
+type TokenScopeKind = 'root' | 'theme' | 'component';
+interface TokenScope { selector: string; kind: TokenScopeKind; active: boolean; matchCount: number }
+interface DesignSystemProfile { id: string; label: string; tokenCount: number }
+interface TokenVariant { scope: TokenScope; value: string; resolvedValue: string }
+interface DesignToken {
+  cssVar: string; value: string; resolvedValue: string; group: TokenGroup; usageCount: number;
+  scope: TokenScope; scopes: string[]; variants: TokenVariant[]; system?: string;
+}
 interface ScaleEntry { value: string; count: number; driftOf?: string }
 interface DesignSystemPayload {
   tokens: DesignToken[];
   scales: { spacing: ScaleEntry[]; radius: ScaleEntry[]; fontSize: ScaleEntry[]; shadow: ScaleEntry[] };
+  systems: DesignSystemProfile[];
+  scopes: TokenScope[];
 }
 type TokenFilter = 'all' | TokenGroup;
 type TokensTab = 'declared' | 'detected' | 'defined';
@@ -329,7 +344,20 @@ const appliedPresetGroups = new Map<string, string>();
 // Map of cssVar → the user's edited value (cleared on Reset). Lets the
 // panel surface a Reset affordance only for tokens that have changed.
 const editedTokens = new Map<string, string>();
+const tokenEditKey = (scopeSelector: string, cssVar: string) => scopeSelector + '\u0000' + cssVar;
 let tokenSearch = '';
+// Token badge on Design-tab fields: which prop's badge menu / swap picker
+// is open, and which var the Tokens panel should highlight when opened
+// via "Edit token globally".
+let tokenBadgeMenuProp: string | null = null;
+let tokenPickerProp: string | null = null;
+let tokensFocusVar: string | null = null;
+// Tokens panel — scope / design-system filters and the component-token
+// disclosure. Component-scoped tokens live in their own section so they
+// don't drown the page-wide sets.
+let tokenScopeFilter = 'all';
+let tokenSystemFilter: string | null = null;
+let componentTokensOpen = false;
 
 // v1.2: Computed CSS
 let computedCssOpen = false;
@@ -711,6 +739,20 @@ function scrollSelectedLayerIntoView() {
   // Three rAFs is plenty for morphdom + the auto-expand of collapsed ancestors.
   requestAnimationFrame(() => tryScroll(3));
 }
+// Bring the token a field's "Edit token globally" jumped to into view.
+// Same retry cadence as scrollSelectedLayerIntoView — the row only exists
+// once the design-system fetch has resolved and morphdom has painted.
+function scrollFocusedTokenIntoView() {
+  const cssVar = tokensFocusVar;
+  if (!cssVar) return;
+  const tryScroll = (attempts: number) => {
+    const row = root.querySelector('[data-dm-token-row="' + CSS.escape(cssVar) + '"]');
+    if (row) { row.scrollIntoView({ block: 'center' }); return; }
+    if (attempts > 0) requestAnimationFrame(() => tryScroll(attempts - 1));
+  };
+  requestAnimationFrame(() => tryScroll(5));
+}
+
 async function refreshDesignTokens() { const res = await send({ type: 'SP_GET_DESIGN_TOKENS' }); designTokens = res.tokens || []; }
 async function refreshPageFonts() { const res = await send({ type: 'SP_GET_PAGE_FONTS' }); pageFonts = res.fonts || []; render(); }
 async function refreshMedia() {
@@ -731,12 +773,12 @@ async function refreshCustomPresets(): Promise<void> {
 // (spacing, radius, font-size, shadow histograms from viewport-visible
 // elements). Cached in `designSystem` until the user reloads or
 // re-opens the Tokens panel.
-async function refreshDesignSystem() {
+async function refreshDesignSystem(force = false) {
   if (designSystemInflight) return;
   designSystemInflight = true;
   try {
-    const res = await send({ type: 'SP_GET_DESIGN_SYSTEM' });
-    designSystem = (res && res.tokens) ? res as DesignSystemPayload : { tokens: [], scales: { spacing: [], radius: [], fontSize: [], shadow: [] } };
+    const res = await send({ type: 'SP_GET_DESIGN_SYSTEM', force });
+    designSystem = (res && res.tokens) ? res as DesignSystemPayload : { tokens: [], scales: { spacing: [], radius: [], fontSize: [], shadow: [] }, systems: [], scopes: [] };
     render();
   } finally {
     designSystemInflight = false;
@@ -1614,7 +1656,7 @@ async function revertGroup(groupKey: string) {
   // Token edits live under the synthetic ':root' group — reset each via the
   // root-var path so the page repaints and the prompt drops them too.
   if (groupKey === ':root') {
-    for (const t of tokenChanges) { editedTokens.delete(t.cssVar); await send({ type: 'SP_RESET_ROOT_VAR', cssVar: t.cssVar }); }
+    for (const t of tokenChanges) { editedTokens.delete(tokenEditKey(t.scopeSelector || ':root', t.cssVar)); await send({ type: 'SP_RESET_ROOT_VAR', cssVar: t.cssVar, scopeSelector: t.scopeSelector || ':root' }); }
     tokenChanges = [];
     designSystem = null;
   }
@@ -1732,8 +1774,13 @@ chrome.runtime.onMessage.addListener((msg) => {
     info = msg.payload; hoverInfo = null; commentMode = false;
     hydrateLayoutGuidesFromPayload(info);
     contrastSettingsOpen = false;
+    tokenBadgeMenuProp = null;
+    tokenPickerProp = null;
     effectiveBgCache.clear();
     maybeFetchEffectiveBg();
+    // Covers pages that hydrated after INIT_STATE fired (SPA nav): without
+    // the token cache the badges and swap pickers have nothing to offer.
+    if (designTokens.length === 0) refreshDesignTokens();
     // Matching-layers selection is per-element — reset for the new one.
     matchingLayersChecked = false;
     render();
@@ -2099,6 +2146,8 @@ function formatPxValueForDisplay(value: string): { display: string; unit: string
 }
 
 function inp(label: string, prop: string, value: string, unit = 'px'): string {
+  const badge = renderTokenBadge(prop);
+  const overlays = renderTokenOverlays(prop);
   const parsed = parseNumeric(value);
   if (!parsed) {
     // Non-numeric (e.g. `auto`, `inherit`) — render raw, no unit chip.
@@ -2106,7 +2155,8 @@ function inp(label: string, prop: string, value: string, unit = 'px'): string {
       (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
       '<div class="dm-input-shell">' +
       '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" value="' + escapeAttr(value) + '"/>' +
-      '</div></div>';
+      badge +
+      '</div>' + overlays + '</div>';
   }
   const sourceUnit = parsed.unit || unit;
   // Only apply the px ↔ rem conversion when the input is genuinely a px
@@ -2121,8 +2171,9 @@ function inp(label: string, prop: string, value: string, unit = 'px'): string {
     (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
     '<div class="dm-input-shell">' +
     '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(writeUnit) + '" inputmode="decimal" value="' + escapeAttr(displayVal) + '"/>' +
+    badge +
     '<span class="dm-input-unit">' + displayUnit + '</span>' +
-    '</div></div>';
+    '</div>' + overlays + '</div>';
 }
 
 // Figma-style W / H input with a Fixed / Hug / Fill mode picker.
@@ -2149,6 +2200,112 @@ function lastStyleChangeFor(elementId: string, property: string): string | null 
     if (c.elementId === elementId && c.property === property) return c.newValue;
   }
   return null;
+}
+
+// Which design token paints a property of the selected element, and the
+// scope this element resolves it through — a design system declares the
+// same token once per theme, so editing the wrong scope is a no-op. The
+// user's own var() override (panel intent) wins over page attribution; a
+// raw-value override detaches the field from its page token.
+function tokenForProp(prop: string): { cssVar: string; scope: string; source: 'edit' | 'page' } | null {
+  if (!info) return null;
+  const tokens = info.styleTokens;
+  const intent = lastStyleChangeFor(info.id, prop);
+  if (intent) {
+    const m = intent.match(/^var\(\s*(--[\w-]+)/);
+    if (!m) return null;
+    // Attribution harvests our own dm-applied-styles overrides, so once the
+    // swap round-trips it already knows the scope this element resolves the
+    // new token through. The primary scope is only a pre-round-trip stopgap.
+    const attributed = tokens?.[prop];
+    const scope = attributed?.cssVar === m[1]
+      ? attributed.scope
+      : designTokens.find(t => t.cssVar === m[1])?.scope.selector || ':root';
+    return { cssVar: m[1], scope, source: 'edit' };
+  }
+  if (!tokens) return null;
+  // Shorthand fields (uniform padding / margin) only badge when every
+  // side is authored from the same var.
+  if (prop === 'padding' || prop === 'margin') {
+    const sides = ['Top', 'Right', 'Bottom', 'Left'].map(s => tokens[prop + s]);
+    const first = sides[0];
+    return first && sides.every(v => v?.cssVar === first.cssVar)
+      ? { cssVar: first.cssVar, scope: first.scope, source: 'page' }
+      : null;
+  }
+  const t = tokens[prop];
+  return t ? { cssVar: t.cssVar, scope: t.scope, source: 'page' } : null;
+}
+
+const PROP_TOKEN_GROUPS: Array<{ re: RegExp; group: TokenGroup }> = [
+  { re: /color|fill$|^stroke/i, group: 'colour' },
+  { re: /^(padding|margin|gap|rowGap|columnGap|width|height)/, group: 'spacing' },
+  { re: /Radius/, group: 'radius' },
+  { re: /^(fontSize|fontWeight|fontFamily|lineHeight|letterSpacing)$/, group: 'typography' },
+  { re: /Shadow$/i, group: 'shadow' },
+];
+
+function tokenGroupForProp(prop: string): TokenGroup {
+  for (const r of PROP_TOKEN_GROUPS) if (r.re.test(prop)) return r.group;
+  return 'other';
+}
+
+// The badge pill rendered inside a field's input shell. Compact mode
+// (narrow numeric fields) shows the token diamond only; full mode shows
+// the shortened var name. Click opens the badge menu.
+function renderTokenBadge(prop: string, compact = true): string {
+  const tok = tokenForProp(prop);
+  if (!tok) return '';
+  const short = tok.cssVar.replace(/^--(cds|mdc|md|mui|bs|p|radix)-/, '').replace(/^--/, '');
+  const open = tokenBadgeMenuProp === prop || tokenPickerProp === prop;
+  return '<button type="button" class="dm-token-badge' + (open ? ' dm-token-badge-open' : '') + '" data-dm-token-badge="' + escapeAttr(prop) + '" title="var(' + escapeAttr(tok.cssVar) + ')">' +
+    '◆' + (compact ? '' : '<span class="dm-token-badge-name">' + escapeAttr(short) + '</span>') +
+    '</button>';
+}
+
+// Swap-token dropdown for non-color groups (colors reuse the site-colour
+// dropdown). Same visual pattern as renderTokensDropdown.
+function renderTokenPicker(prop: string): string {
+  const group = tokenGroupForProp(prop);
+  const tokens = designTokens.filter(t => t.group === group);
+  const current = tokenForProp(prop)?.cssVar;
+  const rows = tokens.length > 0
+    ? tokens.map(t => {
+        const display = (t.resolvedValue || t.value).trim();
+        const isCurrent = t.cssVar === current;
+        return '<button data-dm-pick-token="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
+          '<span style="flex:1;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
+          '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;">' + escapeAttr(display) + '</span>' +
+          '</button>';
+      }).join('')
+    : '<div style="padding:12px;font-size:10px;color:var(--dm-text-dim);text-align:center;">No ' + group + ' tokens on this page.</div>';
+  return '<div data-dm-token-picker="' + escapeAttr(prop) + '" style="position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:40;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;max-height:240px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;">' +
+    '<div style="padding:6px 8px 4px;font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Site tokens (' + tokens.length + ')</div>' + rows +
+    '</div>';
+}
+
+// Badge menu + swap picker, absolutely positioned inside the field.
+// Rendered by every field that renders a badge.
+function renderTokenOverlays(prop: string): string {
+  const tok = tokenForProp(prop);
+  if (!tok) return '';
+  if (tokenPickerProp === prop) return renderTokenPicker(prop);
+  if (tokenBadgeMenuProp !== prop) return '';
+  const item = (action: string, label: string) =>
+    '<button data-dm-token-action="' + action + '" data-dm-token-prop="' + escapeAttr(prop) + '" data-dm-token-var="' + escapeAttr(tok.cssVar) + '" data-dm-token-scope="' + escapeAttr(tok.scope) + '" style="width:100%;display:block;padding:6px 10px;background:transparent;border:none;cursor:pointer;text-align:left;font-family:inherit;font-size:11px;color:var(--dm-text);">' + label + '</button>';
+  // The scope line matters: it's where an edit to this token has to land
+  // for this element to change.
+  const scopeLine = tok.scope !== ':root'
+    ? '<div style="padding:0 10px 6px;font-size:9px;color:var(--dm-text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">via <span style="font-family:SF Mono,Monaco,monospace;">' + escapeAttr(tok.scope) + '</span></div>'
+    : '';
+  return '<div data-dm-token-menu="' + escapeAttr(prop) + '" style="position:absolute;right:0;top:100%;margin-top:4px;z-index:40;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;min-width:180px;">' +
+    '<div style="padding:5px 10px 3px;font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">var(' + escapeAttr(tok.cssVar) + ')</div>' +
+    scopeLine +
+    '<div style="border-bottom:1px solid var(--dm-separator);margin-bottom:3px;"></div>' +
+    item('swap', 'Swap token…') +
+    item('edit', 'Edit token globally') +
+    item('detach', 'Detach from token') +
+    '</div>';
 }
 
 function sizeInput(label: string, prop: 'width' | 'height', resolvedValue: string, elementId: string): string {
@@ -2179,13 +2336,14 @@ function sizeInput(label: string, prop: 'width' | 'height', resolvedValue: strin
     '<label class="dm-field-label">' + label + '</label>' +
     '<div class="dm-input-shell">' +
     valueCell +
+    renderTokenBadge(prop) +
     '<span class="dm-input-unit">' + displayUnit + '</span>' +
     '<select class="dm-size-mode" data-dm-size-mode="' + prop + '" title="Size mode" aria-label="' + label + ' size mode">' +
       '<option value="fixed"' + (mode === 'fixed' ? ' selected' : '') + '>Fixed</option>' +
       '<option value="hug"' + (mode === 'hug' ? ' selected' : '') + '>Hug</option>' +
       '<option value="fill"' + (mode === 'fill' ? ' selected' : '') + '>Fill</option>' +
     '</select>' +
-    '</div></div>';
+    '</div>' + renderTokenOverlays(prop) + '</div>';
 }
 
 // Which distribution property a gap field's "Auto" mode drives. The visible
@@ -2226,12 +2384,13 @@ function gapInput(label: string, field: 'col' | 'row', s: Record<string, string>
   return '<div class="dm-field">' + labelHtml +
     '<div class="dm-input-shell">' +
     valueCell +
+    renderTokenBadge(prop) +
     '<span class="dm-input-unit">' + unit + '</span>' +
     '<select class="dm-size-mode" data-dm-gap-mode="' + field + '" title="Gap mode" aria-label="' + label + ' mode">' +
       '<option value="fixed"' + (mode === 'fixed' ? ' selected' : '') + '>Fixed</option>' +
       '<option value="auto"' + (mode === 'auto' ? ' selected' : '') + '>Auto</option>' +
     '</select>' +
-    '</div></div>';
+    '</div>' + renderTokenOverlays(prop) + '</div>';
 }
 
 // Numeric input that knows about a CSS keyword default (e.g. `normal` for
@@ -2253,8 +2412,9 @@ function inpKw(label: string, prop: string, value: string, unit: string, keyword
     (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
     '<div class="dm-input-shell">' +
     '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(unit) + '" data-dm-kw="' + escapeAttr(keyword) + '" inputmode="decimal" placeholder="' + placeholder + '" value="' + escapeAttr(displayVal) + '"/>' +
+    renderTokenBadge(prop) +
     keywordChip +
-    '</div></div>';
+    '</div>' + renderTokenOverlays(prop) + '</div>';
 }
 
 function sel(label: string, prop: string, value: string, options: string[]): string {
@@ -2646,8 +2806,9 @@ function resolveCssVarToColor(value: string): string | null {
   const m = value.match(/^var\(\s*(--[\w-]+)/);
   if (!m) return null;
   const tokenName = m[1];
-  const token = designTokens.find(t => t.name === tokenName);
-  return token?.value ? token.value.trim() : null;
+  const token = designTokens.find(t => t.cssVar === tokenName);
+  const resolved = token?.resolvedValue || token?.value;
+  return resolved ? resolved.trim() : null;
 }
 
 // Format a token's display value the same way (used in the dropdown label).
@@ -2689,10 +2850,10 @@ function renderFontFamilyPicker(currentValue: string): string {
 // e.g. layout-guide overlays — WCAG pairing and design tokens are noise.
 function renderColorPanel(prop: string, value: string, compact = false): string {
   const hex = rgbToHex(value);
-  const colorTokens = designTokens.filter(t => t.category === 'color');
+  const colorTokens = designTokens.filter(t => t.group === 'colour');
   const q = colorPickerSearch.toLowerCase();
   const filteredTokens = q
-    ? colorTokens.filter(t => t.name.toLowerCase().includes(q) || t.value.toLowerCase().includes(q))
+    ? colorTokens.filter(t => t.cssVar.toLowerCase().includes(q) || (t.resolvedValue || t.value).toLowerCase().includes(q))
     : colorTokens;
   return '<div data-dm-color-popover="' + prop + '" style="margin-top:6px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;max-height:520px;overflow-y:auto;">' +
     '<div style="padding:10px;' + (compact ? '' : 'border-bottom:1px solid var(--dm-separator);') + '">' +
@@ -2701,13 +2862,13 @@ function renderColorPanel(prop: string, value: string, compact = false): string 
     (compact ? '' : filteredTokens.length > 0
       ? '<div style="padding:6px 8px 4px;font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Site Colors (' + filteredTokens.length + ')</div>' +
         filteredTokens.map(t => {
-          const tokenVal = t.value.trim();
+          const tokenVal = (t.resolvedValue || t.value).trim();
           const tokenHex = rgbToHex(tokenVal);
           const tokenDisplay = formatTokenForDisplay(tokenVal);
-          const isCurrent = tokenVal === value || tokenHex === hex || ('var(' + t.name + ')') === value;
-          return '<button data-dm-pick-color="' + escapeAttr('var(' + t.name + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;border-radius:0;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
+          const isCurrent = tokenVal === value || tokenHex === hex || ('var(' + t.cssVar + ')') === value;
+          return '<button data-dm-pick-color="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;border-radius:0;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
             '<span style="width:14px;height:14px;border-radius:3px;background:' + escapeAttr(tokenVal) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>' +
-            '<span style="flex:1;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.name) + '</span>' +
+            '<span style="flex:1;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
             '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;">' + escapeAttr(tokenDisplay) + '</span>' +
             '</button>';
         }).join('')
@@ -2721,18 +2882,18 @@ function renderColorPanel(prop: string, value: string, compact = false): string 
 // the full panel.
 function renderTokensDropdown(prop: string, value: string): string {
   const hex = rgbToHex(value);
-  const colorTokens = designTokens.filter(t => t.category === 'color');
+  const colorTokens = designTokens.filter(t => t.group === 'colour');
   if (colorTokens.length === 0) return '';
   return '<div data-dm-tokens-dropdown="' + prop + '" style="position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;max-height:240px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;">' +
     '<div style="padding:6px 8px 4px;font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Site colours (' + colorTokens.length + ')</div>' +
     colorTokens.map(t => {
-      const tokenVal = t.value.trim();
+      const tokenVal = (t.resolvedValue || t.value).trim();
       const tokenHex = rgbToHex(tokenVal);
-      const isCurrent = tokenVal === value || tokenHex === hex || ('var(' + t.name + ')') === value;
+      const isCurrent = tokenVal === value || tokenHex === hex || ('var(' + t.cssVar + ')') === value;
       const tokenDisplay = formatTokenForDisplay(tokenVal);
-      return '<button data-dm-pick-color="' + escapeAttr('var(' + t.name + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
+      return '<button data-dm-pick-color="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
         '<span style="width:14px;height:14px;border-radius:3px;background:' + escapeAttr(tokenVal) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>' +
-        '<span style="flex:1;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.name) + '</span>' +
+        '<span style="flex:1;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
         '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;">' + escapeAttr(tokenDisplay) + '</span>' +
         '</button>';
     }).join('') +
@@ -2755,7 +2916,9 @@ function colorInp(label: string, prop: string, value: string, omitPanel = false)
     '<div style="display:flex;align-items:center;gap:4px;min-width:0;position:relative;">' +
     '<button type="button" data-dm-color-trigger="' + escapeAttr(prop) + '" title="Pick a color" style="width:28px;height:28px;border:1px solid var(--dm-input-border);border-radius:5px;cursor:pointer;background:' + escapeAttr(value || hex || '#000') + ';padding:0;flex-shrink:0;outline:' + (isOpen ? '2px solid var(--dm-accent)' : 'none') + ';"></button>' +
     '<input type="text" class="dm-input" data-dm-prop="' + prop + '" data-dm-tokens-trigger="' + escapeAttr(prop) + '" value="' + escapeAttr(displayColor) + '" style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);flex:1;min-width:0;"/>' +
+    renderTokenBadge(prop, false) +
     tokensPanel +
+    renderTokenOverlays(prop) +
     '</div>' +
     panel +
     '</div>';
@@ -3170,8 +3333,9 @@ function spacingUniformField(label: string, kind: 'margin' | 'padding', s: Recor
     '<label class="dm-field-label">' + label + '</label>' +
     '<div class="dm-input-shell">' +
     '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + kind + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" placeholder="' + (isMixed ? 'Mixed' : '0') + '" value="' + escapeAttr(isMixed ? '' : formatted.display) + '"/>' +
+    renderTokenBadge(kind) +
     '<span class="dm-input-unit">' + formatted.unit + '</span>' +
-    '</div></div>';
+    '</div>' + renderTokenOverlays(kind) + '</div>';
 }
 
 // Per-side icon for the expanded editor. Margin uses gallery-thumbnails
@@ -5059,7 +5223,7 @@ function renderTokensView(): string {
   if (!designSystem) {
     refreshDesignSystem();
   }
-  const ds: DesignSystemPayload = designSystem || { tokens: [], scales: { spacing: [], radius: [], fontSize: [], shadow: [] } };
+  const ds: DesignSystemPayload = designSystem || { tokens: [], scales: { spacing: [], radius: [], fontSize: [], shadow: [] }, systems: [], scopes: [] };
 
   const header = '<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);">' +
     '<button data-dm-action="close-tokens" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:2px;" title="Back">' + icon('chevronLeft', 14) + '</button>' +
@@ -5096,39 +5260,87 @@ function renderTokensView(): string {
     return customPresets.filter(p => kinds.has(p.kind)).length;
   };
 
-  // Filter chips — always visible. Each tab interprets the chip via the
-  // per-tab count + content selector.
-  const filterChips = (() => {
-    const chip = (key: TokenFilter, label: string, count: number) => {
-      const active = tokenFilter === key;
-      return '<button class="dm-token-chip" data-dm-token-filter="' + key + '" data-active="' + (active ? 'true' : 'false') + '">' +
-        escapeAttr(label) + ' <span class="dm-token-chip-count">' + count + '</span>' +
-      '</button>';
-    };
-    const countFor = (g: TokenFilter): number => {
-      if (tokensTab === 'declared') {
-        if (g === 'all') return ds.tokens.length;
-        return ds.tokens.filter(t => t.group === g).length;
-      }
-      if (tokensTab === 'detected') return detectedCountForChip(g);
-      return definedCountForChip(g);
-    };
-    return '<div class="dm-token-chips">' +
-      chip('all', 'All', countFor('all')) +
-      chip('colour', 'Colours', countFor('colour')) +
-      chip('typography', 'Type', countFor('typography')) +
-      chip('spacing', 'Spacing', countFor('spacing')) +
-      chip('radius', 'Radius', countFor('radius')) +
-      chip('shadow', 'Shadow', countFor('shadow')) +
-      chip('other', 'Other', countFor('other')) +
+  const countFor = (g: TokenFilter): number => {
+    if (tokensTab === 'declared') {
+      if (g === 'all') return ds.tokens.length;
+      return ds.tokens.filter(t => t.group === g).length;
+    }
+    if (tokensTab === 'detected') return detectedCountForChip(g);
+    return definedCountForChip(g);
+  };
+
+  // One filter row: detected design-system chips on the left (Carbon,
+  // shadcn, Tailwind…), the group selector as a dropdown pinned to the
+  // right end. The system chips only appear when a known system is
+  // detected on the Declared tab; the group dropdown is always present.
+  const filterRow = (() => {
+    const systemChips = (ds.systems.length > 0 && tokensTab === 'declared')
+      ? ds.systems.map(sys => {
+          const active = tokenSystemFilter === sys.id;
+          return '<button data-dm-token-system="' + escapeAttr(sys.id) + '" data-active="' + (active ? 'true' : 'false') + '" class="dm-token-chip" title="' + escapeAttr(sys.label) + ' — ' + sys.tokenCount + ' tokens">' +
+            '<span style="color:var(--dm-accent);">◆</span> ' + escapeAttr(sys.label) +
+            ' <span class="dm-token-chip-count">' + sys.tokenCount + '</span></button>';
+        }).join('')
+      : '';
+    const groupOption = (key: TokenFilter, label: string) =>
+      '<option value="' + key + '"' + (tokenFilter === key ? ' selected' : '') + '>' + escapeAttr(label) + ' (' + countFor(key) + ')</option>';
+    const groupSelect = '<span style="position:relative;display:inline-flex;align-items:center;flex-shrink:0;">' +
+      '<select class="dm-select" data-dm-token-group title="Filter by token group" style="width:auto;font-size:10px;padding-right:22px;">' +
+        groupOption('all', 'All') +
+        groupOption('colour', 'Colours') +
+        groupOption('typography', 'Type') +
+        groupOption('spacing', 'Spacing') +
+        groupOption('radius', 'Radius') +
+        groupOption('shadow', 'Shadow') +
+        groupOption('other', 'Other') +
+      '</select>' +
+      '<span style="position:absolute;right:6px;display:flex;color:var(--dm-text-muted);pointer-events:none;">' + icon('chevronDown', 12) + '</span>' +
+    '</span>';
+    return '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' +
+      systemChips +
+      '<div style="flex:1;min-width:8px;"></div>' +
+      groupSelect +
     '</div>';
+  })();
+
+  // Scope picker — which theme's token declarations to show. Only :root
+  // and theme-level scopes (`.dark`, `.cds--g100`, `[data-theme]`) belong
+  // here: those are the whole-page variants a user switches between.
+  // Component scopes — Tailwind utility classes, the universal `*` default
+  // block, `:where(...)` helpers — are implementation noise for this
+  // control; they're browsable in the Component tokens section instead.
+  const scopePicker = (() => {
+    if (tokensTab !== 'declared') return '';
+    const isUniversal = (sel: string) => /(^|[\s,])\*/.test(sel);
+    const declaredScopes = new Map<string, { scope: TokenScope; count: number }>();
+    for (const t of ds.tokens) {
+      for (const v of t.variants) {
+        if (v.scope.kind === 'component') continue;
+        if (isUniversal(v.scope.selector)) continue;
+        const hit = declaredScopes.get(v.scope.selector);
+        if (hit) hit.count++;
+        else declaredScopes.set(v.scope.selector, { scope: v.scope, count: 1 });
+      }
+    }
+    if (declaredScopes.size <= 1) return '';
+    // Themes first, then the richest sets — the scopes a user actually
+    // wants to switch between sit at the top of the list.
+    const sorted = Array.from(declaredScopes.values()).sort((a, b) =>
+      Number(b.scope.active) - Number(a.scope.active) || b.count - a.count);
+    const opts = ['<option value="all"' + (tokenScopeFilter === 'all' ? ' selected' : '') + '>All scopes</option>'];
+    for (const { scope: s, count } of sorted) {
+      const label = s.selector + ' · ' + count + (s.active ? '' : ' · inactive');
+      opts.push('<option value="' + escapeAttr(s.selector) + '"' + (tokenScopeFilter === s.selector ? ' selected' : '') + '>' + escapeAttr(label) + '</option>');
+    }
+    return '<select class="dm-select" data-dm-token-scope-filter style="width:100%;font-size:10px;">' + opts.join('') + '</select>';
   })();
 
   // Chrome row (chips + search + checkbox) shown on every tab so the
   // user has consistent filtering affordances throughout the panel.
   const filterChrome =
     '<div style="padding:8px 10px;border-bottom:1px solid var(--dm-separator);flex-shrink:0;display:flex;flex-direction:column;gap:6px;background:var(--dm-bg);position:relative;z-index:2;">' +
-      filterChips +
+      filterRow +
+      scopePicker +
       '<input type="text" class="dm-input" data-dm-token-search value="' + escapeAttr(tokenSearch) + '" placeholder="Search tokens…" style="width:100%;font-size:10px;padding:5px 8px;box-sizing:border-box;"/>' +
       '<label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--dm-text-secondary);cursor:pointer;">' +
         '<input type="checkbox" data-dm-tokens-used-only' + (tokenUsedOnlyFilter ? ' checked' : '') + ' style="accent-color:var(--dm-accent);"/>' +
@@ -5161,13 +5373,27 @@ function renderTokensView(): string {
   const filter = tokenSearch.toLowerCase().trim();
   const matchesFilter = (s: string) => !filter || s.toLowerCase().includes(filter);
   const passesUsedFilter = (t: DesignToken) => !tokenUsedOnlyFilter || t.usageCount > 0;
-  const tFilter = (group: TokenGroup) => ds.tokens.filter(t =>
-    t.group === group &&
+  const systemLabelFor = (id?: string) => ds.systems.find(s => s.id === id)?.label || '';
+  // The scope a row represents: the selected one when the user has picked
+  // a scope and this token declares in it, otherwise the token's primary.
+  const effectiveScope = (t: DesignToken): TokenScope =>
+    (tokenScopeFilter !== 'all' && t.variants.find(v => v.scope.selector === tokenScopeFilter)?.scope) || t.scope;
+  const passesTokenFilters = (t: DesignToken) =>
     passesUsedFilter(t) &&
-    (matchesFilter(t.cssVar) || matchesFilter(t.resolvedValue) || matchesFilter(t.value)),
-  );
-
+    (tokenScopeFilter === 'all' || t.scopes.includes(tokenScopeFilter)) &&
+    (!tokenSystemFilter || t.system === tokenSystemFilter) &&
+    (matchesFilter(t.cssVar) || matchesFilter(t.resolvedValue) || matchesFilter(t.value) ||
+      t.scopes.some(matchesFilter) || matchesFilter(systemLabelFor(t.system)));
   const showGroup = (g: TokenFilter) => tokenFilter === 'all' || tokenFilter === g;
+
+  // Component-scoped tokens render in their own section below the
+  // page-wide sets, so the semantic groups stay readable.
+  const tFilter = (group: TokenGroup) => ds.tokens.filter(t =>
+    t.group === group && effectiveScope(t).kind !== 'component' && passesTokenFilters(t),
+  );
+  const componentTokens = ds.tokens.filter(t =>
+    effectiveScope(t).kind === 'component' && showGroup(t.group) && passesTokenFilters(t),
+  );
 
   // Groups for the Declared tab — only declared :root token buckets.
   // Detected scales render on the Detected tab via a separate branch.
@@ -5225,24 +5451,49 @@ function renderTokensView(): string {
 
   // ── Declared body ──
   const renderDeclaredRow = (t: DesignToken) => {
-    const edited = editedTokens.has(t.cssVar);
-    const displayValue = edited ? editedTokens.get(t.cssVar)! : t.resolvedValue || t.value;
+    // With a scope selected, the row shows (and edits) that scope's own
+    // declaration — the same token carries a different value per theme.
+    const variant = tokenScopeFilter !== 'all'
+      ? t.variants.find(v => v.scope.selector === tokenScopeFilter)
+      : undefined;
+    const scope = variant ? variant.scope : t.scope;
+    const scopeSel = scope.selector;
+    const edited = editedTokens.has(tokenEditKey(scopeSel, t.cssVar));
+    const baseValue = variant ? (variant.resolvedValue || variant.value) : (t.resolvedValue || t.value);
+    const displayValue = edited ? editedTokens.get(tokenEditKey(scopeSel, t.cssVar))! : baseValue;
     const swatch = renderSwatch(t.group, displayValue);
-    const valueInputAttrs = 'data-dm-token-edit="' + escapeAttr(t.cssVar) + '" value="' + escapeAttr(displayValue) + '"';
+    const valueInputAttrs = 'data-dm-token-edit="' + escapeAttr(t.cssVar) + '" data-dm-token-scope="' + escapeAttr(scopeSel) + '" value="' + escapeAttr(displayValue) + '"';
     const usageLabel = t.usageCount > 0 ? '×' + t.usageCount + ' uses' : 'unused';
     const usageTitle = t.usageCount > 0
       ? 'Highlight ' + t.usageCount + ' element' + (t.usageCount === 1 ? '' : 's') + ' using this token'
       : 'No on-page consumers — declared but never resolved on this page';
-    return '<div class="dm-token-row" data-dm-token-row="' + escapeAttr(t.cssVar) + '">' +
+    // Scope chip on anything not declared at :root, so the user can see
+    // which theme / component the value they're editing belongs to.
+    const scopeChip = scopeSel !== ':root'
+      ? '<span class="dm-token-scope-chip" data-inactive="' + (scope.active ? 'false' : 'true') + '" title="Declared on ' + escapeAttr(scopeSel) + (scope.active ? '' : ' — not active on this page') + '">' + escapeAttr(scopeSel) + '</span>'
+      : '';
+    const focused = tokensFocusVar === t.cssVar;
+    return '<div class="dm-token-row" data-dm-token-row="' + escapeAttr(t.cssVar) + '"' + (focused ? ' data-dm-token-focused="true"' : '') + '>' +
       swatch +
       '<span class="dm-token-name" title="' + escapeAttr(t.cssVar) + '">' + escapeAttr(t.cssVar) + '</span>' +
+      scopeChip +
       '<input class="dm-input dm-token-value" type="text" ' + valueInputAttrs + ' />' +
-      '<button class="dm-token-uses" data-dm-token-find-uses="' + escapeAttr(t.cssVar) + '" data-unused="' + (t.usageCount === 0 ? 'true' : 'false') + '" title="' + escapeAttr(usageTitle) + '">' + usageLabel + '</button>' +
+      '<button class="dm-token-uses" data-dm-token-find-uses="' + escapeAttr(t.cssVar) + '" data-unused="' + (t.usageCount === 0 ? 'true' : 'false') + '" data-active="' + (tokenUsesActiveVar === t.cssVar ? 'true' : 'false') + '" title="' + escapeAttr(tokenUsesActiveVar === t.cssVar ? 'Click to hide highlights' : usageTitle) + '">' + usageLabel + '</button>' +
       (edited
-        ? '<button class="dm-token-reset" data-dm-token-reset="' + escapeAttr(t.cssVar) + '" title="Restore original value">' + icon('rotateCcw', 10) + '</button>'
+        ? '<button class="dm-token-reset" data-dm-token-reset="' + escapeAttr(t.cssVar) + '" data-dm-token-scope="' + escapeAttr(scopeSel) + '" title="Restore original value">' + icon('rotateCcw', 10) + '</button>'
         : '<span class="dm-token-reset-placeholder"></span>') +
       '</div>';
   };
+
+  const componentTokensHtml = componentTokens.length > 0
+    ? '<div class="dm-token-group">' +
+        '<button class="dm-token-group-header" data-dm-action="toggle-component-tokens" style="width:100%;background:none;border:none;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px;">' +
+          '<span style="color:var(--dm-text-dim);display:flex;">' + icon(componentTokensOpen ? 'chevronDown' : 'chevronRight', 10) + '</span>' +
+          '<span class="dm-token-group-label">Component tokens · ' + componentTokens.length + '</span>' +
+        '</button>' +
+        (componentTokensOpen ? componentTokens.map(renderDeclaredRow).join('') : '') +
+      '</div>'
+    : '';
 
   const declaredHtml = declaredGroups.map(g => {
     if (!g.tokens.length) return '';
@@ -5252,7 +5503,7 @@ function renderTokensView(): string {
       '</div>' +
       g.tokens.map(renderDeclaredRow).join('') +
       '</div>';
-  }).join('');
+  }).join('') + componentTokensHtml;
 
   // ── Detected body ──
   // Compute lower / exact / upper declared-token suggestions per group.
@@ -7546,7 +7797,7 @@ function renderChangesTab(): string {
     | { type: 'text'; data: TextChange; idx: number }
     | { type: 'dom'; data: DomChange; idx: number }
     | { type: 'comment'; data: CommentEntry; idx: number }
-    | { type: 'token'; data: { cssVar: string; original: string; current: string; selector: string; elementId: string }; idx: number };
+    | { type: 'token'; data: { cssVar: string; scopeSelector: string; original: string; current: string; system?: string; selector: string; elementId: string }; idx: number };
   const allItemsRaw: ChangeItem[] = [
     ...styleChanges.map((c, idx) => ({ type: 'style' as const, data: c, idx })),
     ...textChanges.map((c, idx) => ({ type: 'text' as const, data: c, idx })),
@@ -7554,7 +7805,7 @@ function renderChangesTab(): string {
     ...comments.map((c, idx) => ({ type: 'comment' as const, data: c, idx })),
     // Token edits group under a synthetic `:root` selector so they share one
     // "Design tokens" group header in the by-element view.
-    ...tokenChanges.map((c, idx) => ({ type: 'token' as const, data: { ...c, selector: ':root', elementId: '' }, idx })),
+    ...tokenChanges.map((c, idx) => ({ type: 'token' as const, data: { ...c, selector: c.scopeSelector || ':root', elementId: '' }, idx })),
   ];
   // Compute the first-touched timestamp per group so the by-element sort
   // can keep all of an element's edits together while preserving relative
@@ -8000,10 +8251,16 @@ function renderChangesTab(): string {
         const c = item.data;
         const shortOld = escapeAttr((c.original || '').slice(0, 20));
         const shortNew = escapeAttr((c.current || '').slice(0, 20));
+        const scopeSel = c.scopeSelector || ':root';
+        const chip = (text: string, title: string) =>
+          '<span title="' + escapeAttr(title) + '" style="flex-shrink:0;padding:0 3px;border-radius:3px;background:var(--dm-accent-bg);color:var(--dm-accent);font-size:8px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(text) + '</span>';
+        const chips =
+          (c.system ? chip(c.system, 'Design system: ' + c.system) : '') +
+          (scopeSel !== ':root' ? chip(scopeSel, 'Declared on ' + scopeSel) : '');
         return '<div class="dm-change-item"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px ' + indentLeft + 'px;border-bottom:1px solid var(--dm-separator);">' +
           '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;">' + icon('swatchBook', 10) + '</span>' +
-          '<div style="flex:1;min-width:0;"><div style="font-size:10px;"><span style="color:var(--dm-text-muted);font-family:SF Mono,Monaco,monospace;">' + escapeAttr(c.cssVar) + '</span>: <span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + shortOld + '</span> → <span style="color:var(--dm-success);">' + shortNew + '</span></div></div>' +
-          '<button class="dm-change-revert" data-dm-token-reset="' + escapeAttr(c.cssVar) + '" title="Revert token to original" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
+          '<div style="flex:1;min-width:0;"><div style="font-size:10px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;"><span style="color:var(--dm-text-muted);font-family:SF Mono,Monaco,monospace;">' + escapeAttr(c.cssVar) + '</span>' + chips + '<span><span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + shortOld + '</span> → <span style="color:var(--dm-success);">' + shortNew + '</span></span></div></div>' +
+          '<button class="dm-change-revert" data-dm-token-reset="' + escapeAttr(c.cssVar) + '" data-dm-token-scope="' + escapeAttr(scopeSel) + '" title="Revert token to original" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else {
         const c = item.data;
         const isViewing = c.id === viewingCommentId;
@@ -9060,6 +9317,7 @@ function setupDelegation() {
         // Tokens / Design system panel
         case 'open-tokens':
           tokensOpen = true;
+          tokensFocusVar = null;
           // Restore the user's last-active tab within the session.
           chrome.storage?.session?.get?.(['dm-tokens-tab'], (r: any) => {
             const t = r?.['dm-tokens-tab'];
@@ -9069,7 +9327,7 @@ function setupDelegation() {
           // Force a refetch each time the panel opens — the page may have
           // changed (theme switch, route nav) since the last open.
           designSystem = null;
-          refreshDesignSystem();
+          refreshDesignSystem(true);
           refreshCustomPresets();
           render();
           break;
@@ -9078,11 +9336,12 @@ function setupDelegation() {
           break;
         case 'close-tokens':
           tokensOpen = false;
+          tokensFocusVar = null;
           render();
           break;
         case 'refresh-tokens':
           designSystem = null;
-          refreshDesignSystem();
+          refreshDesignSystem(true);
           render();
           break;
         case 'switch-tokens-tab': {
@@ -9096,6 +9355,10 @@ function setupDelegation() {
           }
           break;
         }
+        case 'toggle-component-tokens':
+          componentTokensOpen = !componentTokensOpen;
+          render();
+          break;
         case 'add-preset-open': {
           if (!info) {
             showCaptureToast('error', 'Select an element on the page first.');
@@ -9362,7 +9625,7 @@ function setupDelegation() {
       else if (action === 'hide-all') ids.forEach(id => { if (domTree.find(n => n.id === id)?.isVisible) toggleLayerVisibility(id); });
       else if (action === 'duplicate-all') ids.forEach(id => duplicateLayer(id));
       else if (action === 'delete-all') ids.forEach(id => deleteLayer(id));
-      else if (action === 'clear-selection') { multiSelectIds.length = 0; multiSelectActive = false; render(); }
+      else if (action === 'clear-selection') { multiSelectIds.length = 0; multiSelectActive = false; tokenUsesActiveVar = null; render(); }
       return;
     }
 
@@ -9653,11 +9916,11 @@ function setupDelegation() {
       render(); return;
     }
 
-    // Tokens panel — filter chip click.
-    const tokenChipBtn = target.closest<HTMLElement>('[data-dm-token-filter]');
-    if (tokenChipBtn) {
-      const next = tokenChipBtn.dataset.dmTokenFilter as TokenFilter;
-      tokenFilter = next;
+    // Tokens panel — design-system banner chip toggles a system filter.
+    const systemChip = target.closest<HTMLElement>('[data-dm-token-system]');
+    if (systemChip) {
+      const id = systemChip.dataset.dmTokenSystem!;
+      tokenSystemFilter = tokenSystemFilter === id ? null : id;
       render();
       return;
     }
@@ -9666,8 +9929,9 @@ function setupDelegation() {
     const resetTokenBtn = target.closest<HTMLElement>('[data-dm-token-reset]');
     if (resetTokenBtn) {
       const cssVar = resetTokenBtn.dataset.dmTokenReset!;
-      editedTokens.delete(cssVar);
-      send({ type: 'SP_RESET_ROOT_VAR', cssVar }).then((r: any) => {
+      const scopeSelector = resetTokenBtn.dataset.dmTokenScope || ':root';
+      editedTokens.delete(tokenEditKey(scopeSelector, cssVar));
+      send({ type: 'SP_RESET_ROOT_VAR', cssVar, scopeSelector }).then((r: any) => {
         if (r?.tokenChanges) tokenChanges = r.tokenChanges;
         designSystem = null;
         refreshDesignSystem();
@@ -9679,8 +9943,16 @@ function setupDelegation() {
     const findUsesBtn = target.closest<HTMLElement>('[data-dm-token-find-uses]');
     if (findUsesBtn) {
       const cssVar = findUsesBtn.dataset.dmTokenFindUses!;
-      send({ type: 'SP_GET_TOKEN_USAGES', cssVar }).then((r: any) => {
-        const ids: string[] = (r && r.ids) || [];
+      // Second click on the active chip clears the highlight.
+      if (tokenUsesActiveVar === cssVar) {
+        tokenUsesActiveVar = null;
+        multiSelectIds = [];
+        multiSelectActive = false;
+        send({ type: 'SP_SET_MULTI_SELECT_IDS', ids: [] }).then(() => render());
+        return;
+      }
+      send({ type: 'SP_GET_TOKEN_USAGES', cssVar }).then((r: { ids?: string[] }) => {
+        const ids: string[] = r?.ids || [];
         if (!ids.length) {
           showCaptureToast('error', 'No on-page consumers of ' + cssVar);
           return;
@@ -9688,6 +9960,7 @@ function setupDelegation() {
         send({ type: 'SP_SET_MULTI_SELECT_IDS', ids }).then(() => {
           multiSelectActive = true;
           multiSelectIds = ids;
+          tokenUsesActiveVar = cssVar;
           showCaptureToast('success', ids.length + ' element' + (ids.length === 1 ? '' : 's') + ' using ' + cssVar);
           render();
         });
@@ -9704,6 +9977,70 @@ function setupDelegation() {
       tokensDropdownProp = null;
       colorPickerSearch = '';
       applyStyle(prop, val);
+      return;
+    }
+
+    // Pick token from the swap-token dropdown (non-color groups)
+    const pickTokenBtn = target.closest<HTMLElement>('[data-dm-pick-token]');
+    if (pickTokenBtn) {
+      const val = pickTokenBtn.dataset.dmPickToken!;
+      const prop = pickTokenBtn.dataset.dmPickProp!;
+      tokenPickerProp = null;
+      tokenBadgeMenuProp = null;
+      applyStyle(prop, val);
+      return;
+    }
+
+    // Token badge menu actions: swap / edit globally / detach
+    const tokenActionBtn = target.closest<HTMLElement>('[data-dm-token-action]');
+    if (tokenActionBtn) {
+      const action = tokenActionBtn.dataset.dmTokenAction!;
+      const prop = tokenActionBtn.dataset.dmTokenProp!;
+      const cssVar = tokenActionBtn.dataset.dmTokenVar!;
+      const tokenScope = tokenActionBtn.dataset.dmTokenScope || ':root';
+      tokenBadgeMenuProp = null;
+      if (action === 'swap') {
+        if (tokenGroupForProp(prop) === 'colour') tokensDropdownProp = prop;
+        else tokenPickerProp = prop;
+      } else if (action === 'edit') {
+        tokenPickerProp = null;
+        tokensOpen = true;
+        settingsOpen = false;
+        helpOpen = false;
+        tokensTab = 'declared';
+        tokensFocusVar = cssVar;
+        // Pin the panel to the scope this element resolves the token
+        // through — the same token exists on every theme, and editing any
+        // other scope's copy would leave this element unchanged.
+        tokenScopeFilter = tokenScope;
+        tokenSearch = cssVar;
+        tokenFilter = 'all';
+        tokenSystemFilter = null;
+        tokenUsedOnlyFilter = false;
+        componentTokensOpen = true;
+        designSystem = null;
+        refreshDesignSystem().then(() => scrollFocusedTokenIntoView());
+      } else if (action === 'detach') {
+        // computedStyles only carries longhands, so the uniform
+        // padding / margin fields rebuild their shorthand from the sides.
+        const cs = info?.computedStyles;
+        const resolved = (prop === 'padding' || prop === 'margin')
+          ? ['Top', 'Right', 'Bottom', 'Left'].map(s => cs?.[prop + s] || '').filter(Boolean).join(' ')
+          : (cs?.[prop] || '');
+        if (resolved) applyStyle(prop, resolved);
+      }
+      render();
+      return;
+    }
+
+    // Token badge — toggles its menu
+    const tokenBadgeBtn = target.closest<HTMLElement>('[data-dm-token-badge]');
+    if (tokenBadgeBtn) {
+      const prop = tokenBadgeBtn.dataset.dmTokenBadge!;
+      const wasOpen = tokenBadgeMenuProp === prop || tokenPickerProp === prop;
+      tokenBadgeMenuProp = wasOpen ? null : prop;
+      tokenPickerProp = null;
+      render();
       return;
     }
 
@@ -9750,6 +10087,14 @@ function setupDelegation() {
       activeColorPickerProp = null;
       colorPickerSearch = '';
       contrastSettingsOpen = false;
+      render();
+    }
+
+    // Click outside the token badge menu / swap picker closes them
+    if ((tokenBadgeMenuProp || tokenPickerProp) &&
+      !target.closest('[data-dm-token-menu]') && !target.closest('[data-dm-token-picker]') && !target.closest('[data-dm-token-badge]')) {
+      tokenBadgeMenuProp = null;
+      tokenPickerProp = null;
       render();
     }
 
@@ -10727,6 +11072,22 @@ function setupDelegation() {
   root.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
 
+    // Declared tab — scope filter dropdown.
+    const scopeFilterSel = target.closest<HTMLSelectElement>('[data-dm-token-scope-filter]');
+    if (scopeFilterSel) {
+      tokenScopeFilter = scopeFilterSel.value;
+      render();
+      return;
+    }
+
+    // Tokens panel — group filter dropdown (All / Colours / Type / …).
+    const groupSel = target.closest<HTMLSelectElement>('[data-dm-token-group]');
+    if (groupSel) {
+      tokenFilter = groupSel.value as TokenFilter;
+      render();
+      return;
+    }
+
     // Defined tab — preset kind dropdown.
     const definedKindSel = target.closest<HTMLSelectElement>('[data-dm-defined-kind]');
     if (definedKindSel) {
@@ -10794,8 +11155,9 @@ function setupDelegation() {
         for (const t of incoming) {
           if (!t || typeof t.cssVar !== 'string' || typeof t.value !== 'string') { skipped++; continue; }
           if (!declared.has(t.cssVar)) { skipped++; continue; }
-          editedTokens.set(t.cssVar, t.resolvedValue || t.value);
-          send({ type: 'SP_SET_ROOT_VAR', cssVar: t.cssVar, value: t.resolvedValue || t.value });
+          const scopeSelector = (designSystem?.tokens || []).find(d => d.cssVar === t.cssVar)?.scope.selector || ':root';
+          editedTokens.set(tokenEditKey(scopeSelector, t.cssVar), t.resolvedValue || t.value);
+          send({ type: 'SP_SET_ROOT_VAR', cssVar: t.cssVar, value: t.resolvedValue || t.value, scopeSelector });
           applied++;
         }
         showCaptureToast(applied > 0 ? 'success' : 'error',
@@ -11019,6 +11381,12 @@ function setupDelegation() {
       const raw = propInput.value.trim();
       const isPureNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
       const val = isNumeric && unit && isPureNumber ? raw + unit : raw;
+      // var(--token) passes through verbatim — the non-negative clamp
+      // below would otherwise flatten a token reference to 0.
+      if (/^var\(\s*--/.test(raw)) {
+        applyStyle(prop, raw);
+        return;
+      }
       // Non-negative numeric guard — corner radius and stroke weight
       // both fail silently in CSS when handed a negative value. Same
       // UX either way: floor to 0 whether the user typed a negative,
@@ -11672,9 +12040,10 @@ function setupDelegation() {
     const tokenEditInput = target.closest<HTMLInputElement>('[data-dm-token-edit]');
     if (tokenEditInput) {
       const cssVar = tokenEditInput.dataset.dmTokenEdit!;
+      const scopeSelector = tokenEditInput.dataset.dmTokenScope || ':root';
       const newValue = tokenEditInput.value;
-      editedTokens.set(cssVar, newValue);
-      send({ type: 'SP_SET_ROOT_VAR', cssVar, value: newValue }).then((r: any) => { if (r?.tokenChanges) tokenChanges = r.tokenChanges; });
+      editedTokens.set(tokenEditKey(scopeSelector, cssVar), newValue);
+      send({ type: 'SP_SET_ROOT_VAR', cssVar, value: newValue, scopeSelector }).then((r: any) => { if (r?.tokenChanges) tokenChanges = r.tokenChanges; });
       return;
     }
 
@@ -11990,6 +12359,7 @@ function setupDelegation() {
         const raw = propInput.value.trim();
         if (propName === '__opacity_pct') { commitOpacityPct(raw); return; }
         if (fillOpacityMatch) { commitFillOpacityPct(raw); return; }
+        if (/^var\(\s*--/.test(raw)) { applyStyle(propName, raw); return; }
         if (isNonNegativeNumericProp(propName)) {
           const n = parseFloat(raw);
           const clamped = !isFinite(n) || n < 0 ? 0 : n;
@@ -12047,6 +12417,9 @@ function setupDelegation() {
         const start = propInput.selectionStart ?? cur.length;
         const end = propInput.selectionEnd ?? cur.length;
         const next = cur.slice(0, start) + e.key + cur.slice(end);
+        // A var(--token) reference is legal in any numeric field — let the
+        // user type one through the strict digit filter.
+        if (/^v(?:a(?:r(?:\(.*)?)?)?$/i.test(next)) return;
         const re = nonNegative ? /^\d{0,}(\.\d{0,2})?$/ : /^-?\d{0,}(\.\d{0,2})?$/;
         if (!re.test(next)) {
           e.preventDefault();

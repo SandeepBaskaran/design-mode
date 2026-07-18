@@ -303,8 +303,8 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 8.1  | Open Tokens panel | Click the swatch-book icon in the action row | Panel opens with three tabs: **Declared**, **Detected**, **Defined**; last-active tab is restored from `dm-tokens-tab` |
-| 8.2  | Declared — grouping | Switch to Declared | Every `:root` CSS variable on the page is listed, grouped by purpose (Colour / Typography / Spacing / Radius / Shadow / Other), each row with swatch/preview + current value + inline editor |
-| 8.3  | Declared — live repaint | Type a new value (e.g. change a colour token's hex) | The page repaints live via `documentElement.style.setProperty` without a reload |
+| 8.2  | Declared — grouping | Switch to Declared | Every CSS variable the page declares is listed — not just `:root` — grouped by purpose (Colour / Typography / Spacing / Radius / Shadow / Other), each row with swatch/preview + current value + inline editor |
+| 8.3  | Declared — live repaint | Type a new value (e.g. change a colour token's hex) | The page repaints live via the `dm-token-overrides` stylesheet without a reload |
 | 8.4  | Declared — reset | Click the reset button on an edited row | Value restores to the original captured on the first edit |
 | 8.5  | `×N uses` preview | Click the `×N uses` badge on a token | On-page consumers light up via the multi-select overlay system |
 | 8.6  | Detected — histograms | Switch to Detected | Histograms of computed values used by viewport-visible elements for spacing / radius / font-size / shadow, each with a count |
@@ -322,6 +322,27 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 8.18 | Markdown exporter — Tokens changed | Edit a `:root` var → Copy as Prompt | Output contains a focused **`## Tokens changed`** section listing only edited tokens (original → current). With no root-var edits, the section is omitted |
 | 8.18a | Token edits show in Changes tab | Edit a `:root` var → open the Changes tab | A row appears under a `:root` / Design-tokens group showing `--var: original → current`; the **Tokens** filter chip counts it; the row's Revert restores the original; "Clear all" removes it. Parity with the Copy as Prompt's Tokens-changed section |
 | 8.19 | Pre-rework presets read back | If you had presets from before this rework | They load into the Defined tab without migration; `groupId` continues to work |
+
+### Phase 8b — Scopes, design systems, token badges
+
+Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
+
+| #    | Test | Steps | Expected |
+|------|------|-------|----------|
+| 8.20 | Theme-scoped detection | Open the Tokens panel on carbondesignsystem.com | Hundreds of `--cds-*` tokens listed (they're declared on theme classes, not `:root` — the old `:root`-only scan found none) |
+| 8.21 | Design-system banner | Same page | An **IBM Carbon** chip shows with a token count; clicking it filters to `--cds-*` tokens. On ui.shadcn.com the chip reads **shadcn/ui** |
+| 8.22 | Scope switching | Open the scope dropdown → pick a non-primary theme (e.g. `.cds--g100`) | Rows show *that* scope's values; scopes that match nothing on the page are marked `inactive` |
+| 8.23 | Component tokens section | Scroll the Declared tab | Component-scoped tokens (e.g. `.cds--btn { --cds-btn-* }`) sit in their own collapsed **Component tokens** section, not mixed into the semantic groups |
+| 8.24 | Scoped edit is contained | Edit a token on a theme scope that applies to only part of the page | Only elements inside that scope repaint; elements themed by a sibling scope are untouched; Reset restores |
+| 8.25 | Token badge appears | Select a Carbon button → Design tab | Fields authored from tokens show a ◆ badge (Fill shows the token name); hovering a numeric field's diamond shows the full var name |
+| 8.26 | Badge is cascade-accurate | Select an element whose colour comes from a *literal* rule that shadows a `var()` rule with the same value | **No badge** on that field — the literal wins the cascade, so the property isn't token-driven |
+| 8.27 | Swap token (non-colour) | Badge → **Swap token…** on a spacing / radius / type field | A group-matched token picker opens; picking one applies `var(--token)`, the page repaints, and the Changes row reads `→ var(--token)` |
+| 8.28 | Edit token globally | Badge → **Edit token globally** | Tokens panel opens with that token focused/highlighted **and its scope pre-selected**; editing the value changes the element you started from |
+| 8.29 | Detach from token | Badge → **Detach from token** | The resolved literal is written; the badge disappears |
+| 8.30 | `var()` in numeric fields | Type `var(--cds-spacing-05)` into a radius or stroke-weight field → Enter | The value is applied verbatim (previously clamped to `0`); Changes shows the `var()` |
+| 8.31 | Token change → MCP | Edit a token → call `get_changes` (local and cloud) | Response contains `tokenChanges` with `cssVar`, `scopeSelector`, `oldValue`, `newValue`, `system`, `cssRule`, plus a `tokenGuidance` string |
+| 8.32 | Token change → prompt | Edit a theme-scoped token → Copy as Prompt | `## Tokens changed` names the token, its design system, and its scope, followed by the "edit the definition at its source" guidance |
+| 8.33 | Refresh picks up a theme switch | Toggle the site's theme → click the panel's refresh (⟳) | Token values re-scan to the now-active theme |
 
 ---
 

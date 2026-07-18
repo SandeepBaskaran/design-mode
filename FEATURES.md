@@ -302,6 +302,34 @@ side panel is open.
   Category override (Auto / Large / Normal / Graphics). Category and level
   persist across sessions.
 
+### 2.17 Token badges — which token paints this field
+
+Any Design-tab field whose value is authored from a CSS variable shows a
+small **◆ badge**. Fill / stroke fields spell the token name out; the
+narrow numeric fields show the diamond alone (full name on hover).
+
+The badge is earned, not guessed: the field is only badged when the
+declaration that actually **wins the cascade** for that property is a
+`var()` — a more specific literal rule (`color: #0f62fe` beating
+`color: var(--brand)`) means no badge, even when the two resolve to the
+same value. Shorthands authored as `padding: var(--x)` badge each side.
+
+Clicking the badge opens a menu naming the token and the scope this
+element resolves it through (`via .cds--g100`):
+
+| Action | What |
+|---|---|
+| **Swap token…** | Replace the value with a different `var(--token)` of the same kind — colours, spacing, radius, typography, and shadows all have pickers, not just colour. |
+| **Edit token globally** | Jump to the Tokens panel with that token focused **and its scope pre-selected**, so the edit lands where this element reads it. |
+| **Detach from token** | Write the resolved literal, dropping the reference. |
+
+Typing `var(--token)` by hand into any numeric field works too — the
+non-negative clamp on radius / stroke-weight no longer flattens it to `0`.
+
+Attribution rides on `ELEMENT_SELECTED` as `styleTokens` (built by
+`getAuthoredVarsForElement` in `content/token-engine.ts`) and is computed
+on selection only — hover stays cheap.
+
 ---
 
 ## 3. Side panel — Layers tab
@@ -489,24 +517,62 @@ existing user-saved presets surface in the **Defined** tab without
 migration.
 
 > **Site-colour tokens** (CSS custom properties on the page) also appear
-> inline on every colour input via the focus-driven dropdown (see §2.16).
-> The Tokens panel surfaces the underlying `:root` vars, the implicit
+> inline on every colour input via the focus-driven dropdown (see §2.16),
+> and every Design-tab field authored from a token carries a badge
+> (see §2.17). The Tokens panel surfaces the declared vars, the implicit
 > scales the page actually uses, and your user-saved presets.
+
+Token discovery lives in `content/token-engine.ts` — one scan shared by
+the Tokens panel, the inspector's pickers, and the markdown export.
 
 The three tabs:
 
 | Tab | What |
 |---|---|
-| **Declared** | Every `:root` CSS variable on the page, grouped by purpose (Colour / Typography / Spacing / Radius / Shadow / Other). Each row shows the swatch / preview, current value, an inline editor that repaints the page live via `documentElement.style.setProperty`, a reset-to-original button, and a `×N uses` badge that lights up the on-page consumers via the multi-select overlay. Per-token original values live in `content/root-var-store.ts` (session-only). |
+| **Declared** | Every CSS variable the page declares, grouped by purpose (Colour / Typography / Spacing / Radius / Shadow / Other). Not just `:root` — theme scopes (`.cds--g100`, `[data-theme]`, `.dark`) and component scopes (`.cds--btn { --cds-btn-height }`) are picked up too, from `@media` blocks that currently match, `@supports`, and cascade layers. Each row shows the swatch / preview, current value, an inline editor that repaints the page live, a reset-to-original button, and a `×N uses` badge that lights up the on-page consumers via the multi-select overlay. Per-token original values live in `content/root-var-store.ts` (session-only). |
 | **Detected** | Histograms of values *actually used* by viewport-visible elements for spacing / radius / font-size / shadow. Each entry shows its count, a drift warning when it's close to a declared token, and a "Replace with…" dropdown listing up to three closest declared tokens (lower / exact / upper). Picking one fans out a `CONSOLIDATE_DETECTED` scan that rewrites every matching computed value as `var(--name)` under a single grouped change in the Changes tab. |
 | **Defined** | User-saved presets — empty by default. Save the selected element's styles as a named preset; the Add form's kind dropdown only lists kinds with at least one non-default value on the current selection. Applied presets gain an **↶ Applied** button that reverts every style change in that application's `groupId`. |
 
 Across all three tabs: **filter chips** (`All` / `Colours` / `Type` /
-`Spacing` / `Radius` / `Shadow` / `Other`), free-text search, and a
+`Spacing` / `Radius` / `Shadow` / `Other`), free-text search (matching
+token name, value, scope selector, and design-system label), and a
 **"Show only tokens used on this page"** toggle. The active tab persists
 to `chrome.storage.local` as `dm-tokens-tab`.
 
-### 6.1 Defined-tab — nine kinds
+### 6.1 Scopes and themes
+
+A design system declares the same token once per theme — Carbon ships
+~327 `--cds-*` vars on each of `.cds--white`, `.cds--g10`, `.cds--g90`,
+`.cds--g100`. So a token is not one value; it's one value *per scope*.
+
+- A scope declaring **12 or more** tokens is a **theme**; fewer makes it a
+  **component** scope. (Token count, not element size — theme classes
+  routinely sit on small wrappers.)
+- The **Declared** tab opens on the token's *primary* scope: the active
+  scope declaring the richest set. The **scope dropdown** switches to any
+  other declaring scope, and rows then show and edit *that* scope's value.
+  Scopes declared but not matching anything on the page are marked
+  `inactive`.
+- Component-scoped tokens collapse into their own **Component tokens**
+  section so they don't drown the page-wide sets.
+- Edits are written as `scope { --token: value !important }` into a
+  managed `<style id="dm-token-overrides">`, so a theme-scoped edit beats
+  the page's own declaration without leaking into sibling themes.
+
+### 6.2 Design-system profiles
+
+When enough tokens share a known prefix or name-set, the Declared tab
+shows a banner chip naming the system; clicking it filters to that
+system's tokens. Recognised: IBM Carbon (`--cds-`), Material
+(`--md-` / `--mdc-`), MUI (`--mui-`), Bootstrap (`--bs-`), Shopify
+Polaris (`--p-`), Radix Themes (`--radix-`), shadcn/ui (its
+`--background` / `--primary` / `--radius` name-set), and Tailwind v4
+(`--color-*` / `--spacing-*` / … namespaces). Each system's own taxonomy
+drives grouping before the generic name/value heuristics. A profile only
+appears once it clears a minimum token count, so a few coincidental
+`--color-*` vars won't brand a page as Tailwind.
+
+### 6.3 Defined-tab — nine kinds
 
 When you save a preset, pick a **Kind**. The kind drives which properties
 get captured from the selected element (NOT a 30-prop snapshot of
@@ -529,7 +595,7 @@ The exact property list per kind is owned by the side panel
 each save — so widening a section's surface area automatically widens what
 its preset captures.
 
-### 6.2 Save / Apply / Edit / Delete
+### 6.4 Save / Apply / Edit / Delete
 
 - **Save**: select an element, open the Defined tab, pick a Kind, type a
   name, click **Save**. Default-valued properties (`none`, `normal`,
@@ -544,7 +610,7 @@ its preset captures.
   change kinds, save a new preset from the source element.
 - **Delete**: trash icon → confirmation overlay → confirm.
 
-### 6.3 Import / Export
+### 6.5 Import / Export
 
 - **Export** writes a JSON file (`design-mode-design-system` kind marker)
   with every saved preset.
@@ -554,7 +620,7 @@ its preset captures.
   on import. Duplicate IDs / names are renamed; toast confirms
   `Imported X of Y presets`.
 
-### 6.4 Sync + storage
+### 6.6 Sync + storage
 
 - Saved presets sync via `chrome.storage.sync` so they're available
   across every site you visit (and across Chrome-signed-in devices).
@@ -562,7 +628,7 @@ its preset captures.
   saves fail with a clean "Storage full" toast — delete an old preset and
   try again.
 
-### 6.5 Markdown exporter integration
+### 6.7 Markdown exporter integration
 
 The Copy-Prompt markdown exporter emits a focused **`## Tokens changed`**
 section listing only the `:root` CSS variables you've edited this session
@@ -580,6 +646,14 @@ signal** to a coding agent.
 ```
 # Visual changes — <page title>
 <page url>
+
+## Tokens changed
+- `--cds-link-primary` [carbon] (scope `.cds--g100`): #78a9ff → #ff0000
+
+These redefine CSS custom properties. Find each token's definition in the
+codebase (SCSS variable, theme file, Tailwind @theme block, or CSS rule on
+the scope selector) and change it at the source — do not restyle
+individual components.
 
 ## Changes
 - <selector> [<file>:<line>]: <prop> <old> → <new>; <prop2> <old2> → <new2>
@@ -601,6 +675,10 @@ What's special:
 - **File pointers inline** — `[components/Button.tsx:42]` after the selector
   if source detection found the source file. No separate cross-reference
   block.
+- **Token changes are token operations** — a redefined token is reported by
+  name, design system, and the scope selector it's declared on, with
+  guidance to edit the *definition* rather than the components. The section
+  only appears when the user actually changed a token.
 - **Token resolution** — when an edited value matches an existing `--var`,
   the prompt shows `var(--name)` instead of the raw hex/px so the agent
   preserves the design system.
@@ -608,6 +686,10 @@ What's special:
   set, not every token on the page.
 - **Move destinations included** — `<parent>[<index>]` so the agent knows
   where to place the element in code.
+
+The same data reaches agents over MCP: `get_changes` carries a
+`tokenChanges` array (`cssVar`, `scopeSelector`, `oldValue`, `newValue`,
+`system`, `cssRule`) plus a `tokenGuidance` string.
 
 ---
 

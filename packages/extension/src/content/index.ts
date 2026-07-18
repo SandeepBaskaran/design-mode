@@ -15,11 +15,12 @@ import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyS
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, captureViewportScreenshotClean, downloadDataUrl } from './screenshots';
 import {
-  getPageTokens, detectScales, annotateDrift, findTokenUsages,
+  detectScales, annotateDrift, findTokenUsages,
   getCustomPresets, saveCustomPreset, deleteCustomPreset,
   type PresetKind,
 } from './presets';
-import { captureOriginalIfNew, clearRootVarEdit, clearAllRootVarEdits, getRootVarEdits } from './root-var-store';
+import { getTokenIndex, invalidateTokenIndex } from './token-engine';
+import { setTokenEdit, resetTokenEdit, clearAllTokenEdits, getTokenEdits } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
 import { buildDomTree } from './dom-tree';
 import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments } from './comments';
@@ -349,7 +350,7 @@ async function getChangesPayload() {
     textChanges: getTextChanges(),
     comments: pageComments,
     domChanges: getDomChanges(),
-    tokenChanges: getRootVarEdits(),
+    tokenChanges: getTokenEdits(),
   };
 }
 
@@ -448,7 +449,7 @@ async function performFullClear() {
   const pageComments = await getPageComments();
   for (const c of pageComments) await deleteComment(c.id);
   clearAllChanges();
-  clearAllRootVarEdits();
+  clearAllTokenEdits();
   clearAllLayoutGuides();
   undoStack.length = 0;
   redoStack.length = 0;
@@ -1454,25 +1455,25 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
 
     case 'GET_DESIGN_SYSTEM': {
       // Single round-trip the panel uses to populate the Tokens view:
-      // declared :root vars + the implicit scales (spacing / radius /
-      // font-size / shadow) detected from viewport-visible elements.
-      // Drift is computed here so the panel doesn't have to.
-      const tokens = getPageTokens();
+      // declared tokens (all scopes) + the implicit scales (spacing /
+      // radius / font-size / shadow) detected from viewport-visible
+      // elements. Drift is computed here so the panel doesn't have to.
+      if (msg.force) invalidateTokenIndex();
+      const index = getTokenIndex();
       const scales = detectScales();
-      annotateDrift(scales, tokens);
-      sendResponse({ tokens, scales });
+      annotateDrift(scales, index.tokens);
+      sendResponse({ tokens: index.tokens, scales, systems: index.systems, scopes: index.scopes });
       break;
     }
     case 'SET_ROOT_VAR': {
-      // Edit a CSS variable at :root. Inline-set on documentElement —
-      // resolves immediately for every consumer. The original value is
-      // captured in root-var-store on the first edit so RESET_ROOT_VAR
-      // and the markdown exporter can read it later. Changes-tab ledger
+      // Edit a CSS variable globally, scoped to the selector it's
+      // declared on (default :root). The original value is captured in
+      // root-var-store on the first edit so RESET_ROOT_VAR and the
+      // markdown exporter can read it later. Changes-tab ledger
       // integration is deferred (applyStyleChange requires data-dm-id'd
-      // elements; :root doesn't carry one).
+      // elements; scope selectors don't carry one).
       if (msg.cssVar && msg.value != null) {
-        captureOriginalIfNew(msg.cssVar);
-        document.documentElement.style.setProperty(msg.cssVar, msg.value);
+        setTokenEdit(msg.cssVar, msg.value, msg.scopeSelector || ':root');
         getChangesPayload().then(p => sendResponse({ ok: true, ...p }));
         return true;
       }
@@ -1480,8 +1481,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
     case 'RESET_ROOT_VAR': {
       if (msg.cssVar) {
-        document.documentElement.style.removeProperty(msg.cssVar);
-        clearRootVarEdit(msg.cssVar);
+        resetTokenEdit(msg.cssVar, msg.scopeSelector || ':root');
         getChangesPayload().then(p => sendResponse({ ok: true, ...p }));
         return true;
       }
@@ -1855,7 +1855,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
 
     case 'GET_DESIGN_TOKENS': {
-      sendResponse({ tokens: detectDesignTokens() });
+      sendResponse({ tokens: getTokenIndex().tokens });
       break;
     }
 
@@ -2097,25 +2097,6 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
   return true;
 });
 
-// Detect CSS design tokens from the page's stylesheets
-function detectDesignTokens(): Array<{ name: string; value: string; category: 'color' | 'spacing' | 'font' | 'shadow' | 'other' }> {
-  const tokens = new Map<string, string>();
-  for (const sheet of Array.from(document.styleSheets)) {
-    try {
-      for (const rule of Array.from(sheet.cssRules)) {
-        if (rule instanceof CSSStyleRule && (rule.selectorText === ':root' || rule.selectorText === 'html')) {
-          const style = rule.style;
-          for (let i = 0; i < style.length; i++) {
-            const name = style[i];
-            if (name.startsWith('--')) tokens.set(name, style.getPropertyValue(name).trim());
-          }
-        }
-      }
-    } catch {}
-  }
-  return Array.from(tokens.entries()).map(([name, value]) => ({ name, value, category: categoriseToken(name, value) }));
-}
-
 // Build the list of fonts to surface in the Typography → Font dropdown.
 // Two sources, deduped + sorted: every `font-family` declared in the page's
 // own stylesheets, plus a curated set of web-safe / system fallbacks. The
@@ -2176,17 +2157,6 @@ function detectPageFonts(): Array<{ value: string; label: string }> {
     const primary = stack.split(',')[0].trim().replace(/^["']|["']$/g, '');
     return { value: stack, label: primary };
   });
-}
-
-function categoriseToken(name: string, value: string): 'color' | 'spacing' | 'font' | 'shadow' | 'other' {
-  const lname = name.toLowerCase();
-  if (lname.includes('color') || lname.includes('bg') || lname.includes('text') || lname.includes('border') ||
-    /^#[0-9a-f]{3,8}$/i.test(value) || value.startsWith('rgb') || value.startsWith('hsl')) return 'color';
-  if (lname.includes('space') || lname.includes('gap') || lname.includes('padding') || lname.includes('margin') ||
-    lname.includes('radius') || lname.includes('size') || /^\d+(\.\d+)?(px|rem|em)$/.test(value)) return 'spacing';
-  if (lname.includes('font') || lname.includes('weight') || lname.includes('line-height') || lname.includes('letter')) return 'font';
-  if (lname.includes('shadow')) return 'shadow';
-  return 'other';
 }
 
 // Forward comment bubble clicks to sidepanel
