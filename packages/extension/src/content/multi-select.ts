@@ -4,9 +4,61 @@
 // tab and Copy Prompt show the full impact).
 // ============================================================
 
-import { getElementById, getElementRect } from './helpers';
+import { getElementById, getElementRect, getOrAssignId } from './helpers';
 import { Z_INDEX } from '../shared';
 import { showPairwiseDistances, hideDistance } from './measure-guides';
+
+// ── Similarity matching ─────────────────────────────────────────────
+// Finds elements "like" the reference so one edit can fan out to all of
+// them via the existing multi-select machinery. Sensitivity tiers:
+//   1 strict   — same tag, identical class list, same parent tag
+//   2 balanced — same tag, shares a class (classless: same parent tag)
+//   3 loose    — same tag, shares a class OR same computed text signature
+const MAX_SIMILAR = 100;
+
+function classSet(el: HTMLElement): Set<string> {
+  const raw = typeof el.className === 'string' ? el.className : '';
+  return new Set(raw.trim().split(/\s+/).filter(c => c && !c.startsWith('dm-')));
+}
+
+function textSignature(el: HTMLElement): string {
+  const cs = window.getComputedStyle(el);
+  return `${cs.fontSize}|${cs.fontWeight}|${cs.color}|${cs.display}`;
+}
+
+export function findSimilarElements(elementId: string, sensitivity: number): string[] {
+  const ref = getElementById(elementId);
+  if (!ref) return [];
+  const refClasses = classSet(ref);
+  const refParentTag = ref.parentElement?.tagName || '';
+  const refSig = textSignature(ref);
+  const ids: string[] = [getOrAssignId(ref)];
+
+  const candidates = document.getElementsByTagName(ref.tagName);
+  for (let i = 0; i < candidates.length && ids.length < MAX_SIMILAR; i++) {
+    const el = candidates[i] as HTMLElement;
+    if (el === ref) continue;
+    if (el.closest('[class^="dm-"], [id^="dm-"]')) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    const classes = classSet(el);
+    const sharesClass = [...refClasses].some(c => classes.has(c));
+    let match = false;
+    if (sensitivity <= 1) {
+      match = classes.size === refClasses.size &&
+        [...refClasses].every(c => classes.has(c)) &&
+        el.parentElement?.tagName === refParentTag;
+    } else if (sensitivity === 2) {
+      match = refClasses.size > 0
+        ? sharesClass
+        : classes.size === 0 && el.parentElement?.tagName === refParentTag;
+    } else {
+      match = sharesClass || textSignature(el) === refSig;
+    }
+    if (match) ids.push(getOrAssignId(el));
+  }
+  return ids;
+}
 
 let active = false;
 const selectedIds = new Set<string>();

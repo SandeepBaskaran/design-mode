@@ -171,6 +171,24 @@ let tab: Tab = 'design';
 let settingsOpen = false;
 let helpOpen = false;
 let sendAgentHelpOpen = false;
+
+// Section rearrange view
+interface PanelSection {
+  id: string; selector: string; label: string;
+  rect: { top: number; left: number; width: number; height: number };
+  children: string[]; layoutPattern: string;
+}
+let sectionsOpen = false;
+let pageSections: PanelSection[] = [];
+let sectionNoteOpenId: string | null = null;
+let sectionDragSrc: number | null = null;
+
+// Similarity multi-select (sensitivity 1 strict · 2 balanced · 3 loose)
+let similarOpen = false;
+let similarSensitivity = 2;
+let similarIds: string[] = [];
+let similarCount = -1;
+let similarTimer: number | undefined;
 let shortcutsOpen = false;
 let contributeOpen = false;
 let fileAccessBlocked = false;
@@ -1632,6 +1650,55 @@ async function sendToAgent() {
   }
 }
 function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); chrome.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
+
+/* ── Section rearrange ── */
+async function refreshSections() {
+  const res = await send({ type: 'SP_GET_SECTIONS' });
+  pageSections = Array.isArray(res?.sections) ? res.sections : [];
+  render();
+}
+
+async function moveSectionTo(sectionId: string, targetIndex: number) {
+  const res = await send({ type: 'SP_REORDER_SECTION', sectionId, targetIndex });
+  if (res?.sections) pageSections = res.sections;
+  await refreshChanges();
+  render();
+}
+
+async function saveSectionNote(sectionId: string) {
+  const input = root.querySelector<HTMLTextAreaElement>('[data-dm-section-note-input]');
+  const text = input?.value.trim();
+  if (!text) return;
+  const res = await send({ type: 'SP_ADD_SECTION_NOTE', sectionId, text });
+  sectionNoteOpenId = null;
+  if (res?.comment) { await refreshChanges(); showCaptureToast('success', 'Note pinned to section.'); }
+  else showCaptureToast('error', res?.error || 'Could not pin the note.');
+  render();
+}
+
+/* ── Similarity multi-select ── */
+// Debounced count preview: every slider move re-queries the page, the
+// Apply button label shows the would-be selection size live.
+function queueSimilarQuery() {
+  if (similarTimer) clearTimeout(similarTimer);
+  similarTimer = window.setTimeout(() => { void fetchSimilar(); }, 120) as unknown as number;
+}
+
+async function fetchSimilar() {
+  if (!info) return;
+  const res = await send({ type: 'SP_FIND_SIMILAR', elementId: info.id, sensitivity: similarSensitivity });
+  similarIds = Array.isArray(res?.ids) ? res.ids : [];
+  similarCount = similarIds.length;
+  render();
+}
+
+async function applySimilarSelection() {
+  if (similarIds.length < 2) return;
+  await pushMultiSelectIds([...similarIds]);
+  similarOpen = false;
+  showCaptureToast('success', 'Editing ' + similarIds.length + ' elements — style changes fan out to all.');
+  render();
+}
 // Click on a compact comment row in the changes tab. We expand the row
 // inline (the same "viewing" card the page-pin click triggers) so the
 // user sees Resolve / Edit / Delete in one place. Clicking the same row
@@ -1712,6 +1779,8 @@ chrome.runtime.onMessage.addListener((msg) => {
     contrastSettingsOpen = false;
     effectiveBgCache.clear();
     maybeFetchEffectiveBg();
+    // Similar-match preview is per-element — recount for the new selection.
+    if (similarOpen) { similarCount = -1; similarIds = []; queueSimilarQuery(); }
     render();
     refreshMedia();
     setTimeout(() => {
@@ -5011,6 +5080,53 @@ function renderVizPanel(): string {
 //
 // This panel replaced the user-saved-preset feature. The bookmark icon
 // in the header is now the swatchBook icon.
+// Full-panel Sections view: the page's top-level sections as a draggable
+// list. Rows reorder via drag or the arrow buttons; every applied move is
+// a recorded DOM change (Changes tab, exports, MCP). The sticky-note
+// button pins a rearrange note to the section as a comment.
+function renderSectionsView(): string {
+  const rowStyle = 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;cursor:grab;';
+  const rows = pageSections.map((s, idx) => {
+    const meta = s.layoutPattern + ' · ' + s.children.length + ' block' + (s.children.length === 1 ? '' : 's') + ' · ' + Math.round(s.rect.height) + 'px';
+    const childLine = s.children.length
+      ? '<div style="font-size:9px;color:var(--dm-text-dimmer);font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(s.children.join('  ')) + '</div>'
+      : '';
+    const noteOpen = sectionNoteOpenId === s.id;
+    const noteCard = noteOpen
+      ? '<div style="margin:4px 0 8px;padding:8px;background:var(--dm-purple-bg);border:1px solid var(--dm-purple-border);border-radius:8px;">' +
+        '<textarea data-dm-section-note-input placeholder="e.g. Move testimonials above pricing — social proof first" style="width:100%;min-height:44px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:6px;color:var(--dm-text);font-size:11px;padding:6px 8px;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;"></textarea>' +
+        '<div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end;">' +
+        '<button data-dm-action="section-note-cancel" style="padding:4px 10px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Cancel</button>' +
+        '<button data-dm-action="section-note-save" data-dm-section-id="' + escapeAttr(s.id) + '" style="padding:4px 10px;background:rgba(139,92,246,0.15);border:1px solid var(--dm-purple-border);border-radius:5px;color:var(--dm-purple);cursor:pointer;font-size:10px;font-weight:500;font-family:inherit;">Pin note</button>' +
+        '</div></div>'
+      : '';
+    const arrowBtn = (dir: 'up' | 'down', disabled: boolean) =>
+      '<button data-dm-action="section-' + dir + '" data-dm-section-id="' + escapeAttr(s.id) + '" data-dm-idx="' + idx + '"' + (disabled ? ' disabled' : '') + ' title="Move ' + dir + '" style="background:none;border:none;color:' + (disabled ? 'var(--dm-text-dimmer)' : 'var(--dm-text-secondary)') + ';cursor:' + (disabled ? 'default' : 'pointer') + ';display:flex;padding:2px;">' + icon(dir === 'up' ? 'arrowUp' : 'arrowDown', 12) + '</button>';
+    return '<div data-dm-section-row="' + idx + '" data-dm-section-id="' + escapeAttr(s.id) + '" draggable="true" style="margin-bottom:6px;">' +
+      '<div style="' + rowStyle + '">' +
+      '<span style="color:var(--dm-text-dim);display:flex;flex-shrink:0;cursor:grab;">' + icon('gripVertical', 12) + '</span>' +
+      '<span style="font-size:9px;font-weight:700;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;width:14px;text-align:right;">' + (idx + 1) + '</span>' +
+      '<div style="flex:1;min-width:0;">' +
+      '<div style="font-size:11px;font-weight:500;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(s.label) + '</div>' +
+      '<div style="font-size:9px;color:var(--dm-text-dim);">' + escapeAttr(meta) + '</div>' +
+      childLine +
+      '</div>' +
+      '<button data-dm-action="section-note-toggle" data-dm-section-id="' + escapeAttr(s.id) + '" title="Pin a rearrange note to this section" style="background:none;border:none;color:' + (noteOpen ? 'var(--dm-purple)' : 'var(--dm-text-muted)') + ';cursor:pointer;display:flex;padding:3px;">' + icon('stickyNote', 12) + '</button>' +
+      '<div style="display:flex;flex-direction:column;">' + arrowBtn('up', idx === 0) + arrowBtn('down', idx === pageSections.length - 1) + '</div>' +
+      '</div>' + noteCard + '</div>';
+  }).join('');
+  const empty = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 30px;color:var(--dm-text-dim);text-align:center;gap:10px;">' +
+    icon('rows3', 28) +
+    '<div style="font-size:11px;color:var(--dm-text-muted);">No sections detected on this page. Sections are the visible top-level blocks of the document (header, hero, footer, …).</div></div>';
+  return '<div style="flex:1;overflow-y:auto;padding:12px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+    '<button data-dm-action="back-from-sections" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
+    '<span style="font-size:13px;font-weight:600;color:var(--dm-text);flex:1;">Rearrange sections</span>' +
+    '<button data-dm-action="refresh-sections" title="Re-detect sections" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('rotateCw', 12) + '</button></div>' +
+    '<div style="font-size:9px;color:var(--dm-text-dimmer);margin:0 0 12px 26px;line-height:1.5;">Drag rows (or use the arrows) to reorder the page live. Every move is tracked in Changes and travels to your agent.</div>' +
+    (pageSections.length ? rows : empty) + '</div>';
+}
+
 function renderTokensView(): string {
   // Token data is fetched lazily when the panel opens. Until it arrives
   // we render an empty-state with a small spinner-like message.
@@ -5641,6 +5757,7 @@ function renderActionRow(): string {
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
     '<button data-dm-action="open-tokens" title="Design system" style="' + bs(undefined, true) + ';' + (tokensOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('swatchBook', 14) + '</button>' +
+    '<button data-dm-action="open-sections" title="Rearrange sections" style="' + bs(undefined, true) + ';' + (sectionsOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('rows3', 14) + '</button>' +
     '<div style="flex:1;"></div>' +
     '<button data-dm-action="undo" title="Undo (Ctrl+Z)" style="' + bs(undefined, true) + '">' + icon('undo', 14) + '</button>' +
     '<button data-dm-action="redo" title="Redo (Ctrl+Shift+Z)" style="' + bs(undefined, true) + ';transform:scaleX(-1);">' + icon('undo', 14) + '</button></div>';
@@ -6007,6 +6124,21 @@ function renderDesignTab(): string {
     : '';
   const cssBtnDisabled = !info; // hover-only state still shouldn't trigger a "view computed CSS" of a fleeting hover
   const cssBtn = '<button data-dm-action="view-computed-css"' + (cssBtnDisabled ? ' disabled' : '') + ' title="' + (cssBtnDisabled ? 'Select a layer to view its computed CSS' : 'View computed CSS for the selected layer') + '" style="display:flex;align-items:center;gap:4px;padding:3px 8px;background:' + (cssBtnDisabled ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-btn-bg)') + ';border:1px solid ' + (cssBtnDisabled ? 'var(--dm-btn-border-disabled)' : 'var(--dm-btn-border)') + ';border-radius:5px;color:' + (cssBtnDisabled ? 'var(--dm-text-dim)' : 'var(--dm-text-secondary)') + ';cursor:' + (cssBtnDisabled ? 'default' : 'pointer') + ';font-size:10px;font-family:inherit;flex-shrink:0;opacity:' + (cssBtnDisabled ? '0.5' : '1') + ';">' + icon('code', 11) + '<span>CSS</span></button>';
+  // Similarity selector — wand toggles a slider card; the slider re-counts
+  // matching elements live and Apply hands them to multi-select fan-out.
+  const similarBtn = '<button data-dm-action="toggle-similar"' + (cssBtnDisabled ? ' disabled' : '') + ' title="' + (cssBtnDisabled ? 'Select a layer to find similar elements' : 'Select similar elements — edit them all at once') + '" style="display:flex;align-items:center;padding:3px 6px;background:' + (similarOpen ? 'var(--dm-accent-bg)' : (cssBtnDisabled ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-btn-bg)')) + ';border:1px solid ' + (similarOpen ? 'var(--dm-accent-border)' : (cssBtnDisabled ? 'var(--dm-btn-border-disabled)' : 'var(--dm-btn-border)')) + ';border-radius:5px;color:' + (similarOpen ? 'var(--dm-accent)' : (cssBtnDisabled ? 'var(--dm-text-dim)' : 'var(--dm-text-secondary)')) + ';cursor:' + (cssBtnDisabled ? 'default' : 'pointer') + ';flex-shrink:0;opacity:' + (cssBtnDisabled ? '0.5' : '1') + ';">' + icon('wand', 11) + '</button>';
+  const sensLabel = similarSensitivity === 1 ? 'Strict' : similarSensitivity === 3 ? 'Loose' : 'Balanced';
+  const similarCard = similarOpen && info
+    ? '<div style="padding:8px 12px;border-bottom:1px solid var(--dm-separator);background:var(--dm-accent-bg);">' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<span style="font-size:10px;color:var(--dm-text-secondary);flex-shrink:0;">Match</span>' +
+      '<input type="range" data-dm-similar-sensitivity min="1" max="3" step="1" value="' + similarSensitivity + '" style="flex:1;accent-color:var(--dm-accent);" aria-label="Similarity sensitivity"/>' +
+      '<span style="font-size:9px;color:var(--dm-accent);font-weight:600;width:52px;text-align:right;flex-shrink:0;">' + sensLabel + '</span></div>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">' +
+      '<span style="font-size:10px;color:var(--dm-text-muted);flex:1;">' + (similarCount < 0 ? 'Scanning…' : similarCount + ' matching element' + (similarCount === 1 ? '' : 's')) + '</span>' +
+      '<button data-dm-action="apply-similar"' + (similarCount < 2 ? ' disabled' : '') + ' style="padding:4px 10px;background:' + (similarCount < 2 ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-accent-bg)') + ';border:1px solid ' + (similarCount < 2 ? 'var(--dm-btn-border-disabled)' : 'var(--dm-accent-border)') + ';border-radius:5px;color:' + (similarCount < 2 ? 'var(--dm-text-dim)' : 'var(--dm-accent)') + ';cursor:' + (similarCount < 2 ? 'default' : 'pointer') + ';font-size:10px;font-weight:500;font-family:inherit;">Edit all ' + Math.max(similarCount, 0) + '</button>' +
+      '</div></div>'
+    : '';
   // Indicator label: "Page" when body/html is the implicit context (no real
   // selection), "Hovering" while hovering, otherwise "Selected".
   const indicatorLeft = isPageContext
@@ -6018,7 +6150,7 @@ function renderDesignTab(): string {
     '<div style="padding:6px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;">' +
     indicatorLeft +
     '<span style="font-size:10px;color:var(--dm-text-dim);font-family:SF Mono,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">&lt;' + escapeAttr(tag) + '&gt;</span>' +
-    multiBadge + cssBtn + '</div>';
+    multiBadge + similarBtn + cssBtn + '</div>' + similarCard;
 
   // Text content editing — show for ANY text-tagged layer (the same set whose
   // Layers icon is the "T"/type glyph). Editing a text element with children
@@ -8506,6 +8638,9 @@ function render() {
     html = renderHeader() + renderHelpView() + renderCaptureToast();
   } else if (contributeOpen) {
     html = renderHeader() + renderContributeView() + renderCaptureToast();
+  } else if (sectionsOpen) {
+    html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
+      renderHeader() + renderSectionsView() + renderCaptureToast() + '</div>';
   } else if (tokensOpen) {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
       renderHeader() + renderTokensView() + renderCaptureToast() + '</div>';
@@ -8969,6 +9104,38 @@ function setupDelegation() {
           refreshCustomPresets();
           render();
           break;
+        case 'open-sections':
+          sectionsOpen = !sectionsOpen;
+          if (sectionsOpen) { tokensOpen = false; sectionNoteOpenId = null; void refreshSections(); }
+          render();
+          break;
+        case 'back-from-sections': sectionsOpen = false; render(); break;
+        case 'refresh-sections': void refreshSections(); break;
+        case 'section-up':
+        case 'section-down': {
+          const sid = actionBtn.dataset.dmSectionId;
+          const idx = parseInt(actionBtn.dataset.dmIdx || '', 10);
+          if (sid && !isNaN(idx)) void moveSectionTo(sid, act === 'section-up' ? idx - 1 : idx + 1);
+          break;
+        }
+        case 'section-note-toggle': {
+          const sid = actionBtn.dataset.dmSectionId || null;
+          sectionNoteOpenId = sectionNoteOpenId === sid ? null : sid;
+          render();
+          break;
+        }
+        case 'section-note-cancel': sectionNoteOpenId = null; render(); break;
+        case 'section-note-save': {
+          const sid = actionBtn.dataset.dmSectionId;
+          if (sid) void saveSectionNote(sid);
+          break;
+        }
+        case 'toggle-similar':
+          similarOpen = !similarOpen;
+          if (similarOpen) { similarCount = -1; similarIds = []; void fetchSimilar(); }
+          render();
+          break;
+        case 'apply-similar': void applySimilarSelection(); break;
         case 'close-tokens':
           tokensOpen = false;
           render();
@@ -11495,6 +11662,16 @@ function setupDelegation() {
     return true;
   }
 
+  // Similarity sensitivity slider — update state and re-count (debounced).
+  root.addEventListener('input', (e) => {
+    const slider = (e.target as HTMLElement).closest<HTMLInputElement>('[data-dm-similar-sensitivity]');
+    if (!slider) return;
+    similarSensitivity = parseInt(slider.value, 10) || 2;
+    similarCount = -1;
+    queueSimilarQuery();
+    render();
+  });
+
   root.addEventListener('input', (e) => {
     const editor = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-richtext]');
     if (!editor) return;
@@ -11969,6 +12146,41 @@ function setupDelegation() {
   // dragstart stashes the source index in dataTransfer; drop reads the
   // target index, splices the source out, and re-inserts at the target.
   let fillDragSrc: number | null = null;
+  // Sections view drag-reorder — same pattern as Fill/Stroke rows: stash
+  // the source index on dragstart, apply on drop via the content script.
+  root.addEventListener('dragstart', (e) => {
+    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-section-row]');
+    if (!rowEl) return;
+    sectionDragSrc = parseInt(rowEl.dataset.dmSectionRow || '-1', 10);
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(sectionDragSrc));
+    }
+    rowEl.style.opacity = '0.5';
+  });
+  root.addEventListener('dragend', (e) => {
+    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-section-row]');
+    if (rowEl) rowEl.style.opacity = '';
+    sectionDragSrc = null;
+  });
+  root.addEventListener('dragover', (e) => {
+    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-section-row]');
+    if (!rowEl || sectionDragSrc === null) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  });
+  root.addEventListener('drop', (e) => {
+    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-section-row]');
+    if (!rowEl || sectionDragSrc === null) return;
+    e.preventDefault();
+    const target = parseInt(rowEl.dataset.dmSectionRow || '-1', 10);
+    const src = sectionDragSrc;
+    sectionDragSrc = null;
+    rowEl.style.opacity = '';
+    if (src < 0 || target < 0 || src === target || src >= pageSections.length) return;
+    void moveSectionTo(pageSections[src].id, target);
+  });
+
   root.addEventListener('dragstart', (e) => {
     const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-fill-row]');
     if (!rowEl) return;

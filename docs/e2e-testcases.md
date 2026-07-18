@@ -474,6 +474,24 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 
 ---
 
+## Phase 17 — Section rearrange + Select similar
+
+| #    | Test | Steps | Expected |
+|------|------|-------|----------|
+| 17.1 | Section detection | On a landing-style page, click the `rows3` (Rearrange sections) toolbar icon | Full-panel list of the page's top-level sections, each with label, layout line (`flex · column`, `grid · 3 cols`, `stack`), block count, height |
+| 17.2 | Arrow reorder | Click the ↓ arrow on the first section | Page reorders live; row moves down; Changes tab gains a `MOVE` DOM change with from/to positions |
+| 17.3 | Drag reorder | Drag a row by its grip onto another row | Same as 17.2 via drag; dragged row dims while dragging |
+| 17.4 | Reorder is undoable | After 17.2, press Undo | Section returns to its original slot; Changes row disappears |
+| 17.5 | Rearrange survives reload | Reorder a section, reload the page | Move replays from session storage; Changes tab still lists it |
+| 17.6 | Rearrange note | Click the sticky-note icon on a section, type a note, **Pin note** | Numbered comment pin appears on the section; note listed under Comments in the Changes tab; included in Copy as Prompt + agent `get_changes` |
+| 17.7 | Re-detect | Click the refresh icon in the Sections header | List re-scans (e.g. after route navigation in an SPA) |
+| 17.8 | Similar — open | Select a repeated element (card title, button); click the `wand` icon in the Selected row | Slider card opens showing "N matching elements" |
+| 17.9 | Similar — sensitivity | Move the slider Strict → Balanced → Loose | Count updates live per tier (Strict ≤ Balanced ≤ Loose) |
+| 17.10 | Similar — apply | Click **Edit all N** | Dashed overlays on all matches; "N selected" badge in Design tab; a style edit (e.g. color) fans out to every match; Changes tab shows one row per element (grouped) |
+| 17.11 | Similar — escape | Press `Escape` | Multi-select clears, overlays disappear |
+
+---
+
 ## Phase 14 — Website (docs site)
 
 | #    | Test | Steps | Expected |
