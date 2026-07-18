@@ -66,6 +66,11 @@ const textChanges: TextChange[] = [];
 const domChanges: DomChange[] = [];
 let ws: WebSocket | null = null;
 
+// Set when the user clicks "Send to Agent"; travels to the MCP server so
+// the agent's next get_changes sees the explicit "these are ready" marker.
+interface AgentHandoff { requestedAt: number; pageUrl: string; pageTitle: string; }
+let pendingHandoff: AgentHandoff | null = null;
+
 export function getStyleChanges() { return [...styleChanges]; }
 export function getTextChanges() { return [...textChanges]; }
 export function getDomChanges() { return [...domChanges]; }
@@ -78,6 +83,7 @@ export function clearAllChanges() {
   styleChanges.length = 0;
   textChanges.length = 0;
   domChanges.length = 0;
+  pendingHandoff = null;
   clearAllRules();
   persistSession();
 }
@@ -977,20 +983,36 @@ export function getChangeReport() {
     pageTitle: document.title,
     styleChanges: styleChanges.map(c => ({
       id: c.id, status: c.status || 'todo',
+      elementId: c.elementId, timestamp: c.timestamp,
       selector: c.selector, property: c.property,
       oldValue: c.oldValue, newValue: c.newValue,
       cssRule: `${c.selector} { ${c.property.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}: ${c.newValue}; }`,
     })),
     textChanges: textChanges.map(c => ({
       id: c.id, status: c.status || 'todo',
+      elementId: c.elementId, timestamp: c.timestamp,
       selector: c.selector, oldText: c.oldText, newText: c.newText,
     })),
     domChanges: domChanges.map(c => ({
       id: c.id, status: c.status || 'todo',
+      elementId: c.elementId, timestamp: c.timestamp,
       selector: c.selector, action: c.action, tagName: c.tagName,
     })),
     cssBlock: generateCSSBlock(),
+    handoff: pendingHandoff
+      ? { ...pendingHandoff, requestedAt: new Date(pendingHandoff.requestedAt).toISOString() }
+      : undefined,
   };
+}
+
+// User clicked "Send to Agent". Stash the marker locally (cloud tools read
+// the page live via getChangeReport) and push it to the local server's
+// state (local get_changes reads server-side). Returns the marker so the
+// panel can confirm the staging.
+export function stageAgentHandoff(): AgentHandoff {
+  pendingHandoff = { requestedAt: Date.now(), pageUrl: location.href, pageTitle: document.title };
+  transportSend({ type: 'HANDOFF', payload: pendingHandoff });
+  return pendingHandoff;
 }
 
 // --- Transport sync ---
@@ -1083,7 +1105,13 @@ export function connectToServer(opts: ConnectOpts | number = {}) {
     const port = o.port ?? DEFAULT_WS_PORT;
     try {
       ws = new WebSocket(`ws://localhost:${port}`);
-      ws.onopen = () => console.log('[Design Mode] Connected to companion server');
+      ws.onopen = () => {
+        console.log('[Design Mode] Connected to companion server');
+        // Back-fill everything recorded before the server came up (it is
+        // spawned by the agent, usually after the user already edited).
+        syncAllChanges();
+        void loadComments().then(cs => { for (const c of cs) syncCommentChange(c); }).catch(() => {});
+      };
       ws.onclose = () => { ws = null; setAgentConnected(false); };
       ws.onerror = () => { ws = null; setAgentConnected(false); };
       ws.onmessage = (event) => {
@@ -1235,7 +1263,7 @@ async function handleScreenshotRequest(
         } else if (matches.length > 1) {
           // Ambiguous — return up to 8 unique candidate paths so the agent
           // can re-query with a specific one.
-          error = `Selector "${payload.selector}" matched ${matches.length} elements. Pass a more specific path (use list_layers to discover unique paths).`;
+          error = `Selector "${payload.selector}" matched ${matches.length} elements. Pass a more specific path — pick one of the candidates below.`;
           candidates = matches.slice(0, 8).map(el => ({
             path: generateSelector(el),
             label: shortLabel(el),

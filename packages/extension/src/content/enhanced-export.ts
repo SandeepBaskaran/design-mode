@@ -133,10 +133,7 @@ function tokenize(value: string, lookup: Map<string, string>, used: Set<string>)
 }
 
 // ── Markdown — short, chronological, agent-friendly ──
-export function exportMarkdown(
-  _level: string = 'standard',
-  pageComments: CommentData[] = []
-): string {
+export function exportMarkdown(pageComments: CommentData[] = []): string {
   const styleChanges = getStyleChanges();
   const textChanges = getTextChanges();
   const domChanges = getDomChanges();
@@ -276,6 +273,6 @@ export function exportGitHubIssueBody(): string {
   lines.push(`**Page:** ${document.title}`);
   lines.push(`**URL:** ${window.location.href}`);
   lines.push(``);
-  lines.push(exportMarkdown('standard'));
+  lines.push(exportMarkdown());
   return lines.join('\n');
 }

@@ -1,13 +1,14 @@
 // ============================================================
 // Design Mode Server — MCP Server
-// 7 tools for coding agents:
-//   - get_changes        : read everything the user edited
-//   - apply_changes      : push CSS back to the browser (single or batch)
-//   - set_change_status  : mark changes/comments todo / in_progress / resolved
-//   - clear_changes      : reset the session
-//   - get_session_summary: status + counts + active sessions
-//   - export_changes     : emit CSS / Tailwind / SCSS / JSX
-//   - get_screenshot     : capture a PNG of the page or a specific element
+// 8 tools for coding agents:
+//   - get_changes           : read everything the user edited
+//   - apply_changes         : push CSS back to the browser (single or batch)
+//   - set_change_status     : mark changes/comments todo / in_progress / resolved
+//   - clear_changes         : reset the session
+//   - mark_comment_resolved : close the loop on a pinned comment
+//   - get_session_summary   : status + counts + active sessions
+//   - export_changes        : emit CSS / Tailwind / SCSS / JSX
+//   - get_screenshot        : capture a PNG of the page or a specific element
 //
 // Spring + easing curves come through naturally inside style change values
 // (e.g. `transition: all 0.3s cubic-bezier(...)`); no separate apply tool —
@@ -17,7 +18,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { state } from './state.js';
-import { sendToExtension, requestFromExtension, isExtensionConnected } from './websocket-server.js';
+import { requestFromExtension, isExtensionConnected } from './websocket-server.js';
 
 function toKebab(s: string): string {
   return s.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
@@ -119,8 +120,13 @@ export function createMcpServer(): McpServer {
       report.items = [
         ...state.getStyleChanges().map(c => ({ id: c.id, kind: 'style', selector: c.selector, property: c.property, status: c.status || 'todo' })),
         ...state.getTextChanges().map(c => ({ id: c.id, kind: 'text', selector: c.selector, status: c.status || 'todo' })),
+        ...state.getDomChanges().map(c => ({ id: c.id, kind: 'dom', selector: c.selector, action: c.action, status: c.status || 'todo' })),
         ...state.getComments().map(c => ({ id: c.id, kind: 'comment', selector: c.selector, status: c.resolved ? 'resolved' : 'todo' })),
       ];
+      const handoff = state.getHandoff();
+      if (handoff) {
+        report.handoff = { ...handoff, requestedAt: new Date(handoff.requestedAt).toISOString() };
+      }
       return { content: [{ type: 'text' as const, text: JSON.stringify(report, null, 2) }] };
     }
   );
@@ -139,11 +145,16 @@ export function createMcpServer(): McpServer {
       if (!isExtensionConnected()) {
         return { content: [{ type: 'text' as const, text: 'Error: Extension not connected.' }], isError: true };
       }
-      for (const change of changes) {
-        sendToExtension({ type: 'APPLY_CHANGES', payload: change });
+      try {
+        const res = await requestFromExtension<{ ok?: boolean; totalProps?: number; totalEls?: number }>(
+          'APPLY_CHANGES', { changes }
+        );
+        const totalProps = res?.totalProps ?? 0;
+        const totalEls = res?.totalEls ?? 0;
+        return { content: [{ type: 'text' as const, text: `Applied ${totalProps} style change${totalProps === 1 ? '' : 's'} to ${totalEls} element${totalEls === 1 ? '' : 's'}.` }] };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Failed to apply changes: ${e?.message || e}` }], isError: true };
       }
-      const totalProps = changes.reduce((n, c) => n + Object.keys(c.styles).length, 0);
-      return { content: [{ type: 'text' as const, text: `Applied ${totalProps} style change${totalProps === 1 ? '' : 's'} to ${changes.length} element${changes.length === 1 ? '' : 's'}.` }] };
     }
   );
 
@@ -158,19 +169,35 @@ export function createMcpServer(): McpServer {
     async ({ status, ids }) => {
       const count = state.setChangeStatus(status, ids);
       if (isExtensionConnected()) {
-        sendToExtension({ type: 'SET_CHANGE_STATUS', payload: { status, ids } });
+        try {
+          const res = await requestFromExtension<{ ok?: boolean; count?: number }>(
+            'SET_CHANGE_STATUS', { status, ids }
+          );
+          const applied = typeof res?.count === 'number' ? res.count : count;
+          return { content: [{ type: 'text' as const, text: `Marked ${applied} item${applied === 1 ? '' : 's'} as ${status}.` }] };
+        } catch (e: any) {
+          return { content: [{ type: 'text' as const, text: `Status stored server-side, but the browser did not confirm: ${e?.message || e}` }], isError: true };
+        }
       }
-      return { content: [{ type: 'text' as const, text: `Marked ${count} item${count === 1 ? '' : 's'} as ${status}.` }] };
+      return { content: [{ type: 'text' as const, text: `Marked ${count} item${count === 1 ? '' : 's'} as ${status} (extension offline — panel will not reflect it until reconnect).` }] };
     }
   );
 
   // ── 4. clear_changes ──────────────────────────────────────────────
   server.tool(
     'clear_changes',
-    'Clear all tracked changes and comments for the current session.',
+    'Clear all tracked changes and comments for the current session — server state AND the live page (edits revert, comment pins disappear).',
     async () => {
       state.clear();
-      return { content: [{ type: 'text' as const, text: 'All changes cleared.' }] };
+      if (!isExtensionConnected()) {
+        return { content: [{ type: 'text' as const, text: 'Server state cleared. Extension offline — the page keeps its edits until it reconnects.' }] };
+      }
+      try {
+        await requestFromExtension('CLEAR_CHANGES', {});
+        return { content: [{ type: 'text' as const, text: 'All changes cleared.' }] };
+      } catch (e: any) {
+        return { content: [{ type: 'text' as const, text: `Server state cleared, but the browser did not confirm the page clear: ${e?.message || e}` }], isError: true };
+      }
     }
   );
 
@@ -203,10 +230,8 @@ export function createMcpServer(): McpServer {
     'get_session_summary',
     'Connection status, active sessions, and counts. Use this for a quick health check before calling apply_changes.',
     async () => {
-      const styleChanges = state.getStyleChanges();
-      const textChanges = state.getTextChanges();
-      const comments = state.getComments();
       const sessions = state.listSessions();
+      const handoff = state.getHandoff();
       const summary = {
         extensionConnected: isExtensionConnected(),
         activeSessions: sessions.length,
@@ -217,9 +242,11 @@ export function createMcpServer(): McpServer {
           startedAt: new Date(s.startedAt).toISOString(),
           lastActivity: new Date(s.lastActivity).toISOString(),
         })),
-        totalStyleChanges: styleChanges.length,
-        totalTextChanges: textChanges.length,
-        totalComments: comments.length,
+        totalStyleChanges: state.getStyleChanges().length,
+        totalTextChanges: state.getTextChanges().length,
+        totalDomChanges: state.getDomChanges().length,
+        totalComments: state.getComments().length,
+        pendingHandoff: handoff ? { ...handoff, requestedAt: new Date(handoff.requestedAt).toISOString() } : null,
       };
       return { content: [{ type: 'text' as const, text: JSON.stringify(summary, null, 2) }] };
     }
@@ -246,7 +273,7 @@ export function createMcpServer(): McpServer {
     'get_screenshot',
     'Capture a PNG screenshot of the page. Pass the unique `selector` string from `get_changes` output (e.g. "main > section.hero > button:nth-of-type(2)") or a Design Mode element id (dm-*) to crop to one element; pass a `commentId` from get_changes to crop to that comment\'s flagged region (or its element); otherwise the visible viewport is returned. A generic selector like "button" or "h1" matches multiple elements and will fail with a list of candidate unique paths to pick from.',
     {
-      selector: z.string().optional().describe('Unique CSS path for the element. Use the path list_layers returns, or the `selector` value from get_changes. Mutually exclusive with elementId.'),
+      selector: z.string().optional().describe('Unique CSS path for the element. Use the `selector` value from get_changes. Mutually exclusive with elementId.'),
       elementId: z.string().optional().describe('Design Mode element id (dm-*). Mutually exclusive with selector.'),
       commentId: z.string().optional().describe('A comment id from get_changes — crops to that comment\'s region rectangle (or its element). Takes precedence over selector/elementId.'),
     },

@@ -64,7 +64,7 @@ When the active filter / search produces zero matches, the list is replaced with
 
 A connected coding agent can mark changes as it implements them, via the `set_change_status` MCP tool: **to-do** (default) → **in-progress** → **resolved**. Two things surface this in the Changes tab:
 
-- **Row badge** — a small `WIP` (amber) or `DONE` (green) pill on each style / text / DOM row once the agent moves it off the default *to-do*. Resolved rows also dim. To-do rows show no badge, so solo editing (no agent) looks exactly as before.
+- **Row badge** — a small `WIP` (amber) or `DONE` (green) pill on each style / text / DOM row once the agent moves it off the default *to-do*. Resolved rows also dim and strike through, matching resolved comments. To-do rows show no badge, so solo editing (no agent) looks exactly as before.
 - **Status sub-filter** — a **To-do / In progress / Resolved / All** chip row that appears once any change is in-progress or resolved, narrowing the list by status. Comments keep their own open/resolved filter; the agent can resolve a comment through the same tool.
 
 ### Clear All — confirmation dialog
@@ -249,7 +249,7 @@ Same as the rest of the panel. Pinned at the bottom regardless of which tab is a
 | Button | What | Disabled when |
 |---|---|---|
 | **Copy as Prompt** (`clipboard` icon) | Builds a markdown prompt summarising every tracked change — element selector, before/after values for styles, text diffs, DOM operations, and any comments. Includes file:line / framework hints when source detection found them. Copies to clipboard. | The Changes toggle is in preview-original state, or no changes exist. |
-| **Send to Agent** (`send` icon) | Sends the same payload via the MCP `ws://localhost:9960` channel directly to a connected coding agent (Claude Code, Cursor, etc.). | The Changes toggle is in preview-original state, or no changes, or MCP is offline, or MCP is running but no agent is connected. The button's tooltip names the specific blocker. |
+| **Send to Agent** (`send` icon) | Stages a handoff marker over the MCP transport (local WS or cloud relay). The agent's next `get_changes` / `get_session_summary` call sees a `handoff` field — the explicit "these are ready to implement" signal — alongside the change list it already reads live. | The Changes toggle is in preview-original state, or no changes exist. When MCP is offline or no agent is connected yet, the button stays clickable and opens state-specific setup instructions instead of sending. |
 
 Send to Agent uses an accent style to distinguish it from Copy as the higher-stakes action.
 
