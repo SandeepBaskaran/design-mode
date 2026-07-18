@@ -327,26 +327,6 @@ export interface ResizeHandle {
 }
 
 // ============================================================
-// Phase 6: Rearrange Mode
-// ============================================================
-
-export interface PageSection {
-  id: string;
-  selector: string;
-  label: string;
-  rect: ElementRect;
-  children: string[];
-  layoutPattern: string;
-}
-
-export interface RearrangeNote {
-  id: string;
-  sectionId: string;
-  text: string;
-  newOrder: number[];
-}
-
-// ============================================================
 // Phase 7: Enhanced Output & Export
 // ============================================================
 

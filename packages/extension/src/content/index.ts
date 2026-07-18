@@ -37,8 +37,6 @@ import {
   toggleSelection as toggleMultiSelectMember,
   findMatchingElements,
 } from './multi-select';
-// Section rearrange — detect top-level sections, reorder with recorded moves
-import { detectSections, reorderSection } from './section-rearrange';
 // Design/Layout mode — component palette + wireframe placement
 import { getComponentsByCategory, placeComponent } from './design-mode';
 // Measurement guides — axis lines, distance pills, resize handles
@@ -1854,32 +1852,6 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'PLACE_COMPONENT': {
       if (msg.html && msg.parentId) { const id = placeComponent(msg.html, msg.parentId); sendResponse({ elementId: id }); }
       else sendResponse({ error: 'Missing html or parentId' }); break;
-    }
-
-    // ── Section rearrange ──
-    case 'GET_SECTIONS': {
-      sendResponse({ sections: detectSections() });
-      break;
-    }
-    case 'REORDER_SECTION': {
-      const res = reorderSection(msg.sectionId, msg.targetIndex);
-      if (res) notifyPanel('REARRANGE_APPLIED', { payload: { sectionId: msg.sectionId, newOrder: res.newOrder } });
-      getChangesPayload().then(p => sendResponse({ ok: !!res, sections: detectSections(), ...p }));
-      return true;
-    }
-    // A rearrange note is a pinned comment on the section element, so it
-    // rides the existing comment pipeline: Changes tab, exports, MCP sync,
-    // and the agent's mark_comment_resolved loop.
-    case 'ADD_SECTION_NOTE': {
-      const el = msg.sectionId ? getElementById(msg.sectionId) : null;
-      if (!el || !msg.text) { sendResponse({ error: 'Section not found or empty note' }); break; }
-      addComment(msg.sectionId, generateSelector(el), msg.text).then(comment => {
-        syncCommentChange(comment);
-        void showCommentPins();
-        notifyPanel('CHANGES_UPDATE', {});
-        sendResponse({ comment });
-      });
-      return true;
     }
 
     case 'GET_DESIGN_TOKENS': {

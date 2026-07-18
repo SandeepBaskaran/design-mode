@@ -172,17 +172,6 @@ let settingsOpen = false;
 let helpOpen = false;
 let sendAgentHelpOpen = false;
 
-// Section rearrange view
-interface PanelSection {
-  id: string; selector: string; label: string;
-  rect: { top: number; left: number; width: number; height: number };
-  children: string[]; layoutPattern: string;
-}
-let sectionsOpen = false;
-let pageSections: PanelSection[] = [];
-let sectionNoteOpenId: string | null = null;
-let sectionDragSrc: number | null = null;
-
 // "Select matching layers" checkbox — checked hands all matching
 // elements to multi-select so edits fan out; unchecked returns to
 // single selection. Resets whenever the selected element changes.
@@ -1648,31 +1637,6 @@ async function sendToAgent() {
   }
 }
 function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); chrome.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
-
-/* ── Section rearrange ── */
-async function refreshSections() {
-  const res = await send({ type: 'SP_GET_SECTIONS' });
-  pageSections = Array.isArray(res?.sections) ? res.sections : [];
-  render();
-}
-
-async function moveSectionTo(sectionId: string, targetIndex: number) {
-  const res = await send({ type: 'SP_REORDER_SECTION', sectionId, targetIndex });
-  if (res?.sections) pageSections = res.sections;
-  await refreshChanges();
-  render();
-}
-
-async function saveSectionNote(sectionId: string) {
-  const input = root.querySelector<HTMLTextAreaElement>('[data-dm-section-note-input]');
-  const text = input?.value.trim();
-  if (!text) return;
-  const res = await send({ type: 'SP_ADD_SECTION_NOTE', sectionId, text });
-  sectionNoteOpenId = null;
-  if (res?.comment) { await refreshChanges(); showCaptureToast('success', 'Note pinned to section.'); }
-  else showCaptureToast('error', res?.error || 'Could not pin the note.');
-  render();
-}
 
 /* ── Select matching layers ── */
 async function toggleMatchingLayers(next: boolean) {
@@ -5089,53 +5053,6 @@ function renderVizPanel(): string {
 //
 // This panel replaced the user-saved-preset feature. The bookmark icon
 // in the header is now the swatchBook icon.
-// Full-panel Sections view: the page's top-level sections as a draggable
-// list. Rows reorder via drag or the arrow buttons; every applied move is
-// a recorded DOM change (Changes tab, exports, MCP). The sticky-note
-// button pins a rearrange note to the section as a comment.
-function renderSectionsView(): string {
-  const rowStyle = 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;cursor:grab;';
-  const rows = pageSections.map((s, idx) => {
-    const meta = s.layoutPattern + ' · ' + s.children.length + ' block' + (s.children.length === 1 ? '' : 's') + ' · ' + Math.round(s.rect.height) + 'px';
-    const childLine = s.children.length
-      ? '<div style="font-size:9px;color:var(--dm-text-dimmer);font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(s.children.join('  ')) + '</div>'
-      : '';
-    const noteOpen = sectionNoteOpenId === s.id;
-    const noteCard = noteOpen
-      ? '<div style="margin:4px 0 8px;padding:8px;background:var(--dm-purple-bg);border:1px solid var(--dm-purple-border);border-radius:8px;">' +
-        '<textarea data-dm-section-note-input placeholder="e.g. Move testimonials above pricing — social proof first" style="width:100%;min-height:44px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:6px;color:var(--dm-text);font-size:11px;padding:6px 8px;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;"></textarea>' +
-        '<div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end;">' +
-        '<button data-dm-action="section-note-cancel" style="padding:4px 10px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Cancel</button>' +
-        '<button data-dm-action="section-note-save" data-dm-section-id="' + escapeAttr(s.id) + '" style="padding:4px 10px;background:rgba(139,92,246,0.15);border:1px solid var(--dm-purple-border);border-radius:5px;color:var(--dm-purple);cursor:pointer;font-size:10px;font-weight:500;font-family:inherit;">Pin note</button>' +
-        '</div></div>'
-      : '';
-    const arrowBtn = (dir: 'up' | 'down', disabled: boolean) =>
-      '<button data-dm-action="section-' + dir + '" data-dm-section-id="' + escapeAttr(s.id) + '" data-dm-idx="' + idx + '"' + (disabled ? ' disabled' : '') + ' title="Move ' + dir + '" style="background:none;border:none;color:' + (disabled ? 'var(--dm-text-dimmer)' : 'var(--dm-text-secondary)') + ';cursor:' + (disabled ? 'default' : 'pointer') + ';display:flex;padding:2px;">' + icon(dir === 'up' ? 'arrowUp' : 'arrowDown', 12) + '</button>';
-    return '<div data-dm-section-row="' + idx + '" data-dm-section-id="' + escapeAttr(s.id) + '" draggable="true" style="margin-bottom:6px;">' +
-      '<div style="' + rowStyle + '">' +
-      '<span style="color:var(--dm-text-dim);display:flex;flex-shrink:0;cursor:grab;">' + icon('gripVertical', 12) + '</span>' +
-      '<span style="font-size:9px;font-weight:700;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;width:14px;text-align:right;">' + (idx + 1) + '</span>' +
-      '<div style="flex:1;min-width:0;">' +
-      '<div style="font-size:11px;font-weight:500;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(s.label) + '</div>' +
-      '<div style="font-size:9px;color:var(--dm-text-dim);">' + escapeAttr(meta) + '</div>' +
-      childLine +
-      '</div>' +
-      '<button data-dm-action="section-note-toggle" data-dm-section-id="' + escapeAttr(s.id) + '" title="Pin a rearrange note to this section" style="background:none;border:none;color:' + (noteOpen ? 'var(--dm-purple)' : 'var(--dm-text-muted)') + ';cursor:pointer;display:flex;padding:3px;">' + icon('stickyNote', 12) + '</button>' +
-      '<div style="display:flex;flex-direction:column;">' + arrowBtn('up', idx === 0) + arrowBtn('down', idx === pageSections.length - 1) + '</div>' +
-      '</div>' + noteCard + '</div>';
-  }).join('');
-  const empty = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 30px;color:var(--dm-text-dim);text-align:center;gap:10px;">' +
-    icon('rows3', 28) +
-    '<div style="font-size:11px;color:var(--dm-text-muted);">No sections detected on this page. Sections are the visible top-level blocks of the document (header, hero, footer, …).</div></div>';
-  return '<div style="flex:1;overflow-y:auto;padding:12px;">' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
-    '<button data-dm-action="back-from-sections" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
-    '<span style="font-size:13px;font-weight:600;color:var(--dm-text);flex:1;">Rearrange sections</span>' +
-    '<button data-dm-action="refresh-sections" title="Re-detect sections" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('rotateCw', 12) + '</button></div>' +
-    '<div style="font-size:9px;color:var(--dm-text-dimmer);margin:0 0 12px 26px;line-height:1.5;">Drag rows (or use the arrows) to reorder the page live. Every move is tracked in Changes and travels to your agent.</div>' +
-    (pageSections.length ? rows : empty) + '</div>';
-}
-
 function renderTokensView(): string {
   // Token data is fetched lazily when the panel opens. Until it arrives
   // we render an empty-state with a small spinner-like message.
@@ -5766,7 +5683,6 @@ function renderActionRow(): string {
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
     '<button data-dm-action="open-tokens" title="Design system" style="' + bs(undefined, true) + ';' + (tokensOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('swatchBook', 14) + '</button>' +
-    '<button data-dm-action="open-sections" title="Rearrange sections" style="' + bs(undefined, true) + ';' + (sectionsOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('rows3', 14) + '</button>' +
     '<div style="flex:1;"></div>' +
     '<button data-dm-action="undo" title="Undo (Ctrl+Z)" style="' + bs(undefined, true) + '">' + icon('undo', 14) + '</button>' +
     '<button data-dm-action="redo" title="Redo (Ctrl+Shift+Z)" style="' + bs(undefined, true) + ';transform:scaleX(-1);">' + icon('undo', 14) + '</button></div>';
@@ -5834,21 +5750,47 @@ function renderStickyBottom(): string {
 function renderSendAgentHelpOverlay(): string {
   if (!sendAgentHelpOpen) return '';
   const isCloud = mcpMode === 'cloud' || mcpMode === 'self-hosted';
-  const code = (t: string) => '<code style="font-family:SF Mono,Monaco,monospace;font-size:9px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:3px;padding:1px 4px;">' + t + '</code>';
-  let body: string;
+  const code = (t: string) => '<code style="font-family:SF Mono,Monaco,monospace;font-size:9px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:3px;padding:1px 4px;word-break:break-all;">' + t + '</code>';
+  let intro: string;
+  let steps: string[];
   if (mcpState === 'running') {
-    body = 'MCP is up, but no coding agent has attached yet. In <b>Settings → MCP</b>, copy the MCP config into your agent (Claude Code, Cursor, …), restart it, then run ' + code('/design-mode') + '.';
+    intro = 'The MCP server is reachable, but no coding agent has connected yet.';
+    steps = [
+      'Open <b>Settings → MCP</b> and click <b>Copy MCP config</b>.',
+      'Paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …) and restart the agent.',
+      'Run ' + code('/design-mode') + ' in the agent — the MCP chip up top turns solid green.',
+    ];
+  } else if (isCloud && mcpCloudToken) {
+    intro = 'The cloud relay is unreachable right now.';
+    steps = [
+      'Open <b>Settings → MCP</b> and check the server URL and token.',
+      'Click the <b>MCP</b> chip in the panel header to retry the connection.',
+    ];
   } else if (isCloud) {
-    body = mcpCloudToken
-      ? 'The cloud relay is unreachable. Check the server URL and token in <b>Settings → MCP</b>, then retry.'
-      : 'Connect once in <b>Settings → MCP</b> (“Connect to Cloud”), copy the MCP config into your agent, restart it, then run ' + code('/design-mode') + '.';
+    intro = 'One-time setup — takes about a minute.';
+    steps = [
+      'Open <b>Settings → MCP</b> and click <b>Connect to Cloud</b>.',
+      'Click <b>Copy MCP config</b> and paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …).',
+      'Restart the agent, then run ' + code('/design-mode') + ' in it.',
+    ];
   } else {
-    body = 'The local companion server isn’t running. Register it with your agent once — ' + code('claude mcp add design-mode -- npm start --prefix &lt;repo&gt;/packages/mcp-local') + ' — then run ' + code('/design-mode') + '; the agent starts the server automatically.';
+    intro = 'The local companion server isn’t running. One-time setup:';
+    steps = [
+      'Register the server with your agent: ' + code('claude mcp add design-mode -- npm start --prefix &lt;repo&gt;/packages/mcp-local'),
+      'Start your agent — it launches the server automatically.',
+      'Run ' + code('/design-mode') + ' in the agent.',
+    ];
   }
+  const stepRows = steps.map((s, i) =>
+    '<div style="display:flex;gap:8px;align-items:flex-start;">' +
+    '<span style="flex-shrink:0;width:16px;height:16px;border-radius:50%;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);color:var(--dm-accent);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;">' + (i + 1) + '</span>' +
+    '<span style="font-size:10px;color:var(--dm-text-secondary);line-height:1.6;min-width:0;">' + s + '</span></div>'
+  ).join('');
   return '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
-    '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:250px;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
+    '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:312px;max-width:calc(100vw - 32px);box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
     '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;display:flex;align-items:center;gap:6px;">' + icon('send', 12) + ' Connect a coding agent</div>' +
-    '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:10px;line-height:1.6;">' + body + '</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-muted);margin-bottom:10px;line-height:1.5;">' + intro + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">' + stepRows + '</div>' +
     '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-bottom:14px;line-height:1.5;">Once connected, this button stages your changes for the agent — it implements them and marks each one done in the Changes tab.</div>' +
     '<div style="display:flex;gap:6px;">' +
     '<button data-dm-action="send-agent-help-close" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Close</button>' +
@@ -6142,14 +6084,14 @@ function renderDesignTab(): string {
     : '';
   const cssBtnDisabled = !info; // hover-only state still shouldn't trigger a "view computed CSS" of a fleeting hover
   const cssBtn = '<button data-dm-action="view-computed-css"' + (cssBtnDisabled ? ' disabled' : '') + ' title="' + (cssBtnDisabled ? 'Select a layer to view its computed CSS' : 'View computed CSS for the selected layer') + '" style="display:flex;align-items:center;gap:4px;padding:3px 8px;background:' + (cssBtnDisabled ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-btn-bg)') + ';border:1px solid ' + (cssBtnDisabled ? 'var(--dm-btn-border-disabled)' : 'var(--dm-btn-border)') + ';border-radius:5px;color:' + (cssBtnDisabled ? 'var(--dm-text-dim)' : 'var(--dm-text-secondary)') + ';cursor:' + (cssBtnDisabled ? 'default' : 'pointer') + ';font-size:10px;font-family:inherit;flex-shrink:0;opacity:' + (cssBtnDisabled ? '0.5' : '1') + ';">' + icon('code', 11) + '<span>CSS</span></button>';
-  // "Select matching layers" — one checkbox: checked hands every matching
-  // element (same tag sharing a class) to multi-select fan-out; the
-  // existing "N selected" badge shows the resulting count.
-  const matchingRow = info && !isPageContext && !isHovering
-    ? '<div style="padding:5px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;">' +
-      '<input type="checkbox" id="dm-matching-layers" data-dm-action="toggle-matching-layers"' + (matchingLayersChecked ? ' checked' : '') + ' style="accent-color:var(--dm-accent);margin:0;cursor:pointer;"/>' +
-      '<label for="dm-matching-layers" title="Selects every layer like this one (same tag, shared class) so your edits apply to all of them" style="font-size:10px;color:var(--dm-text-secondary);cursor:pointer;user-select:none;">Select matching layers</label>' +
-      '</div>'
+  // "Matching layers" — one checkbox: checked hands every matching element
+  // (same tag sharing a class) to multi-select fan-out; the existing
+  // "N selected" badge shows the resulting count. Lives inline in the
+  // Selected row, in front of the CSS button.
+  const matchingCtl = info && !isPageContext && !isHovering
+    ? '<label title="Selects every layer like this one (same tag, shared class) so your edits apply to all of them" style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--dm-text-secondary);cursor:pointer;user-select:none;flex-shrink:0;white-space:nowrap;">' +
+      '<input type="checkbox" data-dm-action="toggle-matching-layers"' + (matchingLayersChecked ? ' checked' : '') + ' style="accent-color:var(--dm-accent);margin:0;cursor:pointer;"/>' +
+      'Matching layers</label>'
     : '';
   // Indicator label: "Page" when body/html is the implicit context (no real
   // selection), "Hovering" while hovering, otherwise "Selected".
@@ -6162,7 +6104,7 @@ function renderDesignTab(): string {
     '<div style="padding:6px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;">' +
     indicatorLeft +
     '<span style="font-size:10px;color:var(--dm-text-dim);font-family:SF Mono,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">&lt;' + escapeAttr(tag) + '&gt;</span>' +
-    multiBadge + cssBtn + '</div>' + matchingRow;
+    multiBadge + matchingCtl + cssBtn + '</div>';
 
   // Text content editing — show for ANY text-tagged layer (the same set whose
   // Layers icon is the "T"/type glyph). Editing a text element with children
@@ -7848,7 +7790,7 @@ function renderChangesTab(): string {
   // the user would never see it.
   const clearAllOverlay = clearAllConfirming
     ? '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
-      '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:200px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
+      '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:250px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
       '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;">Clear all changes?</div>' +
       '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;line-height:1.5;">Removes every tracked style, text, DOM, and comment change. Resets the undo stack. This can\'t be undone.</div>' +
       '<div style="display:flex;gap:6px;">' +
@@ -7860,7 +7802,7 @@ function renderChangesTab(): string {
   // Same inline overlay for deleting a single comment.
   const deleteCommentOverlay = deletingCommentId
     ? '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
-      '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:200px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
+      '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:250px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
       '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;">Delete comment?</div>' +
       '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;line-height:1.5;">The comment, its pin, and any unsaved replies will be removed. This can\'t be undone.</div>' +
       '<div style="display:flex;gap:6px;">' +
@@ -8467,7 +8409,7 @@ function renderShortcutsPopover(): string {
       '</div>'
     : '';
   return '<div data-dm-action="close-shortcuts" style="position:fixed;inset:0;z-index:50;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;padding:16px;">' +
-    '<div data-dm-action="noop" data-dm-shortcuts-card style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);width:100%;max-width:340px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">' +
+    '<div data-dm-action="noop" data-dm-shortcuts-card style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);width:100%;max-width:425px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--dm-separator);flex-shrink:0;">' +
     '<span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--dm-text);">' + icon('keyboard', 13) + ' Keyboard shortcuts</span>' +
     '<button data-dm-action="close-shortcuts" aria-label="Close" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;">' + icon('x', 14) + '</button>' +
@@ -8664,9 +8606,6 @@ function render() {
     html = renderHeader() + renderHelpView() + renderCaptureToast();
   } else if (contributeOpen) {
     html = renderHeader() + renderContributeView() + renderCaptureToast();
-  } else if (sectionsOpen) {
-    html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
-      renderHeader() + renderSectionsView() + renderCaptureToast() + '</div>';
   } else if (tokensOpen) {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
       renderHeader() + renderTokensView() + renderCaptureToast() + '</div>';
@@ -9134,32 +9073,6 @@ function setupDelegation() {
           refreshCustomPresets();
           render();
           break;
-        case 'open-sections':
-          sectionsOpen = !sectionsOpen;
-          if (sectionsOpen) { tokensOpen = false; sectionNoteOpenId = null; void refreshSections(); }
-          render();
-          break;
-        case 'back-from-sections': sectionsOpen = false; render(); break;
-        case 'refresh-sections': void refreshSections(); break;
-        case 'section-up':
-        case 'section-down': {
-          const sid = actionBtn.dataset.dmSectionId;
-          const idx = parseInt(actionBtn.dataset.dmIdx || '', 10);
-          if (sid && !isNaN(idx)) void moveSectionTo(sid, act === 'section-up' ? idx - 1 : idx + 1);
-          break;
-        }
-        case 'section-note-toggle': {
-          const sid = actionBtn.dataset.dmSectionId || null;
-          sectionNoteOpenId = sectionNoteOpenId === sid ? null : sid;
-          render();
-          break;
-        }
-        case 'section-note-cancel': sectionNoteOpenId = null; render(); break;
-        case 'section-note-save': {
-          const sid = actionBtn.dataset.dmSectionId;
-          if (sid) void saveSectionNote(sid);
-          break;
-        }
         case 'toggle-matching-layers':
           void toggleMatchingLayers((actionBtn as HTMLInputElement).checked);
           break;
@@ -12167,41 +12080,6 @@ function setupDelegation() {
   // dragstart stashes the source index in dataTransfer; drop reads the
   // target index, splices the source out, and re-inserts at the target.
   let fillDragSrc: number | null = null;
-  // Sections view drag-reorder — same pattern as Fill/Stroke rows: stash
-  // the source index on dragstart, apply on drop via the content script.
-  root.addEventListener('dragstart', (e) => {
-    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-section-row]');
-    if (!rowEl) return;
-    sectionDragSrc = parseInt(rowEl.dataset.dmSectionRow || '-1', 10);
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(sectionDragSrc));
-    }
-    rowEl.style.opacity = '0.5';
-  });
-  root.addEventListener('dragend', (e) => {
-    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-section-row]');
-    if (rowEl) rowEl.style.opacity = '';
-    sectionDragSrc = null;
-  });
-  root.addEventListener('dragover', (e) => {
-    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-section-row]');
-    if (!rowEl || sectionDragSrc === null) return;
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-  });
-  root.addEventListener('drop', (e) => {
-    const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-section-row]');
-    if (!rowEl || sectionDragSrc === null) return;
-    e.preventDefault();
-    const target = parseInt(rowEl.dataset.dmSectionRow || '-1', 10);
-    const src = sectionDragSrc;
-    sectionDragSrc = null;
-    rowEl.style.opacity = '';
-    if (src < 0 || target < 0 || src === target || src >= pageSections.length) return;
-    void moveSectionTo(pageSections[src].id, target);
-  });
-
   root.addEventListener('dragstart', (e) => {
     const rowEl = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-fill-row]');
     if (!rowEl) return;

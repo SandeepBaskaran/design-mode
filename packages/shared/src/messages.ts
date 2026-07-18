@@ -5,7 +5,7 @@
 import type {
   ElementInfo, DomTreeNode, PartialElementStyle, Comment,
   StyleChange, TextChange, ChangeSession, ChangeStatus,
-  AnimationState, ComponentPalette, PageSection, RearrangeNote,
+  AnimationState, ComponentPalette,
   OutputDetailLevel, StructuredOutput,
   KeyboardShortcut, NamedPreset, SpatialContext, AccessibilityInfo,
   SourceLocation, ComponentHierarchy,
@@ -36,10 +36,7 @@ export type PanelMessage =
   | { type: 'ANIMATION_FROZEN'; payload: { frozen: boolean } }
   // Phase 5: Design mode
   | { type: 'COMPONENT_PLACED'; payload: { html: string; parentId: string } }
-  | { type: 'SNAP_GUIDES'; payload: { guides: Array<{ type: string; position: number }> } }
-  // Phase 6: Rearrange
-  | { type: 'SECTIONS_DETECTED'; payload: PageSection[] }
-  | { type: 'REARRANGE_APPLIED'; payload: { sectionId: string; newOrder: number[] } };
+  | { type: 'SNAP_GUIDES'; payload: { guides: Array<{ type: string; position: number }> } };
 
 // --- Extension <-> Background Service Worker Messages ---
 
