@@ -1762,7 +1762,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     const requested = msg.tab as Tab | undefined;
     if (requested && (requested === 'layers' || requested === 'design' || requested === 'changes') && tab !== requested) {
       captureTabScroll();
-      pendingTabScrollRestore = tabScrollPositions[requested] ?? 0;
+      pendingTabScrollRestore = tabScrollPositions[requested] ?? { top: 0, left: 0 };
       tab = requested;
       render();
     }
@@ -5747,7 +5747,7 @@ function renderLayersTab(): string {
   // Bulk-action toolbar — shows when multi-select has 2+ layers. Each
   // action operates on every selected layer at once.
   const bulkBar = (msCount >= 2) ? (
-    '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;border-bottom:1px solid var(--dm-separator);background:var(--dm-accent-bg);">' +
+    '<div style="position:sticky;left:0;display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;border-bottom:1px solid var(--dm-separator);background:var(--dm-accent-bg);">' +
       '<span style="font-size:9px;color:var(--dm-accent);font-weight:600;align-self:center;margin-right:4px;">' + msCount + ' selected:</span>' +
       '<button data-dm-bulk-action="show-all" title="Make all visible" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('eye', 10) + ' Show</button>' +
       '<button data-dm-bulk-action="hide-all" title="Hide all" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('eyeClosed', 10) + ' Hide</button>' +
@@ -5814,7 +5814,10 @@ function renderLayersTab(): string {
     // belongs to the live DOM (the page already names every node), so
     // there's no rename here. Locking was removed too — Lock didn't
     // align with the "Layers tab mirrors the live DOM" stance.
-    const hoverActions = '<span class="dm-layer-hover-actions" style="display:flex;gap:2px;margin-left:auto;flex-shrink:0;">' +
+    // sticky right keeps the actions reachable at the viewport edge while
+    // the tree is panned horizontally; background:inherit picks up the
+    // row's hover/selected colour so panned content doesn't bleed through.
+    const hoverActions = '<span class="dm-layer-hover-actions" style="display:flex;gap:2px;margin-left:auto;flex-shrink:0;position:sticky;right:0;background:inherit;">' +
       '<button data-dm-scroll-to="' + n.id + '" title="Scroll page to this layer" aria-label="Scroll to layer" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;">' + icon('crosshair', 11) + '</button>' +
       '<button data-dm-toggle-vis="' + n.id + '" title="' + (n.isVisible ? 'Hide layer' : 'Show layer') + '" aria-label="Toggle visibility" style="background:none;border:none;color:' + (n.isVisible ? 'var(--dm-text-muted)' : 'var(--dm-accent)') + ';cursor:pointer;display:flex;padding:2px;">' + icon(n.isVisible ? 'eye' : 'eyeClosed', 12) + '</button></span>';
 
@@ -5858,7 +5861,10 @@ function renderLayersTab(): string {
       ? '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;opacity:0.7;">' + escapeAttr('<' + n.tagName + '>') + '</span>'
       : '';
 
-    const nameCell = '<span style="font-size:11px;color:' + tagColor + ';font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">' + escapeAttr(displayName) + '</span>';
+    // max-width guards against a single pathological class/id name
+    // blowing up the max-content row width; the row title carries the
+    // full name for that case.
+    const nameCell = '<span style="font-size:11px;color:' + tagColor + ';font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;max-width:360px;">' + escapeAttr(displayName) + '</span>';
 
     return '<div class="dm-layer-item" data-dm-layer="' + n.id + '" draggable="true" data-dm-layer-drag="' + n.id + '" style="display:flex;align-items:center;gap:3px;padding:3px 6px 3px ' + (4 + indent) + 'px;background:' + bg + ';cursor:pointer;border-left:2px solid ' + borderColor + ';position:relative;min-height:30px;opacity:' + (!n.isVisible || dimmedByAncestor.has(n.id) ? '0.4' : '1') + ';" title="' + escapeAttr(displayName) + '">' +
       guides + dragHandle + chevron + tagIcon + colorSwatch + multiBadge + containerBadge + changeDot + commentChip +
@@ -5867,12 +5873,15 @@ function renderLayersTab(): string {
       hoverActions + '</div>';
   }).join('');
 
-  // Search + filter chips pin to the top of the layers list while the rows
-  // scroll beneath them — the multi-select bulk bar sits below the sticky
-  // header so it scrolls with the list (it's transient and tied to the
-  // active selection, not navigation).
-  const stickyHeader = '<div style="position:sticky;top:0;z-index:5;background:var(--dm-bg);">' + searchBar + filterChipsRow + '</div>';
-  return stickyHeader + bulkBar + '<div style="overflow-y:auto;">' + rows + '</div>';
+  // The layers tab scrolls both axes (#dm-tab-body gets overflow:auto in
+  // render()) so deep trees can be panned to read full names. The rows
+  // wrapper is max-content wide so every row spans the widest row and
+  // names render un-truncated; the search/filter header pins to the
+  // top-left of the viewport, and the bulk bar scrolls away vertically
+  // with the list (it's transient and tied to the active selection, not
+  // navigation) but pins horizontally so it never shifts out of view.
+  const stickyHeader = '<div style="position:sticky;top:0;left:0;z-index:5;background:var(--dm-bg);">' + searchBar + filterChipsRow + '</div>';
+  return stickyHeader + bulkBar + '<div style="width:max-content;min-width:100%;">' + rows + '</div>';
 }
 
 // Layer kind classifier — what sections in the design panel should show.
@@ -8407,8 +8416,8 @@ function renderCaptureToast(): string {
 // document and the user expects to land where they last left it. We
 // listen to scroll on the body and stash the last position per tab; on
 // switch, the new render() restores the destination tab's saved value.
-const tabScrollPositions: Partial<Record<Tab, number>> = {};
-let pendingTabScrollRestore: number | null = null;
+const tabScrollPositions: Partial<Record<Tab, { top: number; left: number }>> = {};
+let pendingTabScrollRestore: { top: number; left: number } | null = null;
 
 function ensureTabScrollListener(): void {
   const el = document.getElementById('dm-tab-body');
@@ -8419,13 +8428,13 @@ function ensureTabScrollListener(): void {
     // browser fires `scroll` synchronously when we set scrollTop and we
     // shouldn't overwrite the value we just told it to use.
     if (pendingTabScrollRestore !== null) return;
-    tabScrollPositions[tab] = el.scrollTop;
+    tabScrollPositions[tab] = { top: el.scrollTop, left: el.scrollLeft };
   }, { passive: true });
 }
 
 function captureTabScroll(): void {
   const el = document.getElementById('dm-tab-body');
-  if (el) tabScrollPositions[tab] = el.scrollTop;
+  if (el) tabScrollPositions[tab] = { top: el.scrollTop, left: el.scrollLeft };
 }
 
 // Keep inspect suspended while a comment composer is open (add / edit /
@@ -8485,7 +8494,10 @@ function render() {
 
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative;">' +
       renderHeader() + renderActionRow() + renderCommentCard() + renderTabs() +
-      '<div id="dm-tab-body" style="flex:1;overflow-y:auto;overflow-x:hidden;">' + tabContent + '</div>' +
+      // Layers pans both axes so deep trees stay readable (rows are
+      // max-content wide there — see renderLayersTab); other tabs keep
+      // horizontal overflow clipped.
+      '<div id="dm-tab-body" style="flex:1;' + (tab === 'layers' ? 'overflow:auto;' : 'overflow-y:auto;overflow-x:hidden;') + '">' + tabContent + '</div>' +
       renderStickyBottom() + renderComputedCssOverlay() + renderCaptureToast() + '</div>';
   }
 
@@ -8541,7 +8553,8 @@ function render() {
     const el = document.getElementById('dm-tab-body');
     if (el) {
       pendingTabScrollRestore = restoreTo;
-      el.scrollTop = restoreTo;
+      el.scrollTop = restoreTo.top;
+      el.scrollLeft = restoreTo.left;
     }
   }
   pendingTabScrollRestore = null;

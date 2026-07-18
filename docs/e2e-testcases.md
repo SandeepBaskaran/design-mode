@@ -238,6 +238,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 5.8  | Trash icon | Click the trash icon | Element removed; "delete" entry appears in Changes tab |
 | 5.9  | Duplicate marker | Duplicate an element | Layers row of the duplicate carries the `dm-clone` marker class and shows a "(copy)" suffix label |
 | 5.10 | DM elements excluded | Inspect the tree | No `dm-hover`, `dm-select`, `dm-comment-pin`, or `dm-applied-styles` rows |
+| 5.11 | Horizontal pan on deep trees | On a deeply nested page (10+ levels), scroll the tree horizontally | Full layer names become visible while panning; search/filter header stays pinned top-left; the crosshair/eye hover actions stay pinned at the right edge of every hovered row; panned position survives re-renders (e.g. hovering rows) |
 
 ---
 
@@ -348,13 +349,14 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 |------|------|-------|----------|
 | 10.1 | Disabled with no changes | Open a fresh page | Both buttons disabled |
 | 10.2 | Disabled while previewing | Click View Original | Both buttons disabled (banner explains) |
-| 10.3 | Copy as Prompt format — header | Make any change → Copy as Prompt | Clipboard's first line is exactly `here are the changes in {{page title}} {{page url}}` (single space between title and URL, no boilerplate above) |
-| 10.4 | Copy as Prompt format — body | Make 3 style + 1 text + 1 DOM change → Copy as Prompt | Each change is one bullet `- {label}: {detail}` ordered chronologically. No headings, no code fences, no "How to apply" prose, no framework section |
+| 10.3 | Copy as Prompt format — header | Make any change → Copy as Prompt | Clipboard opens with `# Visual changes — {{page title}}` then `<{{page url}}>` on the next line (title falls back to `untitled` when the page has none). No boilerplate above the heading |
+| 10.4 | Copy as Prompt format — body | Make 3 style + 1 text + 1 DOM change → Copy as Prompt | Changes sit under a `## Changes` heading, one bullet `- {label}: {detail}` each, ordered chronologically. Only the documented sections appear (`## Tokens changed`, `## Comments`, `## Design tokens used` — each omitted when empty); no code fences, no "How to apply" prose, no framework section |
 | 10.5 | Style grouping per element | Edit two properties on the same `.btn` | Single bullet groups them: `- button.btn: padding 8px → 12px; border-radius 4px → 8px` |
 | 10.6 | Text change format | Edit a heading's text | Bullet reads `- {label} text: "{old}" → "{new}"` (truncated to ~60 chars per side) |
 | 10.7 | DOM change format | Duplicate / delete / move an element | Bullet reads `- {label} duplicated` (or `deleted` / `moved` / `inserted`) |
+| 10.7a | Move conveys origin → destination + chronology | Edit a style on `.card` → drag it to another parent in Layers → edit another style → Copy as Prompt | Move bullet reads `- {label} moved: {oldParent}[i] → {newParent}[j]`; the pre-move style bullet appears BEFORE the move line and the post-move one AFTER it; ambiguous labels (e.g. `div.card` matching several nodes) carry the full post-move selector in parens; MCP `get_changes` shows the same `origin`/`destination` on the move record and live (post-move) selectors on every change |
 | 10.8 | Comment lines | Add a comment | Bullet reads `- note on {selector}: {text}` |
-| 10.9 | Empty state | Copy as Prompt with no changes | Output is the header line + `(no changes recorded yet)` |
+| 10.9 | Empty state | Copy as Prompt with no changes | Both the button gate (10.1) and this fallback key off the same empty ledger, so the fallback isn't reachable from the UI — verify by reading `exportMarkdown`, not by clicking. When hit, output is the two header lines from 10.3, a blank line, then `(no changes recorded yet)` |
 | 10.10 | Send to Agent — connected | MCP connected | Button shows "Sent!" briefly |
 | 10.11 | Send to Agent — running, no agent | Server running but no agent | Toast / alert: "MCP running but no agent connected" |
 | 10.12 | Send to Agent — local offline | No local server in Local mode | Alert: "MCP server is not running. Start it with: `npm start` in `packages/mcp-local`" |
