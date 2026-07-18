@@ -808,6 +808,24 @@ The colour picker has three entry points, each surfacing the same site-colour to
 | Type into the **hex input** | (Same input, no popup) — typed value applies on commit | Paste a hex / rgb / hsl / colour-name / `var(--token)` directly. |
 | **Pick** button (inside HSV panel) | Chrome `EyeDropper` system picker | Sample any pixel on screen. Falls back to a friendly alert on Firefox / Safari. |
 
+### Token badges (all field types)
+
+Any field whose value is authored from a CSS variable carries a **◆
+badge** — colour fields spell the token name out, numeric fields show the
+diamond alone with the name on hover. A field is only badged when the
+declaration that wins the cascade for that property is a `var()`; a more
+specific literal rule resolving to the same value earns no badge.
+
+Clicking it opens a menu naming the token and the scope the selected
+element resolves it through, with three actions: **Swap token…** (a
+group-matched picker — spacing, radius, typography and shadow fields get
+one too, not just colour), **Edit token globally** (opens the Tokens panel
+focused on that token with its scope pre-selected), and **Detach from
+token** (writes the resolved literal). `var(--token)` can also be typed
+directly into any numeric field.
+
+See FEATURES.md §2.17 and §6.1.
+
 ### Inline WCAG contrast checker
 
 When the colour applies to text/foreground (`color`, `fill`, `stroke`,

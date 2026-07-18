@@ -30,6 +30,13 @@ export interface Comment {
 export interface ChangeSession {
   pageUrl: string;
   pageTitle: string;
+  // Design tokens the user redefined. `scopeSelector` is the selector the
+  // token is declared on (':root', a theme class like '.cds--g100', …).
+  tokenChanges?: Array<{
+    cssVar: string; scopeSelector: string;
+    oldValue: string; newValue: string; system?: string; cssRule: string;
+  }>;
+  tokenGuidance?: string;
   styleChanges: Array<{
     selector: string; property: string;
     oldValue: string; newValue: string; cssRule: string;

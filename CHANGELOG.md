@@ -6,6 +6,61 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Design-system aware tokens.** Token discovery moved to a single
+  engine (`content/token-engine.ts`) that finds every CSS variable the
+  page declares — not just `:root`. Theme scopes (Carbon's
+  `.cds--g100`, `[data-theme]`, `.dark`), component scopes
+  (`.cds--btn { --cds-btn-height }`), matching `@media` blocks,
+  `@supports`, and cascade layers are all picked up. On
+  carbondesignsystem.com this is the difference between finding **no**
+  tokens and finding ~660.
+- **Design-system profiles.** Tokens are recognised and labelled by
+  system — IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix,
+  shadcn/ui, and Tailwind v4 — with each system's own taxonomy driving
+  grouping. A banner chip in the Declared tab filters to that system's
+  tokens. Profiles need a minimum token count, so a handful of
+  coincidental `--color-*` vars won't mislabel a page.
+- **Token badges on Design-tab fields.** A field whose value is
+  authored from a variable shows a ◆ badge naming the token, with
+  **Swap token…** (pickers for spacing / radius / typography / shadow,
+  not just colour), **Edit token globally**, and **Detach from token**.
+  Badging follows the real cascade: a more specific literal rule that
+  resolves to the same value as a `var()` rule earns no badge, so the
+  badge never promises a swap that wouldn't repaint.
+- **Scope-aware token editing.** A token is one value *per theme*, so
+  edits are written as `scope { --token: value !important }` into a
+  managed `dm-token-overrides` stylesheet, and "Edit token globally"
+  from a field pre-selects the scope that element actually resolves the
+  token through. The Declared tab gains a scope dropdown, per-row scope
+  chips, and a separate Component-tokens section.
+- **Token operations reach the agent.** `get_changes` (local + cloud
+  MCP) now carries `tokenChanges` — `cssVar`, `scopeSelector`,
+  `oldValue`, `newValue`, `system`, `cssRule` — plus a `tokenGuidance`
+  string, and the `/design-mode` workflow instructs agents to change the
+  token's *definition* in the codebase rather than restyling components.
+  Copy as Prompt's `## Tokens changed` section gained the same scope and
+  system context.
+
+### Fixed
+
+- Theme-scoped tokens could not be edited at all: overrides were set
+  inline on `documentElement`, which a theme scope's own declaration
+  beats, so the edit silently did nothing on design-system sites.
+- Typing `var(--token)` into a radius or stroke-weight field flattened
+  it to `0`.
+
+### Internal
+
+- Three near-duplicate `:root` token scanners (Tokens panel, colour
+  picker, markdown export) collapsed into one engine with a 15s cache;
+  the two conflicting `DesignToken` interfaces in the side panel are now
+  one. `'consolidate'` added to the `groupKind` union it was already
+  being passed as.
+
 ## [1.8.0] — 2026-07-08
 
 ### Added

@@ -100,7 +100,7 @@ export function createMcpServer(): McpServer {
   // ── 1. get_changes ────────────────────────────────────────────────
   server.tool(
     'get_changes',
-    'Read everything the user has edited in this session: style changes, text changes, DOM changes, and pinned comments, plus a ready-to-paste CSS block. Spring/easing curves come through inside the style values (e.g. `transition: all 0.3s cubic-bezier(...)`).',
+    'Read everything the user has edited in this session: design-token changes, style changes, text changes, DOM changes, and pinned comments, plus a ready-to-paste CSS block. `tokenChanges` lists CSS custom properties the user redefined, each with the `scopeSelector` it is declared on and its design system — change those at their source definition in the codebase (see `tokenGuidance`), not on individual components. Spring/easing curves come through inside the style values (e.g. `transition: all 0.3s cubic-bezier(...)`).',
     async () => {
       const report: any = state.getChangeReport();
       report.comments = state.getComments().map(c => ({

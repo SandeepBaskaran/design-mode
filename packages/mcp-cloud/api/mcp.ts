@@ -39,7 +39,7 @@ interface ToolDef {
 const TOOLS: ToolDef[] = [
   {
     name: 'get_changes',
-    description: 'Read everything the user has edited in this session: style changes, text changes, DOM changes, and pinned comments, plus a ready-to-paste CSS block.',
+    description: 'Read everything the user has edited in this session: design-token changes, style changes, text changes, DOM changes, and pinned comments, plus a ready-to-paste CSS block. `tokenChanges` lists CSS custom properties the user redefined, each with the `scopeSelector` it is declared on and its design system — change those at their source definition in the codebase (see `tokenGuidance`), not on individual components.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     buildRequest: () => ({ type: 'CLOUD_GET_CHANGES', payload: {} }),
     toContent: (reply) => [{ type: 'text', text: JSON.stringify(reply ?? {}, null, 2) }],

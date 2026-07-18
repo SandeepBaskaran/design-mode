@@ -19,9 +19,11 @@ server — drive them live; do not look for task files on disk.
 
 ## Tools (Design Mode MCP server)
 - \`get_session_summary\` — health check; confirm the extension is connected.
-- \`get_changes\` — style / text / DOM changes plus pinned comments. Each
-  comment has an \`id\`, a \`selector\`, and — for region comments — a
-  \`region\` box ({x,y,w,h} in document pixels) instead of an element.
+- \`get_changes\` — design-token / style / text / DOM changes plus pinned
+  comments. Each comment has an \`id\`, a \`selector\`, and — for region
+  comments — a \`region\` box ({x,y,w,h} in document pixels) instead of an
+  element. \`tokenChanges\` lists CSS custom properties the user
+  redefined, each with the \`scopeSelector\` it's declared on.
 - \`get_screenshot\` — capture a \`selector\`, \`elementId\`, or region for
   visual context.
 - \`export_changes\` — emit the edits as CSS / Tailwind / SCSS / JSX.
@@ -31,15 +33,21 @@ server — drive them live; do not look for task files on disk.
 ## Workflow
 1. Call \`get_session_summary\`. If the extension isn't connected, ask the
    user to open the Design Mode side panel, then stop.
-2. Call \`get_changes\`. Build a task list from the style/text/DOM changes
-   and the comments.
+2. Call \`get_changes\`. Build a task list from the token/style/text/DOM
+   changes and the comments.
 3. For each item:
    - Map the \`selector\` to its source in the codebase. Reference files as
      \`path:line\`.
    - For a comment, read its \`text\`; for a region comment, call
      \`get_screenshot\` with the region first so you can see the area.
+   - For a \`tokenChanges\` entry, find where that token is defined in the
+     codebase (SCSS variable, theme file, Tailwind \`@theme\` block, or the
+     CSS rule matching its \`scopeSelector\`) and change the definition —
+     never inline the new value on components.
    - Implement the change. Prefer existing design tokens / CSS variables and
-     \`rem\` over hardcoded \`px\`. Match the surrounding code's conventions.
+     \`rem\` over hardcoded \`px\`. A style change whose \`newValue\` is
+     \`var(--x)\` means the element should reference that token, not the
+     literal it resolves to. Match the surrounding code's conventions.
    - After implementing what a comment asked for, call
      \`mark_comment_resolved\` with its \`id\` so the user sees the loop close
      in the Changes tab.
