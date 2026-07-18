@@ -6,7 +6,7 @@
 // and a source-files block so the agent opens the right files.
 // ============================================================
 
-import { getElementById } from './helpers';
+import { getElementById, generateSelector } from './helpers';
 import { getStyleChanges, getTextChanges, getDomChanges } from './change-tracker';
 import { getSourceLocation } from './source-detection';
 import type { CommentData } from './comments';
@@ -16,6 +16,9 @@ interface ElementContext {
   selector: string;
   tagName: string;
   smartLabel: string;
+  // True when smartLabel matches more than one element on the page —
+  // lines then carry the full selector so the agent can pinpoint the node.
+  ambiguous?: boolean;
   sourceFile?: string;
   componentName?: string;
   framework?: string;
@@ -35,6 +38,7 @@ function gatherElementContext(elementId: string, selector: string): ElementConte
   const el = getElementById(elementId);
   let tagName = '';
   let smartLabel = selector;
+  let ambiguous = false;
   let sourceFile: string | undefined;
   let componentName: string | undefined;
   let framework: string | undefined;
@@ -46,6 +50,15 @@ function gatherElementContext(elementId: string, selector: string): ElementConte
       ? '.' + el.className.trim().split(/\s+/)[0]
       : '';
     smartLabel = id || (tagName + cls) || selector;
+    // Regenerate from the live element: recorded selectors are positional
+    // (nth-of-type) and go stale once anything is reordered.
+    selector = generateSelector(el);
+    if (!id) {
+      // A throwing label (e.g. a Tailwind `md:flex` class) can't be used
+      // by the agent as a selector either — treat it as ambiguous.
+      try { ambiguous = document.querySelectorAll(smartLabel).length > 1; }
+      catch { ambiguous = true; }
+    }
     const src = getSourceLocation(el);
     if (src) {
       sourceFile = src.cleanPath || (src.file !== 'unknown' ? src.file : undefined);
@@ -54,7 +67,7 @@ function gatherElementContext(elementId: string, selector: string): ElementConte
       line = src.line;
     }
   }
-  return { selector, tagName, smartLabel, sourceFile, componentName, framework, line };
+  return { selector, tagName, smartLabel, ambiguous, sourceFile, componentName, framework, line };
 }
 
 // ── Page design tokens (CSS custom properties on :root) ──
@@ -168,10 +181,18 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
 
   // Style changes — group consecutive edits to the same element on one line.
   // e.g. `- .btn-primary: color #000 → var(--accent); padding 8px → 12px`
+  // Groups split at the element's move timestamp so the chronological list
+  // preserves "edited → moved → edited again" for the agent.
+  const moveTimestamps = new Map<string, number>();
+  for (const d of domChanges) {
+    if (d.action === 'move') moveTimestamps.set(d.elementId, d.timestamp);
+  }
   const styleByElement = new Map<string, typeof styleChanges>();
   for (const c of styleChanges) {
-    if (!styleByElement.has(c.elementId)) styleByElement.set(c.elementId, []);
-    styleByElement.get(c.elementId)!.push(c);
+    const moveT = moveTimestamps.get(c.elementId);
+    const key = moveT !== undefined && c.timestamp > moveT ? c.elementId + ' post-move' : c.elementId;
+    if (!styleByElement.has(key)) styleByElement.set(key, []);
+    styleByElement.get(key)!.push(c);
   }
   // Inline source pointer: `[file:line]` after the selector when source
   // detection found something. Drops the separate "Source files" section
@@ -181,6 +202,13 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     const loc = ctx.line ? `${ctx.sourceFile}:${ctx.line}` : ctx.sourceFile;
     return ` [${loc}]`;
   };
+  // Short label, plus the full live selector when the short form matches
+  // more than one element — otherwise an agent locating `div.card` in a
+  // reordered DOM lands on the wrong sibling.
+  const label = (ctx: ElementContext): string =>
+    ctx.ambiguous && ctx.selector !== ctx.smartLabel
+      ? `${ctx.smartLabel} (${ctx.selector})`
+      : ctx.smartLabel;
 
   for (const list of styleByElement.values()) {
     const ctx = ensureCtx(list[0].elementId, list[0].selector);
@@ -192,7 +220,7 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
       })
       .join('; ');
     const earliest = Math.min(...list.map(c => c.timestamp));
-    entries.push({ t: earliest, line: `- ${ctx.smartLabel}${sourcePointer(ctx)}: ${decls}` });
+    entries.push({ t: earliest, line: `- ${label(ctx)}${sourcePointer(ctx)}: ${decls}` });
   }
 
   // Text changes
@@ -200,23 +228,38 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     const ctx = ensureCtx(c.elementId, c.selector);
     const oldSnip = shortenValue(c.oldText, 60);
     const newSnip = shortenValue(c.newText, 60);
-    entries.push({ t: c.timestamp, line: `- ${ctx.smartLabel}${sourcePointer(ctx)} text: "${oldSnip}" → "${newSnip}"` });
+    entries.push({ t: c.timestamp, line: `- ${label(ctx)}${sourcePointer(ctx)} text: "${oldSnip}" → "${newSnip}"` });
   }
 
-  // DOM changes (delete/duplicate/insert/move). For 'move' we surface the
-  // destination so the agent knows the parent + position in code.
+  // DOM changes (delete/duplicate/insert/move). Moves surface BOTH ends:
+  // origin (stored at drag time, parent selector re-resolved live via its
+  // data-dm-id) and destination (the element's CURRENT position — stored
+  // destinations are positional and go stale after later reorders).
+  const describeStored = (loc: { parentSelector: string; index: number; parentId?: string }): string => {
+    const parent = loc.parentId ? getElementById(loc.parentId) : null;
+    return `${parent ? generateSelector(parent) : loc.parentSelector}[${loc.index}]`;
+  };
+  const describeCurrent = (el: HTMLElement | null, fallback: { parentSelector: string; index: number; parentId?: string }): string => {
+    if (el?.parentElement) {
+      return `${generateSelector(el.parentElement)}[${Array.from(el.parentElement.children).indexOf(el)}]`;
+    }
+    return describeStored(fallback);
+  };
   for (const c of domChanges) {
     const ctx = ensureCtx(c.elementId, c.selector);
     let line: string;
     if (c.action === 'move' && c.destination) {
-      line = `- ${ctx.smartLabel}${sourcePointer(ctx)} moved → ${c.destination.parentSelector}[${c.destination.index}]`;
+      const dest = describeCurrent(getElementById(c.elementId), c.destination);
+      line = c.origin
+        ? `- ${label(ctx)}${sourcePointer(ctx)} moved: ${describeStored(c.origin)} → ${dest} (parent[child-index])`
+        : `- ${label(ctx)}${sourcePointer(ctx)} moved → ${dest}`;
     } else {
       const verb =
         c.action === 'delete' ? 'deleted' :
         c.action === 'duplicate' ? 'duplicated' :
         c.action === 'insert' ? 'inserted' :
         c.action === 'move' ? 'moved' : c.action;
-      line = `- ${ctx.smartLabel}${sourcePointer(ctx)} ${verb}`;
+      line = `- ${label(ctx)}${sourcePointer(ctx)} ${verb}`;
     }
     entries.push({ t: c.timestamp, line });
   }

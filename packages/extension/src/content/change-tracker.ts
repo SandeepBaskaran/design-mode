@@ -962,26 +962,59 @@ export function generateCSSBlock(): string {
 }
 
 export function getChangeReport() {
+  // Selectors are regenerated from the live DOM at report time — recorded
+  // selectors are positional (nth-of-type) and go stale once layers are
+  // reordered, sending the agent to whatever sibling now sits in the old
+  // slot. Fall back to the recorded selector when the element is gone
+  // (e.g. deletes).
+  const liveSelector = (elementId: string, fallback: string): string => {
+    const el = getElementById(elementId);
+    return el ? generateSelector(el) : fallback;
+  };
   return {
     pageUrl: window.location.href,
     pageTitle: document.title,
-    styleChanges: styleChanges.map(c => ({
-      id: c.id, status: c.status || 'todo',
-      elementId: c.elementId, timestamp: c.timestamp,
-      selector: c.selector, property: c.property,
-      oldValue: c.oldValue, newValue: c.newValue,
-      cssRule: `${c.selector} { ${c.property.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}: ${c.newValue}; }`,
-    })),
+    styleChanges: styleChanges.map(c => {
+      const selector = liveSelector(c.elementId, c.selector);
+      return {
+        id: c.id, status: c.status || 'todo',
+        elementId: c.elementId, timestamp: c.timestamp,
+        selector, property: c.property,
+        oldValue: c.oldValue, newValue: c.newValue,
+        cssRule: `${selector} { ${c.property.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}: ${c.newValue}; }`,
+      };
+    }),
     textChanges: textChanges.map(c => ({
       id: c.id, status: c.status || 'todo',
       elementId: c.elementId, timestamp: c.timestamp,
-      selector: c.selector, oldText: c.oldText, newText: c.newText,
+      selector: liveSelector(c.elementId, c.selector), oldText: c.oldText, newText: c.newText,
     })),
-    domChanges: domChanges.map(c => ({
-      id: c.id, status: c.status || 'todo',
-      elementId: c.elementId, timestamp: c.timestamp,
-      selector: c.selector, action: c.action, tagName: c.tagName,
-    })),
+    domChanges: domChanges.map(c => {
+      // Moves carry both ends: origin's parent selector re-resolved via
+      // its data-dm-id, destination replaced by the element's CURRENT
+      // parent + child index.
+      let origin = c.origin;
+      if (origin?.parentId) {
+        const p = getElementById(origin.parentId);
+        if (p) origin = { ...origin, parentSelector: generateSelector(p) };
+      }
+      let destination = c.destination;
+      const el = getElementById(c.elementId);
+      if (c.action === 'move' && el?.parentElement) {
+        destination = {
+          parentSelector: generateSelector(el.parentElement),
+          index: Array.from(el.parentElement.children).indexOf(el),
+          parentId: c.destination?.parentId,
+        };
+      }
+      return {
+        id: c.id, status: c.status || 'todo',
+        elementId: c.elementId, timestamp: c.timestamp,
+        selector: el ? generateSelector(el) : c.selector,
+        action: c.action, tagName: c.tagName,
+        origin, destination,
+      };
+    }),
     cssBlock: generateCSSBlock(),
     handoff: pendingHandoff
       ? { ...pendingHandoff, requestedAt: new Date(pendingHandoff.requestedAt).toISOString() }
