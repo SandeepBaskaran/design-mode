@@ -4,9 +4,44 @@
 // tab and Copy Prompt show the full impact).
 // ============================================================
 
-import { getElementById, getElementRect } from './helpers';
+import { getElementById, getElementRect, getOrAssignId } from './helpers';
 import { Z_INDEX } from '../shared';
 import { showPairwiseDistances, hideDistance } from './measure-guides';
+
+// ── Matching layers ─────────────────────────────────────────────────
+// Finds elements "like" the reference so one edit can fan out to all of
+// them via the existing multi-select machinery: same tag sharing a class;
+// classless elements match classless same-tag peers under the same
+// parent tag. Feeds the "Select matching layers" checkbox.
+const MAX_MATCHING = 100;
+
+function classSet(el: HTMLElement): Set<string> {
+  const raw = typeof el.className === 'string' ? el.className : '';
+  return new Set(raw.trim().split(/\s+/).filter(c => c && !c.startsWith('dm-')));
+}
+
+export function findMatchingElements(elementId: string): string[] {
+  const ref = getElementById(elementId);
+  if (!ref) return [];
+  const refClasses = classSet(ref);
+  const refParentTag = ref.parentElement?.tagName || '';
+  const ids: string[] = [getOrAssignId(ref)];
+
+  const candidates = document.getElementsByTagName(ref.tagName);
+  for (let i = 0; i < candidates.length && ids.length < MAX_MATCHING; i++) {
+    const el = candidates[i] as HTMLElement;
+    if (el === ref) continue;
+    if (el.closest('[class^="dm-"], [id^="dm-"]')) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    const classes = classSet(el);
+    const match = refClasses.size > 0
+      ? [...refClasses].some(c => classes.has(c))
+      : classes.size === 0 && el.parentElement?.tagName === refParentTag;
+    if (match) ids.push(getOrAssignId(el));
+  }
+  return ids;
+}
 
 let active = false;
 const selectedIds = new Set<string>();

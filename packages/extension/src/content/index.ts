@@ -11,7 +11,7 @@ import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOve
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
 import { initCustomCursor, applyBaseCursor, clearBaseCursor } from './custom-cursor';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, captureViewportScreenshotClean, downloadDataUrl } from './screenshots';
 import {
@@ -36,6 +36,7 @@ import {
   setSelectedIds as setMultiSelectIds,
   refreshOverlays as refreshMultiSelectOverlays,
   toggleSelection as toggleMultiSelectMember,
+  findMatchingElements,
 } from './multi-select';
 // Design/Layout mode — component palette + wireframe placement
 import { getComponentsByCategory, placeComponent } from './design-mode';
@@ -430,6 +431,30 @@ function onElementSelected(info: ElementInfo) {
 
 /* —— Enable / Disable —— */
 
+// Single clear path for the panel's Clear All and the agent's clear_changes
+// (both transports). Reverts every page mutation, deletes comment pins,
+// clears the trackers, and resets the undo stacks.
+async function performFullClear() {
+  // Make sure the override stylesheet is enabled before we clear it,
+  // otherwise the page would still be showing `disabled` overrides.
+  setOverridesEnabled(true);
+  if ((window as any).__dmPreviewSaved) delete (window as any).__dmPreviewSaved;
+
+  // Page DOM revert — text / DOM mutations / inline-style sweep /
+  // preview markers — runs synchronously so the state-flip is immediate.
+  revertAllPageMutations();
+
+  // Comments live in chrome.storage.local (separate from the change
+  // arrays), so they need their own async cleanup.
+  const pageComments = await getPageComments();
+  for (const c of pageComments) await deleteComment(c.id);
+  clearAllChanges();
+  clearAllTokenEdits();
+  clearAllLayoutGuides();
+  undoStack.length = 0;
+  redoStack.length = 0;
+}
+
 // Cloud-tools dispatcher. Mirrors the local server's MCP handlers but runs
 // here in the content script because cloud has no server-side state — we
 // answer queries straight from the live page.
@@ -493,9 +518,16 @@ function dispatchCloudMessage(msg: any) {
       sendRelayResponse(msg.requestId, { ok: true, totalProps, totalEls });
       return;
     }
+    // Agent-initiated clear — local (CLEAR_CHANGES) and cloud
+    // (CLOUD_CLEAR_CHANGES) run the same full clear as the panel's
+    // Clear All, then refresh the panel since the user didn't click it.
+    case 'CLEAR_CHANGES':
     case 'CLOUD_CLEAR_CHANGES':
-      clearAllChanges();
-      sendRelayResponse(msg.requestId, { ok: true });
+      (async () => {
+        await performFullClear();
+        try { notifyPanel('CHANGES_UPDATE', await getChangesPayload()); } catch { /* panel closed */ }
+        sendRelayResponse(msg.requestId, { ok: true });
+      })();
       return;
     case 'CLOUD_GET_SESSION_SUMMARY':
       sendRelayResponse(msg.requestId, {
@@ -504,6 +536,7 @@ function dispatchCloudMessage(msg: any) {
         totalStyleChanges: getStyleChanges().length,
         totalTextChanges: getTextChanges().length,
         totalDomChanges: getDomChanges().length,
+        pendingHandoff: (getChangeReport() as { handoff?: object }).handoff ?? null,
       });
       return;
     case 'CLOUD_EXPORT_CHANGES':
@@ -1415,27 +1448,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
 
     case 'CLEAR_CHANGES': {
-      // Make sure the override stylesheet is enabled before we clear it,
-      // otherwise the page would still be showing `disabled` overrides.
-      setOverridesEnabled(true);
-      if ((window as any).__dmPreviewSaved) delete (window as any).__dmPreviewSaved;
-
-      // Page DOM revert — text / DOM mutations / inline-style sweep /
-      // preview markers — runs synchronously so the user sees the
-      // state-flip immediately on click.
-      revertAllPageMutations();
-
-      // Comments live in chrome.storage.local (separate from the change
-      // arrays), so they need their own async cleanup.
-      getPageComments().then(async (pageComments) => {
-        for (const c of pageComments) await deleteComment(c.id);
-        clearAllChanges();
-        clearAllTokenEdits();
-        clearAllLayoutGuides();
-        undoStack.length = 0;
-        redoStack.length = 0;
-        sendResponse({ ok: true });
-      });
+      performFullClear().then(() => sendResponse({ ok: true }));
       return true;
     }
     case 'REORDER_CHANGE': if (typeof msg.from === 'number' && typeof msg.to === 'number') reorderChange(msg.from, msg.to); getChangesPayload().then(p => sendResponse(p)); return true; break;
@@ -1702,9 +1715,17 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       else if (msg.format === 'scss') output = exportSCSS(ch);
       else if (msg.format === 'jsx') output = exportJSX(ch);
       else if (msg.format === 'github') { sendResponse({ body: generateGitHubIssueBody(ch, window.location.href, document.title) }); break; }
-      else if (msg.format === 'markdown') { getPageComments().then(pc => sendResponse({ output: exportMarkdown(msg.level || 'standard', pc) })); return true; }
+      else if (msg.format === 'markdown') { getPageComments().then(pc => sendResponse({ output: exportMarkdown(pc) })); return true; }
       else if (msg.format === 'enhanced-github') { sendResponse({ body: exportEnhancedGitHubIssue() }); break; }
       sendResponse({ output }); break;
+    }
+
+    // "Send to Agent" — stage the handoff marker and push it to the MCP
+    // server so the agent's next get_changes sees it.
+    case 'SEND_TO_AGENT': {
+      if (!isConnected() || !isAgentConnected()) { sendResponse({ ok: false, error: 'No agent connected' }); break; }
+      sendResponse({ ok: true, handoff: stageAgentHandoff() });
+      break;
     }
 
     case 'SCREENSHOT_ELEMENT': { const sid = getSelectedElementId(); if (sid) { captureElementScreenshot(sid).then(dataUrl => sendResponse({ dataUrl })); return true; } sendResponse({ dataUrl: null }); break; }
@@ -1741,6 +1762,11 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
     case 'GET_MULTI_SELECT': {
       sendResponse({ active: isMultiSelectActive(), ids: getMultiSelectIds() });
+      break;
+    }
+    case 'FIND_MATCHING': {
+      const ids = msg.elementId ? findMatchingElements(msg.elementId) : [];
+      sendResponse({ ids, count: ids.length });
       break;
     }
     // Panel-driven multi-select. The side panel computes the next set
@@ -1828,7 +1854,6 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       else sendResponse({ error: 'Missing html or parentId' }); break;
     }
 
-    // ── Phase 6: Rearrange ──
     case 'GET_DESIGN_TOKENS': {
       sendResponse({ tokens: getTokenIndex().tokens });
       break;

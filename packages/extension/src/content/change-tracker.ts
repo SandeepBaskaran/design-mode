@@ -67,6 +67,11 @@ const textChanges: TextChange[] = [];
 const domChanges: DomChange[] = [];
 let ws: WebSocket | null = null;
 
+// Set when the user clicks "Send to Agent"; travels to the MCP server so
+// the agent's next get_changes sees the explicit "these are ready" marker.
+interface AgentHandoff { requestedAt: number; pageUrl: string; pageTitle: string; }
+let pendingHandoff: AgentHandoff | null = null;
+
 export function getStyleChanges() { return [...styleChanges]; }
 export function getTextChanges() { return [...textChanges]; }
 export function getDomChanges() { return [...domChanges]; }
@@ -79,6 +84,7 @@ export function clearAllChanges() {
   styleChanges.length = 0;
   textChanges.length = 0;
   domChanges.length = 0;
+  pendingHandoff = null;
   clearAllRules();
   persistSession();
 }
@@ -692,6 +698,16 @@ export function applyWithCompanions(
   return applyStyleChange(elementId, property, value, refreshPanel, meta);
 }
 
+// A shorthand redefines every constituent longhand, so a commit must drop
+// the element's stale longhand overrides — the override sheet emits rules
+// in first-write order, so an older shorthand entry would otherwise lose
+// to a per-side/per-corner longhand written after it.
+const SHORTHAND_SUBSUMED_LONGHANDS: Record<string, string[]> = {
+  'border-radius': ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius'],
+  'margin': ['margin-top', 'margin-right', 'margin-bottom', 'margin-left'],
+  'padding': ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'],
+};
+
 export function applyStyleChange(
   elementId: string, property: string, value: string,
   refreshPanel?: () => void,
@@ -700,6 +716,12 @@ export function applyStyleChange(
   const el = getElementById(elementId);
   if (!el) return null;
   const k = kebab(property);
+  const subsumed = SHORTHAND_SUBSUMED_LONGHANDS[k];
+  if (subsumed) {
+    for (const c of styleChanges.filter(c => c.elementId === elementId && subsumed.includes(kebab(c.property)))) {
+      removeStyleChange(c.id);
+    }
+  }
   const selector = generateSelector(el);
 
   // Deduplication: keep original oldValue, update newValue + timestamp.
@@ -968,27 +990,76 @@ export function getChangeReport() {
     oldValue: t.original, newValue: t.current, system: t.system,
     cssRule: `${t.scopeSelector} { ${t.cssVar}: ${t.current}; }`,
   }));
+  // Selectors are regenerated from the live DOM at report time — recorded
+  // selectors are positional (nth-of-type) and go stale once layers are
+  // reordered, sending the agent to whatever sibling now sits in the old
+  // slot. Fall back to the recorded selector when the element is gone
+  // (e.g. deletes).
+  const liveSelector = (elementId: string, fallback: string): string => {
+    const el = getElementById(elementId);
+    return el ? generateSelector(el) : fallback;
+  };
   return {
     pageUrl: window.location.href,
     pageTitle: document.title,
     tokenChanges,
     ...(tokenChanges.length > 0 ? { tokenGuidance: TOKEN_GUIDANCE } : {}),
-    styleChanges: styleChanges.map(c => ({
-      id: c.id, status: c.status || 'todo',
-      selector: c.selector, property: c.property,
-      oldValue: c.oldValue, newValue: c.newValue,
-      cssRule: `${c.selector} { ${c.property.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}: ${c.newValue}; }`,
-    })),
+    styleChanges: styleChanges.map(c => {
+      const selector = liveSelector(c.elementId, c.selector);
+      return {
+        id: c.id, status: c.status || 'todo',
+        elementId: c.elementId, timestamp: c.timestamp,
+        selector, property: c.property,
+        oldValue: c.oldValue, newValue: c.newValue,
+        cssRule: `${selector} { ${c.property.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}: ${c.newValue}; }`,
+      };
+    }),
     textChanges: textChanges.map(c => ({
       id: c.id, status: c.status || 'todo',
-      selector: c.selector, oldText: c.oldText, newText: c.newText,
+      elementId: c.elementId, timestamp: c.timestamp,
+      selector: liveSelector(c.elementId, c.selector), oldText: c.oldText, newText: c.newText,
     })),
-    domChanges: domChanges.map(c => ({
-      id: c.id, status: c.status || 'todo',
-      selector: c.selector, action: c.action, tagName: c.tagName,
-    })),
+    domChanges: domChanges.map(c => {
+      // Moves carry both ends: origin's parent selector re-resolved via
+      // its data-dm-id, destination replaced by the element's CURRENT
+      // parent + child index.
+      let origin = c.origin;
+      if (origin?.parentId) {
+        const p = getElementById(origin.parentId);
+        if (p) origin = { ...origin, parentSelector: generateSelector(p) };
+      }
+      let destination = c.destination;
+      const el = getElementById(c.elementId);
+      if (c.action === 'move' && el?.parentElement) {
+        destination = {
+          parentSelector: generateSelector(el.parentElement),
+          index: Array.from(el.parentElement.children).indexOf(el),
+          parentId: c.destination?.parentId,
+        };
+      }
+      return {
+        id: c.id, status: c.status || 'todo',
+        elementId: c.elementId, timestamp: c.timestamp,
+        selector: el ? generateSelector(el) : c.selector,
+        action: c.action, tagName: c.tagName,
+        origin, destination,
+      };
+    }),
     cssBlock: generateCSSBlock(),
+    handoff: pendingHandoff
+      ? { ...pendingHandoff, requestedAt: new Date(pendingHandoff.requestedAt).toISOString() }
+      : undefined,
   };
+}
+
+// User clicked "Send to Agent". Stash the marker locally (cloud tools read
+// the page live via getChangeReport) and push it to the local server's
+// state (local get_changes reads server-side). Returns the marker so the
+// panel can confirm the staging.
+export function stageAgentHandoff(): AgentHandoff {
+  pendingHandoff = { requestedAt: Date.now(), pageUrl: location.href, pageTitle: document.title };
+  transportSend({ type: 'HANDOFF', payload: pendingHandoff });
+  return pendingHandoff;
 }
 
 // --- Transport sync ---
@@ -1081,7 +1152,13 @@ export function connectToServer(opts: ConnectOpts | number = {}) {
     const port = o.port ?? DEFAULT_WS_PORT;
     try {
       ws = new WebSocket(`ws://localhost:${port}`);
-      ws.onopen = () => console.log('[Design Mode] Connected to companion server');
+      ws.onopen = () => {
+        console.log('[Design Mode] Connected to companion server');
+        // Back-fill everything recorded before the server came up (it is
+        // spawned by the agent, usually after the user already edited).
+        syncAllChanges();
+        void loadComments().then(cs => { for (const c of cs) syncCommentChange(c); }).catch(() => {});
+      };
       ws.onclose = () => { ws = null; setAgentConnected(false); };
       ws.onerror = () => { ws = null; setAgentConnected(false); };
       ws.onmessage = (event) => {
@@ -1233,7 +1310,7 @@ async function handleScreenshotRequest(
         } else if (matches.length > 1) {
           // Ambiguous — return up to 8 unique candidate paths so the agent
           // can re-query with a specific one.
-          error = `Selector "${payload.selector}" matched ${matches.length} elements. Pass a more specific path (use list_layers to discover unique paths).`;
+          error = `Selector "${payload.selector}" matched ${matches.length} elements. Pass a more specific path — pick one of the candidates below.`;
           candidates = matches.slice(0, 8).map(el => ({
             path: generateSelector(el),
             label: shortLabel(el),

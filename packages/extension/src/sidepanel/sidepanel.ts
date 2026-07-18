@@ -173,6 +173,12 @@ type ColorFormat = 'hex' | 'rgba' | 'hsl';
 let tab: Tab = 'design';
 let settingsOpen = false;
 let helpOpen = false;
+let sendAgentHelpOpen = false;
+
+// "Select matching layers" checkbox — checked hands all matching
+// elements to multi-select so edits fan out; unchecked returns to
+// single selection. Resets whenever the selected element changes.
+let matchingLayersChecked = false;
 let shortcutsOpen = false;
 let contributeOpen = false;
 let fileAccessBlocked = false;
@@ -1659,14 +1665,37 @@ async function revertGroup(groupKey: string) {
   await refreshState();
 }
 
-async function copyPrompt() { const res = await send({ type: 'SP_EXPORT', format: 'markdown', level: 'detailed' }); const output = res.output || res.markdown || ''; if (output) { await navigator.clipboard.writeText(output); const btn = root.querySelector('#dm-copy-prompt-btn'); if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); } } }
+async function copyPrompt() { const res = await send({ type: 'SP_EXPORT', format: 'markdown' }); const output = res.output || res.markdown || ''; if (output) { await navigator.clipboard.writeText(output); const btn = root.querySelector('#dm-copy-prompt-btn'); if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); } } }
 async function sendToAgent() {
-  const res = await send({ type: 'SP_EXPORT', format: 'markdown', level: 'detailed' }); const output = res.output || res.markdown || '';
-  if (mcpState === 'connected') { await send({ type: 'SP_SEND_TO_AGENT', payload: output }); const btn = root.querySelector('#dm-send-agent-btn'); if (btn) { (btn as HTMLElement).textContent = 'Sent!'; setTimeout(() => render(), 1500); } }
-  else if (mcpState === 'running') alert('MCP server is running but no coding agent is connected yet.');
-  else alert('MCP server is not running. Start it with: npm start');
+  await refreshMcpStatus();
+  if (mcpState !== 'connected') { sendAgentHelpOpen = true; render(); return; }
+  const res = await send({ type: 'SP_SEND_TO_AGENT' });
+  if (res?.ok) {
+    const btn = root.querySelector('#dm-send-agent-btn');
+    if (btn) { (btn as HTMLElement).textContent = 'Sent!'; setTimeout(() => render(), 1500); }
+    showCaptureToast('success', 'Staged for your agent — run /design-mode to implement.');
+  } else {
+    showCaptureToast('error', 'Could not reach the agent — check the MCP status and retry.');
+  }
 }
 function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); chrome.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
+
+/* ── Select matching layers ── */
+async function toggleMatchingLayers(next: boolean) {
+  matchingLayersChecked = next;
+  if (!next) { await pushMultiSelectIds([]); render(); return; }
+  if (!info) { matchingLayersChecked = false; return; }
+  const res = await send({ type: 'SP_FIND_MATCHING', elementId: info.id });
+  const ids: string[] = Array.isArray(res?.ids) ? res.ids : [];
+  if (ids.length >= 2) {
+    await pushMultiSelectIds(ids);
+    showCaptureToast('success', 'Editing ' + ids.length + ' matching layers — changes apply to all.');
+  } else {
+    matchingLayersChecked = false;
+    showCaptureToast('error', 'No other matching layers on this page.');
+  }
+  render();
+}
 // Click on a compact comment row in the changes tab. We expand the row
 // inline (the same "viewing" card the page-pin click triggers) so the
 // user sees Resolve / Edit / Delete in one place. Clicking the same row
@@ -1752,6 +1781,8 @@ chrome.runtime.onMessage.addListener((msg) => {
     // Covers pages that hydrated after INIT_STATE fired (SPA nav): without
     // the token cache the badges and swap pickers have nothing to offer.
     if (designTokens.length === 0) refreshDesignTokens();
+    // Matching-layers selection is per-element — reset for the new one.
+    matchingLayersChecked = false;
     render();
     refreshMedia();
     setTimeout(() => {
@@ -1809,7 +1840,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     const requested = msg.tab as Tab | undefined;
     if (requested && (requested === 'layers' || requested === 'design' || requested === 'changes') && tab !== requested) {
       captureTabScroll();
-      pendingTabScrollRestore = tabScrollPositions[requested] ?? 0;
+      pendingTabScrollRestore = tabScrollPositions[requested] ?? { top: 0, left: 0 };
       tab = requested;
       render();
     }
@@ -2085,8 +2116,8 @@ function opacityInput(value: string): string {
   const raw = parseFloat(value);
   const pct = isNaN(raw) ? 100 : Math.max(0, Math.min(100, Math.round(raw * 100)));
   return '<div class="dm-field">' +
-    '<label class="dm-field-label">Opacity</label>' +
-    '<div class="dm-input-shell">' +
+    '<div class="dm-input-shell" title="Opacity">' +
+    '<span class="dm-input-icon">' + icon('blend', 12) + '</span>' +
     '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__opacity_pct" data-dm-numeric="1" data-dm-unit="" inputmode="decimal" value="' + pct + '"/>' +
     '<span class="dm-input-unit">%</span>' +
     '</div></div>';
@@ -2660,7 +2691,7 @@ function renderContrastRow(prop: string, value: string): string {
 // Renders the inline custom color picker: HSV gradient + hue slider +
 // hex/R/G/B inputs. All interaction wires through `data-dm-color-*`
 // attributes that the input + pointer handlers below recognize.
-function renderInlineColorPicker(prop: string, value: string): string {
+function renderInlineColorPicker(prop: string, value: string, compact = false): string {
   const rgb = parseColorRgb(value) || [0, 0, 0];
   const [r, g, b] = rgb;
   const [h, s, v] = rgbToHsv(r, g, b);
@@ -2674,7 +2705,7 @@ function renderInlineColorPicker(prop: string, value: string): string {
     // Contrast checker — pairs the edited colour against the element's
     // effective background (or the element's text colour when the prop is
     // itself a fill). Hidden for box-shadow colours via getContrastContext.
-    renderContrastRow(prop, value) +
+    (compact ? '' : renderContrastRow(prop, value)) +
     // SV (saturation × value) gradient. Bottom→top black overlay handles
     // the V axis; left→right white→hue handles the S axis. Marker dot
     // positioned on top via percentage offsets.
@@ -2814,7 +2845,10 @@ function renderFontFamilyPicker(currentValue: string): string {
 // Render the color picker panel (HSV / hex / RGB / token list) for a prop.
 // Used both inline by colorInp and detached by sections (e.g. Stroke) that
 // want the panel rendered below the row instead of inside the field.
-function renderColorPanel(prop: string, value: string): string {
+// `compact` drops the contrast row and the Site Colors list, leaving just
+// the picker and its value inputs. For colours that aren't page content —
+// e.g. layout-guide overlays — WCAG pairing and design tokens are noise.
+function renderColorPanel(prop: string, value: string, compact = false): string {
   const hex = rgbToHex(value);
   const colorTokens = designTokens.filter(t => t.group === 'colour');
   const q = colorPickerSearch.toLowerCase();
@@ -2822,10 +2856,10 @@ function renderColorPanel(prop: string, value: string): string {
     ? colorTokens.filter(t => t.cssVar.toLowerCase().includes(q) || (t.resolvedValue || t.value).toLowerCase().includes(q))
     : colorTokens;
   return '<div data-dm-color-popover="' + prop + '" style="margin-top:6px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;max-height:520px;overflow-y:auto;">' +
-    '<div style="padding:10px;border-bottom:1px solid var(--dm-separator);">' +
-    renderInlineColorPicker(prop, value) +
+    '<div style="padding:10px;' + (compact ? '' : 'border-bottom:1px solid var(--dm-separator);') + '">' +
+    renderInlineColorPicker(prop, value, compact) +
     '</div>' +
-    (filteredTokens.length > 0
+    (compact ? '' : filteredTokens.length > 0
       ? '<div style="padding:6px 8px 4px;font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Site Colors (' + filteredTokens.length + ')</div>' +
         filteredTokens.map(t => {
           const tokenVal = (t.resolvedValue || t.value).trim();
@@ -3230,6 +3264,21 @@ function cornerRadiusPrimary(s: Record<string, string>): string {
   const bl = s.borderBottomLeftRadius || '0px';
   const br = s.borderBottomRightRadius || '0px';
   return (tl === tr && tr === bl && bl === br) ? tl : 'Mixed';
+}
+
+// Uniform corner-radius field. Mirrors spacingUniformField: always numeric,
+// so typing a number over the 'Mixed' placeholder writes the border-radius
+// shorthand and collapses all four corners to the typed value.
+function cornerRadiusUniformField(s: Record<string, string>): string {
+  const primary = cornerRadiusPrimary(s);
+  const isMixed = primary === 'Mixed';
+  const formatted = formatPxValueForDisplay(isMixed ? '0px' : primary);
+  return '<div class="dm-field">' +
+    '<div class="dm-input-shell" title="Corner radius">' +
+    '<span class="dm-input-icon">' + icon('maximize', 12) + '</span>' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="borderRadius" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" placeholder="' + (isMixed ? 'Mixed' : '0') + '" value="' + escapeAttr(isMixed ? '' : formatted.display) + '"/>' +
+    '<span class="dm-input-unit">' + formatted.unit + '</span>' +
+    '</div></div>';
 }
 
 // Expanded 2×2 panel that drops below the Appearance row when the user
@@ -5924,17 +5973,15 @@ function renderTabs(): string {
 function renderStickyBottom(): string {
   const hasChanges = styleChanges.length > 0 || textChanges.length > 0 || domChanges.length > 0 || comments.length > 0;
   const copyDis = previewingOriginal || !hasChanges;
-  // Send-to-Agent gating is independent of changes: even if there's
-  // something to send, MCP must be both running and connected to an
-  // agent. The tooltip names the specific blocker so the user knows
-  // whether to start the server (`offline`) or connect a coding agent
-  // (`running`).
-  const sendDis = previewingOriginal || !hasChanges || mcpState !== 'connected';
-  let sendTitle = 'Send these changes to a connected coding agent';
-  if (mcpState === 'offline') sendTitle = 'MCP server is not running. Start it to enable Send to Agent.';
-  else if (mcpState === 'running') sendTitle = 'MCP server is running but no coding agent is connected.';
-  else if (previewingOriginal) sendTitle = 'Disable “Preview original” first.';
+  // Send-to-Agent stays clickable whenever there's something to send —
+  // when no agent is connected yet, the click opens setup instructions
+  // instead of sending. The tooltip previews which of the two it will be.
+  const sendDis = previewingOriginal || !hasChanges;
+  let sendTitle = 'Send these changes to your coding agent';
+  if (previewingOriginal) sendTitle = 'Disable “Preview original” first.';
   else if (!hasChanges) sendTitle = 'No changes to send.';
+  else if (mcpState === 'offline') sendTitle = 'MCP is not connected — click for setup instructions.';
+  else if (mcpState === 'running') sendTitle = 'No coding agent connected yet — click for instructions.';
   const copyTitle = previewingOriginal ? 'Disable “Preview original” first.' : !hasChanges ? 'No changes to copy.' : 'Copy as prompt to clipboard';
   const copyS = 'flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;' +
     (copyDis ? 'background:var(--dm-btn-bg-disabled);border:1px solid var(--dm-btn-border-disabled);color:var(--dm-text-dim);cursor:default;opacity:0.5;pointer-events:none;' : 'background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text-secondary);cursor:pointer;');
@@ -5945,6 +5992,61 @@ function renderStickyBottom(): string {
   return '<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;bottom:0;z-index:10;">' +
     '<button id="dm-copy-prompt-btn" data-dm-action="copy-prompt" title="' + escapeAttr(copyTitle) + '" style="' + copyS + '">' + icon('clipboard', 13) + ' Copy as Prompt</button>' +
     '<button id="dm-send-agent-btn" data-dm-action="send-to-agent"' + (sendDis ? ' disabled aria-disabled="true"' : '') + ' title="' + escapeAttr(sendTitle) + '" style="' + sendS + '">' + icon('send', 13) + ' Send to Agent</button></div>';
+}
+
+// First-run guidance for "Send to Agent": shown when the button is clicked
+// while no agent is connected. The copy is state-specific — `offline` walks
+// through wiring MCP up, `running` means the transport is live but no agent
+// has attached yet.
+function renderSendAgentHelpOverlay(): string {
+  if (!sendAgentHelpOpen) return '';
+  const isCloud = mcpMode === 'cloud' || mcpMode === 'self-hosted';
+  const code = (t: string) => '<code style="font-family:SF Mono,Monaco,monospace;font-size:9px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:3px;padding:1px 4px;word-break:break-all;">' + t + '</code>';
+  let intro: string;
+  let steps: string[];
+  if (mcpState === 'running') {
+    intro = 'The MCP server is reachable, but no coding agent has connected yet.';
+    steps = [
+      'Open <b>Settings → MCP</b> and click <b>Copy MCP config</b>.',
+      'Paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …) and restart the agent.',
+      'Run ' + code('/design-mode') + ' in the agent — the MCP chip up top turns solid green.',
+    ];
+  } else if (isCloud && mcpCloudToken) {
+    intro = 'The cloud relay is unreachable right now.';
+    steps = [
+      'Open <b>Settings → MCP</b> and check the server URL and token.',
+      'Click the <b>MCP</b> chip in the panel header to retry the connection.',
+    ];
+  } else if (isCloud) {
+    intro = 'One-time setup — takes about a minute.';
+    steps = [
+      'Open <b>Settings → MCP</b> and click <b>Connect to Cloud</b>.',
+      'Click <b>Copy MCP config</b> and paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …).',
+      'Restart the agent, then run ' + code('/design-mode') + ' in it.',
+    ];
+  } else {
+    intro = 'The local companion server isn’t running. One-time setup:';
+    steps = [
+      'Register the server with your agent: ' + code('claude mcp add design-mode -- npm start --prefix &lt;repo&gt;/packages/mcp-local'),
+      'Start your agent — it launches the server automatically.',
+      'Run ' + code('/design-mode') + ' in the agent.',
+    ];
+  }
+  const stepRows = steps.map((s, i) =>
+    '<div style="display:flex;gap:8px;align-items:flex-start;">' +
+    '<span style="flex-shrink:0;width:16px;height:16px;border-radius:50%;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);color:var(--dm-accent);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;">' + (i + 1) + '</span>' +
+    '<span style="font-size:10px;color:var(--dm-text-secondary);line-height:1.6;min-width:0;">' + s + '</span></div>'
+  ).join('');
+  return '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
+    '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:312px;max-width:calc(100vw - 32px);box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
+    '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;display:flex;align-items:center;gap:6px;">' + icon('send', 12) + ' Connect a coding agent</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-muted);margin-bottom:10px;line-height:1.5;">' + intro + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">' + stepRows + '</div>' +
+    '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-bottom:14px;line-height:1.5;">Once connected, this button stages your changes for the agent — it implements them and marks each one done in the Changes tab.</div>' +
+    '<div style="display:flex;gap:6px;">' +
+    '<button data-dm-action="send-agent-help-close" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Close</button>' +
+    '<button data-dm-action="send-agent-help-settings" style="flex:1;padding:6px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Open MCP settings</button>' +
+    '</div></div></div>';
 }
 
 /* ── Phase 2: Layers Tab ── */
@@ -5998,7 +6100,7 @@ function renderLayersTab(): string {
   // Bulk-action toolbar — shows when multi-select has 2+ layers. Each
   // action operates on every selected layer at once.
   const bulkBar = (msCount >= 2) ? (
-    '<div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;border-bottom:1px solid var(--dm-separator);background:var(--dm-accent-bg);">' +
+    '<div style="position:sticky;left:0;display:flex;flex-wrap:wrap;gap:4px;padding:6px 10px;border-bottom:1px solid var(--dm-separator);background:var(--dm-accent-bg);">' +
       '<span style="font-size:9px;color:var(--dm-accent);font-weight:600;align-self:center;margin-right:4px;">' + msCount + ' selected:</span>' +
       '<button data-dm-bulk-action="show-all" title="Make all visible" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('eye', 10) + ' Show</button>' +
       '<button data-dm-bulk-action="hide-all" title="Hide all" style="padding:3px 8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:3px;">' + icon('eyeClosed', 10) + ' Hide</button>' +
@@ -6065,7 +6167,10 @@ function renderLayersTab(): string {
     // belongs to the live DOM (the page already names every node), so
     // there's no rename here. Locking was removed too — Lock didn't
     // align with the "Layers tab mirrors the live DOM" stance.
-    const hoverActions = '<span class="dm-layer-hover-actions" style="display:flex;gap:2px;margin-left:auto;flex-shrink:0;">' +
+    // sticky right keeps the actions reachable at the viewport edge while
+    // the tree is panned horizontally; background:inherit picks up the
+    // row's hover/selected colour so panned content doesn't bleed through.
+    const hoverActions = '<span class="dm-layer-hover-actions" style="display:flex;gap:2px;margin-left:auto;flex-shrink:0;position:sticky;right:0;background:inherit;">' +
       '<button data-dm-scroll-to="' + n.id + '" title="Scroll page to this layer" aria-label="Scroll to layer" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;">' + icon('crosshair', 11) + '</button>' +
       '<button data-dm-toggle-vis="' + n.id + '" title="' + (n.isVisible ? 'Hide layer' : 'Show layer') + '" aria-label="Toggle visibility" style="background:none;border:none;color:' + (n.isVisible ? 'var(--dm-text-muted)' : 'var(--dm-accent)') + ';cursor:pointer;display:flex;padding:2px;">' + icon(n.isVisible ? 'eye' : 'eyeClosed', 12) + '</button></span>';
 
@@ -6109,7 +6214,10 @@ function renderLayersTab(): string {
       ? '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;opacity:0.7;">' + escapeAttr('<' + n.tagName + '>') + '</span>'
       : '';
 
-    const nameCell = '<span style="font-size:11px;color:' + tagColor + ';font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">' + escapeAttr(displayName) + '</span>';
+    // max-width guards against a single pathological class/id name
+    // blowing up the max-content row width; the row title carries the
+    // full name for that case.
+    const nameCell = '<span style="font-size:11px;color:' + tagColor + ';font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;max-width:360px;">' + escapeAttr(displayName) + '</span>';
 
     return '<div class="dm-layer-item" data-dm-layer="' + n.id + '" draggable="true" data-dm-layer-drag="' + n.id + '" style="display:flex;align-items:center;gap:3px;padding:3px 6px 3px ' + (4 + indent) + 'px;background:' + bg + ';cursor:pointer;border-left:2px solid ' + borderColor + ';position:relative;min-height:30px;opacity:' + (!n.isVisible || dimmedByAncestor.has(n.id) ? '0.4' : '1') + ';" title="' + escapeAttr(displayName) + '">' +
       guides + dragHandle + chevron + tagIcon + colorSwatch + multiBadge + containerBadge + changeDot + commentChip +
@@ -6118,12 +6226,15 @@ function renderLayersTab(): string {
       hoverActions + '</div>';
   }).join('');
 
-  // Search + filter chips pin to the top of the layers list while the rows
-  // scroll beneath them — the multi-select bulk bar sits below the sticky
-  // header so it scrolls with the list (it's transient and tied to the
-  // active selection, not navigation).
-  const stickyHeader = '<div style="position:sticky;top:0;z-index:5;background:var(--dm-bg);">' + searchBar + filterChipsRow + '</div>';
-  return stickyHeader + bulkBar + '<div style="overflow-y:auto;">' + rows + '</div>';
+  // The layers tab scrolls both axes (#dm-tab-body gets overflow:auto in
+  // render()) so deep trees can be panned to read full names. The rows
+  // wrapper is max-content wide so every row spans the widest row and
+  // names render un-truncated; the search/filter header pins to the
+  // top-left of the viewport, and the bulk bar scrolls away vertically
+  // with the list (it's transient and tied to the active selection, not
+  // navigation) but pins horizontally so it never shifts out of view.
+  const stickyHeader = '<div style="position:sticky;top:0;left:0;z-index:5;background:var(--dm-bg);">' + searchBar + filterChipsRow + '</div>';
+  return stickyHeader + bulkBar + '<div style="width:max-content;min-width:100%;">' + rows + '</div>';
 }
 
 // Layer kind classifier — what sections in the design panel should show.
@@ -6224,6 +6335,15 @@ function renderDesignTab(): string {
     : '';
   const cssBtnDisabled = !info; // hover-only state still shouldn't trigger a "view computed CSS" of a fleeting hover
   const cssBtn = '<button data-dm-action="view-computed-css"' + (cssBtnDisabled ? ' disabled' : '') + ' title="' + (cssBtnDisabled ? 'Select a layer to view its computed CSS' : 'View computed CSS for the selected layer') + '" style="display:flex;align-items:center;gap:4px;padding:3px 8px;background:' + (cssBtnDisabled ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-btn-bg)') + ';border:1px solid ' + (cssBtnDisabled ? 'var(--dm-btn-border-disabled)' : 'var(--dm-btn-border)') + ';border-radius:5px;color:' + (cssBtnDisabled ? 'var(--dm-text-dim)' : 'var(--dm-text-secondary)') + ';cursor:' + (cssBtnDisabled ? 'default' : 'pointer') + ';font-size:10px;font-family:inherit;flex-shrink:0;opacity:' + (cssBtnDisabled ? '0.5' : '1') + ';">' + icon('code', 11) + '<span>CSS</span></button>';
+  // "Matching layers" — one checkbox: checked hands every matching element
+  // (same tag sharing a class) to multi-select fan-out; the existing
+  // "N selected" badge shows the resulting count. Lives inline in the
+  // Selected row, in front of the CSS button.
+  const matchingCtl = info && !isPageContext && !isHovering
+    ? '<label title="Selects every layer like this one (same tag, shared class) so your edits apply to all of them" style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--dm-text-secondary);cursor:pointer;user-select:none;flex-shrink:0;white-space:nowrap;">' +
+      '<input type="checkbox" data-dm-action="toggle-matching-layers"' + (matchingLayersChecked ? ' checked' : '') + ' style="accent-color:var(--dm-accent);margin:0;cursor:pointer;"/>' +
+      'Matching layers</label>'
+    : '';
   // Indicator label: "Page" when body/html is the implicit context (no real
   // selection), "Hovering" while hovering, otherwise "Selected".
   const indicatorLeft = isPageContext
@@ -6235,7 +6355,7 @@ function renderDesignTab(): string {
     '<div style="padding:6px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;">' +
     indicatorLeft +
     '<span style="font-size:10px;color:var(--dm-text-dim);font-family:SF Mono,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">&lt;' + escapeAttr(tag) + '&gt;</span>' +
-    multiBadge + cssBtn + '</div>';
+    multiBadge + matchingCtl + cssBtn + '</div>';
 
   // Text content editing — show for ANY text-tagged layer (the same set whose
   // Layers icon is the "T"/type glyph). Editing a text element with children
@@ -6911,20 +7031,19 @@ function renderDesignTab(): string {
   // grid: Opacity (5), Corner radius (5), Edit-each-corner toggle (2).
   // Blend mode + isolation moved into Advanced; they're niche stacking-
   // context controls, not the kind of thing you reach for on every layer.
-  const cornerPrimary = cornerRadiusPrimary(s);
   // Button reuses .dm-icon-row-button's default padding (6px) instead of
   // the explicit height:30px;padding:0 the earlier draft hard-coded —
   // that combination rendered ~2px taller than the .dm-input-shell next
   // to it (padding-driven height of an input wins on the small fraction
   // of a px-line difference). Letting padding drive the height keeps the
   // button visually flush with the Opacity / Corner-radius fields.
-  const cornerExpandRowBtn = '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">·</label>' +
+  const cornerExpandRowBtn = '<div class="dm-field">' +
     '<button class="dm-icon-row-button" data-dm-corner-expand title="' + (cornerRadiusExpanded ? 'Collapse corners' : 'Edit each corner separately') + '" data-active="' + (cornerRadiusExpanded ? 'true' : 'false') + '" style="width:100%;">' +
     icon('scan', 14) + '</button></div>';
   const appearanceContent =
     grid12([
       { span: 5, content: opacityInput(s.opacity || '1') },
-      { span: 5, content: inp('Corner radius', 'borderRadius', cornerPrimary) },
+      { span: 5, content: cornerRadiusUniformField(s) },
       { span: 2, content: cornerExpandRowBtn },
     ]) + sp() +
     (cornerRadiusExpanded ? cornerRadius2x2(s) + sp() : '') +
@@ -7571,14 +7690,25 @@ function renderDesignTab(): string {
       (countOrSizeUnit ? '<span class="dm-input-unit">' + countOrSizeUnit + '</span>' : '') +
       '</div>';
     const expandBtn = '<button class="dm-fill-action" data-dm-guide-expand="' + idx + '" title="' + (expanded ? 'Collapse settings' : 'Settings') + '" data-active="' + (expanded ? 'true' : 'false') + '">' + icon('slidersHorizontal', 12) + '</button>';
-    const eyeBtn = '<button class="dm-fill-action" data-dm-guide-toggle="' + idx + '" title="' + (visible ? 'Hide guide' : 'Show guide') + '" data-active="' + (visible ? 'true' : 'false') + '">' + icon(visible ? 'eye' : 'eyeOff', 12) + '</button>';
+    // Parent/child visibility, Figma-style: the layer only paints when the
+    // section eye AND its own eye are on. With the section hidden the row's
+    // eye still reflects (and edits) its own state, dimmed to show the
+    // section gate is what's suppressing it.
+    const eyeTitle = visible
+      ? (guidesSectionHidden ? 'Hide guide (all guides currently hidden)' : 'Hide guide')
+      : 'Show guide';
+    const eyeBtn = '<button class="dm-fill-action" data-dm-guide-toggle="' + idx + '" title="' + eyeTitle + '" data-active="' + (visible ? 'true' : 'false') + '"' +
+      (guidesSectionHidden ? ' style="opacity:0.4;"' : '') + '>' + icon(visible ? 'eye' : 'eyeOff', 12) + '</button>';
     const trashBtn = '<button class="dm-fill-action dm-fill-action-hover" data-dm-guide-remove="' + idx + '" title="Remove guide" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>';
     const primaryRow = '<div class="dm-fill-row-solid">' + grip + kindSel + countOrSizeInput + expandBtn + eyeBtn + trashBtn + '</div>';
     // Colour swatch + hex inline cell, used in the expanded body. Reuses
     // the fill row's solid pattern so the swatch / picker behaviour is
     // identical to the rest of the panel.
     const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + colorProp + '" title="Pick a colour" style="background:' + safeCssColor(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
-    const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + colorProp + '" data-dm-tokens-trigger="' + colorProp + '" value="' + escapeAttr(codeDisplay) + '" spellcheck="false" autocomplete="off"/>';
+    // No data-dm-tokens-trigger here, unlike Fill / Stroke: site-colour
+    // tokens don't apply to a guide overlay, same reasoning as the compact
+    // colour panel below.
+    const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + colorProp + '" value="' + escapeAttr(codeDisplay) + '" spellcheck="false" autocomplete="off"/>';
     // Both cells share an explicit 32px min-height so the swatch row and
     // the opacity input land at exactly the same vertical extent in the
     // 3×2 / 1×2 expanded grids.
@@ -7589,7 +7719,7 @@ function renderDesignTab(): string {
       '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__guide_opacity__' + idx + '" data-dm-numeric="1" data-dm-unit="" inputmode="decimal" value="' + Math.round(layer.opacity) + '"/>' +
       '<span class="dm-input-unit">%</span>' +
       '</div>';
-    const colorPanel = swatchOpen ? renderColorPanel(colorProp, layer.color) : '';
+    const colorPanel = swatchOpen ? renderColorPanel(colorProp, layer.color, true) : '';
     // Expanded body — 3×2 for columns/rows (colour+opacity, align+size,
     // margin+gutter); 1×2 for grid (colour+opacity).
     let body = '';
@@ -7629,7 +7759,11 @@ function renderDesignTab(): string {
   // Section-level show/hide — drawn to the right of the section title,
   // before the chevron. Toggling clears or restores the overlay
   // immediately without touching the per-layer config in the panel.
-  const layoutGuideSectionActions = guideElId
+  // Only earns its seat once there are 2+ guides: with one guide it would
+  // duplicate that row's own eye. The hide flag is cleared below 2 layers
+  // (see the remove handler) so it can never strand a guide invisible with
+  // no visible control explaining why.
+  const layoutGuideSectionActions = (guideElId && guideLayers.length >= 2)
     ? '<button class="dm-section-action" data-dm-guide-section-toggle title="' + (guidesSectionHidden ? 'Show all layout guides' : 'Hide all layout guides') + '" data-active="' + (guidesSectionHidden ? 'false' : 'true') + '">' + icon(guidesSectionHidden ? 'eyeOff' : 'eye', 12) + '</button>'
     : '';
 
@@ -7907,7 +8041,7 @@ function renderChangesTab(): string {
   // the user would never see it.
   const clearAllOverlay = clearAllConfirming
     ? '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
-      '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:200px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
+      '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:250px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
       '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;">Clear all changes?</div>' +
       '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;line-height:1.5;">Removes every tracked style, text, DOM, and comment change. Resets the undo stack. This can\'t be undone.</div>' +
       '<div style="display:flex;gap:6px;">' +
@@ -7919,7 +8053,7 @@ function renderChangesTab(): string {
   // Same inline overlay for deleting a single comment.
   const deleteCommentOverlay = deletingCommentId
     ? '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
-      '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:200px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
+      '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:250px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
       '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;">Delete comment?</div>' +
       '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;line-height:1.5;">The comment, its pin, and any unsaved replies will be removed. This can\'t be undone.</div>' +
       '<div style="display:flex;gap:6px;">' +
@@ -8069,7 +8203,7 @@ function renderChangesTab(): string {
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '" data-dm-change-prop="' + escapeAttr(c.property) + '"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px ' + indentLeft + 'px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           rowIcon +
-          '<div style="flex:1;min-width:0;">' + innerLabel + '</div>' +
+          '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' + innerLabel + '</div>' +
           changeStatusBadge((c as any).status) +
           '<button data-dm-batch-apply="' + cid + '" title="' + zapTitle + '" style="' + zapStyle + '" aria-label="Batch apply">' + icon('zap', 10) + countBadge + '</button>' +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
@@ -8085,7 +8219,7 @@ function renderChangesTab(): string {
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;margin-top:2px;">' + icon('type', 10) + '</span>' +
-          '<div style="flex:1;min-width:0;">' + inner + '</div>' +
+          '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' + inner + '</div>' +
           changeStatusBadge((c as any).status) +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else if (item.type === 'dom') {
@@ -8109,7 +8243,7 @@ function renderChangesTab(): string {
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           '<span style="color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';display:flex;flex-shrink:0;margin-top:2px;">' + icon(ic[c.action] || 'sparkles', 10) + '</span>' +
-          '<div style="flex:1;min-width:0;">' +
+          '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' +
           '<div style="font-size:10px;color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';">' + c.action.toUpperCase() + ' &lt;' + c.tagName + '&gt;</div>' +
           origLine + destLine +
           '</div>' + changeStatusBadge((c as any).status) + '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
@@ -8532,7 +8666,7 @@ function renderShortcutsPopover(): string {
       '</div>'
     : '';
   return '<div data-dm-action="close-shortcuts" style="position:fixed;inset:0;z-index:50;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;padding:16px;">' +
-    '<div data-dm-action="noop" data-dm-shortcuts-card style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);width:100%;max-width:340px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">' +
+    '<div data-dm-action="noop" data-dm-shortcuts-card style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4);width:100%;max-width:425px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--dm-separator);flex-shrink:0;">' +
     '<span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--dm-text);">' + icon('keyboard', 13) + ' Keyboard shortcuts</span>' +
     '<button data-dm-action="close-shortcuts" aria-label="Close" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;">' + icon('x', 14) + '</button>' +
@@ -8664,8 +8798,8 @@ function renderCaptureToast(): string {
 // document and the user expects to land where they last left it. We
 // listen to scroll on the body and stash the last position per tab; on
 // switch, the new render() restores the destination tab's saved value.
-const tabScrollPositions: Partial<Record<Tab, number>> = {};
-let pendingTabScrollRestore: number | null = null;
+const tabScrollPositions: Partial<Record<Tab, { top: number; left: number }>> = {};
+let pendingTabScrollRestore: { top: number; left: number } | null = null;
 
 function ensureTabScrollListener(): void {
   const el = document.getElementById('dm-tab-body');
@@ -8676,13 +8810,13 @@ function ensureTabScrollListener(): void {
     // browser fires `scroll` synchronously when we set scrollTop and we
     // shouldn't overwrite the value we just told it to use.
     if (pendingTabScrollRestore !== null) return;
-    tabScrollPositions[tab] = el.scrollTop;
+    tabScrollPositions[tab] = { top: el.scrollTop, left: el.scrollLeft };
   }, { passive: true });
 }
 
 function captureTabScroll(): void {
   const el = document.getElementById('dm-tab-body');
-  if (el) tabScrollPositions[tab] = el.scrollTop;
+  if (el) tabScrollPositions[tab] = { top: el.scrollTop, left: el.scrollLeft };
 }
 
 // Keep inspect suspended while a comment composer is open (add / edit /
@@ -8742,8 +8876,11 @@ function render() {
 
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative;">' +
       renderHeader() + renderActionRow() + renderCommentCard() + renderTabs() +
-      '<div id="dm-tab-body" style="flex:1;overflow-y:auto;overflow-x:hidden;">' + tabContent + '</div>' +
-      renderStickyBottom() + renderComputedCssOverlay() + renderCaptureToast() + '</div>';
+      // Layers pans both axes so deep trees stay readable (rows are
+      // max-content wide there — see renderLayersTab); other tabs keep
+      // horizontal overflow clipped.
+      '<div id="dm-tab-body" style="flex:1;' + (tab === 'layers' ? 'overflow:auto;' : 'overflow-y:auto;overflow-x:hidden;') + '">' + tabContent + '</div>' +
+      renderStickyBottom() + renderSendAgentHelpOverlay() + renderComputedCssOverlay() + renderCaptureToast() + '</div>';
   }
 
   // Shortcuts popover floats above whichever view is active.
@@ -8798,7 +8935,8 @@ function render() {
     const el = document.getElementById('dm-tab-body');
     if (el) {
       pendingTabScrollRestore = restoreTo;
-      el.scrollTop = restoreTo;
+      el.scrollTop = restoreTo.top;
+      el.scrollLeft = restoreTo.left;
     }
   }
   pendingTabScrollRestore = null;
@@ -8893,6 +9031,8 @@ function setupDelegation() {
         }
         case 'copy-prompt': copyPrompt(); break;
         case 'send-to-agent': sendToAgent(); break;
+        case 'send-agent-help-close': sendAgentHelpOpen = false; render(); break;
+        case 'send-agent-help-settings': sendAgentHelpOpen = false; helpOpen = false; contributeOpen = false; settingsOpen = true; render(); break;
         case 'toggle-theme': toggleTheme(); break;
         case 'submit-comment': submitComment(); break;
         case 'cancel-comment': cancelComment(); break;
@@ -9190,6 +9330,9 @@ function setupDelegation() {
           refreshDesignSystem(true);
           refreshCustomPresets();
           render();
+          break;
+        case 'toggle-matching-layers':
+          void toggleMatchingLayers((actionBtn as HTMLInputElement).checked);
           break;
         case 'close-tokens':
           tokensOpen = false;
@@ -10451,6 +10594,10 @@ function setupDelegation() {
       layers.splice(idx, 1);
       if (expandedGuideIdx === idx) expandedGuideIdx = null;
       else if (expandedGuideIdx !== null && expandedGuideIdx > idx) expandedGuideIdx -= 1;
+      // The section eye stops rendering below 2 layers — drop the hide flag
+      // with it so the remaining guide isn't suppressed by a control the
+      // user can no longer see.
+      if (layers.length < 2) layoutGuidesSectionHidden.delete(id);
       setLayoutGuides(id, layers);
       dispatchLayoutGuides(id, layers);
       render();

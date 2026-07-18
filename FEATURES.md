@@ -59,6 +59,13 @@ outline). The side panel mirrors whatever you have selected.
   button shows a count badge. Press `Escape` or click the toggle again to
   exit. (While inspecting, native text selection is suppressed so shift-click
   never highlights page text.)
+- **Matching layers** (checkbox in the Design tab's Selected row, next to
+  the CSS button): builds the multi-selection for you from every layer
+  *like* the selected one — same tag sharing a class (classless elements
+  match classless same-tag peers under the same parent). Checking it
+  selects all matches so every Design-tab edit fans out to them;
+  unchecking (or selecting another element, or `Escape`) returns to
+  single selection.
 
 ### 1.4 Animation freeze (Motion section)
 
@@ -495,7 +502,10 @@ Every edit you've made grouped by element.
 
 - **Copy as Prompt** → copies the markdown export of every change (see §7) to
   the clipboard.
-- **Send to Agent** → pushes the same markdown to the connected MCP agent.
+- **Send to Agent** → stages a handoff marker over the MCP transport; the
+  agent's next `get_changes` sees a `handoff` field flagging the edits as
+  ready to implement. When MCP is offline or no agent is attached yet, the
+  click opens state-specific setup instructions instead.
 
 ---
 
@@ -742,10 +752,10 @@ bridge on `ws://localhost:9960` and exposes 8 MCP tools over stdio.
 
 | Tool | Inputs | What it returns |
 |---|---|---|
-| **`get_changes`** | none | All style / text / DOM changes + pinned comments + a ready-to-paste CSS block. Each style change carries the unique `selector` for the element. |
+| **`get_changes`** | none | All style / text / DOM changes + pinned comments + a ready-to-paste CSS block. Each style change carries the unique `selector` for the element. The flat `items` array gives every entry a stable `id` for `set_change_status`. A `handoff` field appears once the user presses **Send to Agent** — the explicit "these are ready" signal. |
 | **`apply_changes`** | `changes: Array<{ elementId, styles }>` | Pushes CSS back to the browser for live preview. Single-edit calls use a one-element array. The browser routes these through the same managed-stylesheet path as user edits, so they show up in the Changes tab and survive reload. |
 | **`set_change_status`** | `status: 'todo' \| 'in_progress' \| 'resolved'`, `ids?: string[]` | Marks tracked changes (and comments) as the agent works through them. Omit `ids` to apply to all. Surfaces as a per-row WIP/DONE badge + a Status sub-filter in the Changes tab; resolved comments flip their resolved flag. |
-| **`clear_changes`** | none | Reset the session. Drops every tracked change. |
+| **`clear_changes`** | none | Reset the session — server state and the live page. Edits revert, comment pins disappear, undo stacks reset (same path as the panel's Clear All). |
 | **`get_session_summary`** | none | Connection status, active sessions, counts. Use this as a health check before `apply_changes`. |
 | **`export_changes`** | `format: 'css' | 'tailwind' | 'scss' | 'jsx'` | Emits the change set in the requested format. Spring / cubic-bezier values pass through inside the underlying CSS strings — no separate animation tool. |
 | **`get_screenshot`** | `selector?: string` OR `elementId?: string` OR `commentId?: string` | A PNG of the viewport, or cropped to one element, or cropped to a comment's flagged **region** (or its element) — pass the `commentId` from `get_changes`. Pass the unique selector you got from `get_changes` (e.g. `"main > section.hero > button:nth-of-type(2)"`). Generic selectors that match many elements fail with a list of candidate unique paths. Every capture hides Design Mode's own overlays first, so the image is clean. Returned as an MCP image content block — vision-capable agents read it directly. |

@@ -208,7 +208,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Messages FROM content script — just let them propagate to side panel
   if (msg.type === 'ELEMENT_SELECTED' || msg.type === 'STATE_UPDATE' ||
       msg.type === 'CHANGES_UPDATE' || msg.type === 'STYLE_APPLIED' ||
-      msg.type === 'SECTIONS_DETECTED' || msg.type === 'ANIMATION_STATE' ||
+      msg.type === 'ANIMATION_STATE' ||
       msg.type === 'PROMPT_ANNOTATION' || msg.type === 'ELEMENT_HOVERED_INFO' ||
       msg.type === 'COMMENT_BUBBLE_CLICKED' || msg.type === 'OPEN_COMMENT_FOR_SELECTED' ||
       msg.type === 'AGENT_PRESENCE_UPDATE') {
@@ -431,7 +431,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'SP_EXPORT') {
-    forwardToPinnedTab({ type: 'EXPORT', format: msg.format, level: msg.level }, sendResponse);
+    forwardToPinnedTab({ type: 'EXPORT', format: msg.format }, sendResponse);
     return true;
   }
   if (msg.type === 'SP_SCREENSHOT') {
@@ -463,7 +463,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'SP_TOGGLE_VISIBILITY') { forwardToPinnedTab({ type: 'TOGGLE_VISIBILITY', elementId: msg.elementId }, sendResponse); return true; }
   // SP_REORDER_LAYER falls through to the SP_ fallback below so all fields
   // (sourceId, targetId, position) forward without hand-maintained mapping.
-  if (msg.type === 'SP_SEND_TO_AGENT') { forwardToPinnedTab({ type: 'EXPORT', format: 'markdown', level: 'detailed' }, sendResponse); return true; }
+  // SP_SEND_TO_AGENT falls through the SP_ fallback → content's SEND_TO_AGENT
+  // handler, which stages the handoff and pushes it over the MCP transport.
   if (msg.type === 'SP_GET_MCP_STATUS') { forwardToPinnedTab({ type: 'GET_MCP_STATUS' }, sendResponse); return true; }
   if (msg.type === 'SP_GET_DESIGN_TOKENS') { forwardToPinnedTab({ type: 'GET_DESIGN_TOKENS' }, sendResponse); return true; }
   if (msg.type === 'SP_GET_COMPUTED_CSS') { forwardToPinnedTab({ type: 'GET_COMPUTED_CSS', elementId: msg.elementId }, sendResponse); return true; }

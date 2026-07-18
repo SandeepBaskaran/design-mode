@@ -5,9 +5,8 @@
 import type {
   ElementInfo, DomTreeNode, PartialElementStyle, Comment,
   StyleChange, TextChange, ChangeSession, ChangeStatus,
-  SpringConfig, EasingConfig,
-  AnimationState, ComponentPalette, PageSection, RearrangeNote,
-  OutputDetailLevel, StructuredOutput, MCPSession,
+  AnimationState, ComponentPalette,
+  OutputDetailLevel, StructuredOutput,
   KeyboardShortcut, NamedPreset, SpatialContext, AccessibilityInfo,
   SourceLocation, ComponentHierarchy,
 } from './types';
@@ -37,10 +36,7 @@ export type PanelMessage =
   | { type: 'ANIMATION_FROZEN'; payload: { frozen: boolean } }
   // Phase 5: Design mode
   | { type: 'COMPONENT_PLACED'; payload: { html: string; parentId: string } }
-  | { type: 'SNAP_GUIDES'; payload: { guides: Array<{ type: string; position: number }> } }
-  // Phase 6: Rearrange
-  | { type: 'SECTIONS_DETECTED'; payload: PageSection[] }
-  | { type: 'REARRANGE_APPLIED'; payload: { sectionId: string; newOrder: number[] } };
+  | { type: 'SNAP_GUIDES'; payload: { guides: Array<{ type: string; position: number }> } };
 
 // --- Extension <-> Background Service Worker Messages ---
 
@@ -66,26 +62,17 @@ export type BackgroundMessage =
 // --- Extension <-> WebSocket Server Messages ---
 
 export type ServerMessage =
-  | { type: 'HELLO'; payload: { version: string } }
+  | { type: 'HELLO'; payload: { version: string; agentConnected?: boolean } }
   | { type: 'SESSION_UPDATE'; payload: ChangeSession }
   | { type: 'STYLE_CHANGED'; payload: StyleChange }
   | { type: 'TEXT_CHANGED'; payload: TextChange }
+  | { type: 'DOM_CHANGED'; payload: { id: string; elementId: string; selector: string; action: 'delete' | 'duplicate' | 'move' | 'insert'; tagName: string; timestamp: number; status?: ChangeStatus } }
   | { type: 'COMMENT_ADDED'; payload: Comment }
   | { type: 'COMMENT_UPDATED'; payload: Comment }
   | { type: 'COMMENT_DELETED'; payload: { id: string } }
-  | { type: 'REQUEST_CHANGES'; payload?: { pageUrl?: string } }
-  | { type: 'REQUEST_COMMENTS'; payload?: { pageUrl?: string } }
-  | { type: 'REQUEST_ELEMENT'; payload: { selector: string } }
-  | { type: 'APPLY_CHANGES'; payload: { elementId: string; styles: PartialElementStyle } }
-  | { type: 'SET_CHANGE_STATUS'; payload: { status: ChangeStatus; ids?: string[] } }
-  | { type: 'MARK_COMMENT_RESOLVED'; requestId?: string; payload: { commentId: string; resolved: boolean } }
-  | { type: 'CHANGES_RESPONSE'; payload: ChangeSession }
-  | { type: 'COMMENTS_RESPONSE'; payload: Comment[] }
-  | { type: 'ELEMENT_RESPONSE'; payload: ElementInfo | null }
-  // Phase 4: Animation
-  | { type: 'FREEZE_ANIMATIONS'; payload: { freeze: boolean } }
-  | { type: 'UPDATE_SPRING'; payload: { elementId: string; config: SpringConfig } }
-  | { type: 'UPDATE_EASING'; payload: { elementId: string; config: EasingConfig } }
-  | { type: 'ANIMATION_STATE_RESPONSE'; payload: AnimationState }
-  // Phase 8: Enhanced MCP
-  | { type: 'SESSION_LIST'; payload: MCPSession[] };
+  // "Send to Agent" marker — extension → server
+  | { type: 'HANDOFF'; payload: { requestedAt: number; pageUrl: string; pageTitle: string } }
+  | { type: 'APPLY_CHANGES'; requestId?: string; payload: { changes: Array<{ elementId: string; styles: PartialElementStyle }> } }
+  | { type: 'SET_CHANGE_STATUS'; requestId?: string; payload: { status: ChangeStatus; ids?: string[] } }
+  | { type: 'CLEAR_CHANGES'; requestId?: string; payload?: Record<string, never> }
+  | { type: 'MARK_COMMENT_RESOLVED'; requestId?: string; payload: { commentId: string; resolved: boolean } };

@@ -20,14 +20,18 @@ server — drive them live; do not look for task files on disk.
 ## Tools (Design Mode MCP server)
 - \`get_session_summary\` — health check; confirm the extension is connected.
 - \`get_changes\` — design-token / style / text / DOM changes plus pinned
-  comments. Each comment has an \`id\`, a \`selector\`, and — for region
+  comments. The \`items\` array gives every entry a stable \`id\` for status
+  updates. Each comment has an \`id\`, a \`selector\`, and — for region
   comments — a \`region\` box ({x,y,w,h} in document pixels) instead of an
-  element. \`tokenChanges\` lists CSS custom properties the user
-  redefined, each with the \`scopeSelector\` it's declared on.
+  element. \`tokenChanges\` lists CSS custom properties the user redefined,
+  each with the \`scopeSelector\` it's declared on. A \`handoff\` field means
+  the user explicitly pressed "Send to Agent".
 - \`get_screenshot\` — capture a \`selector\`, \`elementId\`, or region for
   visual context.
 - \`export_changes\` — emit the edits as CSS / Tailwind / SCSS / JSX.
 - \`apply_changes\` — push a CSS tweak back to the live page for preview.
+- \`set_change_status\` — flip change \`id\`s to \`in_progress\` / \`resolved\`
+  as you work; the user's Changes tab updates live.
 - \`mark_comment_resolved\` — mark a comment done (pass its \`id\`).
 
 ## Workflow
@@ -36,6 +40,8 @@ server — drive them live; do not look for task files on disk.
 2. Call \`get_changes\`. Build a task list from the token/style/text/DOM
    changes and the comments.
 3. For each item:
+   - Call \`set_change_status\` with \`{ status: 'in_progress', ids: [id] }\`
+     so the user sees a WIP badge on the row you're working.
    - Map the \`selector\` to its source in the codebase. Reference files as
      \`path:line\`.
    - For a comment, read its \`text\`; for a region comment, call
@@ -47,10 +53,12 @@ server — drive them live; do not look for task files on disk.
    - Implement the change. Prefer existing design tokens / CSS variables and
      \`rem\` over hardcoded \`px\`. A style change whose \`newValue\` is
      \`var(--x)\` means the element should reference that token, not the
-     literal it resolves to. Match the surrounding code's conventions.
-   - After implementing what a comment asked for, call
-     \`mark_comment_resolved\` with its \`id\` so the user sees the loop close
-     in the Changes tab.
+     literal it resolves to. A \`tokenChanges\` entry means the token's own
+     definition should change at the source. Match the surrounding code's
+     conventions.
+   - Once shipped, call \`set_change_status\` with \`{ status: 'resolved',
+     ids: [id] }\` — the row gets struck through in the user's Changes tab.
+     For a comment, call \`mark_comment_resolved\` with its \`id\` instead.
 4. Summarise what you changed and which comments you resolved.
 
 ## Processing modes (ask the user if unspecified)

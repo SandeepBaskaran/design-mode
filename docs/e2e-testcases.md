@@ -238,6 +238,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 5.8  | Trash icon | Click the trash icon | Element removed; "delete" entry appears in Changes tab |
 | 5.9  | Duplicate marker | Duplicate an element | Layers row of the duplicate carries the `dm-clone` marker class and shows a "(copy)" suffix label |
 | 5.10 | DM elements excluded | Inspect the tree | No `dm-hover`, `dm-select`, `dm-comment-pin`, or `dm-applied-styles` rows |
+| 5.11 | Horizontal pan on deep trees | On a deeply nested page (10+ levels), scroll the tree horizontally | Full layer names become visible while panning; search/filter header stays pinned top-left; the crosshair/eye hover actions stay pinned at the right edge of every hovered row; panned position survives re-renders (e.g. hovering rows) |
 
 ---
 
@@ -369,16 +370,19 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 |------|------|-------|----------|
 | 10.1 | Disabled with no changes | Open a fresh page | Both buttons disabled |
 | 10.2 | Disabled while previewing | Click View Original | Both buttons disabled (banner explains) |
-| 10.3 | Copy as Prompt format — header | Make any change → Copy as Prompt | Clipboard's first line is exactly `here are the changes in {{page title}} {{page url}}` (single space between title and URL, no boilerplate above) |
-| 10.4 | Copy as Prompt format — body | Make 3 style + 1 text + 1 DOM change → Copy as Prompt | Each change is one bullet `- {label}: {detail}` ordered chronologically. No headings, no code fences, no "How to apply" prose, no framework section |
+| 10.3 | Copy as Prompt format — header | Make any change → Copy as Prompt | Clipboard opens with `# Visual changes — {{page title}}` then `<{{page url}}>` on the next line (title falls back to `untitled` when the page has none). No boilerplate above the heading |
+| 10.4 | Copy as Prompt format — body | Make 3 style + 1 text + 1 DOM change → Copy as Prompt | Changes sit under a `## Changes` heading, one bullet `- {label}: {detail}` each, ordered chronologically. Only the documented sections appear (`## Tokens changed`, `## Comments`, `## Design tokens used` — each omitted when empty); no code fences, no "How to apply" prose, no framework section |
 | 10.5 | Style grouping per element | Edit two properties on the same `.btn` | Single bullet groups them: `- button.btn: padding 8px → 12px; border-radius 4px → 8px` |
 | 10.6 | Text change format | Edit a heading's text | Bullet reads `- {label} text: "{old}" → "{new}"` (truncated to ~60 chars per side) |
 | 10.7 | DOM change format | Duplicate / delete / move an element | Bullet reads `- {label} duplicated` (or `deleted` / `moved` / `inserted`) |
+| 10.7a | Move conveys origin → destination + chronology | Edit a style on `.card` → drag it to another parent in Layers → edit another style → Copy as Prompt | Move bullet reads `- {label} moved: {oldParent}[i] → {newParent}[j]`; the pre-move style bullet appears BEFORE the move line and the post-move one AFTER it; ambiguous labels (e.g. `div.card` matching several nodes) carry the full post-move selector in parens; MCP `get_changes` shows the same `origin`/`destination` on the move record and live (post-move) selectors on every change |
 | 10.8 | Comment lines | Add a comment | Bullet reads `- note on {selector}: {text}` |
-| 10.9 | Empty state | Copy as Prompt with no changes | Output is the header line + `(no changes recorded yet)` |
-| 10.10 | Send to Agent — connected | MCP connected | Button shows "Sent!" briefly |
-| 10.11 | Send to Agent — running, no agent | Server running but no agent | Toast / alert: "MCP running but no agent connected" |
-| 10.12 | Send to Agent — local offline | No local server in Local mode | Alert: "MCP server is not running. Start it with: `npm start` in `packages/mcp-local`" |
+| 10.9 | Empty state | Copy as Prompt with no changes | Both the button gate (10.1) and this fallback key off the same empty ledger, so the fallback isn't reachable from the UI — verify by reading `exportMarkdown`, not by clicking. When hit, output is the two header lines from 10.3, a blank line, then `(no changes recorded yet)` |
+| 10.10 | Send to Agent — connected | MCP connected → click Send to Agent | Button shows "Sent!" + success toast; agent's next `get_changes` includes a `handoff` field with `requestedAt` / `pageUrl` |
+| 10.11 | Send to Agent — running, no agent | Server running but no agent → click | Instructions overlay: "no coding agent has attached yet", points to Settings → MCP + `/design-mode`; "Open MCP settings" button lands on Settings |
+| 10.12 | Send to Agent — local offline | No local server in Local mode → click | Instructions overlay with `claude mcp add design-mode …` registration hint; button styled enabled (accent), not greyed out |
+| 10.13 | Send to Agent — cloud, no token | Cloud mode without token → click | Instructions overlay pointing to Settings → MCP "Connect to Cloud" |
+| 10.14 | Handoff cleared | Send to Agent → Clear All → agent calls `get_changes` | No `handoff` field in the response |
 
 ---
 
@@ -490,6 +494,18 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | 16.3 | Editing after enabling | Turn the toggle ON (extension reloads), reopen the panel on the file tab | Full editing UI; inspect/select/edit/undo work; header shows the file name (e.g. `test.html`) |
 | 16.4 | Navigate pinned tab to file:// | Toggle OFF again. Open the panel on an http(s) tab, then navigate that tab to the file URL | The guidance card appears; navigating back to the http(s) page restores the editing UI |
 | 16.5 | Pop-out parity | Repeat 16.1 in the floating pop-out window | Same guidance card behaviour |
+
+---
+
+## Phase 17 — Matching layers
+
+| #    | Test | Steps | Expected |
+|------|------|-------|----------|
+| 17.1 | Check | Select a repeated element (card title, button); tick **Matching layers** in the Selected row (left of the CSS button) | Dashed overlays on all matches; "N selected" badge appears; success toast names the count |
+| 17.2 | Fan-out | With the box ticked, change a style (e.g. color) | Every match updates; Changes tab shows one row per element (grouped) |
+| 17.3 | Uncheck | Untick the box | Overlays clear; back to single selection |
+| 17.4 | Reset on reselect | Tick the box, then select a different element | Checkbox resets to unticked for the new element |
+| 17.5 | No matches | Select a unique element (e.g. the only `h1`) and tick | Error toast "No other matching layers"; checkbox stays unticked |
 
 ---
 

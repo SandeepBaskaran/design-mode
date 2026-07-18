@@ -80,25 +80,28 @@ function handleMessage(msg: any) {
   switch (msg.type) {
     case 'STYLE_CHANGED': if (msg.payload) state.addStyleChange(msg.payload); break;
     case 'TEXT_CHANGED': if (msg.payload) state.addTextChange(msg.payload); break;
+    case 'DOM_CHANGED': if (msg.payload) state.addDomChange(msg.payload); break;
+    case 'HANDOFF': if (msg.payload) state.setHandoff(msg.payload); break;
     case 'SESSION_UPDATE':
       if (msg.payload) {
         state.updateSession(msg.payload);
         // Also register it in the sessions map so listSessions() /
         // get_session_summary.activeSessions actually reflect the page.
         state.getOrCreateSession(msg.payload.pageUrl, msg.payload.pageTitle);
+        state.replaceChanges(msg.payload);
+        if (msg.payload.handoff?.requestedAt) {
+          state.setHandoff({
+            requestedAt: new Date(msg.payload.handoff.requestedAt).getTime(),
+            pageUrl: msg.payload.handoff.pageUrl,
+            pageTitle: msg.payload.handoff.pageTitle,
+          });
+        }
       }
       break;
     case 'COMMENT_ADDED': if (msg.payload) state.addComment(msg.payload); break;
     case 'COMMENT_UPDATED': if (msg.payload) state.addComment(msg.payload); break;
     case 'COMMENT_DELETED': if (msg.payload?.id) state.deleteComment(msg.payload.id); break;
     default: break;
-  }
-}
-
-// Fire-and-forget — used by `apply_changes` etc.
-export function sendToExtension(msg: object) {
-  if (activeConnection?.readyState === WebSocket.OPEN) {
-    activeConnection.send(JSON.stringify(msg));
   }
 }
 
