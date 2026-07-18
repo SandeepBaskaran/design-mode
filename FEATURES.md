@@ -59,6 +59,13 @@ outline). The side panel mirrors whatever you have selected.
   button shows a count badge. Press `Escape` or click the toggle again to
   exit. (While inspecting, native text selection is suppressed so shift-click
   never highlights page text.)
+- **Select similar** (`wand` icon in the Design tab's Selected row): builds
+  the multi-selection for you from elements *like* the selected one. A
+  sensitivity slider tunes the match — **Strict** (same tag, identical
+  classes, same parent), **Balanced** (same tag, shares a class), **Loose**
+  (same tag, shares a class or the same computed text signature) — with a
+  live match count. **Edit all N** hands the set to multi-select, so every
+  Design-tab edit fans out to all of them.
 
 ### 1.4 Animation freeze (Motion section)
 
@@ -461,6 +468,14 @@ Every edit you've made grouped by element.
 - **Hide all pins** (`eye` / `eye-off`) → toggles every comment pin on the page in one click. The Changes-tab list still works — only the page overlay is muted. Persisted across sessions via `chrome.storage.local`.
 - **Screenshot** → see §1.5.
 - **Presets** → opens the Presets view (see §6).
+- **Rearrange sections** (`rows3` icon) → full-panel Sections view. Design
+  Mode detects the page's top-level sections (header, hero, features,
+  footer, …) with a heading-derived label plus a layout analysis line
+  (grid/flex/stack, block count, height). Drag rows — or use the arrow
+  buttons — to reorder the live page; every move is a tracked DOM change
+  (Changes tab, exports, MCP, undo). The sticky-note button pins a
+  rearrange note to the section, which travels as a pinned comment so an
+  agent can read and resolve it.
 - **Undo** / **Redo** → step through every style/text/DOM/visibility action.
 
 ### 5.3 Sticky bottom
