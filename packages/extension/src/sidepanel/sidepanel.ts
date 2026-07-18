@@ -2038,8 +2038,8 @@ function opacityInput(value: string): string {
   const raw = parseFloat(value);
   const pct = isNaN(raw) ? 100 : Math.max(0, Math.min(100, Math.round(raw * 100)));
   return '<div class="dm-field">' +
-    '<label class="dm-field-label">Opacity</label>' +
-    '<div class="dm-input-shell">' +
+    '<div class="dm-input-shell" title="Opacity">' +
+    '<span class="dm-input-icon">' + icon('blend', 12) + '</span>' +
     '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__opacity_pct" data-dm-numeric="1" data-dm-unit="" inputmode="decimal" value="' + pct + '"/>' +
     '<span class="dm-input-unit">%</span>' +
     '</div></div>';
@@ -2500,7 +2500,7 @@ function renderContrastRow(prop: string, value: string): string {
 // Renders the inline custom color picker: HSV gradient + hue slider +
 // hex/R/G/B inputs. All interaction wires through `data-dm-color-*`
 // attributes that the input + pointer handlers below recognize.
-function renderInlineColorPicker(prop: string, value: string): string {
+function renderInlineColorPicker(prop: string, value: string, compact = false): string {
   const rgb = parseColorRgb(value) || [0, 0, 0];
   const [r, g, b] = rgb;
   const [h, s, v] = rgbToHsv(r, g, b);
@@ -2514,7 +2514,7 @@ function renderInlineColorPicker(prop: string, value: string): string {
     // Contrast checker — pairs the edited colour against the element's
     // effective background (or the element's text colour when the prop is
     // itself a fill). Hidden for box-shadow colours via getContrastContext.
-    renderContrastRow(prop, value) +
+    (compact ? '' : renderContrastRow(prop, value)) +
     // SV (saturation × value) gradient. Bottom→top black overlay handles
     // the V axis; left→right white→hue handles the S axis. Marker dot
     // positioned on top via percentage offsets.
@@ -2653,7 +2653,10 @@ function renderFontFamilyPicker(currentValue: string): string {
 // Render the color picker panel (HSV / hex / RGB / token list) for a prop.
 // Used both inline by colorInp and detached by sections (e.g. Stroke) that
 // want the panel rendered below the row instead of inside the field.
-function renderColorPanel(prop: string, value: string): string {
+// `compact` drops the contrast row and the Site Colors list, leaving just
+// the picker and its value inputs. For colours that aren't page content —
+// e.g. layout-guide overlays — WCAG pairing and design tokens are noise.
+function renderColorPanel(prop: string, value: string, compact = false): string {
   const hex = rgbToHex(value);
   const colorTokens = designTokens.filter(t => t.category === 'color');
   const q = colorPickerSearch.toLowerCase();
@@ -2661,10 +2664,10 @@ function renderColorPanel(prop: string, value: string): string {
     ? colorTokens.filter(t => t.name.toLowerCase().includes(q) || t.value.toLowerCase().includes(q))
     : colorTokens;
   return '<div data-dm-color-popover="' + prop + '" style="margin-top:6px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;max-height:520px;overflow-y:auto;">' +
-    '<div style="padding:10px;border-bottom:1px solid var(--dm-separator);">' +
-    renderInlineColorPicker(prop, value) +
+    '<div style="padding:10px;' + (compact ? '' : 'border-bottom:1px solid var(--dm-separator);') + '">' +
+    renderInlineColorPicker(prop, value, compact) +
     '</div>' +
-    (filteredTokens.length > 0
+    (compact ? '' : filteredTokens.length > 0
       ? '<div style="padding:6px 8px 4px;font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Site Colors (' + filteredTokens.length + ')</div>' +
         filteredTokens.map(t => {
           const tokenVal = t.value.trim();
@@ -3067,6 +3070,21 @@ function cornerRadiusPrimary(s: Record<string, string>): string {
   const bl = s.borderBottomLeftRadius || '0px';
   const br = s.borderBottomRightRadius || '0px';
   return (tl === tr && tr === bl && bl === br) ? tl : 'Mixed';
+}
+
+// Uniform corner-radius field. Mirrors spacingUniformField: always numeric,
+// so typing a number over the 'Mixed' placeholder writes the border-radius
+// shorthand and collapses all four corners to the typed value.
+function cornerRadiusUniformField(s: Record<string, string>): string {
+  const primary = cornerRadiusPrimary(s);
+  const isMixed = primary === 'Mixed';
+  const formatted = formatPxValueForDisplay(isMixed ? '0px' : primary);
+  return '<div class="dm-field">' +
+    '<div class="dm-input-shell" title="Corner radius">' +
+    '<span class="dm-input-icon">' + icon('maximize', 12) + '</span>' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="borderRadius" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" placeholder="' + (isMixed ? 'Mixed' : '0') + '" value="' + escapeAttr(isMixed ? '' : formatted.display) + '"/>' +
+    '<span class="dm-input-unit">' + formatted.unit + '</span>' +
+    '</div></div>';
 }
 
 // Expanded 2×2 panel that drops below the Appearance row when the user
@@ -6660,20 +6678,19 @@ function renderDesignTab(): string {
   // grid: Opacity (5), Corner radius (5), Edit-each-corner toggle (2).
   // Blend mode + isolation moved into Advanced; they're niche stacking-
   // context controls, not the kind of thing you reach for on every layer.
-  const cornerPrimary = cornerRadiusPrimary(s);
   // Button reuses .dm-icon-row-button's default padding (6px) instead of
   // the explicit height:30px;padding:0 the earlier draft hard-coded —
   // that combination rendered ~2px taller than the .dm-input-shell next
   // to it (padding-driven height of an input wins on the small fraction
   // of a px-line difference). Letting padding drive the height keeps the
   // button visually flush with the Opacity / Corner-radius fields.
-  const cornerExpandRowBtn = '<div class="dm-field"><label class="dm-field-label dm-field-label-hidden">·</label>' +
+  const cornerExpandRowBtn = '<div class="dm-field">' +
     '<button class="dm-icon-row-button" data-dm-corner-expand title="' + (cornerRadiusExpanded ? 'Collapse corners' : 'Edit each corner separately') + '" data-active="' + (cornerRadiusExpanded ? 'true' : 'false') + '" style="width:100%;">' +
     icon('scan', 14) + '</button></div>';
   const appearanceContent =
     grid12([
       { span: 5, content: opacityInput(s.opacity || '1') },
-      { span: 5, content: inp('Corner radius', 'borderRadius', cornerPrimary) },
+      { span: 5, content: cornerRadiusUniformField(s) },
       { span: 2, content: cornerExpandRowBtn },
     ]) + sp() +
     (cornerRadiusExpanded ? cornerRadius2x2(s) + sp() : '') +
@@ -7320,14 +7337,25 @@ function renderDesignTab(): string {
       (countOrSizeUnit ? '<span class="dm-input-unit">' + countOrSizeUnit + '</span>' : '') +
       '</div>';
     const expandBtn = '<button class="dm-fill-action" data-dm-guide-expand="' + idx + '" title="' + (expanded ? 'Collapse settings' : 'Settings') + '" data-active="' + (expanded ? 'true' : 'false') + '">' + icon('slidersHorizontal', 12) + '</button>';
-    const eyeBtn = '<button class="dm-fill-action" data-dm-guide-toggle="' + idx + '" title="' + (visible ? 'Hide guide' : 'Show guide') + '" data-active="' + (visible ? 'true' : 'false') + '">' + icon(visible ? 'eye' : 'eyeOff', 12) + '</button>';
+    // Parent/child visibility, Figma-style: the layer only paints when the
+    // section eye AND its own eye are on. With the section hidden the row's
+    // eye still reflects (and edits) its own state, dimmed to show the
+    // section gate is what's suppressing it.
+    const eyeTitle = visible
+      ? (guidesSectionHidden ? 'Hide guide (all guides currently hidden)' : 'Hide guide')
+      : 'Show guide';
+    const eyeBtn = '<button class="dm-fill-action" data-dm-guide-toggle="' + idx + '" title="' + eyeTitle + '" data-active="' + (visible ? 'true' : 'false') + '"' +
+      (guidesSectionHidden ? ' style="opacity:0.4;"' : '') + '>' + icon(visible ? 'eye' : 'eyeOff', 12) + '</button>';
     const trashBtn = '<button class="dm-fill-action dm-fill-action-hover" data-dm-guide-remove="' + idx + '" title="Remove guide" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>';
     const primaryRow = '<div class="dm-fill-row-solid">' + grip + kindSel + countOrSizeInput + expandBtn + eyeBtn + trashBtn + '</div>';
     // Colour swatch + hex inline cell, used in the expanded body. Reuses
     // the fill row's solid pattern so the swatch / picker behaviour is
     // identical to the rest of the panel.
     const swatchBtn = '<button type="button" class="dm-fill-swatch" data-dm-color-trigger="' + colorProp + '" title="Pick a colour" style="background:' + safeCssColor(swatchBg) + ';outline:' + (swatchOpen ? '2px solid var(--dm-accent)' : 'none') + ';outline-offset:1px;"></button>';
-    const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + colorProp + '" data-dm-tokens-trigger="' + colorProp + '" value="' + escapeAttr(codeDisplay) + '" spellcheck="false" autocomplete="off"/>';
+    // No data-dm-tokens-trigger here, unlike Fill / Stroke: site-colour
+    // tokens don't apply to a guide overlay, same reasoning as the compact
+    // colour panel below.
+    const codeInput = '<input type="text" class="dm-fill-code" data-dm-prop="' + colorProp + '" value="' + escapeAttr(codeDisplay) + '" spellcheck="false" autocomplete="off"/>';
     // Both cells share an explicit 32px min-height so the swatch row and
     // the opacity input land at exactly the same vertical extent in the
     // 3×2 / 1×2 expanded grids.
@@ -7338,7 +7366,7 @@ function renderDesignTab(): string {
       '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__guide_opacity__' + idx + '" data-dm-numeric="1" data-dm-unit="" inputmode="decimal" value="' + Math.round(layer.opacity) + '"/>' +
       '<span class="dm-input-unit">%</span>' +
       '</div>';
-    const colorPanel = swatchOpen ? renderColorPanel(colorProp, layer.color) : '';
+    const colorPanel = swatchOpen ? renderColorPanel(colorProp, layer.color, true) : '';
     // Expanded body — 3×2 for columns/rows (colour+opacity, align+size,
     // margin+gutter); 1×2 for grid (colour+opacity).
     let body = '';
@@ -7378,7 +7406,11 @@ function renderDesignTab(): string {
   // Section-level show/hide — drawn to the right of the section title,
   // before the chevron. Toggling clears or restores the overlay
   // immediately without touching the per-layer config in the panel.
-  const layoutGuideSectionActions = guideElId
+  // Only earns its seat once there are 2+ guides: with one guide it would
+  // duplicate that row's own eye. The hide flag is cleared below 2 layers
+  // (see the remove handler) so it can never strand a guide invisible with
+  // no visible control explaining why.
+  const layoutGuideSectionActions = (guideElId && guideLayers.length >= 2)
     ? '<button class="dm-section-action" data-dm-guide-section-toggle title="' + (guidesSectionHidden ? 'Show all layout guides' : 'Hide all layout guides') + '" data-active="' + (guidesSectionHidden ? 'false' : 'true') + '">' + icon(guidesSectionHidden ? 'eyeOff' : 'eye', 12) + '</button>'
     : '';
 
@@ -10106,6 +10138,10 @@ function setupDelegation() {
       layers.splice(idx, 1);
       if (expandedGuideIdx === idx) expandedGuideIdx = null;
       else if (expandedGuideIdx !== null && expandedGuideIdx > idx) expandedGuideIdx -= 1;
+      // The section eye stops rendering below 2 layers — drop the hide flag
+      // with it so the remaining guide isn't suppressed by a control the
+      // user can no longer see.
+      if (layers.length < 2) layoutGuidesSectionHidden.delete(id);
       setLayoutGuides(id, layers);
       dispatchLayoutGuides(id, layers);
       render();

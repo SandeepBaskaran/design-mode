@@ -691,6 +691,16 @@ export function applyWithCompanions(
   return applyStyleChange(elementId, property, value, refreshPanel, meta);
 }
 
+// A shorthand redefines every constituent longhand, so a commit must drop
+// the element's stale longhand overrides — the override sheet emits rules
+// in first-write order, so an older shorthand entry would otherwise lose
+// to a per-side/per-corner longhand written after it.
+const SHORTHAND_SUBSUMED_LONGHANDS: Record<string, string[]> = {
+  'border-radius': ['border-top-left-radius', 'border-top-right-radius', 'border-bottom-left-radius', 'border-bottom-right-radius'],
+  'margin': ['margin-top', 'margin-right', 'margin-bottom', 'margin-left'],
+  'padding': ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'],
+};
+
 export function applyStyleChange(
   elementId: string, property: string, value: string,
   refreshPanel?: () => void,
@@ -699,6 +709,12 @@ export function applyStyleChange(
   const el = getElementById(elementId);
   if (!el) return null;
   const k = kebab(property);
+  const subsumed = SHORTHAND_SUBSUMED_LONGHANDS[k];
+  if (subsumed) {
+    for (const c of styleChanges.filter(c => c.elementId === elementId && subsumed.includes(kebab(c.property)))) {
+      removeStyleChange(c.id);
+    }
+  }
   const selector = generateSelector(el);
 
   // Deduplication: keep original oldValue, update newValue + timestamp.
