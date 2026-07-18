@@ -59,13 +59,12 @@ outline). The side panel mirrors whatever you have selected.
   button shows a count badge. Press `Escape` or click the toggle again to
   exit. (While inspecting, native text selection is suppressed so shift-click
   never highlights page text.)
-- **Select similar** (`wand` icon in the Design tab's Selected row): builds
-  the multi-selection for you from elements *like* the selected one. A
-  sensitivity slider tunes the match — **Strict** (same tag, identical
-  classes, same parent), **Balanced** (same tag, shares a class), **Loose**
-  (same tag, shares a class or the same computed text signature) — with a
-  live match count. **Edit all N** hands the set to multi-select, so every
-  Design-tab edit fans out to all of them.
+- **Select matching layers** (checkbox under the Design tab's Selected
+  row): builds the multi-selection for you from every layer *like* the
+  selected one — same tag sharing a class (classless elements match
+  classless same-tag peers under the same parent). Checking it selects all
+  matches so every Design-tab edit fans out to them; unchecking (or
+  selecting another element, or `Escape`) returns to single selection.
 
 ### 1.4 Animation freeze (Motion section)
 

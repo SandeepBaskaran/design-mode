@@ -487,10 +487,11 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | 17.5 | Rearrange survives reload | Reorder a section, reload the page | Move replays from session storage; Changes tab still lists it |
 | 17.6 | Rearrange note | Click the sticky-note icon on a section, type a note, **Pin note** | Numbered comment pin appears on the section; note listed under Comments in the Changes tab; included in Copy as Prompt + agent `get_changes` |
 | 17.7 | Re-detect | Click the refresh icon in the Sections header | List re-scans (e.g. after route navigation in an SPA) |
-| 17.8 | Similar — open | Select a repeated element (card title, button); click the `wand` icon in the Selected row | Slider card opens showing "N matching elements" |
-| 17.9 | Similar — sensitivity | Move the slider Strict → Balanced → Loose | Count updates live per tier (Strict ≤ Balanced ≤ Loose) |
-| 17.10 | Similar — apply | Click **Edit all N** | Dashed overlays on all matches; "N selected" badge in Design tab; a style edit (e.g. color) fans out to every match; Changes tab shows one row per element (grouped) |
-| 17.11 | Similar — escape | Press `Escape` | Multi-select clears, overlays disappear |
+| 17.8 | Matching layers — check | Select a repeated element (card title, button); tick **Select matching layers** under the Selected row | Dashed overlays on all matches; "N selected" badge appears; success toast names the count |
+| 17.9 | Matching layers — fan-out | With the box ticked, change a style (e.g. color) | Every match updates; Changes tab shows one row per element (grouped) |
+| 17.10 | Matching layers — uncheck | Untick the box | Overlays clear; back to single selection |
+| 17.11 | Matching layers — reset on reselect | Tick the box, then select a different element | Checkbox resets to unticked for the new element |
+| 17.12 | Matching layers — no matches | Select a unique element (e.g. the only `h1`) and tick | Error toast "No other matching layers"; checkbox stays unticked |
 
 ---
 
