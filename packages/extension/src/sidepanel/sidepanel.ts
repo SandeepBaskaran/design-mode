@@ -183,12 +183,10 @@ let pageSections: PanelSection[] = [];
 let sectionNoteOpenId: string | null = null;
 let sectionDragSrc: number | null = null;
 
-// Similarity multi-select (sensitivity 1 strict · 2 balanced · 3 loose)
-let similarOpen = false;
-let similarSensitivity = 2;
-let similarIds: string[] = [];
-let similarCount = -1;
-let similarTimer: number | undefined;
+// "Select matching layers" checkbox — checked hands all matching
+// elements to multi-select so edits fan out; unchecked returns to
+// single selection. Resets whenever the selected element changes.
+let matchingLayersChecked = false;
 let shortcutsOpen = false;
 let contributeOpen = false;
 let fileAccessBlocked = false;
@@ -1676,27 +1674,20 @@ async function saveSectionNote(sectionId: string) {
   render();
 }
 
-/* ── Similarity multi-select ── */
-// Debounced count preview: every slider move re-queries the page, the
-// Apply button label shows the would-be selection size live.
-function queueSimilarQuery() {
-  if (similarTimer) clearTimeout(similarTimer);
-  similarTimer = window.setTimeout(() => { void fetchSimilar(); }, 120) as unknown as number;
-}
-
-async function fetchSimilar() {
-  if (!info) return;
-  const res = await send({ type: 'SP_FIND_SIMILAR', elementId: info.id, sensitivity: similarSensitivity });
-  similarIds = Array.isArray(res?.ids) ? res.ids : [];
-  similarCount = similarIds.length;
-  render();
-}
-
-async function applySimilarSelection() {
-  if (similarIds.length < 2) return;
-  await pushMultiSelectIds([...similarIds]);
-  similarOpen = false;
-  showCaptureToast('success', 'Editing ' + similarIds.length + ' elements — style changes fan out to all.');
+/* ── Select matching layers ── */
+async function toggleMatchingLayers(next: boolean) {
+  matchingLayersChecked = next;
+  if (!next) { await pushMultiSelectIds([]); render(); return; }
+  if (!info) { matchingLayersChecked = false; return; }
+  const res = await send({ type: 'SP_FIND_MATCHING', elementId: info.id });
+  const ids: string[] = Array.isArray(res?.ids) ? res.ids : [];
+  if (ids.length >= 2) {
+    await pushMultiSelectIds(ids);
+    showCaptureToast('success', 'Editing ' + ids.length + ' matching layers — changes apply to all.');
+  } else {
+    matchingLayersChecked = false;
+    showCaptureToast('error', 'No other matching layers on this page.');
+  }
   render();
 }
 // Click on a compact comment row in the changes tab. We expand the row
@@ -1779,8 +1770,8 @@ chrome.runtime.onMessage.addListener((msg) => {
     contrastSettingsOpen = false;
     effectiveBgCache.clear();
     maybeFetchEffectiveBg();
-    // Similar-match preview is per-element — recount for the new selection.
-    if (similarOpen) { similarCount = -1; similarIds = []; queueSimilarQuery(); }
+    // Matching-layers selection is per-element — reset for the new one.
+    matchingLayersChecked = false;
     render();
     refreshMedia();
     setTimeout(() => {
@@ -6124,20 +6115,14 @@ function renderDesignTab(): string {
     : '';
   const cssBtnDisabled = !info; // hover-only state still shouldn't trigger a "view computed CSS" of a fleeting hover
   const cssBtn = '<button data-dm-action="view-computed-css"' + (cssBtnDisabled ? ' disabled' : '') + ' title="' + (cssBtnDisabled ? 'Select a layer to view its computed CSS' : 'View computed CSS for the selected layer') + '" style="display:flex;align-items:center;gap:4px;padding:3px 8px;background:' + (cssBtnDisabled ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-btn-bg)') + ';border:1px solid ' + (cssBtnDisabled ? 'var(--dm-btn-border-disabled)' : 'var(--dm-btn-border)') + ';border-radius:5px;color:' + (cssBtnDisabled ? 'var(--dm-text-dim)' : 'var(--dm-text-secondary)') + ';cursor:' + (cssBtnDisabled ? 'default' : 'pointer') + ';font-size:10px;font-family:inherit;flex-shrink:0;opacity:' + (cssBtnDisabled ? '0.5' : '1') + ';">' + icon('code', 11) + '<span>CSS</span></button>';
-  // Similarity selector — wand toggles a slider card; the slider re-counts
-  // matching elements live and Apply hands them to multi-select fan-out.
-  const similarBtn = '<button data-dm-action="toggle-similar"' + (cssBtnDisabled ? ' disabled' : '') + ' title="' + (cssBtnDisabled ? 'Select a layer to find similar elements' : 'Select similar elements — edit them all at once') + '" style="display:flex;align-items:center;padding:3px 6px;background:' + (similarOpen ? 'var(--dm-accent-bg)' : (cssBtnDisabled ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-btn-bg)')) + ';border:1px solid ' + (similarOpen ? 'var(--dm-accent-border)' : (cssBtnDisabled ? 'var(--dm-btn-border-disabled)' : 'var(--dm-btn-border)')) + ';border-radius:5px;color:' + (similarOpen ? 'var(--dm-accent)' : (cssBtnDisabled ? 'var(--dm-text-dim)' : 'var(--dm-text-secondary)')) + ';cursor:' + (cssBtnDisabled ? 'default' : 'pointer') + ';flex-shrink:0;opacity:' + (cssBtnDisabled ? '0.5' : '1') + ';">' + icon('wand', 11) + '</button>';
-  const sensLabel = similarSensitivity === 1 ? 'Strict' : similarSensitivity === 3 ? 'Loose' : 'Balanced';
-  const similarCard = similarOpen && info
-    ? '<div style="padding:8px 12px;border-bottom:1px solid var(--dm-separator);background:var(--dm-accent-bg);">' +
-      '<div style="display:flex;align-items:center;gap:8px;">' +
-      '<span style="font-size:10px;color:var(--dm-text-secondary);flex-shrink:0;">Match</span>' +
-      '<input type="range" data-dm-similar-sensitivity min="1" max="3" step="1" value="' + similarSensitivity + '" style="flex:1;accent-color:var(--dm-accent);" aria-label="Similarity sensitivity"/>' +
-      '<span style="font-size:9px;color:var(--dm-accent);font-weight:600;width:52px;text-align:right;flex-shrink:0;">' + sensLabel + '</span></div>' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">' +
-      '<span style="font-size:10px;color:var(--dm-text-muted);flex:1;">' + (similarCount < 0 ? 'Scanning…' : similarCount + ' matching element' + (similarCount === 1 ? '' : 's')) + '</span>' +
-      '<button data-dm-action="apply-similar"' + (similarCount < 2 ? ' disabled' : '') + ' style="padding:4px 10px;background:' + (similarCount < 2 ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-accent-bg)') + ';border:1px solid ' + (similarCount < 2 ? 'var(--dm-btn-border-disabled)' : 'var(--dm-accent-border)') + ';border-radius:5px;color:' + (similarCount < 2 ? 'var(--dm-text-dim)' : 'var(--dm-accent)') + ';cursor:' + (similarCount < 2 ? 'default' : 'pointer') + ';font-size:10px;font-weight:500;font-family:inherit;">Edit all ' + Math.max(similarCount, 0) + '</button>' +
-      '</div></div>'
+  // "Select matching layers" — one checkbox: checked hands every matching
+  // element (same tag sharing a class) to multi-select fan-out; the
+  // existing "N selected" badge shows the resulting count.
+  const matchingRow = info && !isPageContext && !isHovering
+    ? '<div style="padding:5px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;">' +
+      '<input type="checkbox" id="dm-matching-layers" data-dm-action="toggle-matching-layers"' + (matchingLayersChecked ? ' checked' : '') + ' style="accent-color:var(--dm-accent);margin:0;cursor:pointer;"/>' +
+      '<label for="dm-matching-layers" title="Selects every layer like this one (same tag, shared class) so your edits apply to all of them" style="font-size:10px;color:var(--dm-text-secondary);cursor:pointer;user-select:none;">Select matching layers</label>' +
+      '</div>'
     : '';
   // Indicator label: "Page" when body/html is the implicit context (no real
   // selection), "Hovering" while hovering, otherwise "Selected".
@@ -6150,7 +6135,7 @@ function renderDesignTab(): string {
     '<div style="padding:6px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;">' +
     indicatorLeft +
     '<span style="font-size:10px;color:var(--dm-text-dim);font-family:SF Mono,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">&lt;' + escapeAttr(tag) + '&gt;</span>' +
-    multiBadge + similarBtn + cssBtn + '</div>' + similarCard;
+    multiBadge + cssBtn + '</div>' + matchingRow;
 
   // Text content editing — show for ANY text-tagged layer (the same set whose
   // Layers icon is the "T"/type glyph). Editing a text element with children
@@ -9130,12 +9115,9 @@ function setupDelegation() {
           if (sid) void saveSectionNote(sid);
           break;
         }
-        case 'toggle-similar':
-          similarOpen = !similarOpen;
-          if (similarOpen) { similarCount = -1; similarIds = []; void fetchSimilar(); }
-          render();
+        case 'toggle-matching-layers':
+          void toggleMatchingLayers((actionBtn as HTMLInputElement).checked);
           break;
-        case 'apply-similar': void applySimilarSelection(); break;
         case 'close-tokens':
           tokensOpen = false;
           render();
@@ -11661,16 +11643,6 @@ function setupDelegation() {
     document.execCommand('insertHTML', false, `<a href="${escapeHtml(href)}">${escapeHtml(url)}</a>`);
     return true;
   }
-
-  // Similarity sensitivity slider — update state and re-count (debounced).
-  root.addEventListener('input', (e) => {
-    const slider = (e.target as HTMLElement).closest<HTMLInputElement>('[data-dm-similar-sensitivity]');
-    if (!slider) return;
-    similarSensitivity = parseInt(slider.value, 10) || 2;
-    similarCount = -1;
-    queueSimilarQuery();
-    render();
-  });
 
   root.addEventListener('input', (e) => {
     const editor = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-richtext]');

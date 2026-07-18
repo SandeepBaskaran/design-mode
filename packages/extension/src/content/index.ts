@@ -35,7 +35,7 @@ import {
   setSelectedIds as setMultiSelectIds,
   refreshOverlays as refreshMultiSelectOverlays,
   toggleSelection as toggleMultiSelectMember,
-  findSimilarElements,
+  findMatchingElements,
 } from './multi-select';
 // Section rearrange — detect top-level sections, reorder with recorded moves
 import { detectSections, reorderSection } from './section-rearrange';
@@ -1766,8 +1766,8 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       sendResponse({ active: isMultiSelectActive(), ids: getMultiSelectIds() });
       break;
     }
-    case 'FIND_SIMILAR': {
-      const ids = msg.elementId ? findSimilarElements(msg.elementId, Number(msg.sensitivity) || 2) : [];
+    case 'FIND_MATCHING': {
+      const ids = msg.elementId ? findMatchingElements(msg.elementId) : [];
       sendResponse({ ids, count: ids.length });
       break;
     }
