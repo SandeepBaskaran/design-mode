@@ -170,6 +170,7 @@ type ColorFormat = 'hex' | 'rgba' | 'hsl';
 let tab: Tab = 'design';
 let settingsOpen = false;
 let helpOpen = false;
+let sendAgentHelpOpen = false;
 let shortcutsOpen = false;
 let contributeOpen = false;
 let fileAccessBlocked = false;
@@ -1617,12 +1618,18 @@ async function revertGroup(groupKey: string) {
   await refreshState();
 }
 
-async function copyPrompt() { const res = await send({ type: 'SP_EXPORT', format: 'markdown', level: 'detailed' }); const output = res.output || res.markdown || ''; if (output) { await navigator.clipboard.writeText(output); const btn = root.querySelector('#dm-copy-prompt-btn'); if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); } } }
+async function copyPrompt() { const res = await send({ type: 'SP_EXPORT', format: 'markdown' }); const output = res.output || res.markdown || ''; if (output) { await navigator.clipboard.writeText(output); const btn = root.querySelector('#dm-copy-prompt-btn'); if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); } } }
 async function sendToAgent() {
-  const res = await send({ type: 'SP_EXPORT', format: 'markdown', level: 'detailed' }); const output = res.output || res.markdown || '';
-  if (mcpState === 'connected') { await send({ type: 'SP_SEND_TO_AGENT', payload: output }); const btn = root.querySelector('#dm-send-agent-btn'); if (btn) { (btn as HTMLElement).textContent = 'Sent!'; setTimeout(() => render(), 1500); } }
-  else if (mcpState === 'running') alert('MCP server is running but no coding agent is connected yet.');
-  else alert('MCP server is not running. Start it with: npm start');
+  await refreshMcpStatus();
+  if (mcpState !== 'connected') { sendAgentHelpOpen = true; render(); return; }
+  const res = await send({ type: 'SP_SEND_TO_AGENT' });
+  if (res?.ok) {
+    const btn = root.querySelector('#dm-send-agent-btn');
+    if (btn) { (btn as HTMLElement).textContent = 'Sent!'; setTimeout(() => render(), 1500); }
+    showCaptureToast('success', 'Staged for your agent — run /design-mode to implement.');
+  } else {
+    showCaptureToast('error', 'Could not reach the agent — check the MCP status and retry.');
+  }
 }
 function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); chrome.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
 // Click on a compact comment row in the changes tab. We expand the row
@@ -5673,17 +5680,15 @@ function renderTabs(): string {
 function renderStickyBottom(): string {
   const hasChanges = styleChanges.length > 0 || textChanges.length > 0 || domChanges.length > 0 || comments.length > 0;
   const copyDis = previewingOriginal || !hasChanges;
-  // Send-to-Agent gating is independent of changes: even if there's
-  // something to send, MCP must be both running and connected to an
-  // agent. The tooltip names the specific blocker so the user knows
-  // whether to start the server (`offline`) or connect a coding agent
-  // (`running`).
-  const sendDis = previewingOriginal || !hasChanges || mcpState !== 'connected';
-  let sendTitle = 'Send these changes to a connected coding agent';
-  if (mcpState === 'offline') sendTitle = 'MCP server is not running. Start it to enable Send to Agent.';
-  else if (mcpState === 'running') sendTitle = 'MCP server is running but no coding agent is connected.';
-  else if (previewingOriginal) sendTitle = 'Disable “Preview original” first.';
+  // Send-to-Agent stays clickable whenever there's something to send —
+  // when no agent is connected yet, the click opens setup instructions
+  // instead of sending. The tooltip previews which of the two it will be.
+  const sendDis = previewingOriginal || !hasChanges;
+  let sendTitle = 'Send these changes to your coding agent';
+  if (previewingOriginal) sendTitle = 'Disable “Preview original” first.';
   else if (!hasChanges) sendTitle = 'No changes to send.';
+  else if (mcpState === 'offline') sendTitle = 'MCP is not connected — click for setup instructions.';
+  else if (mcpState === 'running') sendTitle = 'No coding agent connected yet — click for instructions.';
   const copyTitle = previewingOriginal ? 'Disable “Preview original” first.' : !hasChanges ? 'No changes to copy.' : 'Copy as prompt to clipboard';
   const copyS = 'flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;' +
     (copyDis ? 'background:var(--dm-btn-bg-disabled);border:1px solid var(--dm-btn-border-disabled);color:var(--dm-text-dim);cursor:default;opacity:0.5;pointer-events:none;' : 'background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text-secondary);cursor:pointer;');
@@ -5694,6 +5699,35 @@ function renderStickyBottom(): string {
   return '<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;bottom:0;z-index:10;">' +
     '<button id="dm-copy-prompt-btn" data-dm-action="copy-prompt" title="' + escapeAttr(copyTitle) + '" style="' + copyS + '">' + icon('clipboard', 13) + ' Copy as Prompt</button>' +
     '<button id="dm-send-agent-btn" data-dm-action="send-to-agent"' + (sendDis ? ' disabled aria-disabled="true"' : '') + ' title="' + escapeAttr(sendTitle) + '" style="' + sendS + '">' + icon('send', 13) + ' Send to Agent</button></div>';
+}
+
+// First-run guidance for "Send to Agent": shown when the button is clicked
+// while no agent is connected. The copy is state-specific — `offline` walks
+// through wiring MCP up, `running` means the transport is live but no agent
+// has attached yet.
+function renderSendAgentHelpOverlay(): string {
+  if (!sendAgentHelpOpen) return '';
+  const isCloud = mcpMode === 'cloud' || mcpMode === 'self-hosted';
+  const code = (t: string) => '<code style="font-family:SF Mono,Monaco,monospace;font-size:9px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:3px;padding:1px 4px;">' + t + '</code>';
+  let body: string;
+  if (mcpState === 'running') {
+    body = 'MCP is up, but no coding agent has attached yet. In <b>Settings → MCP</b>, copy the MCP config into your agent (Claude Code, Cursor, …), restart it, then run ' + code('/design-mode') + '.';
+  } else if (isCloud) {
+    body = mcpCloudToken
+      ? 'The cloud relay is unreachable. Check the server URL and token in <b>Settings → MCP</b>, then retry.'
+      : 'Connect once in <b>Settings → MCP</b> (“Connect to Cloud”), copy the MCP config into your agent, restart it, then run ' + code('/design-mode') + '.';
+  } else {
+    body = 'The local companion server isn’t running. Register it with your agent once — ' + code('claude mcp add design-mode -- npm start --prefix &lt;repo&gt;/packages/mcp-local') + ' — then run ' + code('/design-mode') + '; the agent starts the server automatically.';
+  }
+  return '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
+    '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:250px;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
+    '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;display:flex;align-items:center;gap:6px;">' + icon('send', 12) + ' Connect a coding agent</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:10px;line-height:1.6;">' + body + '</div>' +
+    '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-bottom:14px;line-height:1.5;">Once connected, this button stages your changes for the agent — it implements them and marks each one done in the Changes tab.</div>' +
+    '<div style="display:flex;gap:6px;">' +
+    '<button data-dm-action="send-agent-help-close" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Close</button>' +
+    '<button data-dm-action="send-agent-help-settings" style="flex:1;padding:6px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Open MCP settings</button>' +
+    '</div></div></div>';
 }
 
 /* ── Phase 2: Layers Tab ── */
@@ -7818,7 +7852,7 @@ function renderChangesTab(): string {
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '" data-dm-change-prop="' + escapeAttr(c.property) + '"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px ' + indentLeft + 'px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           rowIcon +
-          '<div style="flex:1;min-width:0;">' + innerLabel + '</div>' +
+          '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' + innerLabel + '</div>' +
           changeStatusBadge((c as any).status) +
           '<button data-dm-batch-apply="' + cid + '" title="' + zapTitle + '" style="' + zapStyle + '" aria-label="Batch apply">' + icon('zap', 10) + countBadge + '</button>' +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
@@ -7834,7 +7868,7 @@ function renderChangesTab(): string {
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;margin-top:2px;">' + icon('type', 10) + '</span>' +
-          '<div style="flex:1;min-width:0;">' + inner + '</div>' +
+          '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' + inner + '</div>' +
           changeStatusBadge((c as any).status) +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else if (item.type === 'dom') {
@@ -7858,7 +7892,7 @@ function renderChangesTab(): string {
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           '<span style="color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';display:flex;flex-shrink:0;margin-top:2px;">' + icon(ic[c.action] || 'sparkles', 10) + '</span>' +
-          '<div style="flex:1;min-width:0;">' +
+          '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' +
           '<div style="font-size:10px;color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';">' + c.action.toUpperCase() + ' &lt;' + c.tagName + '&gt;</div>' +
           origLine + destLine +
           '</div>' + changeStatusBadge((c as any).status) + '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
@@ -8486,7 +8520,7 @@ function render() {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative;">' +
       renderHeader() + renderActionRow() + renderCommentCard() + renderTabs() +
       '<div id="dm-tab-body" style="flex:1;overflow-y:auto;overflow-x:hidden;">' + tabContent + '</div>' +
-      renderStickyBottom() + renderComputedCssOverlay() + renderCaptureToast() + '</div>';
+      renderStickyBottom() + renderSendAgentHelpOverlay() + renderComputedCssOverlay() + renderCaptureToast() + '</div>';
   }
 
   // Shortcuts popover floats above whichever view is active.
@@ -8636,6 +8670,8 @@ function setupDelegation() {
         }
         case 'copy-prompt': copyPrompt(); break;
         case 'send-to-agent': sendToAgent(); break;
+        case 'send-agent-help-close': sendAgentHelpOpen = false; render(); break;
+        case 'send-agent-help-settings': sendAgentHelpOpen = false; helpOpen = false; contributeOpen = false; settingsOpen = true; render(); break;
         case 'toggle-theme': toggleTheme(); break;
         case 'submit-comment': submitComment(); break;
         case 'cancel-comment': cancelComment(); break;

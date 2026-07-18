@@ -355,9 +355,11 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 10.7 | DOM change format | Duplicate / delete / move an element | Bullet reads `- {label} duplicated` (or `deleted` / `moved` / `inserted`) |
 | 10.8 | Comment lines | Add a comment | Bullet reads `- note on {selector}: {text}` |
 | 10.9 | Empty state | Copy as Prompt with no changes | Output is the header line + `(no changes recorded yet)` |
-| 10.10 | Send to Agent — connected | MCP connected | Button shows "Sent!" briefly |
-| 10.11 | Send to Agent — running, no agent | Server running but no agent | Toast / alert: "MCP running but no agent connected" |
-| 10.12 | Send to Agent — local offline | No local server in Local mode | Alert: "MCP server is not running. Start it with: `npm start` in `packages/mcp-local`" |
+| 10.10 | Send to Agent — connected | MCP connected → click Send to Agent | Button shows "Sent!" + success toast; agent's next `get_changes` includes a `handoff` field with `requestedAt` / `pageUrl` |
+| 10.11 | Send to Agent — running, no agent | Server running but no agent → click | Instructions overlay: "no coding agent has attached yet", points to Settings → MCP + `/design-mode`; "Open MCP settings" button lands on Settings |
+| 10.12 | Send to Agent — local offline | No local server in Local mode → click | Instructions overlay with `claude mcp add design-mode …` registration hint; button styled enabled (accent), not greyed out |
+| 10.13 | Send to Agent — cloud, no token | Cloud mode without token → click | Instructions overlay pointing to Settings → MCP "Connect to Cloud" |
+| 10.14 | Handoff cleared | Send to Agent → Clear All → agent calls `get_changes` | No `handoff` field in the response |
 
 ---
 

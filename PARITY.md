@@ -733,7 +733,7 @@ Sticky bottom (panel-wide):
 | Button | What |
 |---|---|
 | **Copy Prompt** | Builds a markdown prompt summarising every tracked change including file:line / framework hints from source detection. Disabled when View Original is on. |
-| **Send to Agent** | Pushes the same payload over the MCP `ws://localhost:9960` channel. Disabled when MCP is offline / no agent connected; tooltip names the specific blocker. |
+| **Send to Agent** | Stages a handoff marker over the MCP transport; the agent's next `get_changes` sees it as the "ready to implement" signal. When MCP is offline or no agent is connected, the click opens setup instructions instead of sending. |
 
 ### Planned
 
