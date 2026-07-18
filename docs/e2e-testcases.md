@@ -474,22 +474,15 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 
 ---
 
-## Phase 17 — Section rearrange + Select similar
+## Phase 17 — Matching layers
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
-| 17.1 | Section detection | On a landing-style page, click the `rows3` (Rearrange sections) toolbar icon | Full-panel list of the page's top-level sections, each with label, layout line (`flex · column`, `grid · 3 cols`, `stack`), block count, height |
-| 17.2 | Arrow reorder | Click the ↓ arrow on the first section | Page reorders live; row moves down; Changes tab gains a `MOVE` DOM change with from/to positions |
-| 17.3 | Drag reorder | Drag a row by its grip onto another row | Same as 17.2 via drag; dragged row dims while dragging |
-| 17.4 | Reorder is undoable | After 17.2, press Undo | Section returns to its original slot; Changes row disappears |
-| 17.5 | Rearrange survives reload | Reorder a section, reload the page | Move replays from session storage; Changes tab still lists it |
-| 17.6 | Rearrange note | Click the sticky-note icon on a section, type a note, **Pin note** | Numbered comment pin appears on the section; note listed under Comments in the Changes tab; included in Copy as Prompt + agent `get_changes` |
-| 17.7 | Re-detect | Click the refresh icon in the Sections header | List re-scans (e.g. after route navigation in an SPA) |
-| 17.8 | Matching layers — check | Select a repeated element (card title, button); tick **Select matching layers** under the Selected row | Dashed overlays on all matches; "N selected" badge appears; success toast names the count |
-| 17.9 | Matching layers — fan-out | With the box ticked, change a style (e.g. color) | Every match updates; Changes tab shows one row per element (grouped) |
-| 17.10 | Matching layers — uncheck | Untick the box | Overlays clear; back to single selection |
-| 17.11 | Matching layers — reset on reselect | Tick the box, then select a different element | Checkbox resets to unticked for the new element |
-| 17.12 | Matching layers — no matches | Select a unique element (e.g. the only `h1`) and tick | Error toast "No other matching layers"; checkbox stays unticked |
+| 17.1 | Check | Select a repeated element (card title, button); tick **Matching layers** in the Selected row (left of the CSS button) | Dashed overlays on all matches; "N selected" badge appears; success toast names the count |
+| 17.2 | Fan-out | With the box ticked, change a style (e.g. color) | Every match updates; Changes tab shows one row per element (grouped) |
+| 17.3 | Uncheck | Untick the box | Overlays clear; back to single selection |
+| 17.4 | Reset on reselect | Tick the box, then select a different element | Checkbox resets to unticked for the new element |
+| 17.5 | No matches | Select a unique element (e.g. the only `h1`) and tick | Error toast "No other matching layers"; checkbox stays unticked |
 
 ---
 
