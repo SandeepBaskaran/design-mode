@@ -6,7 +6,7 @@
 // and a source-files block so the agent opens the right files.
 // ============================================================
 
-import { getElementById, generateSelector } from './helpers';
+import { getElementById, generateSelector, describeElement } from './helpers';
 import { getStyleChanges, getTextChanges, getDomChanges } from './change-tracker';
 import { getSourceLocation } from './source-detection';
 import type { CommentData } from './comments';
@@ -58,7 +58,9 @@ function gatherElementContext(elementId: string, selector: string): ElementConte
     const cls = (typeof el.className === 'string' && el.className.trim())
       ? '.' + el.className.trim().split(/\s+/)[0]
       : '';
-    smartLabel = id || (tagName + cls) || selector;
+    // Class-less markup would give a bare tag ("div") — fall back to the
+    // recognition label (text snippet / accessible name / position).
+    smartLabel = id || (cls ? tagName + cls : describeElement(el));
     // Regenerate from the live element: recorded selectors are positional
     // (nth-of-type) and go stale once anything is reordered.
     selector = generateSelector(el);
