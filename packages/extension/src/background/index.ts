@@ -305,7 +305,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'SP_APPLY_STYLE') {
-    forwardToPinnedTab({ type: 'APPLY_STYLE', property: msg.property, value: msg.value }, sendResponse);
+    forwardToPinnedTab({ type: 'APPLY_STYLE', property: msg.property, value: msg.value, state: msg.state }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_FORCE_STATE') {
+    forwardToPinnedTab({ type: 'FORCE_STATE', elementId: msg.elementId, state: msg.state, on: msg.on }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_REPLAY_APPEAR') {
+    forwardToPinnedTab({ type: 'REPLAY_APPEAR', elementId: msg.elementId }, sendResponse);
     return true;
   }
   if (msg.type === 'SP_SET_LAYOUT_GUIDES') {

@@ -205,7 +205,15 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 3.11 | Z-index strict numeric | Type `10.5` in z-index | Allowed (2 decimals); type letters → blocked |
 | 3.12 | Opacity / transform | Set `opacity: 0.5`, transform `rotate(3deg)` | Both apply visually |
 | 3.13 | Box shadow builder | Use shadow inputs | Shadow appears; values reflect in Changes tab |
-| 3.14 | Animation easing visualizer | Edit a `transition` value, click the curve preview icon | Bézier panel opens with adjustable control points; spring mode toggles to stiffness / damping / mass sliders |
+| 3.14 | Animation easing visualizer | In Motion → Advanced, edit a `transition` value, click the curve preview icon | Bézier panel opens with adjustable control points; spring mode toggles to stiffness / damping / mass sliders |
+| 3.15 | Motion: add Hover interaction | Motion section → **When:** → **Hover** | A Hover card appears seeded with a Fade change + shared Curve; hovering the element on the page fades it |
+| 3.16 | Motion: real preview | On the Hover card, click ▶ Preview | Element plays the transition (forced `.dm-force-hover`); button toggles to pause; click again to stop |
+| 3.17 | Motion: add change preset | On a Hover card, click the **Lift** chip | A `translate` change row is added; hovering lifts the element |
+| 3.18 | Motion: Appear (@starting-style) | **When:** → **Appear**, then click ▶ | Element re-mounts and animates in from the seeded start state |
+| 3.19 | Motion: Loop | **When:** → **Loop**, pick `dm-pulse` | Element pulses continuously; ▶ restarts the animation |
+| 3.20 | Motion: Scroll | **When:** → **Scroll** | `animation-timeline: view()` seeded; scrolling the element through the viewport drives the animation |
+| 3.21 | Motion: variant export | Add a Hover interaction, open Copy CSS | Output has a base rule + a real `.selector:hover { … }` rule (SCSS same; Tailwind uses `hover:`) |
+| 3.22 | Motion: Advanced disclosure | Toggle the Motion **sliders** icon | Raw Transition / Animation / Transform / Motion-path / View-transition / Scroll-driven editors appear below the cards |
 
 ---
 

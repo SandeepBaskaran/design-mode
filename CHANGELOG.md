@@ -6,6 +6,38 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Motion interactions (trigger-first).** The Motion section now leads
+  with interaction cards that make the _trigger_ explicit — the concept
+  raw CSS transitions leave implicit. Six triggers: **Hover / Press /
+  Focus** (animate to a target while in that state), **Appear** (animate
+  from a start state on mount), **Loop** (infinite keyframe animation),
+  and **Scroll** (scroll-driven timeline). Each card has change presets
+  (Fade / Lift / Scale / Background), a shared easing **Curve**, a
+  plain-English summary, and a **Preview** that plays the real
+  interaction. The raw per-property editors move under a new
+  Motion → **Advanced** disclosure.
+
+### Changed
+
+- **Override engine now emits state-variant rules.** `StyleChange` gained
+  an optional `state` field; the content-side override sheet can emit
+  `[data-dm-id]:hover { … }` and `@starting-style` blocks in addition to
+  the base rule. Exports (CSS / SCSS / Tailwind / JSX) and the agent
+  prompt are state-aware — CSS/SCSS emit real pseudo-class /
+  `@starting-style` rules, Tailwind uses `hover:` variants, and the
+  prompt tags each change with its trigger.
+
+### Notes
+
+- Motion covers the animation subset of Figma prototyping only; CSS has
+  no equivalent for navigate / drag / after-delay chaining / overlays.
+  `@starting-style` and scroll-driven timelines require Chrome 115+/117+;
+  exported CSS inherits that browser floor.
+
 ## [1.8.0] — 2026-07-08
 
 ### Added

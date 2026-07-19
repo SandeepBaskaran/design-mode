@@ -134,6 +134,8 @@ type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
 interface StyleChange {
   id?: string; elementId: string; selector: string;
   property: string; oldValue: string; newValue: string; timestamp?: number;
+  // State-variant suffix for Motion interactions (':hover', '@starting', …).
+  state?: string;
   // Optional grouping envelope. Multiple StyleChanges sharing a `groupId`
   // collapse into a single row in the Changes tab. `groupKind` shapes the
   // row label (`PRESET`, `APPLIED to N`, `HIDE`). When `groupKind` is set
@@ -387,6 +389,61 @@ let sidesPopoverOpen = false;
 let strokeStylePopoverOpen = false;
 let effectsMenuOpen = false;
 let motionMenuOpen = false;
+// Which interaction is being force-previewed (the .dm-force-* class is on
+// the page element). Null when nothing is previewing. Panel-only state.
+let motionForcedTrigger: string | null = null;
+// Motion interaction triggers → the CSS state-variant selector the target
+// props are written into. Hover/press/focus are pseudo-classes; 'appear'
+// uses the @starting-style sentinel handled in the override engine.
+const MOTION_TRIGGER_STATE: Record<string, string> = {
+  hover: ':hover',
+  press: ':active',
+  focus: ':focus-visible',
+  appear: '@starting',
+};
+// State-variant triggers (target values written into a `:state` rule).
+// `appear` uses the @starting-style sentinel and carries "from" values —
+// the element animates from those to its natural resting state on mount.
+const MOTION_TRIGGERS: Array<{ trigger: string; state: string; label: string; verb: string; icon: keyof typeof icons }> = [
+  { trigger: 'hover',  state: ':hover',         label: 'Hover',  verb: 'On hover',  icon: 'mousePointer2' },
+  { trigger: 'press',  state: ':active',        label: 'Press',  verb: 'On press',  icon: 'move' },
+  { trigger: 'focus',  state: ':focus-visible', label: 'Focus',  verb: 'On focus',  icon: 'crosshair' },
+  { trigger: 'appear', state: '@starting',      label: 'Appear', verb: 'On appear', icon: 'sparkles' },
+];
+const MOTION_STATE_TRIGGER: Record<string, typeof MOTION_TRIGGERS[number]> =
+  Object.fromEntries(MOTION_TRIGGERS.map(t => [t.state, t]));
+type MotionPreset = { prop: string; value: string; label: string; icon: keyof typeof icons };
+// Interaction / press / focus animate TO a target; appear animates FROM a
+// start state, so the same gestures need different seed values per family.
+const MOTION_CHANGE_PRESETS: Record<string, MotionPreset> = {
+  fade:  { prop: 'opacity',         value: '0.6',       label: 'Fade',       icon: 'blend' },
+  lift:  { prop: 'translate',       value: '0px -8px',  label: 'Lift',       icon: 'move' },
+  scale: { prop: 'scale',           value: '1.05',      label: 'Scale',      icon: 'maximize' },
+  color: { prop: 'backgroundColor', value: '#3b82f6',   label: 'Background', icon: 'droplet' },
+};
+const MOTION_APPEAR_PRESETS: Record<string, MotionPreset> = {
+  fade:  { prop: 'opacity',   value: '0',        label: 'Fade in',  icon: 'blend' },
+  slide: { prop: 'translate', value: '0px 12px', label: 'Slide up', icon: 'move' },
+  scale: { prop: 'scale',     value: '0.9',      label: 'Scale in', icon: 'maximize' },
+};
+function motionPresetsFor(trigger: string): Record<string, MotionPreset> {
+  return trigger === 'appear' ? MOTION_APPEAR_PRESETS : MOTION_CHANGE_PRESETS;
+}
+function motionChangeLabel(prop: string): string {
+  const hit = [...Object.values(MOTION_CHANGE_PRESETS), ...Object.values(MOTION_APPEAR_PRESETS)].find(p => p.prop === prop);
+  return hit ? hit.label : prop;
+}
+// Built-in @keyframes offered in the Loop / Scroll cards (from the shared
+// keyframes library — names must match BUILTIN_KEYFRAMES in change-tracker).
+const MOTION_KEYFRAME_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'dm-fade-in', label: 'Fade in' },
+  { value: 'dm-slide-up', label: 'Slide up' },
+  { value: 'dm-pulse', label: 'Pulse' },
+  { value: 'dm-bounce', label: 'Bounce' },
+  { value: 'dm-spin', label: 'Spin' },
+  { value: 'dm-wiggle', label: 'Wiggle' },
+  { value: 'dm-ping', label: 'Ping' },
+];
 let fillAddOpen = false;
 let expandedFillIdx: number | null = null;
 let expandedStrokeIdx: number | null = null;
@@ -935,6 +992,18 @@ async function applyStyle(property: string, value: string) {
   // section's UI mode-agnostic — fields write through one helper.
   if (property === '__stroke_color' || property === '__stroke_weight' || property === '__stroke_style') {
     applyStrokeProperty(property, value);
+    return;
+  }
+  // Motion interaction target: `__motion_<trigger>__<cssProp>` writes the
+  // CSS prop into a state-variant rule (`:hover` etc.) rather than the base
+  // rule, so it only applies while that interaction state is active.
+  const motionMatch = property.match(/^__motion_([a-z]+)__(.+)$/);
+  if (motionMatch) {
+    const state = MOTION_TRIGGER_STATE[motionMatch[1]];
+    if (state) {
+      const res = await send({ type: 'SP_APPLY_STYLE', property: motionMatch[2], value, state });
+      if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
+    }
     return;
   }
   // Margin / padding shorthand from the uniform field → write the four
@@ -1707,6 +1776,13 @@ chrome.runtime.onMessage.addListener((msg) => {
     return;
   }
   if (msg.type === 'ELEMENT_SELECTED') {
+    // Clear a lingering Motion preview: the forced `.dm-force-*` class was
+    // applied to the previously-selected element and must come off when the
+    // selection moves, or it stays stuck in that state on the page.
+    if (motionForcedTrigger && info?.id) {
+      send({ type: 'SP_FORCE_STATE', elementId: info.id, state: MOTION_TRIGGER_STATE[motionForcedTrigger] || '', on: false });
+      motionForcedTrigger = null;
+    }
     info = msg.payload; hoverInfo = null; commentMode = false;
     hydrateLayoutGuidesFromPayload(info);
     contrastSettingsOpen = false;
@@ -4942,6 +5018,162 @@ function renderAnimationEditor(s: Record<string, string>): string {
     '</div>';
 }
 
+// ── Motion interactions (trigger-first UI) ─────────────────────────────
+// Derives interaction cards from the element's state-variant style changes.
+// Each distinct state (`:hover`, …) present on the element becomes one card.
+function motionInteractionsFor(elId: string): Array<{ trigger: typeof MOTION_TRIGGERS[number]; changes: StyleChange[] }> {
+  if (!elId) return [];
+  const byState = new Map<string, StyleChange[]>();
+  for (const c of styleChanges) {
+    if (c.elementId !== elId || !c.state) continue;
+    if (!byState.has(c.state)) byState.set(c.state, []);
+    byState.get(c.state)!.push(c);
+  }
+  const out: Array<{ trigger: typeof MOTION_TRIGGERS[number]; changes: StyleChange[] }> = [];
+  for (const t of MOTION_TRIGGERS) {
+    const changes = byState.get(t.state);
+    if (changes && changes.length) out.push({ trigger: t, changes });
+  }
+  return out;
+}
+
+function motionInteractionSummary(verb: string, changes: StyleChange[], dur: string, timing: string): string {
+  const parts = changes.map(c => motionChangeLabel(c.property).toLowerCase() + ' → ' + c.newValue);
+  return verb + ' → ' + parts.join(', ') + ' · ' + dur + ' ' + timing;
+}
+
+// Shared card chrome for the trigger cards.
+function motionCardHeader(iconName: keyof typeof icons, verb: string, trigger: string, opts: { forced?: boolean; preview?: boolean }): string {
+  const previewBtn = opts.preview
+    ? '<button class="dm-fill-action" data-dm-motion-preview="' + trigger + '" title="' + (opts.forced ? 'Stop previewing' : 'Preview') + '" data-active="' + (opts.forced ? 'true' : 'false') + '">' + icon(opts.forced ? 'circlePause' : 'play', 12) + '</button>'
+    : '';
+  return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
+    '<span style="color:var(--dm-text-secondary);display:flex;">' + icon(iconName, 13) + '</span>' +
+    '<span style="font-size:11px;font-weight:600;color:var(--dm-text);flex:1;">' + verb + '</span>' +
+    previewBtn +
+    '<button class="dm-fill-action" data-dm-motion-remove-trigger="' + trigger + '" title="Remove" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>' +
+    '</div>';
+}
+function motionCardWrap(inner: string, active: boolean): string {
+  return '<div style="background:var(--dm-bg-secondary);border:1px solid ' + (active ? 'var(--dm-accent-border)' : 'var(--dm-separator)') + ';border-radius:6px;padding:8px;margin-bottom:8px;">' + inner + '</div>';
+}
+
+function renderMotionInteractionCard(t: typeof MOTION_TRIGGERS[number], changes: StyleChange[], s: Record<string, string>): string {
+  const dur = (s.transitionDuration || '0.2s').split(',')[0].trim();
+  const timing = (s.transitionTimingFunction || 'ease').split(',')[0].trim();
+  const isForced = motionForcedTrigger === t.trigger;
+  // Appear can't be forced via a class (@starting-style fires on mount), so
+  // its preview re-inserts the element instead — still a play button.
+  const changeRow = (c: StyleChange): string => {
+    const vprop = '__motion_' + t.trigger + '__' + c.property;
+    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
+      '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">' + escapeAttr(motionChangeLabel(c.property)) + (t.trigger === 'appear' ? ' from' : '') + '</span>' +
+      '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + vprop + '" value="' + escapeAttr(c.newValue) + '" spellcheck="false" style="flex:1;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/>' +
+      '<button class="dm-fill-action" data-dm-motion-remove-change="' + t.trigger + ':' + escapeAttr(c.property) + '" title="Remove this change" style="color:var(--dm-danger);flex-shrink:0;">' + icon('x', 11) + '</button>' +
+      '</div>';
+  };
+
+  const present = new Set(changes.map(c => c.property));
+  const chips = Object.entries(motionPresetsFor(t.trigger))
+    .filter(([, p]) => !present.has(p.prop))
+    .map(([key, p]) =>
+      '<button class="dm-btn" data-dm-motion-add-change="' + t.trigger + ':' + key + '" title="Animate ' + escapeAttr(p.label.toLowerCase()) + '" style="padding:3px 7px;font-size:9px;display:inline-flex;align-items:center;gap:3px;">' + icon(p.icon, 10) + escapeAttr(p.label) + '</button>')
+    .join('');
+
+  const curve = '<div style="display:flex;align-items:center;gap:6px;margin-top:8px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Curve</span>' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="transitionDuration" data-dm-numeric="1" data-dm-unit="s" inputmode="decimal" value="' + escapeAttr(parseFloat(dur).toString()) + '" title="Duration (seconds)" style="width:52px;flex-shrink:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/>' +
+    '<select class="dm-select" data-dm-prop="transitionTimingFunction" style="flex:1;min-width:0;font-size:10px;">' +
+      (TIMING_FUNCTION_OPTIONS as readonly string[]).map(o => '<option value="' + o + '"' + (o === timing ? ' selected' : '') + '>' + o + '</option>').join('') +
+    '</select>' +
+    '</div>';
+
+  const summary = '<div style="font-size:10px;color:var(--dm-text-dim);margin-top:8px;font-style:italic;">' + escapeAttr(motionInteractionSummary(t.verb, changes, dur, timing)) + '</div>';
+
+  return motionCardWrap(
+    motionCardHeader(t.icon, t.verb, t.trigger, { forced: isForced, preview: true }) +
+    changes.map(changeRow).join('') +
+    (chips ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">' + chips + '</div>' : '') +
+    curve + summary,
+    isForced,
+  );
+}
+
+// Loop card — an infinite keyframe animation (the timeline family). Writes
+// base animation-* longhands; reuses the shared built-in keyframes.
+function renderMotionLoopCard(s: Record<string, string>): string {
+  const name = (s.animationName || 'none').split(',')[0].trim();
+  const dur = (s.animationDuration || '1s').split(',')[0].trim();
+  const picker = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Animation</span>' +
+    '<select class="dm-select" data-dm-prop="animationName" style="flex:1;min-width:0;font-size:10px;">' +
+      MOTION_KEYFRAME_OPTIONS.map(o => '<option value="' + o.value + '"' + (o.value === name ? ' selected' : '') + '>' + o.label + '</option>').join('') +
+    '</select></div>';
+  const durRow = '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Duration</span>' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="animationDuration" data-dm-numeric="1" data-dm-unit="s" inputmode="decimal" value="' + escapeAttr(parseFloat(dur).toString()) + '" style="width:52px;flex-shrink:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/>' +
+    '<span style="font-size:10px;color:var(--dm-text-dim);align-self:center;">· repeats forever</span></div>';
+  return motionCardWrap(
+    motionCardHeader('activity', 'Loop', 'loop', { preview: true }) + picker + durRow,
+    false,
+  );
+}
+
+// Scroll card — binds a keyframe animation's progress to scroll position via
+// a view() timeline. No time-preview (it plays as you scroll the page).
+function renderMotionScrollCard(s: Record<string, string>): string {
+  const name = ((s as any).animationName || 'none').split(',')[0].trim();
+  const range = ((s as any).animationRange || 'entry 0% cover 40%').trim();
+  const picker = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Animation</span>' +
+    '<select class="dm-select" data-dm-prop="animationName" style="flex:1;min-width:0;font-size:10px;">' +
+      MOTION_KEYFRAME_OPTIONS.map(o => '<option value="' + o.value + '"' + (o.value === name ? ' selected' : '') + '>' + o.label + '</option>').join('') +
+    '</select></div>';
+  const rangeRow = '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Range</span>' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="animationRange" value="' + escapeAttr(range) + '" spellcheck="false" title="Scroll range that drives the animation, e.g. &quot;entry 0% cover 40%&quot;" style="flex:1;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/></div>';
+  const note = '<div style="font-size:10px;color:var(--dm-text-dim);margin-top:8px;font-style:italic;">Plays as this element scrolls through the viewport (Chrome 115+).</div>';
+  return motionCardWrap(
+    motionCardHeader('arrowUpDown', 'On scroll', 'scroll', { preview: false }) + picker + rangeRow + note,
+    false,
+  );
+}
+
+function motionLoopSet(s: Record<string, string>): boolean {
+  const name = (s.animationName || 'none').split(',')[0].trim();
+  const iter = (s.animationIterationCount || '1').split(',')[0].trim();
+  const timeline = ((s as any).animationTimeline || 'auto').trim();
+  return name !== 'none' && name !== '' && iter === 'infinite' && (timeline === 'auto' || timeline === '');
+}
+function motionScrollSet(s: Record<string, string>): boolean {
+  const timeline = ((s as any).animationTimeline || 'auto').trim();
+  return timeline !== 'auto' && timeline !== '';
+}
+
+function renderMotionInteractions(s: Record<string, string>, elId: string): string {
+  const interactions = motionInteractionsFor(elId);
+  const cards = interactions.map(i => renderMotionInteractionCard(i.trigger, i.changes, s)).join('');
+  const loopSet = motionLoopSet(s);
+  const scrollSet = motionScrollSet(s);
+  const timelineCards = (scrollSet ? renderMotionScrollCard(s) : '') + (loopSet ? renderMotionLoopCard(s) : '');
+  const used = new Set<string>(interactions.map(i => i.trigger.trigger));
+  if (loopSet) used.add('loop');
+  if (scrollSet) used.add('scroll');
+  const addDefs: Array<{ trigger: string; label: string; icon: keyof typeof icons }> = [
+    ...MOTION_TRIGGERS.map(t => ({ trigger: t.trigger, label: t.label, icon: t.icon })),
+    { trigger: 'loop', label: 'Loop', icon: 'activity' },
+    { trigger: 'scroll', label: 'Scroll', icon: 'arrowUpDown' },
+  ];
+  const addChips = addDefs.filter(t => !used.has(t.trigger)).map(t =>
+    '<button class="dm-btn" data-dm-motion-add-trigger="' + t.trigger + '" title="Animate ' + t.label + '" style="padding:4px 8px;font-size:10px;display:inline-flex;align-items:center;gap:4px;">' + icon(t.icon, 11) + t.label + '</button>').join('');
+  const anyCard = cards || timelineCards;
+  const addRow = addChips
+    ? '<div style="display:flex;flex-wrap:wrap;gap:5px;' + (anyCard ? 'margin-top:2px;' : '') + '">' +
+      '<span style="font-size:10px;color:var(--dm-text-dim);align-self:center;margin-right:2px;">When:</span>' + addChips + '</div>'
+    : '';
+  return cards + timelineCards + addRow;
+}
+
 /* ── v1.2: Curve math helpers ── */
 function sampleBezier(x1: number, y1: number, x2: number, y2: number, n = 40): {x: number; y: number}[] {
   function b(t: number, p0: number, p1: number, p2: number, p3: number): number {
@@ -6342,7 +6574,7 @@ function renderDesignTab(): string {
   // Freeze toggle lives in the Motion section header (moved out of the action
   // row). Page-wide: pauses every animation / transition / video on the page.
   const freezeBtn = '<button class="dm-section-action" data-dm-action="toggle-freeze" data-active="' + (animationsFrozen ? 'true' : 'false') + '" title="' + (animationsFrozen ? 'Resume all motion on the page' : 'Pause every animation, transition and video on the page') + '">' + icon(animationsFrozen ? 'circlePlay' : 'circlePause', 12) + '</button>';
-  const motionActionsHtml = freezeBtn + motionAddMenuTrigger(motionMenuOpen);
+  const motionActionsHtml = freezeBtn + advancedToggleBtn('motion', !!advancedOpen.motion) + motionAddMenuTrigger(motionMenuOpen);
 
   // Position content \u2014 laid out on a 12-col grid:
   //   \u2022 alignment row: 6 buttons \u00d7 2 cols
@@ -7247,18 +7479,26 @@ function renderDesignTab(): string {
     return '<div data-dm-effect-row="' + idx + '" data-dm-effect-id="' + escapeAttr(entry.id) + '" data-dm-effect-chain="' + ((entry as any).chain || '') + '" draggable="true">' + head + '</div>';
   }).join('');
 
-  // Motion subsection \u2014 keeps the existing per-property editors.
+  // Motion subsection. Trigger-first interaction cards are the primary UI;
+  // the raw transition / animation / transform / etc. editors move into an
+  // Advanced disclosure for power users (Phase 5 absorption).
   const motionPieces: string[] = [];
-  if (hasTransition) motionPieces.push(
+  const motionRawPieces: string[] = [];
+  // Interaction cards + the "When:" add-row (always rendered so a trigger
+  // can be added even before any interaction exists).
+  const motionElId = info?.id || '';
+  const interactionsHtml = renderMotionInteractions(s, motionElId);
+  if (interactionsHtml) motionPieces.push(interactionsHtml);
+  if (hasTransition) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;color:var(--dm-text-muted);"><span>' + icon('play', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Transition</span></div>' +
     renderTransitionEditor(s) +
     (vizProp === 'transition' ? renderVizPanel() : '')
   );
-  if (hasAnimation) motionPieces.push(
+  if (hasAnimation) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('film', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Animation</span></div>' +
     renderAnimationEditor(s)
   );
-  if (transformIsSet) motionPieces.push(
+  if (transformIsSet) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('move3d', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Transform</span></div>' +
     renderTransformComponents(s)
   );
@@ -7267,7 +7507,7 @@ function renderDesignTab(): string {
   // "Motion path" preset that seeds it. CSS-native equivalent of SVG
   // <animateMotion>.
   const motionPathSet = (((s as any).offsetPath || 'none') !== 'none' && (s as any).offsetPath !== '');
-  if (motionPathSet) motionPieces.push(
+  if (motionPathSet) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('compass', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Motion path</span></div>' +
     grid12([
       { span: 12, content: inp('Path', 'offsetPath', (s as any).offsetPath || 'none', '') },
@@ -7291,7 +7531,7 @@ function renderDesignTab(): string {
   const vtName = ((s as any).viewTransitionName || 'none').trim();
   const vtClass = ((s as any).viewTransitionClass || 'none').trim();
   const viewTransitionSet = vtName !== 'none' && vtName !== '' || vtClass !== 'none' && vtClass !== '';
-  if (viewTransitionSet) motionPieces.push(
+  if (viewTransitionSet) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('shuffle', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">View transition</span></div>' +
     grid12([
       { span: 6, content: inp('Name', 'viewTransitionName', vtName === 'none' ? '' : vtName, '') },
@@ -7308,7 +7548,7 @@ function renderDesignTab(): string {
   const sdAnyScrollTl = (((s as any).scrollTimelineName || 'none') !== 'none' && (s as any).scrollTimelineName !== '');
   const sdAnyViewTl   = (((s as any).viewTimelineName || 'none') !== 'none' && (s as any).viewTimelineName !== '');
   const scrollDrivenSet = sdAnyTimeline || sdAnyScrollTl || sdAnyViewTl;
-  if (scrollDrivenSet) motionPieces.push(
+  if (scrollDrivenSet) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('arrowUpDown', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Scroll-driven animation</span></div>' +
     sub('Animation timeline') +
     grid12([
@@ -7336,12 +7576,16 @@ function renderDesignTab(): string {
       '<button class="dm-btn" data-dm-effect-action="clear-scroll-driven" title="Reset all scroll/view-timeline properties" style="padding:3px 8px;font-size:9px;">Clear</button>' +
     '</div>'
   );
-  // Motion lives in its own section now (rendered below Effects). The
-  // pieces array carries each editor; if nothing is set the section
-  // shows an empty hint and the + menu seeds the first kind.
-  const motionContent = motionPieces.length
-    ? motionPieces.join('')
-    : '<div style="font-size:11px;color:var(--dm-text-dim);text-align:center;padding:14px 0;">Click + to add motion.</div>';
+  // Motion lives in its own section (rendered below Effects). Interaction
+  // cards + the "When:" add-row are always present; the raw CSS editors sit
+  // under an Advanced disclosure so the everyday surface stays simple.
+  const motionAdvOpen = !!advancedOpen.motion;
+  const motionAdvancedHtml = motionRawPieces.length
+    ? advancedDisclosure('motion', motionAdvOpen,
+        '<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--dm-text-dim);margin-bottom:8px;">Advanced (raw CSS)</div>' +
+        motionRawPieces.join(''))
+    : '';
+  const motionContent = motionPieces.join('') + motionAdvancedHtml;
 
   const effectsContent = effectEntries.length > 0
     ? effectRows
@@ -10590,8 +10834,111 @@ function setupDelegation() {
           applyStyle('animation', 'dm-fade-in 1s linear both');
         }
       }
+      // Raw motion kinds now live under the Motion → Advanced disclosure;
+      // open it so the seeded editor is visible instead of silently hidden.
+      if (['transition','animation','transform','motion-path','view-transition','scroll-driven'].includes(kind)) {
+        advancedOpen.motion = true;
+      }
       effectsMenuOpen = false;
       motionMenuOpen = false;
+      return;
+    }
+
+    // ── Motion interactions (trigger-first cards) ──────────────────────
+    // Add a trigger: seed the base transition curve + a default Fade change
+    // so the card appears with something concrete to tweak.
+    const motionAddTriggerBtn = target.closest<HTMLElement>('[data-dm-motion-add-trigger]');
+    if (motionAddTriggerBtn) {
+      e.stopPropagation();
+      const trig = motionAddTriggerBtn.dataset.dmMotionAddTrigger!;
+      const s = info?.computedStyles || {};
+      if (trig === 'loop') {
+        applyStyle('animationName', 'dm-pulse');
+        applyStyle('animationDuration', '1s');
+        applyStyle('animationTimingFunction', 'ease-in-out');
+        applyStyle('animationIterationCount', 'infinite');
+      } else if (trig === 'scroll') {
+        applyStyle('animationName', 'dm-fade-in');
+        applyStyle('animationDuration', '1s');
+        applyStyle('animationFillMode', 'both');
+        applyStyle('animationTimeline', 'view()');
+        applyStyle('animationRange', 'entry 0% cover 40%');
+      } else {
+        // State-transition family (hover/press/focus/appear). Seed the base
+        // transition only if absent so a second trigger shares the curve.
+        if ((s.transitionDuration || '0s').split(',')[0].trim() === '0s') {
+          applyStyle('transitionProperty', 'all');
+          applyStyle('transitionDuration', '0.2s');
+          applyStyle('transitionTimingFunction', 'ease');
+        }
+        // Appear needs allow-discrete so an @starting-style transition fires.
+        if (trig === 'appear') applyStyle('transitionBehavior', 'allow-discrete');
+        const seed = motionPresetsFor(trig).fade;
+        applyStyle('__motion_' + trig + '__' + seed.prop, seed.value);
+      }
+      return;
+    }
+    // Add a change preset to an existing trigger card.
+    const motionAddChangeBtn = target.closest<HTMLElement>('[data-dm-motion-add-change]');
+    if (motionAddChangeBtn) {
+      e.stopPropagation();
+      const [trig, key] = motionAddChangeBtn.dataset.dmMotionAddChange!.split(':');
+      const preset = motionPresetsFor(trig)[key];
+      if (preset) applyStyle('__motion_' + trig + '__' + preset.prop, preset.value);
+      return;
+    }
+    // Remove one change from a trigger card ('' clears the variant rule).
+    const motionRemoveChangeBtn = target.closest<HTMLElement>('[data-dm-motion-remove-change]');
+    if (motionRemoveChangeBtn) {
+      e.stopPropagation();
+      const [trig, prop] = motionRemoveChangeBtn.dataset.dmMotionRemoveChange!.split(':');
+      applyStyle('__motion_' + trig + '__' + prop, '');
+      return;
+    }
+    // Remove a whole trigger. State-family clears its variant changes; the
+    // timeline family (loop/scroll) resets the base animation longhands.
+    const motionRemoveTriggerBtn = target.closest<HTMLElement>('[data-dm-motion-remove-trigger]');
+    if (motionRemoveTriggerBtn) {
+      e.stopPropagation();
+      const trig = motionRemoveTriggerBtn.dataset.dmMotionRemoveTrigger!;
+      const elId = info?.id || '';
+      if (trig === 'loop') {
+        applyStyle('animationName', 'none');
+        applyStyle('animationIterationCount', '1');
+        applyStyle('animationDuration', '0s');
+      } else if (trig === 'scroll') {
+        applyStyle('animationTimeline', 'auto');
+        applyStyle('animationRange', 'normal');
+        applyStyle('animationName', 'none');
+      } else {
+        const state = MOTION_TRIGGER_STATE[trig];
+        if (motionForcedTrigger === trig) { motionForcedTrigger = null; send({ type: 'SP_FORCE_STATE', elementId: elId, state: '', on: false }); }
+        for (const c of styleChanges.filter(c => c.elementId === elId && c.state === state)) {
+          applyStyle('__motion_' + trig + '__' + c.property, '');
+        }
+      }
+      return;
+    }
+    // Preview. Hover/press/focus force the `.dm-force-*` class so the real
+    // transition plays. Appear re-inserts the element (@starting-style fires
+    // on mount). Loop restarts the keyframe animation.
+    const motionPreviewBtn = target.closest<HTMLElement>('[data-dm-motion-preview]');
+    if (motionPreviewBtn) {
+      e.stopPropagation();
+      const trig = motionPreviewBtn.dataset.dmMotionPreview!;
+      const elId = info?.id || '';
+      if (trig === 'appear') { send({ type: 'SP_REPLAY_APPEAR', elementId: elId }); return; }
+      if (trig === 'loop') { send({ type: 'SP_PREVIEW_ANIMATION' }); return; }
+      const state = MOTION_TRIGGER_STATE[trig];
+      if (motionForcedTrigger === trig) {
+        motionForcedTrigger = null;
+        send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: false });
+      } else {
+        if (motionForcedTrigger) send({ type: 'SP_FORCE_STATE', elementId: elId, state: MOTION_TRIGGER_STATE[motionForcedTrigger], on: false });
+        motionForcedTrigger = trig;
+        send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: true });
+      }
+      render();
       return;
     }
 
