@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 
-import Link from "next/link";
-
 import { Check, ChevronsUpDown, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -23,26 +21,10 @@ interface FeatureSection {
   }[];
 }
 
-const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
-
 const pricingPlans = [
-  {
-    name: "Cloud",
-    button: { text: "How Cloud works", variant: "outline" as const, href: "/mcp" as const, external: false },
-  },
-  {
-    name: "Local",
-    button: { text: "Setup guide", variant: "outline" as const, href: "/mcp" as const, external: false },
-  },
-  {
-    name: "Self-hosted",
-    button: {
-      text: "View on GitHub",
-      variant: "outline" as const,
-      href: `${REPO_URL}/tree/main/packages/mcp-cloud`,
-      external: true as const,
-    },
-  },
+  { name: "Cloud" },
+  { name: "Local" },
+  { name: "Self-hosted" },
 ];
 
 const comparisonFeatures: FeatureSection[] = [
@@ -183,17 +165,6 @@ const PlanHeaders = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const renderCta = (plan: (typeof pricingPlans)[number]) =>
-    plan.button.external ? (
-      <a href={plan.button.href} target="_blank" rel="noopener noreferrer">
-        <Button variant={plan.button.variant}>{plan.button.text}</Button>
-      </a>
-    ) : (
-      <Link href={plan.button.href}>
-        <Button variant={plan.button.variant}>{plan.button.text}</Button>
-      </Link>
-    );
-
   return (
     <div>
       {/* Mobile View */}
@@ -208,7 +179,6 @@ const PlanHeaders = ({
                 className={`size-5 transition-transform ${isOpen ? "rotate-180" : ""}`}
               />
             </CollapsibleTrigger>
-            {renderCta(pricingPlans[selectedPlan])}
           </div>
           <CollapsibleContent className="flex flex-col space-y-2 p-2">
             {pricingPlans.map(
@@ -237,8 +207,7 @@ const PlanHeaders = ({
 
         {pricingPlans.map((plan, index) => (
           <div key={index}>
-            <h3 className="mb-3 text-2xl font-semibold">{plan.name}</h3>
-            {renderCta(plan)}
+            <h3 className="text-2xl font-semibold">{plan.name}</h3>
           </div>
         ))}
       </div>
