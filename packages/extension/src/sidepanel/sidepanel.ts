@@ -135,7 +135,7 @@ interface ElementInfo {
 }
 type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
 interface StyleChange {
-  id?: string; elementId: string; selector: string;
+  id?: string; elementId: string; selector: string; label?: string;
   property: string; oldValue: string; newValue: string; timestamp?: number;
   // State-variant suffix for Motion interactions (':hover', '@starting', …).
   state?: string;
@@ -148,9 +148,9 @@ interface StyleChange {
   groupLabel?: string;
   status?: ChangeStatus;
 }
-interface TextChange { id: string; elementId: string; selector: string; oldText: string; newText: string; timestamp?: number; status?: ChangeStatus; }
+interface TextChange { id: string; elementId: string; selector: string; label?: string; oldText: string; newText: string; timestamp?: number; status?: ChangeStatus; }
 interface DomChange {
-  id?: string; action: string; tagName: string; selector: string;
+  id?: string; action: string; tagName: string; selector: string; label?: string;
   elementId?: string; timestamp?: number;
   destination?: { parentSelector: string; index: number };
   origin?: { parentSelector: string; index: number };
@@ -220,6 +220,12 @@ let contrastSettingsOpen = false;
 // background — populated on selection when info.computedStyles.backgroundColor
 // is transparent. Keyed by element id; cleared when selection changes.
 const effectiveBgCache = new Map<string, string>();
+// Count of layers that "match" the selected element (same tag + shared
+// class — see findMatchingElements). Keyed by element id; the value
+// includes the element itself, so >= 2 means real peers exist. Drives
+// whether the "Matching layers" checkbox shows at all. Cleared on any
+// structural DOM refresh since duplicating/deleting changes the matches.
+const matchingCountCache = new Map<string, number>();
 let domTree: DomNode[] = [];
 let hoveredLayerId: string | null = null;
 let undoCount = 0;
@@ -782,7 +788,7 @@ function openPipWindow() {
 async function refreshMcpStatus() { const res = await send({ type: 'SP_GET_MCP_STATUS' }); if (res.mcpState) mcpState = res.mcpState; else if (res.connected && res.agentConnected) mcpState = 'connected'; else if (res.connected) mcpState = 'running'; else mcpState = 'offline'; render(); }
 async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
 async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; render(); }
-async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; render(); }
+async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; matchingCountCache.clear(); render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
 // morphdom hasn't placed the element by the next microtask.
@@ -2688,6 +2694,21 @@ function maybeFetchEffectiveBg() {
       effectiveBgCache.set(id, r.color);
       if (activeColorPickerProp) render();
     }
+  });
+}
+
+// Lazily resolve how many layers match the selected element so the design
+// tab can hide the "Matching layers" checkbox when there are no peers.
+// Mirrors maybeFetchEffectiveBg: cache-guarded so it fires once per element
+// and the render() it triggers doesn't loop.
+function maybeFetchMatchingCount() {
+  if (!info) return;
+  const id = info.id;
+  if (!id || matchingCountCache.has(id)) return;
+  send({ type: 'SP_FIND_MATCHING', elementId: id }).then(r => {
+    const ids: string[] = Array.isArray(r?.ids) ? r.ids : [];
+    matchingCountCache.set(id, ids.length);
+    render();
   });
 }
 
@@ -6589,8 +6610,13 @@ function renderDesignTab(): string {
   // "Matching layers" — one checkbox: checked hands every matching element
   // (same tag sharing a class) to multi-select fan-out; the existing
   // "N selected" badge shows the resulting count. Lives inline in the
-  // Selected row, in front of the CSS button.
-  const matchingCtl = info && !isPageContext && !isHovering
+  // Selected row, in front of the CSS button. Only shown when the element
+  // actually has peers (count includes the element itself, so >= 2), or
+  // when it's already checked so the user can uncheck it.
+  const canMatch = !!info && !isPageContext && !isHovering;
+  if (canMatch) maybeFetchMatchingCount();
+  const hasMatchingPeers = (info && (matchingCountCache.get(info.id) ?? 0) >= 2) || false;
+  const matchingCtl = canMatch && (hasMatchingPeers || matchingLayersChecked)
     ? '<label title="Selects every layer like this one (same tag, shared class) so your edits apply to all of them" style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--dm-text-secondary);cursor:pointer;user-select:none;flex-shrink:0;white-space:nowrap;">' +
       '<input type="checkbox" data-dm-action="toggle-matching-layers"' + (matchingLayersChecked ? ' checked' : '') + ' style="accent-color:var(--dm-accent);margin:0;cursor:pointer;"/>' +
       'Matching layers</label>'
@@ -8145,14 +8171,19 @@ function renderChangesTab(): string {
   };
   const items = allItems.filter(matches);
 
-  // Group by selector / elementId.
-  const groups = new Map<string, { selector: string; elementId: string; items: ChangeItem[] }>();
+  // Group by selector / elementId. `label` is the recorded human-readable
+  // layer name (describeElement) — selectors on class-less markup degrade
+  // to bare tags, so the header prefers the label and keeps the selector
+  // in the tooltip.
+  const groups = new Map<string, { selector: string; label: string; elementId: string; items: ChangeItem[] }>();
   for (const item of items) {
     const selector = (item.data as any).selector || 'unknown';
     const elementId = (item.data as any).elementId || '';
     const key = elementId || selector;
-    if (!groups.has(key)) groups.set(key, { selector, elementId, items: [] });
-    groups.get(key)!.items.push(item);
+    if (!groups.has(key)) groups.set(key, { selector, label: '', elementId, items: [] });
+    const group = groups.get(key)!;
+    group.items.push(item);
+    if (!group.label && (item.data as any).label) group.label = (item.data as any).label;
   }
 
   // Single toggle replaces the old "View Original" / "View Changes" pair —
@@ -8419,7 +8450,7 @@ function renderChangesTab(): string {
 
     const header = '<div class="dm-change-group-header" data-dm-change-group="' + escapeAttr(key) + '"' + (isStale ? ' style="opacity:0.7;"' : '') + '>' +
       '<span style="color:var(--dm-text-dim);display:flex;">' + icon(chevIcon as keyof typeof icons, 10) + '</span>' +
-      '<span style="font-family:SF Mono,Monaco,monospace;font-size:10px;color:var(--dm-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;" title="' + escapeAttr(group.selector) + (isStale ? ' (element no longer reachable)' : '') + '">' + escapeAttr(group.selector) + '</span>' +
+      '<span style="font-family:SF Mono,Monaco,monospace;font-size:10px;color:var(--dm-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;" title="' + escapeAttr(group.selector) + (isStale ? ' (element no longer reachable)' : '') + '">' + escapeAttr(group.label || group.selector) + '</span>' +
       (isStale ? '<span style="font-size:8px;padding:1px 6px;border-radius:9999px;background:rgba(0,0,0,0.06);color:var(--dm-text-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;flex-shrink:0;">stale</span>' : '') +
       '<span style="font-size:9px;background:var(--dm-accent-bg);color:var(--dm-accent);border-radius:8px;padding:1px 6px;flex-shrink:0;">' + count + '</span>' +
       (group.elementId ? '<button data-dm-select-change-el="' + escapeAttr(group.elementId) + '" title="Select element" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('crosshair', 10) + '</button>' : '') +

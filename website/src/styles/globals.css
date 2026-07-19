@@ -44,19 +44,18 @@
   --shadow-xl: 0 16px 32px -8px oklch(0.22 0.01 70 / 0.10), 0 28px 56px -14px oklch(0.22 0.01 70 / 0.14);
   --shadow-2xl: 0 28px 60px -14px oklch(0.22 0.01 70 / 0.18);
 
-  /* Plus Jakarta Sans (display + body) + Caveat (handwriting accent),
-     loaded in layout.tsx via next/font/google. */
-  --font-jakarta: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-caveat: "Caveat", ui-serif, cursive;
+  /* DM Sans (local, display) + Inter (google, body) — loaded in layout.tsx. */
+  --font-dm-sans: "dmSans", sans-serif;
+  --font-inter: "inter", sans-serif;
 
-  --font-sans: var(--font-jakarta);
+  --font-sans: var(--font-dm-sans), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --font-handwriting: var(--font-caveat), cursive;
 
-  --display-family: var(--font-jakarta);
-  --text-family: var(--font-jakarta);
-  --display-weight: 800;
+  /* Display = DM Sans, body text = Inter (StyleGlide font abstraction). */
+  --display-family: var(--font-sans);
+  --text-family: var(--font-inter);
+  --display-weight: 600;
   --text-weight: 400;
 }
 
@@ -110,7 +109,6 @@
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
   --font-mono: var(--font-mono);
-  --font-handwriting: var(--font-handwriting);
 
   --font-display: var(--display-family);
   --font-text: var(--text-family);
@@ -170,26 +168,24 @@
   }
   h1,
   h2,
-  h3,
   .font-display {
     font-family: var(--font-display);
     font-weight: var(--display-weight);
-    letter-spacing: -0.02em; /* tight tracking on Jakarta display */
+    /* DM Sans stylistic sets — the alt `a`/`g` and other characters. */
+    font-feature-settings:
+      "ss02" on,
+      "ss03" on,
+      "ss04" on;
   }
   .font-mono {
     font-family: var(--font-mono), monospace;
   }
-  .font-handwriting {
-    font-family: var(--font-handwriting);
-    font-weight: 600;
-    letter-spacing: 0;
-  }
-  /* Macro display headline — fluid, heavy, tight. Used on hero H1s. */
+  /* Macro display headline — heavy, upright. Used on hero H1s. */
   .macro {
     font-family: var(--font-display);
-    font-weight: 800;
-    letter-spacing: -0.035em;
-    line-height: 0.95;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1;
     text-wrap: balance;
   }
 }

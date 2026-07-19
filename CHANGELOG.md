@@ -68,9 +68,9 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   per-agent install paths. It stays byte-identical to what the extension
   installs (enforced by a `verify` check).
 - **Website: warm-cream redesign.** New design language across the whole
-  marketing site — warm cream backgrounds, Plus Jakarta Sans display type,
-  fully-rounded pill nav/buttons, soft rounded cards, a floating dark-pill
-  navbar, and an accessible blue primary CTA. Fully mobile-responsive.
+  marketing site — warm cream backgrounds, fully-rounded pill nav/buttons,
+  soft rounded cards, a floating dark-pill navbar, and an accessible blue
+  primary CTA. Fully mobile-responsive.
 
 ### Changed
 
