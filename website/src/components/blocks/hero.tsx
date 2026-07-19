@@ -50,7 +50,7 @@ export const Hero = () => {
           <VisualEditorPill />
         </div>
 
-        <h1 className="macro text-foreground text-[clamp(2.5rem,7vw,5rem)]">
+        <h1 className="macro text-foreground text-[clamp(2rem,6vw,3.375rem)]">
           Design directly in your browser.
           <br className="hidden md:block" /> Your agent writes the code.
         </h1>

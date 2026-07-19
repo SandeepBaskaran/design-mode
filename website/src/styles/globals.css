@@ -184,12 +184,12 @@
     font-weight: 600;
     letter-spacing: 0;
   }
-  /* Macro display headline — fluid, heavy, tight. Used on hero H1s. */
+  /* Macro display headline — heavy, upright. Used on hero H1s. */
   .macro {
     font-family: var(--font-display);
     font-weight: 800;
-    letter-spacing: -0.035em;
-    line-height: 0.95;
+    letter-spacing: 0;
+    line-height: 1;
     text-wrap: balance;
   }
 }
