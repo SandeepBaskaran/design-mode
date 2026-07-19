@@ -63,13 +63,18 @@ Design Mode brings a coding agent inside the page through a small bridge called 
   Texture (with optional clip-to-shape). Noise and Texture render as
   SVG-data-URI overlays via a `::after` pseudo-element so they don't
   disturb layout.
-- **Motion section** — Split out from Effects: Transition · Animation ·
-  Transform · Motion path · View transition · Scroll-driven animation,
-  each as its own editor. Structured editor with 12 built-in `dm-*`
-  keyframes (`dm-fade-in`, `dm-slide-up`, `dm-pulse`, `dm-bounce`, …)
-  auto-injected on use, full longhand controls (duration, timing,
-  delay, iterations, direction, fill, play state), and a ▶ Preview
-  button that re-triggers the animation cleanly.
+- **Motion section (trigger-first)** — Leads with interaction cards keyed
+  by trigger: Hover / Press / Focus (animate to a target while in that
+  state), Appear (animate from a start state on mount via
+  `@starting-style`), Loop (infinite keyframe animation), and Scroll
+  (scroll-driven timeline via `animation-timeline: view()`). Each card
+  gives you change presets (Fade / Lift / Scale / Background), a shared
+  easing Curve (duration + timing), a plain-English summary, and a
+  Preview that plays the real interaction. The raw per-property editors
+  — Transition, Animation, Transform, Motion path, View transition,
+  Scroll-driven — moved under a Motion → Advanced disclosure for anyone
+  who wants full longhand control (12 built-in `dm-*` keyframes,
+  duration, timing, delay, iterations, direction, fill, play state).
 - **Layout guide** — Figma-style overlay of Columns / Rows / Grid bars
   on the selected element via a `::before` pseudo-element. Doesn't
   affect layout; per-element session memory; survives page reload
@@ -98,6 +103,20 @@ Design Mode brings a coding agent inside the page through a small bridge called 
   Stroke / Effects / Motion / Layout guide). Cross-tab filters, search,
   and a "Show only tokens used on this page" toggle. Sync via
   `chrome.storage.sync`.
+- **Token discovery + inline editing** — A discovery engine finds CSS
+  vars beyond `:root`: theme scopes (`.cds--g100`, `[data-theme]`,
+  `.dark`), component scopes, and vars behind `@media`/`@supports`/
+  cascade layers. Design-system profiles label tokens by system (IBM
+  Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, Tailwind
+  v4). Any Design-tab field whose value comes from a var shows a ◆
+  badge naming the token, with **Swap token…** (pickers for spacing,
+  radius, typography, and shadow — not just colour), **Edit token
+  globally**, and **Detach from token**. Scope-aware edits write
+  `scope { --token: value !important }` into a managed
+  `dm-token-overrides` stylesheet. Agent payload: `get_changes` carries
+  `tokenChanges` (cssVar, scopeSelector, oldValue, newValue, system,
+  cssRule) plus a `tokenGuidance` string, and Copy-as-Prompt gets a
+  `## Tokens changed` section.
 - **Compact prompt format** — `Copy Prompt` produces an LLM-optimised, ~8× smaller markdown
   format with framework + styling-system detection, source-file hints, and grep-ready selectors.
 - **MCP server** — Real-time WebSocket bridge between extension and 8 MCP tools your agent
@@ -107,7 +126,14 @@ Design Mode brings a coding agent inside the page through a small bridge called 
   path, returned as an MCP image block), and `mark_comment_resolved` (close the loop on a
   pinned comment once the agent acts on it). Spring +
   easing curves come through inside the underlying CSS values, so they ship in the regular
-  change stream.
+  change stream. `get_changes` and `get_session_summary` also expose a real `handoff`
+  field for agents that want a ready-made summary of what to do next.
+- **MCP page** — MCP configuration lives in its own full-panel page, opened from the MCP
+  chip in the side panel header (its trailing icon is a chevron, not a re-ping button). Covers
+  the Cloud / Local / Self-hosted mode picker, port, auto-connect, token/tenant, and Copy
+  config / Copy token / Revoke.
+- **Send to Agent** — A step-based guided modal walks you from Copy Prompt through
+  connecting your agent to sending the handoff, instead of a single button.
 - **Keyboard-first** — Strict numeric inputs, arrow stepping (+1 / +10 with Shift), Ctrl+Z / Ctrl+Shift+Z.
 
 ---
@@ -185,7 +211,7 @@ Or add manually to `~/.claude.json`:
 }
 ```
 
-In the side panel, open **Settings** and enable **Auto-connect**.
+In the side panel, click the MCP chip in the header to open the **MCP page**, then enable **Auto-connect**.
 
 ### 5. (Optional) Run the docs site
 

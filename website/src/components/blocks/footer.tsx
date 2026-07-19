@@ -41,18 +41,18 @@ export function Footer() {
         <div className="mb-2 flex justify-center">
           <VisualEditorPill />
         </div>
-        <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
+        <h2 className="text-3xl md:text-4xl lg:text-[3.25rem]">
           Design directly in your browser.
         </h2>
-        <p className="mx-auto max-w-xl text-lg leading-snug text-balance text-[#888888]">
+        <p className="text-muted-foreground mx-auto max-w-xl text-lg leading-snug text-balance">
           Free forever, open source. Edit any live site with visual
           controls and ship the changes to your coding agent over MCP.
         </p>
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
-          <Button variant="outline" asChild>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+          <AddToChromeCta size="lg" />
+          <Button variant="outline" size="lg" asChild>
             <Link href="/demo">Try by yourself</Link>
           </Button>
-          <AddToChromeCta />
         </div>
       </div>
 

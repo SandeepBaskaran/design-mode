@@ -42,7 +42,8 @@ before ticking.
 ## Phase 0.5 — Settings panel
 
 Open via the gear icon in the side-panel header. All settings persist via `chrome.storage.local`
-unless noted otherwise.
+unless noted otherwise. **MCP configuration (mode, port, token, agent setup) is no longer here —
+it lives on its own MCP page (Phase 0.7), opened from the header MCP chip.**
 
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
@@ -52,23 +53,20 @@ unless noted otherwise.
 | 0.5.4 | Screenshot capture mode | Switch among Clipboard / Download / Both | Subsequent camera-button screenshots respect the mode |
 | 0.5.5 | Inspector hover colour | Pick a custom colour (e.g. green) | Hover overlay repaints **live** (no reload) in the new colour; the swatch shows its hex |
 | 0.5.6 | Inspector selection colour | Pick a custom colour | Selection overlay repaints **live** in the new colour; swatch shows its hex |
-| 0.5.7 | MCP — port | Change to e.g. `9970` | Persists; affects the WebSocket URL the extension dials on next connect |
-| 0.5.8 | MCP — auto-connect | Toggle off | Side panel doesn't auto-dial on open; the indicator stays grey until manually connected |
-| 0.5.9 | MCP — mode (Cloud / Local / Self-hosted) | Switch each | Cloud (default for fresh installs) uses `https://mcp.designmode.app` (or the configured URL); Local uses `ws://localhost:<port>`; Self-hosted exposes a URL field |
-| 0.5.10| MCP — cloud token & tenant | Enter a registered token + tenant ID | Stored in `chrome.storage.local`; shown masked; clearing re-disconnects |
-| 0.5.11| Reset to defaults | Click Reset | Theme back to system, colour format to HEX, all four overlay colours (hover / selection / margin / padding) to defaults, MCP port to default, page cursor back to On |
-| 0.5.12| Inspector margin overlay colour | Pick a custom colour | Margin bands on the hover/selection overlay render in it and repaint live (default `#FF6363`) |
-| 0.5.13| Inspector padding overlay colour | Pick a custom colour | Padding bands render in it and repaint live (default `#7CC886`); the ↺ Reset link beside the overlay colours restores all four |
-| 0.5.14| Nudge amount | Change to e.g. `25` | Persists (`dm-nudge-amount`); Shift+Arrow on a px field now steps by 25 (default `10`); invalid / ≤0 reverts to the last valid value |
-| 0.5.15| Page cursor | Toggle Off with the panel open, then On again | Page cursor swaps **live** (no reload): app-icon cursor (default, On) ↔ plain crosshair; `move` over a selected element stays either way; closing the panel restores the normal cursor |
+| 0.5.7 | No MCP section in Settings | Open Settings | The MCP Server card and "Set up your agent" card are **absent** — only editor preferences remain |
+| 0.5.8 | Reset to defaults | Click Reset | Theme back to system, colour format to HEX, all four overlay colours (hover / selection / margin / padding) to defaults, MCP port to default, page cursor back to On |
+| 0.5.9 | Inspector margin overlay colour | Pick a custom colour | Margin bands on the hover/selection overlay render in it and repaint live (default `#FF6363`) |
+| 0.5.10| Inspector padding overlay colour | Pick a custom colour | Padding bands render in it and repaint live (default `#7CC886`); the ↺ Reset link beside the overlay colours restores all four |
+| 0.5.11| Nudge amount | Change to e.g. `25` | Persists (`dm-nudge-amount`); Shift+Arrow on a px field now steps by 25 (default `10`); invalid / ≤0 reverts to the last valid value |
+| 0.5.12| Page cursor | Toggle Off with the panel open, then On again | Page cursor swaps **live** (no reload): app-icon cursor (default, On) ↔ plain crosshair; `move` over a selected element stays either way; closing the panel restores the normal cursor |
 
 ---
 
 ## Phase 0.6 — Header overlay panels (Help, Contribute)
 
 The header icons between the MCP chip and the gear open full-page overlays.
-All three overlays (Settings, Help, Contribute) are mutually exclusive — opening
-any one closes the other two.
+All four overlays (MCP, Settings, Help, Contribute) are mutually exclusive — opening
+any one closes the other three.
 
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
@@ -78,7 +76,27 @@ any one closes the other two.
 | 0.6.4 | Open / close Contribute | Click heart-handshake icon → click again | Contribute overlay replaces the tabs; second click closes |
 | 0.6.5 | Contribute links | Click each row in Contribute (Star repo, Review on CWS, Report issue, Start a discussion, Open a pull request, Sponsor on GitHub) | Each opens the right URL in a new tab |
 | 0.6.6 | Copy share text | In Contribute, click "Share with your network" | Clipboard contains the prefilled share blurb (extension pitch + CWS link); label flashes "Copied ✓ — paste anywhere" then reverts |
-| 0.6.7 | Mutual exclusivity | Open any one of Settings / Help / Contribute, then click another header icon | Previous overlay closes, new one opens |
+| 0.6.7 | Mutual exclusivity | Open any one of MCP / Settings / Help / Contribute, then click another header icon | Previous overlay closes, new one opens |
+
+---
+
+## Phase 0.7 — MCP page
+
+Opened by clicking the **MCP chip** in the side-panel header (top-right, the dot + "MCP" label).
+Replaces the old "MCP" section inside Settings. All values persist via `chrome.storage.local`.
+
+| #     | Test | Steps | Expected |
+|-------|------|-------|----------|
+| 0.7.1 | Chip opens the page | Click the MCP chip | The full-panel MCP page opens (replaces the tabs); the chip's trailing icon is a chevron (not a refresh arrow) |
+| 0.7.2 | Auto-refresh on open | Click the chip and watch the status card | Opening the page re-pings the server; the status card's dot + label (Offline / Running / Connected) reflect the live state |
+| 0.7.3 | Refresh status button | On the MCP page, click **Refresh status** | Re-pings the content script + server; a toast appears only when the state actually changed |
+| 0.7.4 | Back button | Click the ‹ back chevron | Returns to the previously active tab |
+| 0.7.5 | MCP — mode (Cloud / Local / Self-hosted) | Switch each | Cloud (default for fresh installs) uses `https://mcp.designmode.app` (or the configured URL); Local uses `ws://localhost:<port>`; Self-hosted exposes a URL field |
+| 0.7.6 | MCP — port (Local) | In Local mode, change to e.g. `9970` | Persists; affects the WebSocket URL the extension dials on next connect |
+| 0.7.7 | MCP — auto-connect (Local) | Toggle off | Side panel doesn't auto-dial on open; the indicator stays grey until manually connected |
+| 0.7.8 | MCP — cloud token & tenant | Register / enter a token + tenant ID | Stored in `chrome.storage.local`; shown masked; Copy MCP config / Copy token / Revoke work; clearing re-disconnects |
+| 0.7.9 | Agent setup card | Scroll to "Set up your agent" | The `/design-mode` command rows (Claude Code, Cursor, …) each Copy the command to the clipboard |
+| 0.7.10| Chip toggles closed | With the MCP page open, click the chip again | The page closes and returns to the previous tab |
 | 0.6.8 | Theme parity | Toggle theme while each overlay is open | Colours follow `--dm-*` custom properties; no flash, no broken contrast |
 
 ---
@@ -205,7 +223,20 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 3.11 | Z-index strict numeric | Type `10.5` in z-index | Allowed (2 decimals); type letters → blocked |
 | 3.12 | Opacity / transform | Set `opacity: 0.5`, transform `rotate(3deg)` | Both apply visually |
 | 3.13 | Box shadow builder | Use shadow inputs | Shadow appears; values reflect in Changes tab |
-| 3.14 | Animation easing visualizer | Edit a `transition` value, click the curve preview icon | Bézier panel opens with adjustable control points; spring mode toggles to stiffness / damping / mass sliders |
+| 3.14 | Animation easing visualizer | In Motion → Advanced, edit a `transition` value, click the curve preview icon | Bézier panel opens with adjustable control points; spring mode toggles to stiffness / damping / mass sliders |
+| 3.15 | Motion: add Hover interaction | Motion section → **When:** → **Hover** | A Hover card appears seeded with a Fade change + shared Curve; hovering the element on the page fades it |
+| 3.16 | Motion: real preview | On the Hover card, click ▶ Preview | Element plays the transition (forced `.dm-force-hover`); button toggles to pause; click again to stop |
+| 3.17 | Motion: add change preset | On a Hover card, click the **Lift** chip | A `translate` change row is added; hovering lifts the element |
+| 3.18 | Motion: Appear (@starting-style) | **When:** → **Appear**, then click ▶ | Element re-mounts and animates in from the seeded start state |
+| 3.19 | Motion: Loop | **When:** → **Loop**, pick `dm-pulse` | Element pulses continuously; ▶ restarts the animation |
+| 3.20 | Motion: Scroll | **When:** → **Scroll** | `animation-timeline: view()` seeded; scrolling the element through the viewport drives the animation |
+| 3.21 | Motion: variant export | Add a Hover interaction, open Copy CSS | Output has a base rule + a real `.selector:hover { … }` rule (SCSS same; Tailwind uses `hover:`) |
+| 3.22 | Motion: Advanced disclosure | Toggle the Motion **sliders** icon | Raw Transition / Animation / Transform / Motion-path / View-transition / Scroll-driven editors appear below the cards |
+| 3.23 | Appearance: icon-first fields | Select an element → expand Appearance | Opacity field is led by a blend icon (no visible "Opacity" label — name shows on hover); Corner radius field is led by a maximize icon (no visible "Corner radius" label). Blend mode and Isolation are not in the main row — open Appearance → Advanced to find them |
+| 3.24 | Corner radius: Mixed → forced uniform | Click the corner-expand (`scan`) toggle, set each of the 4 corners to a different value, collapse back to the primary row, then type a number into the primary field (showing `Mixed`) | Collapsed primary field shows a `Mixed` placeholder before the edit; typing over it writes the `border-radius` shorthand and all four corners snap to the typed value — re-expanding shows all 4 corners equal |
+| 3.25 | Layout guide: section eye visibility gating | Add one layout guide to an element, then add a second | With one guide, no section-level eye appears next to the Layout guide header — only the row's own eye. Once 2+ guides exist, a section eye appears top-right of the section header |
+| 3.26 | Layout guide: parent/child hide | With 2+ guides on an element, click the section eye to hide all guides, then click one dimmed row's own eye | Every guide disappears from the page; each row's own eye dims (~40% opacity) but still reflects and can toggle its individual on/off state; re-enabling the section eye reveals only the rows currently marked visible |
+| 3.27 | Layout guide: compact color panel | On a layout guide's expanded row, click the Colour swatch | The color panel opens with the HSV picker + hex/RGB inputs only — no WCAG contrast row and no Site Colors token list |
 
 ---
 
@@ -379,9 +410,9 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 | 10.8 | Comment lines | Add a comment | Bullet reads `- note on {selector}: {text}` |
 | 10.9 | Empty state | Copy as Prompt with no changes | Both the button gate (10.1) and this fallback key off the same empty ledger, so the fallback isn't reachable from the UI — verify by reading `exportMarkdown`, not by clicking. When hit, output is the two header lines from 10.3, a blank line, then `(no changes recorded yet)` |
 | 10.10 | Send to Agent — connected | MCP connected → click Send to Agent | Button shows "Sent!" + success toast; agent's next `get_changes` includes a `handoff` field with `requestedAt` / `pageUrl` |
-| 10.11 | Send to Agent — running, no agent | Server running but no agent → click | Instructions overlay: "no coding agent has attached yet", points to Settings → MCP + `/design-mode`; "Open MCP settings" button lands on Settings |
+| 10.11 | Send to Agent — running, no agent | Server running but no agent → click | Instructions overlay: "no coding agent has attached yet", points to the MCP page + `/design-mode`; "Open MCP settings" button lands on the MCP page |
 | 10.12 | Send to Agent — local offline | No local server in Local mode → click | Instructions overlay with `claude mcp add design-mode …` registration hint; button styled enabled (accent), not greyed out |
-| 10.13 | Send to Agent — cloud, no token | Cloud mode without token → click | Instructions overlay pointing to Settings → MCP "Connect to Cloud" |
+| 10.13 | Send to Agent — cloud, no token | Cloud mode without token → click | Instructions overlay pointing to the MCP page's "Connect to Cloud" |
 | 10.14 | Handoff cleared | Send to Agent → Clear All → agent calls `get_changes` | No `handoff` field in the response |
 
 ---
@@ -418,7 +449,7 @@ at `https://mcp.designmode.app`). Both expose the **same seven MCP tools**.
 
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
-| 11.20 | Mode switch | Settings → MCP → mode "Cloud" | URL field defaults to `https://mcp.designmode.app`; tenant + token fields appear |
+| 11.20 | Mode switch | MCP page → mode "Cloud" | URL field defaults to `https://mcp.designmode.app`; tenant + token fields appear |
 | 11.21 | Register token | Open the cloud landing page → register → copy token + tenant ID | Token + tenant ID stored locally; indicator turns green when both present |
 | 11.22 | Send to Agent | With agent connected to the cloud relay → click Send to Agent | Agent receives changes via the cloud bridge |
 | 11.23 | Self-hosted | Mode "Self-hosted" → enter your Vercel URL | Same protocol as Cloud; works against any deployment of the `mcp-cloud` package |

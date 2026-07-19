@@ -32,7 +32,7 @@ export const Features = () => {
         {/* Top dashed line with text */}
         <div className="relative flex items-center justify-center">
           <DashedLine className="text-muted-foreground" />
-          <span className="bg-muted text-muted-foreground absolute px-3 font-mono text-sm font-medium tracking-wide max-md:hidden">
+          <span className="border-border bg-card text-muted-foreground absolute rounded-full border px-3 py-1 text-sm font-medium tracking-wide max-md:hidden">
             DESIGN ON THE LIVE PAGE.
           </span>
         </div>
@@ -76,7 +76,7 @@ export const Features = () => {
                     <h3 className="font-display max-w-60 text-2xl leading-tight font-bold tracking-tight">
                       {item.title}
                     </h3>
-                    <div className="rounded-full border p-2">
+                    <div className="rounded-full border p-2 transition-colors group-hover:border-primary group-hover:bg-primary/10">
                       <ChevronRight className="size-6 transition-transform group-hover:translate-x-1 lg:size-9" />
                     </div>
                   </Link>

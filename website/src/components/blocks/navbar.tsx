@@ -83,14 +83,14 @@ export const Navbar = () => {
   return (
     <section
       className={cn(
-        "bg-background/70 absolute left-1/2 z-50 w-[min(95%,1024px)] max-w-[1024px] -translate-x-1/2 rounded-[18px] border backdrop-blur-md transition-all duration-300",
+        "bg-ink/90 text-ink-foreground absolute left-1/2 z-50 w-[min(95%,1024px)] max-w-[1024px] -translate-x-1/2 rounded-full border border-white/10 shadow-lg backdrop-blur-md transition-all duration-300",
         "top-3",
       )}
     >
-      <div className="flex items-center justify-between px-3 py-3">
-        <Link href="/" className="flex shrink-0 items-center gap-2 pl-1">
+      <div className="flex items-center justify-between py-2.5 pr-2.5 pl-4">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
           <DesignModeMark size={22} />
-          <span className="font-display text-sm font-semibold tracking-tight">
+          <span className="font-display text-ink-foreground text-sm font-semibold tracking-tight">
             Design Mode
           </span>
         </Link>
@@ -103,10 +103,10 @@ export const Navbar = () => {
                 <Link
                   href={link.href}
                   className={cn(
-                    "relative bg-transparent px-1.5 text-sm transition-opacity hover:opacity-75",
+                    "relative bg-transparent px-1.5 text-sm transition-colors",
                     pathname === link.href
-                      ? "text-foreground font-semibold"
-                      : "text-muted-foreground font-medium",
+                      ? "text-ink-foreground font-semibold"
+                      : "text-ink-foreground/60 hover:text-ink-foreground font-medium",
                   )}
                 >
                   {link.label}
@@ -125,21 +125,21 @@ export const Navbar = () => {
             onClick={() => trackCtaClick("github")}
           >
             <Button
-              variant="outline"
-              size="icon"
-              className="size-9"
+              variant="ghost"
+              size="icon-sm"
+              className="text-ink-foreground/80 hover:text-ink-foreground hover:bg-white/10"
               aria-label="GitHub repository"
             >
               <GithubMark size={16} />
             </Button>
           </a>
           <div className="max-lg:hidden">
-            <AddToChromeCta />
+            <AddToChromeCta size="sm" />
           </div>
 
           {/* Hamburger (mobile only) */}
           <button
-            className="text-muted-foreground relative flex size-8 lg:hidden"
+            className="text-ink-foreground relative flex size-8 lg:hidden"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-label="Open main menu"
           >
@@ -164,13 +164,13 @@ export const Navbar = () => {
       {/* Mobile menu */}
       <div
         className={cn(
-          "bg-background fixed inset-x-0 top-[calc(100%+1rem)] flex flex-col rounded-2xl border p-6 transition-all duration-300 ease-in-out lg:hidden",
+          "bg-ink text-ink-foreground fixed inset-x-0 top-[calc(100%+0.75rem)] flex flex-col rounded-3xl border border-white/10 p-6 shadow-xl transition-all duration-300 ease-in-out lg:hidden",
           isMenuOpen
             ? "visible translate-y-0 opacity-100"
             : "invisible -translate-y-4 opacity-0",
         )}
       >
-        <nav className="divide-border flex flex-1 flex-col divide-y">
+        <nav className="flex flex-1 flex-col divide-y divide-white/10">
           {ITEMS.map((link) => (
             <Link
               key={link.label}
@@ -178,16 +178,16 @@ export const Navbar = () => {
               className={cn(
                 "py-4 text-base transition-colors first:pt-0 last:pb-0",
                 pathname === link.href
-                  ? "text-foreground font-semibold"
-                  : "text-muted-foreground hover:text-foreground font-medium",
+                  ? "text-ink-foreground font-semibold"
+                  : "text-ink-foreground/60 hover:text-ink-foreground font-medium",
               )}
               onClick={() => setIsMenuOpen(false)}
             >
               {link.label}
             </Link>
           ))}
-          <div className="pt-4">
-            <AddToChromeCta />
+          <div className="pt-5">
+            <AddToChromeCta className="w-full" />
           </div>
         </nav>
       </div>

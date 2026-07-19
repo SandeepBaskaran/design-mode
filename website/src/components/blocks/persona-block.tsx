@@ -114,9 +114,9 @@ export function PersonaBlock() {
               <Link
                 key={p.title}
                 href={p.href}
-                className="group rounded-2xl border p-5 transition-shadow hover:shadow-md"
+                className="group bg-card rounded-2xl border p-6 shadow-sm transition-shadow hover:shadow-md"
               >
-                <Icon className="text-foreground mb-3 size-5" />
+                <Icon className="text-foreground group-hover:text-primary mb-3 size-5 transition-colors" />
                 <h3 className="font-display text-lg font-semibold">
                   {p.title}
                 </h3>

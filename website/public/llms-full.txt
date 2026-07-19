@@ -49,11 +49,13 @@ One design tool for every maker:
 
 The side panel has three rows.
 
-**Row 1 — Header + Action toolbar.** MCP status chip, theme toggle, contribute panel, help (with Copy Diagnostics for bug reports), settings (colour format, capture mode, inspector colours, MCP mode picker). Action toolbar: parent/child walk, duplicate/delete, comment pins, hide pins, freeze animations, screenshot, presets, undo/redo.
+**Design-system tokens.** A token-discovery engine finds every CSS custom property a page declares — not just `:root`. Theme scopes, component scopes, matching `@media`/`@supports` blocks, and cascade layers are all picked up. Known systems (IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, Tailwind v4) are recognised and labelled by name. Any Design-tab field authored from a token shows a ◆ badge with Swap token…, Edit token globally, and Detach from token; edits write into a managed, scope-aware override stylesheet so a change to a themed token doesn't clobber every theme at once.
+
+**Row 1 — Header + Action toolbar.** MCP status chip (opens the dedicated MCP page), theme toggle, contribute panel, help (with Copy Diagnostics for bug reports), settings (colour format, capture mode, inspector colours). Action toolbar: parent/child walk, duplicate/delete, comment pins, hide pins, freeze animations, screenshot, presets, undo/redo. A "Select matching layers" checkbox in the indicator chip's Selected row builds a multi-selection from every layer matching the current one.
 
 **Row 2 — Three middle panels.**
-- *Layers* — full DOM tree, searchable, multi-select, drag-to-reorder, visibility toggle per row.
-- *Design* — nine Figma-aligned sections (Typography, Position, Layout, Size & spacing, Border, Appearance, Effects, Motion, Variants). Real controls — sliders, colour pickers, segmented buttons. Not a textarea of CSS.
+- *Layers* — full DOM tree, searchable, multi-select, drag-to-reorder, visibility toggle per row. Long names wrap instead of scrolling horizontally.
+- *Design* — nine Figma-aligned sections (Typography, Position, Layout, Size & spacing, Border, Appearance, Effects, Motion, Variants). Real controls — sliders, colour pickers, segmented buttons. Not a textarea of CSS. Motion leads with trigger-first interaction cards (Hover, Press, Focus, Appear, Loop, Scroll) — presets, a shared easing curve, a plain-English summary, and a real preview; raw per-property editors moved under Motion → Advanced. Any field bound to a design-system token shows a ◆ badge for Swap token… / Edit token globally / Detach.
 - *Changes* — every style, text, DOM, and comment edit in reverse chronological order. Group by selector, filter by kind, search by value, resolve or revert anything. Export / import as JSON.
 
 **Row 3 — Handoff.** Copy Prompt → clipboard. Send to Agent → MCP push (only enables when an agent is actually attached).
@@ -75,7 +77,9 @@ MCP is Anthropic's open standard that lets AI agents safely call external tools.
 - `get_screenshot` — visible-tab PNG of the page in its current edited state.
 - `mark_comment_resolved` — mark a pinned comment done (or reopen it) once the agent has acted on it.
 
-Drop the `/design-mode` slash command into your coding tool (Claude Code, Cursor, Codex, Windsurf) and it drives these tools end to end: read the changes and comments, apply them, and resolve each comment as it goes. Copy it from the extension's Settings → "Set up your agent".
+Drop the `/design-mode` slash command into your coding tool (Claude Code, Cursor, Codex, Windsurf) and it drives these tools end to end: read the changes and comments, apply them, and resolve each comment as it goes. Copy it from the extension's dedicated MCP page → "Set up your agent".
+
+MCP configuration — connection mode, port, auto-connect, token/tenant, Copy config / Copy token / Revoke — lives on its own dedicated page inside the extension, opened from the header MCP chip. It is not part of Settings. Send to Agent opens a step-based guided modal; once sent, `get_changes` and `get_session_summary` carry a `handoff` field flagging that batch of edits as approved.
 
 **Three connection modes:**
 

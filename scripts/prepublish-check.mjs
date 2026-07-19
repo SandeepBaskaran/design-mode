@@ -106,6 +106,25 @@ step('Local MCP server has all 8 tools', () => {
   }
 });
 
+// ── 4b. Agent workflow file in sync with the website download ─────────────
+// website/public/design-mode.md is the file users download from /mcp to hand
+// their agent. It must stay byte-identical to AGENT_COMMAND_MARKDOWN (the
+// extension's source of truth), or the download would drift from what the
+// extension installs.
+step('design-mode.md matches AGENT_COMMAND_MARKDOWN', () => {
+  const src = readFileSync(resolve(root, 'packages/extension/src/sidepanel/agent-workflow.ts'), 'utf8');
+  // Match the template literal, treating `\`` as an escaped char so the
+  // capture stops only at the real unescaped closing backtick (the body
+  // itself contains escaped backticks like `\`text\``).
+  const m = src.match(/AGENT_COMMAND_MARKDOWN = `((?:[^`\\]|\\.)*)`;/);
+  if (!m) throw new Error('Could not find AGENT_COMMAND_MARKDOWN in agent-workflow.ts');
+  const expected = m[1].replace(/\\`/g, '`').replace(/\\\$/g, '$').trim();
+  const actual = readFileSync(resolve(root, 'website/public/design-mode.md'), 'utf8').trim();
+  if (expected !== actual) {
+    throw new Error('website/public/design-mode.md is out of sync with AGENT_COMMAND_MARKDOWN — regenerate it from agent-workflow.ts');
+  }
+});
+
 // ── 5. Local MCP build (uses extra heap; package.json sets NODE_OPTIONS) ──
 step('Build local MCP server', () => {
   run('npm --workspace @design-mode/mcp-local run build', { stdio: 'pipe' });

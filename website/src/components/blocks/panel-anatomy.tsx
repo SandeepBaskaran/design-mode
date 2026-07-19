@@ -63,7 +63,7 @@ const bottomItems: Item[] = [
   {
     title: "Design tab.",
     description:
-      "Nine Figma-aligned sections. Real controls — sliders, colour pickers, segmented buttons — not a textarea of CSS.",
+      "Nine Figma-aligned sections. Real controls — sliders, colour pickers, segmented buttons — not a textarea of CSS. Motion leads with trigger-first interaction cards; design-system tokens surface as swap-and-edit badges.",
     image: {
       src: "/panel-anatomy/design-tab.png",
       alt: "Design tab",
@@ -161,7 +161,7 @@ const ItemCard = ({ item, isLast, className }: ItemCardProps) => {
         <div className="from-muted/80 absolute inset-0 z-10 bg-linear-to-t via-transparent to-transparent md:hidden" />
       )}
 
-      <div className="image-container">
+      <div className="image-container border-border bg-card overflow-hidden rounded-2xl border shadow-sm">
         <Image
           src={item.image.src}
           alt={item.image.alt}

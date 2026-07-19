@@ -109,7 +109,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Restart and verify",
-        body: "Restart your agent. The six Design Mode MCP tools (get_changes, apply_changes, clear_changes, get_session_summary, export_changes, get_screenshot) will appear. The side panel's MCP status chip will turn green once an agent attaches.",
+        body: "Restart your agent. The eight Design Mode MCP tools (get_changes, apply_changes, set_change_status, clear_changes, get_session_summary, export_changes, get_screenshot, mark_comment_resolved) will appear. The side panel's MCP status chip will turn green once an agent attaches.",
       },
     ],
     related: ["install", "troubleshooting", "changes-tab"],
@@ -172,7 +172,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "MCP status chip stays offline",
-        body: "Cloud mode: confirm your bearer token is pasted in Settings and the same token is in your agent's config. Local mode: confirm the companion server is running (clone the repo, npm install, npm start) and your config's cwd points at the repo root. Self-hosted: confirm the relay URL is correct and Redis is healthy.",
+        body: "Cloud mode: confirm your bearer token is pasted on the extension's dedicated MCP page (opened from the header MCP chip) and the same token is in your agent's config. Local mode: confirm the companion server is running (clone the repo, npm install, npm start) and your config's cwd points at the repo root. Self-hosted: confirm the relay URL is correct and Redis is healthy.",
       },
       {
         heading: "Send to Agent button is greyed out",

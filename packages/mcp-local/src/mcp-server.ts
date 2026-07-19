@@ -96,7 +96,7 @@ function renderExport(format: ExportFormat): string {
 export function createMcpServer(): McpServer {
   // Keep in sync with APP_VERSION in packages/shared/src/constants.ts
   // (also mirrored in bin/cli.ts and websocket-server.ts HELLO).
-  const server = new McpServer({ name: 'design-mode', version: '1.8.0' });
+  const server = new McpServer({ name: 'design-mode', version: '1.9.0' });
 
   // ── 1. get_changes ────────────────────────────────────────────────
   server.tool(

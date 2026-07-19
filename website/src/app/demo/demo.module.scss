@@ -3,6 +3,12 @@
 // The accent (`--hyperlink-color`) and surface (`--body-bg`) tokens are
 // defined locally on `.demoLayout` and cascade to the nav, content, and
 // demo targets — globals.css uses shadcn-style tokens, not these names.
+// `--hyperlink-color` stays a distinct blue on purpose: the demo route reads
+// as its own little "foreign" website with its own accent, so it's obvious
+// Design Mode edits ANY site's branding, not just designmode.app's own
+// cream/yellow chrome. Every other color in this file derives from the
+// warm-cream tokens in globals.css via `color-mix()`, so neutral greys read
+// warm instead of flat black/white.
 // =============================================================================
 
 .demoLayout {
@@ -26,9 +32,9 @@
   margin: 1rem auto 0;
   font-size: 0.8125rem;
   font-weight: 500;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background: rgba(0, 0, 0, 0.02);
-  color: rgba(0, 0, 0, 0.6);
+  border: 1px solid color-mix(in oklch, var(--foreground) 10%, transparent);
+  background: color-mix(in oklch, var(--foreground) 3%, transparent);
+  color: color-mix(in oklch, var(--foreground) 60%, transparent);
   border-radius: 999px;
   width: fit-content;
   display: flex;
@@ -52,7 +58,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.25);
+  background: color-mix(in oklch, var(--foreground) 25%, transparent);
   flex-shrink: 0;
 
   .extensionBanner[data-detected="true"] & {
@@ -90,19 +96,19 @@
   border-radius: 0.375rem;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.65);
+  color: color-mix(in oklch, var(--foreground) 65%, transparent);
   text-decoration: none;
   border-left: 2px solid transparent;
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.04);
-    color: rgba(0, 0, 0, 0.9);
+    background: color-mix(in oklch, var(--foreground) 4%, transparent);
+    color: color-mix(in oklch, var(--foreground) 90%, transparent);
     text-decoration: none;
   }
 
   &[data-active="true"] {
-    background: rgba(36, 128, 237, 0.08);
+    background: color-mix(in oklch, var(--hyperlink-color) 8%, transparent);
     color: var(--hyperlink-color);
     border-left-color: var(--hyperlink-color);
     font-weight: 600;
@@ -117,14 +123,14 @@
   height: 20px;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.4);
-  background: rgba(0, 0, 0, 0.05);
+  color: color-mix(in oklch, var(--foreground) 40%, transparent);
+  background: color-mix(in oklch, var(--foreground) 5%, transparent);
   border-radius: 0.25rem;
   flex-shrink: 0;
 
   .sideNavLink[data-active="true"] & {
     background: var(--hyperlink-color);
-    color: #fff;
+    color: var(--card);
   }
 }
 
@@ -135,7 +141,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.0625rem;
-  border-left: 1px solid rgba(0, 0, 0, 0.08);
+  border-left: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
 }
 
 .sideNavSubLink {
@@ -146,14 +152,14 @@
   margin-left: 0.5rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.55);
+  color: color-mix(in oklch, var(--foreground) 55%, transparent);
   text-decoration: none;
   border-radius: 0.25rem;
   transition: background 0.12s ease, color 0.12s ease;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.04);
-    color: rgba(0, 0, 0, 0.85);
+    background: color-mix(in oklch, var(--foreground) 4%, transparent);
+    color: color-mix(in oklch, var(--foreground) 85%, transparent);
     text-decoration: none;
   }
 
@@ -171,14 +177,14 @@
   height: 16px;
   font-size: 0.625rem;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.35);
-  background: rgba(0, 0, 0, 0.04);
+  color: color-mix(in oklch, var(--foreground) 35%, transparent);
+  background: color-mix(in oklch, var(--foreground) 4%, transparent);
   border-radius: 0.1875rem;
   flex-shrink: 0;
 
   .sideNavSubLink[data-active="true"] & {
     background: var(--hyperlink-color);
-    color: #fff;
+    color: var(--card);
   }
 }
 
@@ -198,7 +204,7 @@
   flex-direction: column;
   gap: 1rem;
   padding-bottom: 2rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid color-mix(in oklch, var(--foreground) 6%, transparent);
 
   &:last-child {
     border-bottom: 0;
@@ -208,7 +214,7 @@
 .stepChild {
   // Sub-anchors (Design sub-sections) are visually nested
   margin-left: 1.25rem;
-  border-bottom: 1px dashed rgba(0, 0, 0, 0.06);
+  border-bottom: 1px dashed color-mix(in oklch, var(--foreground) 6%, transparent);
   padding-bottom: 1.5rem;
 }
 
@@ -226,7 +232,7 @@
 
   p {
     margin: 0;
-    color: rgba(0, 0, 0, 0.78);
+    color: color-mix(in oklch, var(--foreground) 78%, transparent);
     font-size: 0.9375rem;
     line-height: 1.6;
   }
@@ -238,12 +244,12 @@
   align-items: flex-start;
   gap: 0.625rem;
   padding: 0.75rem 0.875rem;
-  background: rgba(255, 196, 0, 0.08);
-  border: 1px solid rgba(255, 196, 0, 0.3);
+  background: color-mix(in oklch, var(--primary) 10%, transparent);
+  border: 1px solid color-mix(in oklch, var(--primary) 35%, transparent);
   border-radius: 0.5rem;
   font-size: 0.875rem;
   line-height: 1.5;
-  color: rgba(0, 0, 0, 0.8);
+  color: color-mix(in oklch, var(--foreground) 80%, transparent);
 }
 
 .tryItLabel {
@@ -254,8 +260,8 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  background: rgba(255, 196, 0, 0.35);
-  color: rgb(133, 100, 4);
+  background: color-mix(in oklch, var(--primary) 45%, transparent);
+  color: var(--primary-foreground);
   border-radius: 999px;
   flex-shrink: 0;
   white-space: nowrap;
@@ -269,8 +275,8 @@
 .stepTarget {
   margin-top: 0.5rem;
   padding: 1.25rem;
-  background: rgba(0, 0, 0, 0.02);
-  border: 1px dashed rgba(0, 0, 0, 0.12);
+  background: color-mix(in oklch, var(--foreground) 2%, transparent);
+  border: 1px dashed color-mix(in oklch, var(--foreground) 12%, transparent);
   border-radius: 0.625rem;
   min-height: 80px;
   display: flex;
@@ -284,10 +290,10 @@
 
 .targetCard {
   padding: 1.25rem 1.5rem;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--card);
+  border: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
   border-radius: 0.5rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 4%, transparent);
   max-width: 360px;
 
   h3 {
@@ -296,7 +302,7 @@
   }
   p {
     margin: 0;
-    color: rgba(0, 0, 0, 0.7);
+    color: color-mix(in oklch, var(--foreground) 70%, transparent);
     font-size: 0.875rem;
     line-height: 1.55;
   }
@@ -314,8 +320,8 @@
 
   li {
     padding: 0.625rem 0.875rem;
-    background: #fff;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--card);
+    border: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
     border-radius: 0.375rem;
     font-size: 0.875rem;
   }
@@ -340,8 +346,8 @@
   width: 100%;
   max-width: 480px;
   height: 200px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--card);
+  border: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
   border-radius: 0.5rem;
 }
 
@@ -350,13 +356,13 @@
   top: 12px;
   left: 12px;
   padding: 0.625rem 0.875rem;
-  background: rgba(36, 128, 237, 0.08);
-  border: 1px solid rgba(36, 128, 237, 0.4);
+  background: color-mix(in oklch, var(--hyperlink-color) 8%, transparent);
+  border: 1px solid color-mix(in oklch, var(--hyperlink-color) 40%, transparent);
   border-radius: 0.375rem;
   max-width: 200px;
 
   strong { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; }
-  p { margin: 0; font-size: 0.75rem; color: rgba(0, 0, 0, 0.7); }
+  p { margin: 0; font-size: 0.75rem; color: color-mix(in oklch, var(--foreground) 70%, transparent); }
 }
 
 .targetLayoutContainer {
@@ -365,8 +371,8 @@
   padding: 0.75rem;
   width: 100%;
   max-width: 480px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--card);
+  border: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
   border-radius: 0.5rem;
 }
 
@@ -375,24 +381,30 @@
   padding: 1rem;
   text-align: center;
   font-weight: 600;
-  background: rgba(36, 128, 237, 0.08);
+  background: color-mix(in oklch, var(--hyperlink-color) 8%, transparent);
   color: var(--hyperlink-color);
-  border: 1px solid rgba(36, 128, 237, 0.25);
+  border: 1px solid color-mix(in oklch, var(--hyperlink-color) 25%, transparent);
   border-radius: 0.375rem;
 }
 
 .targetAppearanceStage {
   width: 100%;
   max-width: 360px;
-  // image-like backdrop so blend modes have something to react to
-  background: linear-gradient(135deg, #ffd1ff 0%, #fad0c4 100%);
+  // image-like backdrop so blend modes have something to react to — a warm
+  // coral-to-gold gradient built from the destructive + primary tokens so it
+  // stays in the warm family instead of a cool pink.
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--destructive) 35%, var(--card)) 0%,
+    color-mix(in oklch, var(--primary) 45%, var(--card)) 100%
+  );
   padding: 1.5rem;
   border-radius: 0.5rem;
 }
 
 .targetAppearanceCard {
   padding: 1rem 1.25rem;
-  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in oklch, var(--card) 92%, transparent);
   border-radius: 0.5rem;
   font-size: 0.875rem;
   text-align: center;
@@ -403,16 +415,16 @@
   width: 100%;
 
   h3 { margin: 0 0 0.5rem; font-size: 1.125rem; }
-  p  { margin: 0 0 0.5rem; font-size: 0.9375rem; line-height: 1.55; color: rgba(0, 0, 0, 0.78); }
-  ul { margin: 0; padding-left: 1.25rem; font-size: 0.875rem; line-height: 1.6; color: rgba(0, 0, 0, 0.7); }
+  p  { margin: 0 0 0.5rem; font-size: 0.9375rem; line-height: 1.55; color: color-mix(in oklch, var(--foreground) 78%, transparent); }
+  ul { margin: 0; padding-left: 1.25rem; font-size: 0.875rem; line-height: 1.6; color: color-mix(in oklch, var(--foreground) 70%, transparent); }
 }
 
 .targetFillHero {
   width: 100%;
   max-width: 360px;
   padding: 1.75rem 1.5rem;
-  background: rgb(36, 128, 237);
-  color: #fff;
+  background: var(--hyperlink-color);
+  color: var(--card);
   border-radius: 0.5rem;
 
   strong { display: block; font-size: 1.125rem; margin-bottom: 0.375rem; }
@@ -422,12 +434,12 @@
 .targetStrokeSquare {
   width: 140px;
   height: 140px;
-  background: #fff;
+  background: var(--card);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.4);
+  color: color-mix(in oklch, var(--foreground) 40%, transparent);
   border-radius: 0.375rem;
 }
 
@@ -435,7 +447,13 @@
   width: 100%;
   max-width: 360px;
   height: 180px;
-  background: linear-gradient(135deg, #f6d365, #fda085);
+  // Warm gold-to-coral gradient (primary + destructive) instead of a bare
+  // orange hex pair — same visual role (backdrop for a drop-shadow demo).
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--primary) 55%, var(--card)),
+    color-mix(in oklch, var(--destructive) 45%, var(--card))
+  );
   border-radius: 0.5rem;
   display: flex;
   align-items: center;
@@ -444,7 +462,7 @@
 
 .targetEffectsCard {
   padding: 0.875rem 1.25rem;
-  background: #fff;
+  background: var(--card);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -454,7 +472,7 @@
   width: 100%;
   max-width: 360px;
   padding: 1.25rem;
-  background: #f3f4f6;
+  background: var(--muted);
   border-radius: 0.5rem;
   display: flex;
   align-items: center;
@@ -463,9 +481,9 @@
 
 .targetMotionCard {
   padding: 1rem 1.25rem;
-  background: #ffffff;
+  background: var(--card);
   border-radius: 0.5rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 2px color-mix(in oklch, var(--foreground) 6%, transparent);
   text-align: center;
   // Default transition + transform so the demo target already shows a
   // hover state — the user adds / tweaks via the Motion section.
@@ -473,7 +491,7 @@
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 6px 16px color-mix(in oklch, var(--foreground) 12%, transparent);
   }
 
   strong {
@@ -484,7 +502,7 @@
 
   p {
     font-size: 0.8125rem;
-    color: rgba(0, 0, 0, 0.65);
+    color: color-mix(in oklch, var(--foreground) 65%, transparent);
     margin: 0;
   }
 }
@@ -494,8 +512,8 @@
   max-width: 520px;
   height: 200px;
   padding: 1rem;
-  background: #fafafa;
-  border: 1px dashed rgba(0, 0, 0, 0.15);
+  background: var(--muted);
+  border: 1px dashed color-mix(in oklch, var(--foreground) 15%, transparent);
   border-radius: 0.5rem;
   display: flex;
   align-items: center;
@@ -504,7 +522,7 @@
 
 .targetLayoutGuideHint {
   font-size: 0.8125rem;
-  color: rgba(0, 0, 0, 0.55);
+  color: color-mix(in oklch, var(--foreground) 55%, transparent);
   text-align: center;
 }
 
@@ -522,8 +540,8 @@
   align-items: center;
   justify-content: center;
   padding: 0.5rem 0.875rem;
-  background: rgb(36, 128, 237);
-  color: #fff;
+  background: var(--hyperlink-color);
+  color: var(--card);
   border-radius: 999px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -533,11 +551,11 @@
 @keyframes demoPulse {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(36, 128, 237, 0.4);
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--hyperlink-color) 40%, transparent);
   }
   50% {
     transform: scale(1.06);
-    box-shadow: 0 0 0 12px rgba(36, 128, 237, 0);
+    box-shadow: 0 0 0 12px color-mix(in oklch, var(--hyperlink-color) 0%, transparent);
   }
 }
 
@@ -547,8 +565,8 @@
   align-items: center;
   gap: 0.625rem;
   padding: 1rem 1.25rem;
-  background: #fff;
-  border: 1px dashed rgba(0, 0, 0, 0.18);
+  background: var(--card);
+  border: 1px dashed color-mix(in oklch, var(--foreground) 18%, transparent);
   border-radius: 0.5rem;
 }
 
@@ -556,24 +574,30 @@
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(0, 0, 0, 0.45);
+  color: color-mix(in oklch, var(--foreground) 45%, transparent);
 }
 
 .targetActionSibling {
   font-size: 0.8125rem;
-  color: rgba(0, 0, 0, 0.55);
+  color: color-mix(in oklch, var(--foreground) 55%, transparent);
 }
 
 .targetPresetCard {
   width: 100%;
   max-width: 360px;
   padding: 1.5rem 1.25rem;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  // Golden gradient built from the primary token — presets read as "save
+  // this look", so the brand-yellow family fits better than a bare hex pair.
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--primary) 30%, var(--card)) 0%,
+    color-mix(in oklch, var(--primary) 55%, var(--card)) 100%
+  );
+  border: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
   border-radius: 0.75rem;
 
   strong { display: block; font-size: 1rem; margin-bottom: 0.375rem; }
-  p { margin: 0; font-size: 0.8125rem; color: rgba(0, 0, 0, 0.65); }
+  p { margin: 0; font-size: 0.8125rem; color: color-mix(in oklch, var(--foreground) 65%, transparent); }
 }
 
 .targetMultiRow {
@@ -588,9 +612,9 @@
   padding: 1.25rem 1rem;
   text-align: center;
   font-weight: 600;
-  background: rgba(36, 128, 237, 0.08);
+  background: color-mix(in oklch, var(--hyperlink-color) 8%, transparent);
   color: var(--hyperlink-color);
-  border: 1px solid rgba(36, 128, 237, 0.25);
+  border: 1px solid color-mix(in oklch, var(--hyperlink-color) 25%, transparent);
   border-radius: 0.375rem;
 }
 
@@ -601,8 +625,8 @@
   width: 100%;
   max-width: 360px;
   padding: 1rem 1.25rem;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--card);
+  border: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
   border-radius: 0.5rem;
 }
 
@@ -610,13 +634,13 @@
   flex: none;
   width: 48px;
   height: 48px;
-  background: rgb(36, 128, 237);
+  background: var(--hyperlink-color);
   border-radius: 0.5rem;
 }
 
 .targetTokensHint {
   font-size: 0.8125rem;
-  color: rgba(0, 0, 0, 0.6);
+  color: color-mix(in oklch, var(--foreground) 60%, transparent);
 }
 
 // =============================================================================
@@ -638,7 +662,7 @@
     overflow-y: hidden;
     padding: 0.5rem 0;
     background: var(--body-bg);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    border-bottom: 1px solid color-mix(in oklch, var(--foreground) 6%, transparent);
   }
 
   .sideNavList {

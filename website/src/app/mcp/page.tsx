@@ -23,6 +23,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = {
@@ -209,7 +210,10 @@ export default function McpPage() {
                 state of your live page. Design Mode exposes eight MCP tools
                 so your agent can read every edit you made in the side
                 panel, push patches back to the page, grab screenshots, and
-                mark your comments resolved — all without copy-paste.
+                mark your comments resolved — all without copy-paste. MCP
+                connection, mode, and token management now live on their
+                own dedicated page inside the extension, opened from the
+                header MCP chip.
               </p>
               <p>
                 <strong className="text-foreground">
@@ -283,8 +287,8 @@ export default function McpPage() {
             <code className="bg-muted rounded px-1 py-0.5 text-sm">
               dm_&lt;your-token&gt;
             </code>{" "}
-            placeholder with the bearer token from your side panel, and
-            restart the agent.
+            placeholder with the bearer token from the extension's
+            dedicated MCP page (Copy token), and restart the agent.
           </p>
 
           <Accordion type="single" collapsible className="mt-8 w-full">
@@ -316,6 +320,66 @@ export default function McpPage() {
               </AccordionItem>
             ))}
           </Accordion>
+        </div>
+
+        <DashedLine className="container mt-20 max-w-5xl" />
+
+        <div className="container mt-16 max-w-5xl">
+          <h2 className="text-2xl tracking-tight md:text-3xl">
+            Give your agent the workflow
+          </h2>
+          <p className="text-muted-foreground mt-2 max-w-2xl">
+            The config above connects your agent to Design Mode. This one file
+            tells it <em>what to do</em> when you press{" "}
+            <strong className="text-foreground">Send to Agent</strong>: read
+            your edits, comments, and token changes over MCP, map each to its
+            source, and implement them — updating your Changes tab as it works.
+            Drop it into your agent&apos;s commands folder and run{" "}
+            <code className="bg-muted rounded px-1 py-0.5 text-sm">
+              /design-mode
+            </code>
+            .
+          </p>
+
+          <div className="mt-6 flex flex-wrap items-center gap-4">
+            <Button asChild>
+              <a href="/design-mode.md" download="design-mode.md">
+                <FileDown className="size-4" />
+                Download design-mode.md
+              </a>
+            </Button>
+            <span className="text-muted-foreground text-sm">
+              One file, works with every agent below.
+            </span>
+          </div>
+
+          <div className="mt-8">
+            <p className="text-muted-foreground mb-3 text-sm font-medium">
+              Where to save it
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                { label: "Claude Code", path: ".claude/commands/design-mode.md" },
+                { label: "Cursor", path: ".cursor/commands/design-mode.md" },
+                { label: "Codex", path: ".codex/prompts/design-mode.md" },
+                { label: "Windsurf", path: ".windsurf/workflows/design-mode.md" },
+              ].map((t) => (
+                <div
+                  key={t.label}
+                  className="bg-card border-border flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5"
+                >
+                  <span className="text-sm font-medium">{t.label}</span>
+                  <code className="text-muted-foreground text-xs">
+                    {t.path}
+                  </code>
+                </div>
+              ))}
+            </div>
+            <p className="text-muted-foreground mt-3 text-sm">
+              Any other MCP client works too — save the file wherever it looks
+              for slash-command or workflow prompts.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -416,7 +480,7 @@ function Snippet({
   return (
     <div>
       <p className="text-muted-foreground mb-2 text-sm font-medium">{label}</p>
-      <pre className="bg-muted text-foreground overflow-x-auto rounded-lg border p-4 text-xs leading-relaxed">
+      <pre className="bg-ink text-ink-foreground overflow-x-auto rounded-xl p-4 font-mono text-xs leading-relaxed">
         <code>{children}</code>
       </pre>
     </div>

@@ -242,6 +242,75 @@ export const posts: BlogPost[] = [
       "why-we-built-an-mcp-server-for-design-edits",
     ],
   },
+  {
+    slug: "design-mode-1-9-0-release",
+    title: "Design Mode 1.9.0 — design tokens, trigger-first motion, and a dedicated MCP page",
+    metaTitle:
+      "Design Mode 1.9.0 changelog deep-dive — design-system tokens, trigger-first motion, dedicated MCP page",
+    metaDescription:
+      "What shipped in Design Mode 1.9.0: a design-system-aware token engine with swap/edit/detach badges, trigger-first Motion interaction cards, a dedicated in-extension MCP page, a step-based Send to Agent modal, and a Select matching layers checkbox.",
+    keywords: [
+      "Design Mode 1.9.0",
+      "Design Mode changelog",
+      "Design Mode release notes",
+      "design system tokens",
+      "trigger-first motion",
+      "MCP page",
+    ],
+    datePublished: "2026-07-19",
+    excerpt:
+      "A token engine that understands design systems, Motion rebuilt around triggers instead of raw CSS properties, and MCP configuration moved out of Settings into its own page.",
+    body: [
+      {
+        paragraphs: [
+          "Design Mode 1.9.0 is the biggest release since MCP shipped. Three systems got rebuilt from the ground up — tokens, Motion, and the agent handoff — plus a handful of smaller fixes that had been on the list for a while.",
+        ],
+      },
+      {
+        heading: "Design-system aware tokens",
+        paragraphs: [
+          "Token discovery moved to a single engine that finds every CSS custom property a page declares, not just the ones on :root. Theme scopes, component scopes, matching @media/@supports blocks, and cascade layers are all picked up — on a Carbon Design System page that's the difference between finding no tokens and finding roughly 660 of them.",
+          "Recognised systems — IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, and Tailwind v4 — get labelled by name, and any Design-tab field authored from a variable now shows a ◆ badge. Click it for Swap token… (colour, spacing, radius, typography, and shadow all get a matched picker now, not just colour), Edit token globally, or Detach from token.",
+          "Because a token is one value per theme, edits write into a managed override stylesheet scoped to wherever the element actually resolves the token, instead of a single inline override that a theme scope's own rule would just beat. The agent side gets the same context: get_changes now carries tokenChanges with the scope and system, and the /design-mode workflow tells the agent to edit the token's definition, not restyle the component.",
+        ],
+      },
+      {
+        heading: "Motion, trigger-first",
+        paragraphs: [
+          "Motion used to be a list of raw CSS editors — Transition, Animation, Transform. Useful, but it made you translate 'fade in on hover' into property names yourself. The Motion section now leads with interaction cards keyed by trigger: Hover, Press, and Focus animate to a target state; Appear animates from a start state on mount via @starting-style; Loop plays an infinite keyframe; Scroll drives an animation-timeline: view().",
+          "Each card has change presets (Fade, Lift, Scale, Background), a shared easing Curve, a plain-English summary, and a Preview button that actually plays the interaction. The raw per-property editors didn't go away — they moved under Motion → Advanced for anyone who wants a specific CSS longhand.",
+        ],
+      },
+      {
+        heading: "A dedicated MCP page",
+        paragraphs: [
+          "MCP configuration — connection mode, port, auto-connect, token/tenant, Copy config / Copy token / Revoke — moved out of Settings into its own full-panel page, opened from the header MCP chip. Settings was getting crowded, and MCP setup is a distinct enough task (and one people revisit more than the rest of Settings) to earn its own screen.",
+        ],
+      },
+      {
+        heading: "Step-based Send to Agent, and a real handoff signal",
+        paragraphs: [
+          "Send to Agent is now a guided, step-based modal instead of a single click into the void. And on the protocol side, get_changes and get_session_summary expose a real handoff field once you send — an explicit 'these are ready' signal the agent can key off, instead of inferring intent from whatever's sitting in the change buffer.",
+        ],
+      },
+      {
+        heading: "Select matching layers",
+        paragraphs: [
+          "The similarity wand and threshold slider are gone, replaced by a Select matching layers checkbox in the indicator chip's Selected row. Tick it and every layer matching the same tag/class as your current selection joins it — same outcome, fewer moving parts.",
+        ],
+      },
+      {
+        heading: "Everything else",
+        paragraphs: [
+          "Layers tab rows no longer scroll horizontally on long names. Appearance's opacity and corner-radius fields are icon-led now, with blend mode and isolation moved into Advanced. Layout guides gained visibility gating so the section-level eye only shows up once you actually have more than one guide. And the whole panel picked up a Figma-aligned light/dark palette to cut down on visual noise.",
+        ],
+      },
+    ],
+    related: [
+      "why-we-built-an-mcp-server-for-design-edits",
+      "design-mode-1-5-0-changelog-deep-dive",
+    ],
+  },
 ];
 
 export function getPost(slug: string): BlogPost | undefined {

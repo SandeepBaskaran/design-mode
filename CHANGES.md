@@ -54,7 +54,7 @@ When the Changes toggle is in **previewing-original** state:
 
 ### Row 3 — Filter chips
 
-**All / Styles / Text / DOM / Comments** — filter the visible list to one change kind. Each chip carries a count badge so you can see at a glance which kinds have entries. The active chip is accent-tinted.
+**All / Styles / Text / DOM / Comments / Tokens** — filter the visible list to one change kind. Each chip carries a count badge so you can see at a glance which kinds have entries. The active chip is accent-tinted.
 
 When the active filter / search produces zero matches, the list is replaced with a small "No changes match this filter / search" notice and a *Clear filter* link that resets both the chip and the search box.
 
@@ -108,6 +108,12 @@ Changes are **grouped by the element they affect** (or by the element's selector
   └─ change item 2
   └─ ...
 ```
+
+Design-token edits are the one exception: they don't belong to a single
+element, so they group under the token's CSS scope selector instead —
+`:root` for a page-wide token, or the theme/component scope it was edited
+under (e.g. `.dark`, `.cds--g100`). Every token edit against that scope
+lands in the same group.
 
 ### Group header
 
@@ -170,6 +176,8 @@ The batch-apply button shows `×N` when `N > 1` matching elements exist on the p
 This is how you escalate a one-off edit into a sitewide change. E.g., changing `font-weight: 700` on one heading, then batch-applying so all 14 headings on the page also get it.
 
 **Resize entries**: dragging an element's resize handles on the page emits its `width` and `height` as style changes sharing a **"Resize"** group, so they collapse into a single revertable row instead of two.
+
+**State-variant entries**: a change made through Motion's trigger-first interactions (Hover / Press / Focus / Appear) carries a `state` tag internally (`:hover`, `:active`, `:focus-visible`, `@starting`) and writes to a variant rule (`[data-dm-id]:hover { }`, `@starting-style { }`) instead of the element's base style. The row itself still reads as a plain `property: old → new` — the trigger surfaces where it matters for shipping the code: CSS/SCSS/Tailwind/JSX exports and the Copy as Prompt / agent payload tag each such change with its trigger, e.g. `opacity 1 → 0.6 (on hover)`.
 
 ### 2. Text change
 
@@ -240,6 +248,28 @@ Comments have **two visual states** — a compact card and an expanded "viewing"
 
 The expanded card uses a purple-tinted background (or muted grey when resolved). The `×` button closes the expansion (back to the compact card). Edit and Delete actions are larger / more prominent here. The pin badge + timestamp sit in the header alongside the selector.
 
+### 5. Token change
+
+A design-token edit made in the Design-system / Tokens panel, or via a
+◆-badged field's **Edit token globally** action in the Design tab.
+
+```
+[ swatch-book icon ] --token-name [system chip] [scope chip]  oldValue → newValue     [ revert ]
+```
+
+| Element | Behavior |
+|---|---|
+| **Icon** (`swatch-book`, accent-colored) | Identifies this as a token change. |
+| **Token name** | The CSS custom property, e.g. `--color-primary`. |
+| **System chip** | Design-system label (IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, Tailwind v4) when the token is attributed to one. |
+| **Scope chip** | Shown only when the edit isn't page-wide — the theme/component scope selector it was declared on (e.g. `.dark`). Hidden for plain `:root` edits. |
+| **Old value → new value** (red strikethrough → green, max 20 chars each) | Before/after the token's resolved value. |
+| **Revert** (`trash`, hover-revealed) | Restores the token to its original value for that scope, clearing the corresponding rule in the `dm-token-overrides` stylesheet. |
+
+Token changes are sourced from the same store Copy as Prompt reads (as
+`tokenChanges` in `get_changes`), so the tab and the prompt always agree —
+Clear All wipes them too.
+
 ---
 
 ## Sticky bottom (Copy as Prompt + Send to Agent)
@@ -248,7 +278,7 @@ Same as the rest of the panel. Pinned at the bottom regardless of which tab is a
 
 | Button | What | Disabled when |
 |---|---|---|
-| **Copy as Prompt** (`clipboard` icon) | Builds a markdown prompt summarising every tracked change — element selector, before/after values for styles, text diffs, DOM operations, and any comments. Includes file:line / framework hints when source detection found them. Copies to clipboard. | The Changes toggle is in preview-original state, or no changes exist. |
+| **Copy as Prompt** (`clipboard` icon) | Builds a markdown prompt summarising every tracked change — element selector, before/after values for styles, text diffs, DOM operations, and any comments — plus a `## Tokens changed` section for token edits. Includes file:line / framework hints when source detection found them. State-variant style changes (Hover / Press / Focus / Appear) are tagged with their trigger, e.g. `opacity 1 → 0.6 (on hover)`. Copies to clipboard. | The Changes toggle is in preview-original state, or no changes exist. |
 | **Send to Agent** (`send` icon) | Stages a handoff marker over the MCP transport (local WS or cloud relay). The agent's next `get_changes` / `get_session_summary` call sees a `handoff` field — the explicit "these are ready to implement" signal — alongside the change list it already reads live. | The Changes toggle is in preview-original state, or no changes exist. When MCP is offline or no agent is connected yet, the button stays clickable and opens state-specific setup instructions instead of sending. |
 
 Send to Agent uses an accent style to distinguish it from Copy as the higher-stakes action.

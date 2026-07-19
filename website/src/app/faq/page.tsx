@@ -64,6 +64,16 @@ const groups: Group[] = [
           "Both. The shared surface is: edit the live page visually, ship a precise diff to whoever (or whatever AI agent) writes the code.",
       },
       {
+        question: "Does Design Mode understand my design system's tokens?",
+        answer:
+          "Yes. A token-discovery engine finds every CSS custom property a page declares — not just :root — including theme scopes, component scopes, matching @media/@supports blocks, and cascade layers, and recognises known systems (IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, Tailwind v4). Any Design-tab field authored from a token shows a ◆ badge for Swap token…, Edit token globally, or Detach from token, and edits are scope-aware so a themed token doesn't get clobbered across every theme at once.",
+      },
+      {
+        question: "How does Motion work?",
+        answer:
+          "Motion leads with trigger-first interaction cards — Hover, Press, and Focus animate to a target state; Appear animates from a start state on mount; Loop plays an infinite keyframe; Scroll drives a scroll-linked animation. Each card gets presets, a shared easing curve, a plain-English summary, and a real preview. Raw per-property CSS editors (transition, animation, transform, and more) still exist under Motion → Advanced.",
+      },
+      {
         question: "How do I install it?",
         answer:
           "Open the Chrome Web Store listing, click Add to Chrome, pin the side panel. Open any web page and click the toolbar icon to open the panel. No account required. Detailed steps: /docs/install.",
@@ -111,7 +121,7 @@ const groups: Group[] = [
       {
         question: "Does Design Mode work with Claude Code?",
         answer:
-          "Yes. Claude Code reads MCP servers from your project's .claude/settings.json under \"mcpServers\". Paste the Cloud or Local snippet from /mcp, restart Claude Code, and the six Design Mode tools become available.",
+          "Yes. Claude Code reads MCP servers from your project's .claude/settings.json under \"mcpServers\". Paste the Cloud or Local snippet from /mcp, restart Claude Code, and the eight Design Mode tools become available.",
       },
       {
         question: "Does Design Mode work with Cursor?",

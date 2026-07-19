@@ -137,6 +137,8 @@ type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
 interface StyleChange {
   id?: string; elementId: string; selector: string;
   property: string; oldValue: string; newValue: string; timestamp?: number;
+  // State-variant suffix for Motion interactions (':hover', '@starting', …).
+  state?: string;
   // Optional grouping envelope. Multiple StyleChanges sharing a `groupId`
   // collapse into a single row in the Changes tab. `groupKind` shapes the
   // row label (`PRESET`, `APPLIED to N`, `HIDE`). When `groupKind` is set
@@ -173,6 +175,7 @@ type ColorFormat = 'hex' | 'rgba' | 'hsl';
 let tab: Tab = 'design';
 let settingsOpen = false;
 let helpOpen = false;
+let mcpOpen = false;
 let sendAgentHelpOpen = false;
 
 // "Select matching layers" checkbox — checked hands all matching
@@ -420,6 +423,61 @@ let sidesPopoverOpen = false;
 let strokeStylePopoverOpen = false;
 let effectsMenuOpen = false;
 let motionMenuOpen = false;
+// Which interaction is being force-previewed (the .dm-force-* class is on
+// the page element). Null when nothing is previewing. Panel-only state.
+let motionForcedTrigger: string | null = null;
+// Motion interaction triggers → the CSS state-variant selector the target
+// props are written into. Hover/press/focus are pseudo-classes; 'appear'
+// uses the @starting-style sentinel handled in the override engine.
+const MOTION_TRIGGER_STATE: Record<string, string> = {
+  hover: ':hover',
+  press: ':active',
+  focus: ':focus-visible',
+  appear: '@starting',
+};
+// State-variant triggers (target values written into a `:state` rule).
+// `appear` uses the @starting-style sentinel and carries "from" values —
+// the element animates from those to its natural resting state on mount.
+const MOTION_TRIGGERS: Array<{ trigger: string; state: string; label: string; verb: string; icon: keyof typeof icons }> = [
+  { trigger: 'hover',  state: ':hover',         label: 'Hover',  verb: 'On hover',  icon: 'mousePointer2' },
+  { trigger: 'press',  state: ':active',        label: 'Press',  verb: 'On press',  icon: 'move' },
+  { trigger: 'focus',  state: ':focus-visible', label: 'Focus',  verb: 'On focus',  icon: 'crosshair' },
+  { trigger: 'appear', state: '@starting',      label: 'Appear', verb: 'On appear', icon: 'sparkles' },
+];
+const MOTION_STATE_TRIGGER: Record<string, typeof MOTION_TRIGGERS[number]> =
+  Object.fromEntries(MOTION_TRIGGERS.map(t => [t.state, t]));
+type MotionPreset = { prop: string; value: string; label: string; icon: keyof typeof icons };
+// Interaction / press / focus animate TO a target; appear animates FROM a
+// start state, so the same gestures need different seed values per family.
+const MOTION_CHANGE_PRESETS: Record<string, MotionPreset> = {
+  fade:  { prop: 'opacity',         value: '0.6',       label: 'Fade',       icon: 'blend' },
+  lift:  { prop: 'translate',       value: '0px -8px',  label: 'Lift',       icon: 'move' },
+  scale: { prop: 'scale',           value: '1.05',      label: 'Scale',      icon: 'maximize' },
+  color: { prop: 'backgroundColor', value: '#3b82f6',   label: 'Background', icon: 'droplet' },
+};
+const MOTION_APPEAR_PRESETS: Record<string, MotionPreset> = {
+  fade:  { prop: 'opacity',   value: '0',        label: 'Fade in',  icon: 'blend' },
+  slide: { prop: 'translate', value: '0px 12px', label: 'Slide up', icon: 'move' },
+  scale: { prop: 'scale',     value: '0.9',      label: 'Scale in', icon: 'maximize' },
+};
+function motionPresetsFor(trigger: string): Record<string, MotionPreset> {
+  return trigger === 'appear' ? MOTION_APPEAR_PRESETS : MOTION_CHANGE_PRESETS;
+}
+function motionChangeLabel(prop: string): string {
+  const hit = [...Object.values(MOTION_CHANGE_PRESETS), ...Object.values(MOTION_APPEAR_PRESETS)].find(p => p.prop === prop);
+  return hit ? hit.label : prop;
+}
+// Built-in @keyframes offered in the Loop / Scroll cards (from the shared
+// keyframes library — names must match BUILTIN_KEYFRAMES in change-tracker).
+const MOTION_KEYFRAME_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'dm-fade-in', label: 'Fade in' },
+  { value: 'dm-slide-up', label: 'Slide up' },
+  { value: 'dm-pulse', label: 'Pulse' },
+  { value: 'dm-bounce', label: 'Bounce' },
+  { value: 'dm-spin', label: 'Spin' },
+  { value: 'dm-wiggle', label: 'Wiggle' },
+  { value: 'dm-ping', label: 'Ping' },
+];
 let fillAddOpen = false;
 let expandedFillIdx: number | null = null;
 let expandedStrokeIdx: number | null = null;
@@ -982,6 +1040,18 @@ async function applyStyle(property: string, value: string) {
   // section's UI mode-agnostic — fields write through one helper.
   if (property === '__stroke_color' || property === '__stroke_weight' || property === '__stroke_style') {
     applyStrokeProperty(property, value);
+    return;
+  }
+  // Motion interaction target: `__motion_<trigger>__<cssProp>` writes the
+  // CSS prop into a state-variant rule (`:hover` etc.) rather than the base
+  // rule, so it only applies while that interaction state is active.
+  const motionMatch = property.match(/^__motion_([a-z]+)__(.+)$/);
+  if (motionMatch) {
+    const state = MOTION_TRIGGER_STATE[motionMatch[1]];
+    if (state) {
+      const res = await send({ type: 'SP_APPLY_STYLE', property: motionMatch[2], value, state });
+      if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
+    }
     return;
   }
   // Margin / padding shorthand from the uniform field → write the four
@@ -1771,6 +1841,13 @@ chrome.runtime.onMessage.addListener((msg) => {
     return;
   }
   if (msg.type === 'ELEMENT_SELECTED') {
+    // Clear a lingering Motion preview: the forced `.dm-force-*` class was
+    // applied to the previously-selected element and must come off when the
+    // selection moves, or it stays stuck in that state on the page.
+    if (motionForcedTrigger && info?.id) {
+      send({ type: 'SP_FORCE_STATE', elementId: info.id, state: MOTION_TRIGGER_STATE[motionForcedTrigger] || '', on: false });
+      motionForcedTrigger = null;
+    }
     info = msg.payload; hoverInfo = null; commentMode = false;
     hydrateLayoutGuidesFromPayload(info);
     contrastSettingsOpen = false;
@@ -5130,6 +5207,162 @@ function renderAnimationEditor(s: Record<string, string>): string {
     '</div>';
 }
 
+// ── Motion interactions (trigger-first UI) ─────────────────────────────
+// Derives interaction cards from the element's state-variant style changes.
+// Each distinct state (`:hover`, …) present on the element becomes one card.
+function motionInteractionsFor(elId: string): Array<{ trigger: typeof MOTION_TRIGGERS[number]; changes: StyleChange[] }> {
+  if (!elId) return [];
+  const byState = new Map<string, StyleChange[]>();
+  for (const c of styleChanges) {
+    if (c.elementId !== elId || !c.state) continue;
+    if (!byState.has(c.state)) byState.set(c.state, []);
+    byState.get(c.state)!.push(c);
+  }
+  const out: Array<{ trigger: typeof MOTION_TRIGGERS[number]; changes: StyleChange[] }> = [];
+  for (const t of MOTION_TRIGGERS) {
+    const changes = byState.get(t.state);
+    if (changes && changes.length) out.push({ trigger: t, changes });
+  }
+  return out;
+}
+
+function motionInteractionSummary(verb: string, changes: StyleChange[], dur: string, timing: string): string {
+  const parts = changes.map(c => motionChangeLabel(c.property).toLowerCase() + ' → ' + c.newValue);
+  return verb + ' → ' + parts.join(', ') + ' · ' + dur + ' ' + timing;
+}
+
+// Shared card chrome for the trigger cards.
+function motionCardHeader(iconName: keyof typeof icons, verb: string, trigger: string, opts: { forced?: boolean; preview?: boolean }): string {
+  const previewBtn = opts.preview
+    ? '<button class="dm-fill-action" data-dm-motion-preview="' + trigger + '" title="' + (opts.forced ? 'Stop previewing' : 'Preview') + '" data-active="' + (opts.forced ? 'true' : 'false') + '">' + icon(opts.forced ? 'circlePause' : 'play', 12) + '</button>'
+    : '';
+  return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
+    '<span style="color:var(--dm-text-secondary);display:flex;">' + icon(iconName, 13) + '</span>' +
+    '<span style="font-size:11px;font-weight:600;color:var(--dm-text);flex:1;">' + verb + '</span>' +
+    previewBtn +
+    '<button class="dm-fill-action" data-dm-motion-remove-trigger="' + trigger + '" title="Remove" style="color:var(--dm-danger);">' + icon('trash', 12) + '</button>' +
+    '</div>';
+}
+function motionCardWrap(inner: string, active: boolean): string {
+  return '<div style="background:var(--dm-bg-secondary);border:1px solid ' + (active ? 'var(--dm-accent-border)' : 'var(--dm-separator)') + ';border-radius:6px;padding:8px;margin-bottom:8px;">' + inner + '</div>';
+}
+
+function renderMotionInteractionCard(t: typeof MOTION_TRIGGERS[number], changes: StyleChange[], s: Record<string, string>): string {
+  const dur = (s.transitionDuration || '0.2s').split(',')[0].trim();
+  const timing = (s.transitionTimingFunction || 'ease').split(',')[0].trim();
+  const isForced = motionForcedTrigger === t.trigger;
+  // Appear can't be forced via a class (@starting-style fires on mount), so
+  // its preview re-inserts the element instead — still a play button.
+  const changeRow = (c: StyleChange): string => {
+    const vprop = '__motion_' + t.trigger + '__' + c.property;
+    return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
+      '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">' + escapeAttr(motionChangeLabel(c.property)) + (t.trigger === 'appear' ? ' from' : '') + '</span>' +
+      '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + vprop + '" value="' + escapeAttr(c.newValue) + '" spellcheck="false" style="flex:1;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/>' +
+      '<button class="dm-fill-action" data-dm-motion-remove-change="' + t.trigger + ':' + escapeAttr(c.property) + '" title="Remove this change" style="color:var(--dm-danger);flex-shrink:0;">' + icon('x', 11) + '</button>' +
+      '</div>';
+  };
+
+  const present = new Set(changes.map(c => c.property));
+  const chips = Object.entries(motionPresetsFor(t.trigger))
+    .filter(([, p]) => !present.has(p.prop))
+    .map(([key, p]) =>
+      '<button class="dm-btn" data-dm-motion-add-change="' + t.trigger + ':' + key + '" title="Animate ' + escapeAttr(p.label.toLowerCase()) + '" style="padding:3px 7px;font-size:9px;display:inline-flex;align-items:center;gap:3px;">' + icon(p.icon, 10) + escapeAttr(p.label) + '</button>')
+    .join('');
+
+  const curve = '<div style="display:flex;align-items:center;gap:6px;margin-top:8px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Curve</span>' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="transitionDuration" data-dm-numeric="1" data-dm-unit="s" inputmode="decimal" value="' + escapeAttr(parseFloat(dur).toString()) + '" title="Duration (seconds)" style="width:52px;flex-shrink:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/>' +
+    '<select class="dm-select" data-dm-prop="transitionTimingFunction" style="flex:1;min-width:0;font-size:10px;">' +
+      (TIMING_FUNCTION_OPTIONS as readonly string[]).map(o => '<option value="' + o + '"' + (o === timing ? ' selected' : '') + '>' + o + '</option>').join('') +
+    '</select>' +
+    '</div>';
+
+  const summary = '<div style="font-size:10px;color:var(--dm-text-dim);margin-top:8px;font-style:italic;">' + escapeAttr(motionInteractionSummary(t.verb, changes, dur, timing)) + '</div>';
+
+  return motionCardWrap(
+    motionCardHeader(t.icon, t.verb, t.trigger, { forced: isForced, preview: true }) +
+    changes.map(changeRow).join('') +
+    (chips ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">' + chips + '</div>' : '') +
+    curve + summary,
+    isForced,
+  );
+}
+
+// Loop card — an infinite keyframe animation (the timeline family). Writes
+// base animation-* longhands; reuses the shared built-in keyframes.
+function renderMotionLoopCard(s: Record<string, string>): string {
+  const name = (s.animationName || 'none').split(',')[0].trim();
+  const dur = (s.animationDuration || '1s').split(',')[0].trim();
+  const picker = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Animation</span>' +
+    '<select class="dm-select" data-dm-prop="animationName" style="flex:1;min-width:0;font-size:10px;">' +
+      MOTION_KEYFRAME_OPTIONS.map(o => '<option value="' + o.value + '"' + (o.value === name ? ' selected' : '') + '>' + o.label + '</option>').join('') +
+    '</select></div>';
+  const durRow = '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Duration</span>' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="animationDuration" data-dm-numeric="1" data-dm-unit="s" inputmode="decimal" value="' + escapeAttr(parseFloat(dur).toString()) + '" style="width:52px;flex-shrink:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/>' +
+    '<span style="font-size:10px;color:var(--dm-text-dim);align-self:center;">· repeats forever</span></div>';
+  return motionCardWrap(
+    motionCardHeader('activity', 'Loop', 'loop', { preview: true }) + picker + durRow,
+    false,
+  );
+}
+
+// Scroll card — binds a keyframe animation's progress to scroll position via
+// a view() timeline. No time-preview (it plays as you scroll the page).
+function renderMotionScrollCard(s: Record<string, string>): string {
+  const name = ((s as any).animationName || 'none').split(',')[0].trim();
+  const range = ((s as any).animationRange || 'entry 0% cover 40%').trim();
+  const picker = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Animation</span>' +
+    '<select class="dm-select" data-dm-prop="animationName" style="flex:1;min-width:0;font-size:10px;">' +
+      MOTION_KEYFRAME_OPTIONS.map(o => '<option value="' + o.value + '"' + (o.value === name ? ' selected' : '') + '>' + o.label + '</option>').join('') +
+    '</select></div>';
+  const rangeRow = '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Range</span>' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="animationRange" value="' + escapeAttr(range) + '" spellcheck="false" title="Scroll range that drives the animation, e.g. &quot;entry 0% cover 40%&quot;" style="flex:1;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/></div>';
+  const note = '<div style="font-size:10px;color:var(--dm-text-dim);margin-top:8px;font-style:italic;">Plays as this element scrolls through the viewport (Chrome 115+).</div>';
+  return motionCardWrap(
+    motionCardHeader('arrowUpDown', 'On scroll', 'scroll', { preview: false }) + picker + rangeRow + note,
+    false,
+  );
+}
+
+function motionLoopSet(s: Record<string, string>): boolean {
+  const name = (s.animationName || 'none').split(',')[0].trim();
+  const iter = (s.animationIterationCount || '1').split(',')[0].trim();
+  const timeline = ((s as any).animationTimeline || 'auto').trim();
+  return name !== 'none' && name !== '' && iter === 'infinite' && (timeline === 'auto' || timeline === '');
+}
+function motionScrollSet(s: Record<string, string>): boolean {
+  const timeline = ((s as any).animationTimeline || 'auto').trim();
+  return timeline !== 'auto' && timeline !== '';
+}
+
+function renderMotionInteractions(s: Record<string, string>, elId: string): string {
+  const interactions = motionInteractionsFor(elId);
+  const cards = interactions.map(i => renderMotionInteractionCard(i.trigger, i.changes, s)).join('');
+  const loopSet = motionLoopSet(s);
+  const scrollSet = motionScrollSet(s);
+  const timelineCards = (scrollSet ? renderMotionScrollCard(s) : '') + (loopSet ? renderMotionLoopCard(s) : '');
+  const used = new Set<string>(interactions.map(i => i.trigger.trigger));
+  if (loopSet) used.add('loop');
+  if (scrollSet) used.add('scroll');
+  const addDefs: Array<{ trigger: string; label: string; icon: keyof typeof icons }> = [
+    ...MOTION_TRIGGERS.map(t => ({ trigger: t.trigger, label: t.label, icon: t.icon })),
+    { trigger: 'loop', label: 'Loop', icon: 'activity' },
+    { trigger: 'scroll', label: 'Scroll', icon: 'arrowUpDown' },
+  ];
+  const addChips = addDefs.filter(t => !used.has(t.trigger)).map(t =>
+    '<button class="dm-btn" data-dm-motion-add-trigger="' + t.trigger + '" title="Animate ' + t.label + '" style="padding:4px 8px;font-size:10px;display:inline-flex;align-items:center;gap:4px;">' + icon(t.icon, 11) + t.label + '</button>').join('');
+  const anyCard = cards || timelineCards;
+  const addRow = addChips
+    ? '<div style="display:flex;flex-wrap:wrap;gap:5px;' + (anyCard ? 'margin-top:2px;' : '') + '">' +
+      '<span style="font-size:10px;color:var(--dm-text-dim);align-self:center;margin-right:2px;">When:</span>' + addChips + '</div>'
+    : '';
+  return cards + timelineCards + addRow;
+}
+
 /* ── v1.2: Curve math helpers ── */
 function sampleBezier(x1: number, y1: number, x2: number, y2: number, n = 40): {x: number; y: number}[] {
   function b(t: number, p0: number, p1: number, p2: number, p3: number): number {
@@ -5859,38 +6092,52 @@ function spacingBox(s: Record<string, string>, displayInfo: any): string {
 }
 
 /* ── Layout render helpers ── */
-function renderMcpStatus(): string {
-  let dotStyle = '', tooltipText = '', textColor = '';
+// Single source of truth for the MCP state's visual treatment. The header
+// chip and the MCP page's status card both derive from this so they can't
+// drift. `label` is the human-readable state; `detail` is a one-line
+// explanation shown on the MCP page.
+function mcpStatusDisplay(): { dotStyle: string; textColor: string; label: string; detail: string } {
   const isCloud = mcpMode === 'cloud' || mcpMode === 'self-hosted';
-  const offlineHint = isCloud
-    ? (mcpCloudToken
-        ? 'Cloud relay unreachable. Click to retry. Check Settings → MCP for the server URL + token.'
-        : 'No cloud token yet. Open Settings → MCP and click Connect to Cloud.')
-    : 'MCP not running. Click to retry the connection.\n\nStart the server with `npm start --prefix packages/mcp-local`.';
   if (mcpState === 'offline') {
-    dotStyle = 'width:7px;height:7px;border-radius:50%;background:var(--dm-text-muted);flex-shrink:0;';
-    tooltipText = offlineHint;
-    textColor = 'var(--dm-text-muted)';
-  } else if (mcpState === 'running') {
-    dotStyle = 'width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:dm-pulse 2s ease-in-out infinite;';
-    tooltipText = isCloud
-      ? 'Cloud relay connected. Side panel must stay open for agent calls to land.'
-      : 'MCP server is running, but no agent is connected yet. Click to refresh.';
-    textColor = '#22c55e';
-  } else {
-    dotStyle = 'width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.4);flex-shrink:0;';
-    tooltipText = isCloud
-      ? 'Cloud relay connected and serving an agent.'
-      : 'MCP connected. Click to refresh status.';
-    textColor = '#22c55e';
+    return {
+      dotStyle: 'width:7px;height:7px;border-radius:50%;background:var(--dm-text-muted);flex-shrink:0;',
+      textColor: 'var(--dm-text-muted)',
+      label: 'Offline',
+      detail: isCloud
+        ? (mcpCloudToken
+            ? 'Cloud relay unreachable. Refresh to retry, or check the server URL + token below.'
+            : 'No cloud token yet. Click Connect to Cloud below.')
+        : 'MCP not running. Start the server with `npm start --prefix packages/mcp-local`, then refresh.',
+    };
   }
-  // The whole chip is now clickable — clicking it calls refreshMcpStatus()
-  // which re-pings the content script + server. The icon to the right
-  // signals refreshability without crowding the indicator with two
-  // overlapping click targets.
-  return '<button data-dm-action="refresh-mcp" style="display:flex;align-items:center;gap:5px;padding:4px 8px;background:var(--dm-bg-secondary);border:none;border-radius:6px;cursor:pointer;font-family:inherit;" title="' + escapeAttr(tooltipText) + '">' +
+  if (mcpState === 'running') {
+    return {
+      dotStyle: 'width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:dm-pulse 2s ease-in-out infinite;',
+      textColor: '#22c55e',
+      label: 'Running',
+      detail: isCloud
+        ? 'Cloud relay connected. Side panel must stay open for agent calls to land.'
+        : 'MCP server is running, but no agent is connected yet.',
+    };
+  }
+  return {
+    dotStyle: 'width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.4);flex-shrink:0;',
+    textColor: '#22c55e',
+    label: 'Connected',
+    detail: isCloud
+      ? 'Cloud relay connected and serving an agent.'
+      : 'MCP connected and serving an agent.',
+  };
+}
+
+function renderMcpStatus(): string {
+  const { dotStyle, textColor, label } = mcpStatusDisplay();
+  // The whole chip opens the dedicated MCP page (status + server config +
+  // agent setup). The trailing chevron signals navigation rather than the
+  // old in-place refresh — refreshing now lives on the page itself.
+  return '<button data-dm-action="mcp" style="display:flex;align-items:center;gap:5px;padding:4px 8px;background:var(--dm-bg-secondary);border:none;border-radius:6px;cursor:pointer;font-family:inherit;" title="' + escapeAttr('MCP: ' + label + ' — click to open MCP settings') + '">' +
     '<span style="' + dotStyle + '"></span><span style="font-size:10px;color:' + textColor + ';font-weight:500;">MCP</span>' +
-    '<span style="color:var(--dm-text-secondary);display:flex;padding:2px;">' + icon('rotateCw', 10) + '</span>' +
+    '<span style="color:var(--dm-text-secondary);display:flex;padding:2px;">' + icon('chevronRight', 10) + '</span>' +
     '</button>';
 }
 
@@ -5902,6 +6149,10 @@ function renderHeader(): string {
     '<button data-dm-action="toggle-theme" title="Toggle theme" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon(themeIcon as keyof typeof icons, 15) + '</button>' +
     '<button data-dm-action="contribute" title="Contribute" aria-label="Open contribute panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('heartHandshake', 15) + '</button>' +
     '<button data-dm-action="help" title="Help" aria-label="Open help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('helpCircle', 15) + '</button>' +
+    '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button>' +
+    // Docking controls (pop-out / pin-on-top / dock-back) sit last — they
+    // manage the panel window itself, not the page, so they read as a
+    // separate group after Settings.
     (isPip
       ? '<button data-dm-action="pip-unpin" title="Pinned on top — click to unpin back to the floating window" aria-label="Pinned on top — click to unpin back to the floating window" style="background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>' +
         '<button data-dm-action="pip-dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
@@ -5911,7 +6162,7 @@ function renderHeader(): string {
             : '') +
           '<button data-dm-action="dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
         : '<button data-dm-action="pop-out" title="Pop out into a floating window" aria-label="Pop out into a floating window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('externalLink', 15) + '</button>') +
-    '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button></div>';
+    '</div>';
 }
 
 function renderActionRow(): string {
@@ -6007,20 +6258,20 @@ function renderSendAgentHelpOverlay(): string {
   if (mcpState === 'running') {
     intro = 'The MCP server is reachable, but no coding agent has connected yet.';
     steps = [
-      'Open <b>Settings → MCP</b> and click <b>Copy MCP config</b>.',
+      'Open the <b>MCP page</b> (click the MCP chip up top) and click <b>Copy MCP config</b>.',
       'Paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …) and restart the agent.',
       'Run ' + code('/design-mode') + ' in the agent — the MCP chip up top turns solid green.',
     ];
   } else if (isCloud && mcpCloudToken) {
     intro = 'The cloud relay is unreachable right now.';
     steps = [
-      'Open <b>Settings → MCP</b> and check the server URL and token.',
-      'Click the <b>MCP</b> chip in the panel header to retry the connection.',
+      'Open the <b>MCP page</b> (click the MCP chip up top) and check the server URL and token.',
+      'Click <b>Refresh status</b> on the MCP page to retry the connection.',
     ];
   } else if (isCloud) {
     intro = 'One-time setup — takes about a minute.';
     steps = [
-      'Open <b>Settings → MCP</b> and click <b>Connect to Cloud</b>.',
+      'Open the <b>MCP page</b> (click the MCP chip up top) and click <b>Connect to Cloud</b>.',
       'Click <b>Copy MCP config</b> and paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …).',
       'Restart the agent, then run ' + code('/design-mode') + ' in it.',
     ];
@@ -6045,7 +6296,7 @@ function renderSendAgentHelpOverlay(): string {
     '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-bottom:14px;line-height:1.5;">Once connected, this button stages your changes for the agent — it implements them and marks each one done in the Changes tab.</div>' +
     '<div style="display:flex;gap:6px;">' +
     '<button data-dm-action="send-agent-help-close" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Close</button>' +
-    '<button data-dm-action="send-agent-help-settings" style="flex:1;padding:6px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Open MCP settings</button>' +
+    '<button data-dm-action="send-agent-help-mcp" style="flex:1;padding:6px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Open MCP settings</button>' +
     '</div></div></div>';
 }
 
@@ -6652,7 +6903,7 @@ function renderDesignTab(): string {
   // Freeze toggle lives in the Motion section header (moved out of the action
   // row). Page-wide: pauses every animation / transition / video on the page.
   const freezeBtn = '<button class="dm-section-action" data-dm-action="toggle-freeze" data-active="' + (animationsFrozen ? 'true' : 'false') + '" title="' + (animationsFrozen ? 'Resume all motion on the page' : 'Pause every animation, transition and video on the page') + '">' + icon(animationsFrozen ? 'circlePlay' : 'circlePause', 12) + '</button>';
-  const motionActionsHtml = freezeBtn + motionAddMenuTrigger(motionMenuOpen);
+  const motionActionsHtml = freezeBtn + advancedToggleBtn('motion', !!advancedOpen.motion) + motionAddMenuTrigger(motionMenuOpen);
 
   // Position content \u2014 laid out on a 12-col grid:
   //   \u2022 alignment row: 6 buttons \u00d7 2 cols
@@ -7557,18 +7808,26 @@ function renderDesignTab(): string {
     return '<div data-dm-effect-row="' + idx + '" data-dm-effect-id="' + escapeAttr(entry.id) + '" data-dm-effect-chain="' + ((entry as any).chain || '') + '" draggable="true">' + head + '</div>';
   }).join('');
 
-  // Motion subsection \u2014 keeps the existing per-property editors.
+  // Motion subsection. Trigger-first interaction cards are the primary UI;
+  // the raw transition / animation / transform / etc. editors move into an
+  // Advanced disclosure for power users (Phase 5 absorption).
   const motionPieces: string[] = [];
-  if (hasTransition) motionPieces.push(
+  const motionRawPieces: string[] = [];
+  // Interaction cards + the "When:" add-row (always rendered so a trigger
+  // can be added even before any interaction exists).
+  const motionElId = info?.id || '';
+  const interactionsHtml = renderMotionInteractions(s, motionElId);
+  if (interactionsHtml) motionPieces.push(interactionsHtml);
+  if (hasTransition) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;color:var(--dm-text-muted);"><span>' + icon('play', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Transition</span></div>' +
     renderTransitionEditor(s) +
     (vizProp === 'transition' ? renderVizPanel() : '')
   );
-  if (hasAnimation) motionPieces.push(
+  if (hasAnimation) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('film', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Animation</span></div>' +
     renderAnimationEditor(s)
   );
-  if (transformIsSet) motionPieces.push(
+  if (transformIsSet) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('move3d', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Transform</span></div>' +
     renderTransformComponents(s)
   );
@@ -7577,7 +7836,7 @@ function renderDesignTab(): string {
   // "Motion path" preset that seeds it. CSS-native equivalent of SVG
   // <animateMotion>.
   const motionPathSet = (((s as any).offsetPath || 'none') !== 'none' && (s as any).offsetPath !== '');
-  if (motionPathSet) motionPieces.push(
+  if (motionPathSet) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('compass', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Motion path</span></div>' +
     grid12([
       { span: 12, content: inp('Path', 'offsetPath', (s as any).offsetPath || 'none', '') },
@@ -7601,7 +7860,7 @@ function renderDesignTab(): string {
   const vtName = ((s as any).viewTransitionName || 'none').trim();
   const vtClass = ((s as any).viewTransitionClass || 'none').trim();
   const viewTransitionSet = vtName !== 'none' && vtName !== '' || vtClass !== 'none' && vtClass !== '';
-  if (viewTransitionSet) motionPieces.push(
+  if (viewTransitionSet) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('shuffle', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">View transition</span></div>' +
     grid12([
       { span: 6, content: inp('Name', 'viewTransitionName', vtName === 'none' ? '' : vtName, '') },
@@ -7618,7 +7877,7 @@ function renderDesignTab(): string {
   const sdAnyScrollTl = (((s as any).scrollTimelineName || 'none') !== 'none' && (s as any).scrollTimelineName !== '');
   const sdAnyViewTl   = (((s as any).viewTimelineName || 'none') !== 'none' && (s as any).viewTimelineName !== '');
   const scrollDrivenSet = sdAnyTimeline || sdAnyScrollTl || sdAnyViewTl;
-  if (scrollDrivenSet) motionPieces.push(
+  if (scrollDrivenSet) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('arrowUpDown', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Scroll-driven animation</span></div>' +
     sub('Animation timeline') +
     grid12([
@@ -7646,12 +7905,16 @@ function renderDesignTab(): string {
       '<button class="dm-btn" data-dm-effect-action="clear-scroll-driven" title="Reset all scroll/view-timeline properties" style="padding:3px 8px;font-size:9px;">Clear</button>' +
     '</div>'
   );
-  // Motion lives in its own section now (rendered below Effects). The
-  // pieces array carries each editor; if nothing is set the section
-  // shows an empty hint and the + menu seeds the first kind.
-  const motionContent = motionPieces.length
-    ? motionPieces.join('')
-    : '<div style="font-size:11px;color:var(--dm-text-dim);text-align:center;padding:14px 0;">Click + to add motion.</div>';
+  // Motion lives in its own section (rendered below Effects). Interaction
+  // cards + the "When:" add-row are always present; the raw CSS editors sit
+  // under an Advanced disclosure so the everyday surface stays simple.
+  const motionAdvOpen = !!advancedOpen.motion;
+  const motionAdvancedHtml = motionRawPieces.length
+    ? advancedDisclosure('motion', motionAdvOpen,
+        '<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--dm-text-dim);margin-bottom:8px;">Advanced (raw CSS)</div>' +
+        motionRawPieces.join(''))
+    : '';
+  const motionContent = motionPieces.join('') + motionAdvancedHtml;
 
   const effectsContent = effectEntries.length > 0
     ? effectRows
@@ -8479,6 +8742,38 @@ function renderAgentCommandCard(sS: string, sT: string, lS: string): string {
     '<div style="display:flex;flex-direction:column;gap:8px;">' + rows + '</div></div>';
 }
 
+// Dedicated MCP page — opened from the header MCP chip. Surfaces live
+// connection status (with refresh), the MCP Server card (mode + config /
+// token), and the agent-setup command card. These used to live inside
+// Settings; they're MCP/agent concerns, so they get their own home.
+function renderMcpView(): string {
+  const activeBtn = 'flex:1;padding:5px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
+  const inactiveBtn = 'flex:1;padding:5px 8px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
+  const sS = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:12px;';
+  const sT = 'font-size:11px;font-weight:600;color:var(--dm-text-secondary);margin-bottom:8px;';
+  const lS = 'font-size:11px;color:var(--dm-text-muted);';
+
+  const { dotStyle, textColor, label, detail } = mcpStatusDisplay();
+  const statusCard = '<div style="' + sS + '">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+    '<div style="display:flex;align-items:center;gap:6px;"><span style="' + dotStyle + '"></span>' +
+    '<span style="font-size:12px;font-weight:600;color:' + textColor + ';">' + escapeAttr(label) + '</span></div>' +
+    '<button data-dm-action="refresh-mcp" title="Re-ping the MCP server" style="display:flex;align-items:center;gap:4px;padding:5px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">' + icon('rotateCw', 11) + ' Refresh status</button>' +
+    '</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);line-height:1.4;">' + escapeAttr(detail) + '</div>' +
+    '</div>';
+
+  return '<div style="padding:16px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
+    '<button data-dm-action="back-from-mcp" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
+    '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">MCP</span></div>' +
+    '<div style="display:flex;flex-direction:column;gap:12px;">' +
+    statusCard +
+    renderMcpServerCard(sS, sT, lS, activeBtn, inactiveBtn) +
+    renderAgentCommandCard(sS, sT, lS) +
+    '</div></div>';
+}
+
 function renderSettingsView(): string {
   const cfHex = colorFormat === 'hex';
   const cfRgba = colorFormat === 'rgba';
@@ -8495,8 +8790,6 @@ function renderSettingsView(): string {
     '<button data-dm-action="back-from-settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Settings</span></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px;">' +
-    renderMcpServerCard(sS, sT, lS, activeBtn, inactiveBtn) +
-    renderAgentCommandCard(sS, sT, lS) +
     (() => {
       const swatch = (key: string, val: string) =>
         '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -8859,6 +9152,8 @@ function render() {
       '</div>';
   } else if (settingsOpen) {
     html = renderHeader() + renderSettingsView() + renderCaptureToast();
+  } else if (mcpOpen) {
+    html = renderHeader() + renderMcpView() + renderCaptureToast();
   } else if (helpOpen) {
     html = renderHeader() + renderHelpView() + renderCaptureToast();
   } else if (contributeOpen) {
@@ -9023,7 +9318,7 @@ function setupDelegation() {
             } else if (mcpState === 'offline') {
               const cloudMode = mcpMode === 'cloud' || mcpMode === 'self-hosted';
               showCaptureToast('error', cloudMode
-                ? (mcpCloudToken ? 'Cloud relay still unreachable.' : 'No cloud token. Open Settings → MCP.')
+                ? (mcpCloudToken ? 'Cloud relay still unreachable.' : 'No cloud token. Click Connect to Cloud below.')
                 : 'MCP still offline. Run `npm start --prefix packages/mcp-local`.');
             }
           });
@@ -9032,7 +9327,7 @@ function setupDelegation() {
         case 'copy-prompt': copyPrompt(); break;
         case 'send-to-agent': sendToAgent(); break;
         case 'send-agent-help-close': sendAgentHelpOpen = false; render(); break;
-        case 'send-agent-help-settings': sendAgentHelpOpen = false; helpOpen = false; contributeOpen = false; settingsOpen = true; render(); break;
+        case 'send-agent-help-mcp': sendAgentHelpOpen = false; helpOpen = false; contributeOpen = false; settingsOpen = false; mcpOpen = true; render(); break;
         case 'toggle-theme': toggleTheme(); break;
         case 'submit-comment': submitComment(); break;
         case 'cancel-comment': cancelComment(); break;
@@ -9135,12 +9430,14 @@ function setupDelegation() {
         case 'clear-changes-search': changesSearch = ''; render(); break;
         case 'reset-changes-filter': changesFilter = 'all'; changesSearch = ''; render(); break;
         case 'back-from-settings': settingsOpen = false; render(); break;
-        case 'settings': helpOpen = false; contributeOpen = false; settingsOpen = !settingsOpen; render(); break;
+        case 'settings': helpOpen = false; contributeOpen = false; mcpOpen = false; settingsOpen = !settingsOpen; render(); break;
+        case 'back-from-mcp': mcpOpen = false; render(); break;
+        case 'mcp': settingsOpen = false; helpOpen = false; contributeOpen = false; mcpOpen = !mcpOpen; if (mcpOpen) refreshMcpStatus(); render(); break;
         case 'back-from-help': helpOpen = false; render(); break;
-        case 'help': settingsOpen = false; contributeOpen = false; helpOpen = !helpOpen; render(); break;
+        case 'help': settingsOpen = false; contributeOpen = false; mcpOpen = false; helpOpen = !helpOpen; render(); break;
         case 'back-from-contribute': contributeOpen = false; render(); break;
         case 'open-file-access-settings': chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id }); break;
-        case 'contribute': settingsOpen = false; helpOpen = false; contributeOpen = !contributeOpen; render(); break;
+        case 'contribute': settingsOpen = false; helpOpen = false; mcpOpen = false; contributeOpen = !contributeOpen; render(); break;
         case 'copy-diagnostics': {
           const payload = buildDiagnostics();
           const flash = (msg: string) => {
@@ -10007,6 +10304,7 @@ function setupDelegation() {
         tokensOpen = true;
         settingsOpen = false;
         helpOpen = false;
+        mcpOpen = false;
         tokensTab = 'declared';
         tokensFocusVar = cssVar;
         // Pin the panel to the scope this element resolves the token
@@ -10997,8 +11295,111 @@ function setupDelegation() {
           applyStyle('animation', 'dm-fade-in 1s linear both');
         }
       }
+      // Raw motion kinds now live under the Motion → Advanced disclosure;
+      // open it so the seeded editor is visible instead of silently hidden.
+      if (['transition','animation','transform','motion-path','view-transition','scroll-driven'].includes(kind)) {
+        advancedOpen.motion = true;
+      }
       effectsMenuOpen = false;
       motionMenuOpen = false;
+      return;
+    }
+
+    // ── Motion interactions (trigger-first cards) ──────────────────────
+    // Add a trigger: seed the base transition curve + a default Fade change
+    // so the card appears with something concrete to tweak.
+    const motionAddTriggerBtn = target.closest<HTMLElement>('[data-dm-motion-add-trigger]');
+    if (motionAddTriggerBtn) {
+      e.stopPropagation();
+      const trig = motionAddTriggerBtn.dataset.dmMotionAddTrigger!;
+      const s = info?.computedStyles || {};
+      if (trig === 'loop') {
+        applyStyle('animationName', 'dm-pulse');
+        applyStyle('animationDuration', '1s');
+        applyStyle('animationTimingFunction', 'ease-in-out');
+        applyStyle('animationIterationCount', 'infinite');
+      } else if (trig === 'scroll') {
+        applyStyle('animationName', 'dm-fade-in');
+        applyStyle('animationDuration', '1s');
+        applyStyle('animationFillMode', 'both');
+        applyStyle('animationTimeline', 'view()');
+        applyStyle('animationRange', 'entry 0% cover 40%');
+      } else {
+        // State-transition family (hover/press/focus/appear). Seed the base
+        // transition only if absent so a second trigger shares the curve.
+        if ((s.transitionDuration || '0s').split(',')[0].trim() === '0s') {
+          applyStyle('transitionProperty', 'all');
+          applyStyle('transitionDuration', '0.2s');
+          applyStyle('transitionTimingFunction', 'ease');
+        }
+        // Appear needs allow-discrete so an @starting-style transition fires.
+        if (trig === 'appear') applyStyle('transitionBehavior', 'allow-discrete');
+        const seed = motionPresetsFor(trig).fade;
+        applyStyle('__motion_' + trig + '__' + seed.prop, seed.value);
+      }
+      return;
+    }
+    // Add a change preset to an existing trigger card.
+    const motionAddChangeBtn = target.closest<HTMLElement>('[data-dm-motion-add-change]');
+    if (motionAddChangeBtn) {
+      e.stopPropagation();
+      const [trig, key] = motionAddChangeBtn.dataset.dmMotionAddChange!.split(':');
+      const preset = motionPresetsFor(trig)[key];
+      if (preset) applyStyle('__motion_' + trig + '__' + preset.prop, preset.value);
+      return;
+    }
+    // Remove one change from a trigger card ('' clears the variant rule).
+    const motionRemoveChangeBtn = target.closest<HTMLElement>('[data-dm-motion-remove-change]');
+    if (motionRemoveChangeBtn) {
+      e.stopPropagation();
+      const [trig, prop] = motionRemoveChangeBtn.dataset.dmMotionRemoveChange!.split(':');
+      applyStyle('__motion_' + trig + '__' + prop, '');
+      return;
+    }
+    // Remove a whole trigger. State-family clears its variant changes; the
+    // timeline family (loop/scroll) resets the base animation longhands.
+    const motionRemoveTriggerBtn = target.closest<HTMLElement>('[data-dm-motion-remove-trigger]');
+    if (motionRemoveTriggerBtn) {
+      e.stopPropagation();
+      const trig = motionRemoveTriggerBtn.dataset.dmMotionRemoveTrigger!;
+      const elId = info?.id || '';
+      if (trig === 'loop') {
+        applyStyle('animationName', 'none');
+        applyStyle('animationIterationCount', '1');
+        applyStyle('animationDuration', '0s');
+      } else if (trig === 'scroll') {
+        applyStyle('animationTimeline', 'auto');
+        applyStyle('animationRange', 'normal');
+        applyStyle('animationName', 'none');
+      } else {
+        const state = MOTION_TRIGGER_STATE[trig];
+        if (motionForcedTrigger === trig) { motionForcedTrigger = null; send({ type: 'SP_FORCE_STATE', elementId: elId, state: '', on: false }); }
+        for (const c of styleChanges.filter(c => c.elementId === elId && c.state === state)) {
+          applyStyle('__motion_' + trig + '__' + c.property, '');
+        }
+      }
+      return;
+    }
+    // Preview. Hover/press/focus force the `.dm-force-*` class so the real
+    // transition plays. Appear re-inserts the element (@starting-style fires
+    // on mount). Loop restarts the keyframe animation.
+    const motionPreviewBtn = target.closest<HTMLElement>('[data-dm-motion-preview]');
+    if (motionPreviewBtn) {
+      e.stopPropagation();
+      const trig = motionPreviewBtn.dataset.dmMotionPreview!;
+      const elId = info?.id || '';
+      if (trig === 'appear') { send({ type: 'SP_REPLAY_APPEAR', elementId: elId }); return; }
+      if (trig === 'loop') { send({ type: 'SP_PREVIEW_ANIMATION' }); return; }
+      const state = MOTION_TRIGGER_STATE[trig];
+      if (motionForcedTrigger === trig) {
+        motionForcedTrigger = null;
+        send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: false });
+      } else {
+        if (motionForcedTrigger) send({ type: 'SP_FORCE_STATE', elementId: elId, state: MOTION_TRIGGER_STATE[motionForcedTrigger], on: false });
+        motionForcedTrigger = trig;
+        send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: true });
+      }
+      render();
       return;
     }
 

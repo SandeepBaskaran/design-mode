@@ -610,7 +610,7 @@ async function openConfiguredTransport() {
     // No token yet (user picked Cloud mode but hasn't registered) — leave
     // every transport closed instead of dialing localhost. The MCP status
     // dot stays "offline" and the panel's tooltip points the user to
-    // Settings → MCP → Connect to Cloud.
+    // the MCP page → Connect to Cloud.
     if (!cloudToken || !cloudUrl) { disconnectFromServer(); return; }
     connectToServer({ mode, cloudToken, cloudUrl });
   } catch {
@@ -1269,7 +1269,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
           const change = applyWithCompanions(id, msg.property, msg.value, () => {
             const el2 = getElementById(id);
             if (el2 && id === sid) onElementSelected(buildElementInfo(el2));
-          }, groupMeta);
+          }, groupMeta, msg.state || '');
           const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
           if (afterValue !== beforeValue) {
             undoStack.push({ kind: 'style', elementId: id, property: msg.property, oldValue: beforeValue, newValue: msg.value, changeId: change?.id });
@@ -1792,6 +1792,38 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     // can see the transition they just configured. Reads transition-property
     // and transition-duration from the live computed style (which includes
     // our managed-stylesheet rule).
+    // Force a Motion interaction's state on the selected element so the
+    // panel's Preview button plays the real transition without the user
+    // hovering/focusing. Mirrors the `.dm-force-*` class baked into every
+    // variant selector by the override engine.
+    case 'FORCE_STATE': {
+      const el = getElementById(msg.elementId || getSelectedElementId() || '');
+      if (el && msg.state) {
+        const cls = 'dm-force-' + String(msg.state).replace(/[^a-z-]/gi, '');
+        if (msg.on) el.classList.add(cls); else el.classList.remove(cls);
+      } else if (el && !msg.on) {
+        // Clear any lingering force classes when state is unspecified.
+        for (const c of Array.from(el.classList)) if (c.startsWith('dm-force-')) el.classList.remove(c);
+      }
+      sendResponse({ ok: true });
+      break;
+    }
+
+    // Re-trigger an @starting-style "on appear" transition. Toggling
+    // display:none → reflow → restore makes the browser treat the element as
+    // newly rendered, so its @starting-style transition plays again.
+    case 'REPLAY_APPEAR': {
+      const el = getElementById(msg.elementId || getSelectedElementId() || '');
+      if (el) {
+        const prev = el.style.display;
+        el.style.display = 'none';
+        void el.offsetHeight;
+        el.style.display = prev;
+      }
+      sendResponse({ ok: true });
+      break;
+    }
+
     case 'PREVIEW_TRANSITION_RULE': {
       const sid = getSelectedElementId();
       if (sid) {

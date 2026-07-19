@@ -1,9 +1,7 @@
-import { Sparkles } from "lucide-react";
-
 export function VisualEditorPill() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-sm transition-colors hover:bg-secondary">
-      <Sparkles className="size-3.5 text-foreground/70" />
+    <span className="border-border bg-card text-muted-foreground shadow-xs hover:bg-accent inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors">
+      <span className="bg-primary size-1.5 shrink-0 rounded-full" aria-hidden="true" />
       Visual editor that saves your tokens
     </span>
   );

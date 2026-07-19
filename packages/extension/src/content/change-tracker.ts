@@ -18,6 +18,10 @@ export interface StyleChange {
   id: string; elementId: string; selector: string;
   property: string; oldValue: string; newValue: string;
   timestamp: number;
+  // State-variant selector suffix for Motion interactions (':hover',
+  // ':active', ':focus-visible') or the '@starting' sentinel. Absent /
+  // empty = a normal base override (the overwhelming majority).
+  state?: string;
   status?: ChangeStatus;
   // Optional grouping envelope. Multiple StyleChanges sharing a `groupId`
   // collapse into one row in the Changes tab. `groupKind` shapes the row
@@ -100,8 +104,31 @@ export function clearAllChanges() {
 // the original and a duplicate.
 
 const appliedRules = new Map<string, Map<string, string>>(); // elementId -> prop -> value
+// State-variant overrides (Motion interactions). Keyed by elementId ->
+// state -> prop -> value, where `state` is a selector suffix (':hover',
+// ':active', ':focus-visible') or the sentinel '@starting' emitted inside
+// a @starting-style wrapper. Base (stateless) overrides stay in
+// `appliedRules` so the common path and its inherited-typography / overlay
+// handling are untouched.
+const appliedVariants = new Map<string, Map<string, Map<string, string>>>();
 const injectedKeyframes = new Set<string>();
 let appliedStyleEl: HTMLStyleElement | null = null;
+
+// Build the CSS block for one state-variant. '@starting' wraps the rule in
+// a @starting-style at-rule (animate-on-appear); every other state is a
+// pseudo-class suffix on the element-scoped selector. The `.dm-force-*`
+// mirror class lets the panel's Preview button force the state on demand.
+function buildVariantBlock(elementId: string, state: string, props: Map<string, string>): string {
+  const decls: string[] = [];
+  for (const [prop, val] of props) decls.push(`  ${kebab(prop)}: ${val} !important;`);
+  if (!decls.length) return '';
+  const base = `[data-dm-id="${elementId}"][data-dm-id]`;
+  if (state === '@starting') {
+    return `@starting-style {\n${base} {\n${decls.join('\n')}\n}\n}`;
+  }
+  const forceClass = '.dm-force-' + state.replace(/[^a-z-]/gi, '');
+  return `${base}${state}, ${base}${forceClass} {\n${decls.join('\n')}\n}`;
+}
 
 // CSS properties that inherit by default. Writing one of these on a
 // container visually cascades to every text-bearing descendant, which
@@ -320,19 +347,45 @@ function rebuildStyleSheet() {
       if (css) blocks.push(css);
     }
   }
+  // State-variant blocks (Motion interactions) — emitted after every base
+  // rule so they win on equal specificity when the state is active.
+  for (const [elementId, states] of appliedVariants) {
+    for (const [state, props] of states) {
+      if (props.size === 0) continue;
+      const css = buildVariantBlock(elementId, state, props);
+      if (css) blocks.push(css);
+    }
+  }
   el.textContent = blocks.join('\n\n');
 }
 
-function upsertRule(elementId: string, property: string, value: string) {
-  if (!appliedRules.has(elementId)) appliedRules.set(elementId, new Map());
-  appliedRules.get(elementId)!.set(property, value);
+function upsertRule(elementId: string, property: string, value: string, state = '') {
+  if (state) {
+    if (!appliedVariants.has(elementId)) appliedVariants.set(elementId, new Map());
+    const states = appliedVariants.get(elementId)!;
+    if (!states.has(state)) states.set(state, new Map());
+    states.get(state)!.set(property, value);
+  } else {
+    if (!appliedRules.has(elementId)) appliedRules.set(elementId, new Map());
+    appliedRules.get(elementId)!.set(property, value);
+  }
   if (property === 'animationName' || property === 'animation-name') {
     if (BUILTIN_KEYFRAMES[value]) injectedKeyframes.add(value);
   }
   rebuildStyleSheet();
 }
 
-function removeRule(elementId: string, property: string) {
+function removeRule(elementId: string, property: string, state = '') {
+  if (state) {
+    const states = appliedVariants.get(elementId);
+    const props = states?.get(state);
+    if (!props) return;
+    props.delete(property);
+    if (props.size === 0) states!.delete(state);
+    if (states!.size === 0) appliedVariants.delete(elementId);
+    rebuildStyleSheet();
+    return;
+  }
   const props = appliedRules.get(elementId);
   if (!props) return;
   props.delete(property);
@@ -342,6 +395,7 @@ function removeRule(elementId: string, property: string) {
 
 function clearAllRules() {
   appliedRules.clear();
+  appliedVariants.clear();
   injectedKeyframes.clear();
   rebuildStyleSheet();
 }
@@ -516,8 +570,15 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
       try { target = document.querySelector(c.selector) as HTMLElement | null; } catch {}
       if (target) target.setAttribute(DATA_ATTR, c.elementId);
     }
-    if (!appliedRules.has(c.elementId)) appliedRules.set(c.elementId, new Map());
-    appliedRules.get(c.elementId)!.set(c.property, c.newValue);
+    if (c.state) {
+      if (!appliedVariants.has(c.elementId)) appliedVariants.set(c.elementId, new Map());
+      const states = appliedVariants.get(c.elementId)!;
+      if (!states.has(c.state)) states.set(c.state, new Map());
+      states.get(c.state)!.set(c.property, c.newValue);
+    } else {
+      if (!appliedRules.has(c.elementId)) appliedRules.set(c.elementId, new Map());
+      appliedRules.get(c.elementId)!.set(c.property, c.newValue);
+    }
     if ((c.property === 'animationName' || c.property === 'animation-name') && BUILTIN_KEYFRAMES[c.newValue]) {
       injectedKeyframes.add(c.newValue);
     }
@@ -554,7 +615,7 @@ export function removeStyleChange(id: string): void {
   const idx = styleChanges.findIndex(c => c.id === id);
   if (idx !== -1) {
     const ch = styleChanges[idx];
-    removeRule(ch.elementId, ch.property);
+    removeRule(ch.elementId, ch.property, ch.state || '');
     styleChanges.splice(idx, 1);
     persistSession();
   }
@@ -678,11 +739,14 @@ export function applyWithCompanions(
   elementId: string, property: string, value: string,
   refreshPanel?: () => void,
   meta?: StyleChangeMeta,
+  state = '',
 ): StyleChange | null {
   const el = getElementById(elementId);
-  if (!el) return applyStyleChange(elementId, property, value, refreshPanel, meta);
-  const cs = window.getComputedStyle(el);
-  const companions = computeCompanions(property, value, cs);
+  if (!el) return applyStyleChange(elementId, property, value, refreshPanel, meta, state);
+  // Companion auto-fixes patch the BASE rule (e.g. border-style so a
+  // :hover border-color paints at all), so they're only computed for base
+  // writes — a state variant just needs its own declaration.
+  const companions = state ? [] : computeCompanions(property, value, window.getComputedStyle(el));
   if (companions.length > 0) {
     // Reuse the caller's groupId when present (e.g. preset / multi-select)
     // so auto-fixes ride along inside the same Changes-tab row instead of
@@ -695,7 +759,7 @@ export function applyWithCompanions(
     }
     return applyStyleChange(elementId, property, value, refreshPanel, { groupId, groupKind, groupLabel });
   }
-  return applyStyleChange(elementId, property, value, refreshPanel, meta);
+  return applyStyleChange(elementId, property, value, refreshPanel, meta, state);
 }
 
 // A shorthand redefines every constituent longhand, so a commit must drop
@@ -712,29 +776,36 @@ export function applyStyleChange(
   elementId: string, property: string, value: string,
   refreshPanel?: () => void,
   meta?: StyleChangeMeta,
+  state = '',
 ): StyleChange | null {
   const el = getElementById(elementId);
   if (!el) return null;
   const k = kebab(property);
+  // Shorthand clear is scoped to the same state so a base `border-radius`
+  // can't drop a `:hover` per-corner longhand (and vice versa).
   const subsumed = SHORTHAND_SUBSUMED_LONGHANDS[k];
   if (subsumed) {
-    for (const c of styleChanges.filter(c => c.elementId === elementId && subsumed.includes(kebab(c.property)))) {
+    for (const c of styleChanges.filter(c => c.elementId === elementId && (c.state || '') === state && subsumed.includes(kebab(c.property)))) {
       removeStyleChange(c.id);
     }
   }
   const selector = generateSelector(el);
 
   // Deduplication: keep original oldValue, update newValue + timestamp.
+  // Keyed on (elementId, property, state) so a `:hover` opacity and a base
+  // opacity are independent rows, not one clobbering the other.
   // Meta semantics on dedupe: a fresh `meta` overwrites the existing
   // entry's group fields (the new gesture re-classifies it). Calls
   // without meta leave group fields untouched — a no-meta dedupe is
   // assumed to be a follow-up edit in the same context.
-  const existingIdx = styleChanges.findIndex(c => c.elementId === elementId && c.property === property);
+  const existingIdx = styleChanges.findIndex(c => c.elementId === elementId && c.property === property && (c.state || '') === state);
   if (existingIdx !== -1) {
     const existing = styleChanges[existingIdx];
-    if (value === existing.oldValue || value === '') {
-      // Value returned to original (or cleared) — drop the rule and the change entry
-      removeRule(elementId, property);
+    // A base override reverts when it returns to the element's own prior
+    // value; a state variant has no meaningful "original" (the from-value
+    // lives on the base rule), so only an explicit clear drops it.
+    if ((!state && value === existing.oldValue) || value === '') {
+      removeRule(elementId, property, state);
       styleChanges.splice(existingIdx, 1);
       persistSession();
       if (refreshPanel) refreshPanel();
@@ -742,7 +813,7 @@ export function applyStyleChange(
     }
     // Rules are keyed by elementId so the live CSS scope-by-data-dm-id
     // doesn't move when the element's user-friendly selector drifts.
-    upsertRule(elementId, property, value);
+    upsertRule(elementId, property, value, state);
     const merged: StyleChange = { ...existing, newValue: value, timestamp: Date.now() };
     if (meta) {
       merged.groupId = meta.groupId;
@@ -757,13 +828,14 @@ export function applyStyleChange(
   }
 
   const oldValue = window.getComputedStyle(el).getPropertyValue(k);
-  upsertRule(elementId, property, value);
+  upsertRule(elementId, property, value, state);
   // We used to drop rules whose computed value didn't change (invalid CSS,
   // var() that resolves to the same color, etc.) but that swallowed valid
   // user intent — record the change and let the user confirm visually.
   const change: StyleChange = {
     id: crypto.randomUUID(), elementId, selector,
     property, oldValue, newValue: value, timestamp: Date.now(),
+    state: state || undefined,
     groupId: meta?.groupId,
     groupKind: meta?.groupKind,
     groupLabel: meta?.groupLabel,

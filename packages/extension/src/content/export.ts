@@ -8,11 +8,15 @@ import type { StyleChange } from './change-tracker';
 // --- CSS Export ---
 
 export function exportCSS(changes: StyleChange[]): string {
-  const bySelector = groupBySelector(changes);
+  const groups = groupByStateSelector(changes);
   const rules: string[] = [];
-  for (const [sel, props] of bySelector) {
-    const decls = Array.from(props).map(([k, v]) => `  ${toKebab(k)}: ${v};`).join('\n');
-    rules.push(`${sel} {\n${decls}\n}`);
+  for (const g of groups) {
+    const decls = Array.from(g.props).map(([k, v]) => `  ${toKebab(k)}: ${v};`).join('\n');
+    if (g.state === '@starting') {
+      rules.push(`@starting-style {\n  ${g.selector} {\n${decls.replace(/^/gm, '  ')}\n  }\n}`);
+    } else {
+      rules.push(`${g.selector}${g.state} {\n${decls}\n}`);
+    }
   }
   return rules.join('\n\n');
 }
@@ -69,24 +73,24 @@ const cssToTailwind: Record<string, (v: string) => string> = {
 };
 
 export function exportTailwind(changes: StyleChange[]): string {
-  const bySelector = groupBySelector(changes);
+  const groups = groupByStateSelector(changes);
   const lines: string[] = [];
-  for (const [sel, props] of bySelector) {
+  for (const g of groups) {
+    // Pseudo-state props become Tailwind state variants (`hover:opacity-60`).
+    // @starting-style has no Tailwind equivalent — note it rather than
+    // silently folding the from-values into the base class list.
+    const variant = g.state === '@starting' ? '' : g.state.replace(/^:/, '').replace('focus-visible', 'focus') + (g.state ? ':' : '');
     const classes: string[] = [];
     const custom: string[] = [];
-    for (const [prop, val] of props) {
+    for (const [prop, val] of g.props) {
       const kebab = toKebab(prop);
       const mapper = cssToTailwind[kebab];
-      if (mapper) {
-        const cls = mapper(val);
-        if (cls) classes.push(cls);
-        else custom.push(`[${kebab}:${val.replace(/\s+/g, '_')}]`);
-      } else {
-        // Arbitrary value syntax
-        custom.push(`[${kebab}:${val.replace(/\s+/g, '_')}]`);
-      }
+      let cls = '';
+      if (mapper) cls = mapper(val);
+      if (cls) classes.push(variant + cls);
+      else custom.push(variant + `[${kebab}:${val.replace(/\s+/g, '_')}]`);
     }
-    lines.push(`/* ${sel} */`);
+    lines.push(`/* ${g.selector}${g.state === '@starting' ? ' @starting-style' : g.state} */`);
     lines.push(`class="${[...classes, ...custom].join(' ')}"`);
     lines.push('');
   }
@@ -96,12 +100,15 @@ export function exportTailwind(changes: StyleChange[]): string {
 // --- SCSS Export ---
 
 export function exportSCSS(changes: StyleChange[]): string {
-  const bySelector = groupBySelector(changes);
-  // Group by parent selectors for nesting
+  const groups = groupByStateSelector(changes);
   const rules: string[] = [];
-  for (const [sel, props] of bySelector) {
-    const decls = Array.from(props).map(([k, v]) => `  ${toKebab(k)}: ${v};`).join('\n');
-    rules.push(`${sel} {\n${decls}\n}`);
+  for (const g of groups) {
+    const decls = Array.from(g.props).map(([k, v]) => `  ${toKebab(k)}: ${v};`).join('\n');
+    if (g.state === '@starting') {
+      rules.push(`@starting-style {\n  ${g.selector} {\n${decls.replace(/^/gm, '  ')}\n  }\n}`);
+    } else {
+      rules.push(`${g.selector}${g.state} {\n${decls}\n}`);
+    }
   }
   return `// Design Mode — SCSS Export\n// Generated ${new Date().toISOString()}\n\n${rules.join('\n\n')}`;
 }
@@ -109,15 +116,24 @@ export function exportSCSS(changes: StyleChange[]): string {
 // --- JSX Export ---
 
 export function exportJSX(changes: StyleChange[]): string {
-  const bySelector = groupBySelector(changes);
+  const groups = groupByStateSelector(changes);
   const lines: string[] = [];
-  for (const [sel, props] of bySelector) {
-    const entries = Array.from(props).map(([k, v]) => {
-      // Numeric values don't need quotes in JSX
+  for (const g of groups) {
+    // Inline style objects can't express pseudo-states / @starting-style —
+    // emit those as a note so the values aren't silently dropped or, worse,
+    // merged into the base style object as if they were unconditional.
+    if (g.state) {
+      const decls = Array.from(g.props).map(([k, v]) => `${toKebab(k)}: ${v}`).join('; ');
+      lines.push(`// ${g.selector}${g.state === '@starting' ? ' @starting-style' : g.state} — needs a CSS rule / styled-component, not inline style:`);
+      lines.push(`//   ${decls}`);
+      lines.push('');
+      continue;
+    }
+    const entries = Array.from(g.props).map(([k, v]) => {
       const isNumeric = /^\d+(\.\d+)?$/.test(v);
       return `  ${k}: ${isNumeric ? v : `'${v}'`}`;
     }).join(',\n');
-    lines.push(`// ${sel}\nconst styles = {\n${entries}\n};`);
+    lines.push(`// ${g.selector}\nconst styles = {\n${entries}\n};`);
     lines.push('');
   }
   return lines.join('\n');
@@ -184,6 +200,22 @@ function groupBySelector(changes: StyleChange[]): Map<string, Map<string, string
     map.get(c.selector)!.set(c.property, c.newValue);
   }
   return map;
+}
+
+// Groups changes by (selector, state) so Motion state-variants (`:hover`,
+// `@starting`) export as their own rules instead of collapsing into the
+// element's base rule. Insertion order keeps base rules ahead of variants.
+interface StateGroup { selector: string; state: string; props: Map<string, string>; }
+function groupByStateSelector(changes: StyleChange[]): StateGroup[] {
+  const map = new Map<string, StateGroup>();
+  for (const c of changes) {
+    const state = c.state || '';
+    const key = c.selector + '||' + state;
+    if (!map.has(key)) map.set(key, { selector: c.selector, state, props: new Map() });
+    map.get(key)!.props.set(c.property, c.newValue);
+  }
+  // Base rules first, then variants, so an exported `:hover` follows its base.
+  return Array.from(map.values()).sort((a, b) => (a.state ? 1 : 0) - (b.state ? 1 : 0));
 }
 
 function toKebab(s: string): string {
