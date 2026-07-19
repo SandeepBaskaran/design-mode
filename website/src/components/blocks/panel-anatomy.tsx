@@ -161,7 +161,7 @@ const ItemCard = ({ item, isLast, className }: ItemCardProps) => {
         <div className="from-muted/80 absolute inset-0 z-10 bg-linear-to-t via-transparent to-transparent md:hidden" />
       )}
 
-      <div className="image-container">
+      <div className="image-container border-border bg-card overflow-hidden rounded-2xl border shadow-sm">
         <Image
           src={item.image.src}
           alt={item.image.alt}

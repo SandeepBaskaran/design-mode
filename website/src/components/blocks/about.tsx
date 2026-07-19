@@ -42,7 +42,11 @@ export function TextSection({
 }: TextSectionProps) {
   return (
     <section className="flex-1 space-y-4 text-lg md:space-y-6">
-      {title && <h2 className="text-foreground text-4xl">{title}</h2>}
+      {title && (
+        <h2 className="text-foreground text-2xl tracking-tight md:text-3xl">
+          {title}
+        </h2>
+      )}
       <div className="text-muted-foreground max-w-3xl space-y-6">
         {paragraphs.map((paragraph, index) => (
           <p key={index}>{paragraph}</p>

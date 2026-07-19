@@ -113,7 +113,7 @@ export const Testimonials = ({
                     key={index}
                     className="xl:basis-1/3.5 grow basis-4/5 sm:basis-3/5 md:basis-2/5 lg:basis-[28%] 2xl:basis-[24%]"
                   >
-                    <Card className="bg-muted h-full overflow-hidden border-none">
+                    <Card className="bg-muted h-full overflow-hidden rounded-2xl border-none">
                       <CardContent className="flex h-full flex-col p-0">
                         <div className="relative h-[288px] lg:h-[328px]">
                           <Image

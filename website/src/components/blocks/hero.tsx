@@ -50,7 +50,7 @@ export const Hero = () => {
           <VisualEditorPill />
         </div>
 
-        <h1 className="text-foreground text-3xl tracking-tight md:text-4xl lg:text-5xl">
+        <h1 className="macro text-foreground text-[clamp(2.5rem,7vw,5rem)]">
           Design directly in your browser.
           <br className="hidden md:block" /> Your agent writes the code.
         </h1>
@@ -73,11 +73,11 @@ export const Hero = () => {
         </p>
 
         {/* Secondary on the LEFT (Try by yourself → /demo), primary on the RIGHT (Add to Chrome) */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <Button variant="outline" asChild>
+        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <AddToChromeCta size="lg" />
+          <Button variant="outline" size="lg" asChild>
             <Link href="/demo">Try by yourself</Link>
           </Button>
-          <AddToChromeCta />
         </div>
       </div>
     </section>

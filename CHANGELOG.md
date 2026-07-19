@@ -67,6 +67,11 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   agent what to do on Send to Agent — as a direct download, with the
   per-agent install paths. It stays byte-identical to what the extension
   installs (enforced by a `verify` check).
+- **Website: warm-cream redesign.** New design language across the whole
+  marketing site — warm cream backgrounds, Plus Jakarta Sans display type,
+  fully-rounded pill nav/buttons, soft rounded cards, and a floating
+  dark-pill navbar — with Design Mode's yellow kept as the accent. Fully
+  mobile-responsive.
 
 ### Changed
 

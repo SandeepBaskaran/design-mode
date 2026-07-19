@@ -23,6 +23,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = {
@@ -341,14 +342,12 @@ export default function McpPage() {
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-4">
-            <a
-              href="/design-mode.md"
-              download="design-mode.md"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-colors"
-            >
-              <FileDown className="size-4" />
-              Download design-mode.md
-            </a>
+            <Button asChild>
+              <a href="/design-mode.md" download="design-mode.md">
+                <FileDown className="size-4" />
+                Download design-mode.md
+              </a>
+            </Button>
             <span className="text-muted-foreground text-sm">
               One file, works with every agent below.
             </span>
@@ -367,7 +366,7 @@ export default function McpPage() {
               ].map((t) => (
                 <div
                   key={t.label}
-                  className="bg-muted/50 flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5"
+                  className="bg-card border-border flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5"
                 >
                   <span className="text-sm font-medium">{t.label}</span>
                   <code className="text-muted-foreground text-xs">
@@ -481,7 +480,7 @@ function Snippet({
   return (
     <div>
       <p className="text-muted-foreground mb-2 text-sm font-medium">{label}</p>
-      <pre className="bg-muted text-foreground overflow-x-auto rounded-lg border p-4 text-xs leading-relaxed">
+      <pre className="bg-ink text-ink-foreground overflow-x-auto rounded-xl p-4 font-mono text-xs leading-relaxed">
         <code>{children}</code>
       </pre>
     </div>

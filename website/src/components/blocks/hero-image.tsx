@@ -7,13 +7,15 @@ export function HeroImage() {
   return (
     <section className="py-16 lg:py-24">
       <div className="container max-w-5xl">
-        <Image
-          src="/hero.png"
-          alt="Design Mode in action — the live website with the side panel attached"
-          width={2360}
-          height={951}
-          className="shadow-sm"
-        />
+        <div className="border-border bg-card overflow-hidden rounded-2xl border shadow-lg">
+          <Image
+            src="/hero.png"
+            alt="Design Mode in action — the live website with the side panel attached"
+            width={2360}
+            height={951}
+            className="h-auto w-full"
+          />
+        </div>
       </div>
     </section>
   );
