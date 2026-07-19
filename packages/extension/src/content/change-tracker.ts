@@ -3,7 +3,7 @@
 // Records style/text/DOM changes, generates CSS diffs, syncs to server
 // ============================================================
 
-import { getElementById, generateSelector, getComputedStyleSubset, reserveIdsAtLeast } from './helpers';
+import { getElementById, generateSelector, describeElement, getComputedStyleSubset, reserveIdsAtLeast } from './helpers';
 import { DEFAULT_WS_PORT, DATA_ATTR } from '../shared';
 import { BUILTIN_KEYFRAMES } from './keyframes-library';
 import { captureElementScreenshot, captureViewportScreenshotClean, captureRegionScreenshot } from './screenshots';
@@ -16,6 +16,9 @@ export type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
 
 export interface StyleChange {
   id: string; elementId: string; selector: string;
+  // Human-readable layer name (describeElement) for the Changes tab —
+  // selectors on class-less markup degrade to bare tags ("div").
+  label?: string;
   property: string; oldValue: string; newValue: string;
   timestamp: number;
   // State-variant selector suffix for Motion interactions (':hover',
@@ -40,6 +43,7 @@ export interface StyleChangeMeta {
 
 export interface TextChange {
   id: string; elementId: string; selector: string;
+  label?: string;
   oldText: string; newText: string; timestamp: number;
   // When true, oldText/newText carry HTML (innerHTML); revert paths must
   // use el.innerHTML, not el.textContent. Set by applyHtmlChange.
@@ -49,6 +53,7 @@ export interface TextChange {
 
 export interface DomChange {
   id: string; elementId: string; selector: string;
+  label?: string;
   action: 'delete' | 'duplicate' | 'move' | 'insert';
   tagName: string; outerHTML?: string;
   // Where the element ended up. Lets us replay the move / re-create the
@@ -815,6 +820,7 @@ export function applyStyleChange(
     // doesn't move when the element's user-friendly selector drifts.
     upsertRule(elementId, property, value, state);
     const merged: StyleChange = { ...existing, newValue: value, timestamp: Date.now() };
+    if (!merged.label) merged.label = describeElement(el);
     if (meta) {
       merged.groupId = meta.groupId;
       merged.groupKind = meta.groupKind;
@@ -834,6 +840,7 @@ export function applyStyleChange(
   // user intent — record the change and let the user confirm visually.
   const change: StyleChange = {
     id: crypto.randomUUID(), elementId, selector,
+    label: describeElement(el),
     property, oldValue, newValue: value, timestamp: Date.now(),
     state: state || undefined,
     groupId: meta?.groupId,
@@ -896,6 +903,7 @@ export function applyTextChange(
   el.textContent = text;
   const change: TextChange = {
     id: crypto.randomUUID(), elementId, selector: generateSelector(el),
+    label: describeElement(el),
     oldText, newText: text, timestamp: Date.now(),
   };
   textChanges.push(change);
@@ -920,6 +928,7 @@ export function applyHtmlChange(
   el.innerHTML = html;
   const change: TextChange = {
     id: crypto.randomUUID(), elementId, selector: generateSelector(el),
+    label: describeElement(el),
     oldText: oldHtml, newText: html, timestamp: Date.now(), isHtml: true,
   };
   textChanges.push(change);
@@ -1006,8 +1015,10 @@ export function recordDomChange(
       return null;
     }
   }
+  const recordedEl = getElementById(elementId);
   const change: DomChange = {
     id: crypto.randomUUID(), elementId, selector, action,
+    label: recordedEl ? describeElement(recordedEl) : undefined,
     tagName, outerHTML, destination,
     origin: inheritedOrigin,
     timestamp: Date.now(),
@@ -1081,7 +1092,7 @@ export function getChangeReport() {
       return {
         id: c.id, status: c.status || 'todo',
         elementId: c.elementId, timestamp: c.timestamp,
-        selector, property: c.property,
+        selector, label: c.label, property: c.property,
         oldValue: c.oldValue, newValue: c.newValue,
         cssRule: `${selector} { ${c.property.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}: ${c.newValue}; }`,
       };
@@ -1089,7 +1100,8 @@ export function getChangeReport() {
     textChanges: textChanges.map(c => ({
       id: c.id, status: c.status || 'todo',
       elementId: c.elementId, timestamp: c.timestamp,
-      selector: liveSelector(c.elementId, c.selector), oldText: c.oldText, newText: c.newText,
+      selector: liveSelector(c.elementId, c.selector), label: c.label,
+      oldText: c.oldText, newText: c.newText,
     })),
     domChanges: domChanges.map(c => {
       // Moves carry both ends: origin's parent selector re-resolved via
@@ -1112,7 +1124,7 @@ export function getChangeReport() {
       return {
         id: c.id, status: c.status || 'todo',
         elementId: c.elementId, timestamp: c.timestamp,
-        selector: el ? generateSelector(el) : c.selector,
+        selector: el ? generateSelector(el) : c.selector, label: c.label,
         action: c.action, tagName: c.tagName,
         origin, destination,
       };

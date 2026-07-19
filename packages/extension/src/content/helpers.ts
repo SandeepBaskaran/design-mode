@@ -76,6 +76,42 @@ export function generateSelector(el: HTMLElement): string {
   return parts.join(' > ');
 }
 
+// Human-readable layer label. generateSelector covers *targeting*; this
+// covers *recognition* — on class-less markup (hand-written local HTML) a
+// bare `div` identifies nothing, so fall back to the element's own text,
+// its accessible name, or its position under the nearest named ancestor.
+export function describeElement(el: HTMLElement): string {
+  const tag = el.tagName.toLowerCase();
+  if (el.id) return `${tag}#${el.id}`;
+  if (typeof el.className === 'string') {
+    const c = el.className.trim().split(/\s+/).find(cl => cl && !cl.startsWith('dm-clone'));
+    if (c) return `${tag}.${c}`;
+  }
+  const snippet = (s: string) => {
+    const t = s.trim().replace(/\s+/g, ' ');
+    return t.length > 24 ? t.slice(0, 23) + '…' : t;
+  };
+  const named = el.getAttribute('aria-label') || el.getAttribute('alt') || el.getAttribute('placeholder') || el.getAttribute('name');
+  if (named) return `${tag} “${snippet(named)}”`;
+  if ((el.textContent || '').trim()) return `${tag} “${snippet(el.textContent!)}”`;
+  // Empty element (spacer, icon box, image wrapper) — describe it by its
+  // position under the nearest ancestor that has a name of its own.
+  let anc = el.parentElement;
+  let ancLabel = '';
+  while (anc && anc !== document.documentElement) {
+    const aTag = anc.tagName.toLowerCase();
+    if (anc.id) { ancLabel = `${aTag}#${anc.id}`; break; }
+    const aCls = typeof anc.className === 'string' ? anc.className.trim().split(/\s+/)[0] : '';
+    if (aCls && !aCls.startsWith('dm-')) { ancLabel = `${aTag}.${aCls}`; break; }
+    if (aTag !== 'div' && aTag !== 'span') { ancLabel = aTag; break; }
+    anc = anc.parentElement;
+  }
+  const parent = el.parentElement;
+  const idx = parent ? Array.from(parent.children).filter(c => c.tagName === el.tagName).indexOf(el) + 1 : 0;
+  const pos = idx > 0 ? `${tag} ${idx}` : tag;
+  return ancLabel ? `${pos} in ${ancLabel}` : pos;
+}
+
 export function getBreadcrumbs(el: HTMLElement): string[] {
   const crumbs: string[] = [];
   let cur: HTMLElement | null = el;

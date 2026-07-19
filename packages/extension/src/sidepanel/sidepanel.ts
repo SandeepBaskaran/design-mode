@@ -135,7 +135,7 @@ interface ElementInfo {
 }
 type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
 interface StyleChange {
-  id?: string; elementId: string; selector: string;
+  id?: string; elementId: string; selector: string; label?: string;
   property: string; oldValue: string; newValue: string; timestamp?: number;
   // State-variant suffix for Motion interactions (':hover', '@starting', …).
   state?: string;
@@ -148,9 +148,9 @@ interface StyleChange {
   groupLabel?: string;
   status?: ChangeStatus;
 }
-interface TextChange { id: string; elementId: string; selector: string; oldText: string; newText: string; timestamp?: number; status?: ChangeStatus; }
+interface TextChange { id: string; elementId: string; selector: string; label?: string; oldText: string; newText: string; timestamp?: number; status?: ChangeStatus; }
 interface DomChange {
-  id?: string; action: string; tagName: string; selector: string;
+  id?: string; action: string; tagName: string; selector: string; label?: string;
   elementId?: string; timestamp?: number;
   destination?: { parentSelector: string; index: number };
   origin?: { parentSelector: string; index: number };
@@ -8145,14 +8145,19 @@ function renderChangesTab(): string {
   };
   const items = allItems.filter(matches);
 
-  // Group by selector / elementId.
-  const groups = new Map<string, { selector: string; elementId: string; items: ChangeItem[] }>();
+  // Group by selector / elementId. `label` is the recorded human-readable
+  // layer name (describeElement) — selectors on class-less markup degrade
+  // to bare tags, so the header prefers the label and keeps the selector
+  // in the tooltip.
+  const groups = new Map<string, { selector: string; label: string; elementId: string; items: ChangeItem[] }>();
   for (const item of items) {
     const selector = (item.data as any).selector || 'unknown';
     const elementId = (item.data as any).elementId || '';
     const key = elementId || selector;
-    if (!groups.has(key)) groups.set(key, { selector, elementId, items: [] });
-    groups.get(key)!.items.push(item);
+    if (!groups.has(key)) groups.set(key, { selector, label: '', elementId, items: [] });
+    const group = groups.get(key)!;
+    group.items.push(item);
+    if (!group.label && (item.data as any).label) group.label = (item.data as any).label;
   }
 
   // Single toggle replaces the old "View Original" / "View Changes" pair —
@@ -8419,7 +8424,7 @@ function renderChangesTab(): string {
 
     const header = '<div class="dm-change-group-header" data-dm-change-group="' + escapeAttr(key) + '"' + (isStale ? ' style="opacity:0.7;"' : '') + '>' +
       '<span style="color:var(--dm-text-dim);display:flex;">' + icon(chevIcon as keyof typeof icons, 10) + '</span>' +
-      '<span style="font-family:SF Mono,Monaco,monospace;font-size:10px;color:var(--dm-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;" title="' + escapeAttr(group.selector) + (isStale ? ' (element no longer reachable)' : '') + '">' + escapeAttr(group.selector) + '</span>' +
+      '<span style="font-family:SF Mono,Monaco,monospace;font-size:10px;color:var(--dm-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;" title="' + escapeAttr(group.selector) + (isStale ? ' (element no longer reachable)' : '') + '">' + escapeAttr(group.label || group.selector) + '</span>' +
       (isStale ? '<span style="font-size:8px;padding:1px 6px;border-radius:9999px;background:rgba(0,0,0,0.06);color:var(--dm-text-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;flex-shrink:0;">stale</span>' : '') +
       '<span style="font-size:9px;background:var(--dm-accent-bg);color:var(--dm-accent);border-radius:8px;padding:1px 6px;flex-shrink:0;">' + count + '</span>' +
       (group.elementId ? '<button data-dm-select-change-el="' + escapeAttr(group.elementId) + '" title="Select element" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('crosshair', 10) + '</button>' : '') +
