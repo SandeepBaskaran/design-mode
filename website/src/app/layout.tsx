@@ -1,4 +1,5 @@
-import { Caveat, Plus_Jakarta_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 
 import type { Metadata } from "next";
 
@@ -13,19 +14,22 @@ import {
 import { LinkTracker } from "@/components/site/link-tracker";
 import "@/styles/globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-jakarta",
+const dmSans = localFont({
+  src: [
+    { path: "../../fonts/dm-sans/DMSans-Regular.ttf", weight: "400", style: "normal" },
+    { path: "../../fonts/dm-sans/DMSans-Italic.ttf", weight: "400", style: "italic" },
+    { path: "../../fonts/dm-sans/DMSans-Medium.ttf", weight: "500", style: "normal" },
+    { path: "../../fonts/dm-sans/DMSans-MediumItalic.ttf", weight: "500", style: "italic" },
+    { path: "../../fonts/dm-sans/DMSans-SemiBold.ttf", weight: "600", style: "normal" },
+    { path: "../../fonts/dm-sans/DMSans-SemiBoldItalic.ttf", weight: "600", style: "italic" },
+    { path: "../../fonts/dm-sans/DMSans-Bold.ttf", weight: "700", style: "normal" },
+    { path: "../../fonts/dm-sans/DMSans-BoldItalic.ttf", weight: "700", style: "italic" },
+  ],
+  variable: "--font-dm-sans",
   display: "swap",
 });
 
-const caveat = Caveat({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-caveat",
-  display: "swap",
-});
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://designmode.app"),
@@ -128,7 +132,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <body className={`${jakarta.variable} ${caveat.variable} antialiased`}>
+      <body className={`${dmSans.variable} ${inter.variable} antialiased`}>
         <JsonLd data={organizationSchema} />
         <JsonLd data={websiteSchema} />
         <Navbar />
