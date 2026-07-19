@@ -232,9 +232,40 @@ of the picked kind with sensible defaults.
 Split from Effects so the visual-decoration and time-based-motion
 controls don't compete for the same row list. Starts collapsed.
 
-The section header carries two actions: a **pause/resume** toggle
+The section header carries three actions: a **pause/resume** toggle
 (circle-pause / circle-play) that freezes all motion page-wide (see §1.4),
-and the `+` **add-motion** menu.
+the **Advanced** (sliders) toggle for the raw CSS editors, and the `+`
+**add-motion** menu.
+
+**Interactions (trigger-first).** The primary surface answers _when_ motion
+plays — the thing raw CSS transitions leave implicit. A **When:** row adds a
+trigger; each becomes a card:
+
+- **Hover / Press / Focus** — animate to a target while the element is
+  hovered / pressed / keyboard-focused. Backed by state-variant override rules
+  (`[data-dm-id]:hover { … }`), a capability the override engine gained for
+  this (it previously emitted a single base rule per element). Change presets:
+  Fade, Lift, Scale, Background. Shared **Curve** (duration + easing). A ▶
+  **Preview** forces the state (`.dm-force-*` class) so the real transition
+  plays.
+- **Appear** — animate _from_ a start state on mount via `@starting-style`
+  (+ `transition-behavior: allow-discrete`). Preview re-inserts the element.
+- **Loop** — infinite keyframe animation (built-in `dm-*` set). Preview
+  restarts it.
+- **Scroll** — binds a keyframe animation's progress to scroll position via
+  `animation-timeline: view()` + `animation-range`.
+
+Each card shows a plain-English **summary** ("On hover → fade → 0.6 · 0.2s
+ease"). Interactions round-trip through export (CSS/SCSS emit real `:hover` /
+`@starting-style` rules; Tailwind uses `hover:` variants; the agent prompt tags
+each change with its trigger, e.g. "opacity 1 → 0.6 (on hover)").
+
+**Limits.** CSS-only, so this covers the animation subset of Figma
+prototyping — not navigate/drag/after-delay/overlays. `@starting-style` +
+scroll timelines need Chrome 115+/117+.
+
+**Advanced (raw CSS)** — behind the sliders toggle, the original per-property
+editors:
 
 - **Transition** — Property dropdown, Duration, Timing curve, Delay + a
   ▶ Preview button that flashes a contrast value so you can see the curve.

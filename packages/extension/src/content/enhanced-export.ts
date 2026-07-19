@@ -13,6 +13,14 @@ import type { CommentData } from './comments';
 import { getTokenEdits } from './root-var-store';
 import { getTokenIndex, type PageToken } from './token-engine';
 
+// Human trigger labels for Motion state-variants in the agent prompt.
+const MOTION_STATE_LABEL: Record<string, string> = {
+  ':hover': 'on hover',
+  ':active': 'on press',
+  ':focus-visible': 'on focus',
+  '@starting': 'on appear',
+};
+
 interface ElementContext {
   selector: string;
   tagName: string;
@@ -201,7 +209,10 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
       .map(c => {
         const oldShort = shortenValue(tokenize(c.oldValue, tokenLookup, tokensUsed));
         const newShort = shortenValue(tokenize(c.newValue, tokenLookup, tokensUsed));
-        return `${camelToKebab(c.property)} ${oldShort} → ${newShort}`;
+        // Motion state-variants carry a trigger tag so the agent knows the
+        // change is conditional (`on hover`) rather than an unconditional edit.
+        const trigger = c.state ? ` (${MOTION_STATE_LABEL[c.state] || c.state})` : '';
+        return `${camelToKebab(c.property)} ${oldShort} → ${newShort}${trigger}`;
       })
       .join('; ');
     const earliest = Math.min(...list.map(c => c.timestamp));

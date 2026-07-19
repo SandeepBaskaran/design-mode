@@ -1090,9 +1090,42 @@ Motion entry-points:
 - **Transform** · seeds `translate: 0px 0px` so the Transform components editor can take over.
 - **Motion path** · seeds an oval `offset-path` plus `offset-distance: 0%` and `offset-rotate: auto`.
 
-## Motion subsection
+## Motion interactions (trigger-first)
 
-Below the effect list. Each subsection renders only when its property is non-default.
+The primary Motion surface is a list of **interactions**, each answering
+_when_ the motion plays — the concept CSS transitions leave implicit. Add one
+from the **When:** row; remove it with the card's trash icon.
+
+| Trigger | Plays when | CSS mechanism |
+|---|---|---|
+| **Hover** | pointer is over the element | `:hover` variant rule + base `transition` |
+| **Press** | element is actively pressed | `:active` variant |
+| **Focus** | element is keyboard-focused | `:focus-visible` variant |
+| **Appear** | element first mounts | `@starting-style` (from-values) + `transition` (+ `transition-behavior: allow-discrete`) |
+| **Loop** | continuously | infinite keyframe `animation` |
+| **Scroll** | element scrolls through the viewport | `animation-timeline: view()` + `animation-range` |
+
+Each **state** card (Hover / Press / Focus / Appear) has:
+
+- **Change rows** — the properties it animates (Fade, Lift, Scale, Background
+  presets seed a sensible target; Appear seeds a _from_ value instead).
+- **Curve** — shared base `transition` duration + easing.
+- **Summary** — plain-English recap ("On hover → fade → 0.6, lift → 0px -8px ·
+  0.2s ease").
+- **Preview** ▶ — plays the real interaction: Hover/Press/Focus force a
+  `.dm-force-*` class on the element; Appear re-inserts it so `@starting-style`
+  fires again; Loop restarts the keyframe animation. (Scroll has no time
+  preview — it plays as you scroll.)
+
+**Limits (honest):** this maps the _animation_ subset of Figma prototyping.
+CSS-only, so navigate-between-frames, drag, after-delay chaining, and overlays
+are out of scope. `@starting-style` and scroll-driven timelines need Chrome
+115+/117+, and exported CSS inherits that floor.
+
+## Motion subsection (Advanced — raw CSS)
+
+Under the Motion section's **Advanced** (sliders) toggle. The raw per-property
+editors for power users; each renders only when its property is non-default.
 
 ### Transition
 
