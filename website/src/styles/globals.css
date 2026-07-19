@@ -13,8 +13,8 @@
   --card-foreground: oklch(0.23 0.008 70);
   --popover: oklch(0.995 0.006 90);
   --popover-foreground: oklch(0.23 0.008 70);
-  --primary: oklch(0.84 0.145 85);       /* Design Mode golden yellow — the CTA */
-  --primary-foreground: oklch(0.26 0.02 80);
+  --primary: oklch(0.546 0.245 262.9);   /* accessible blue ~#2563EB — primary CTA (WCAG AA on white) */
+  --primary-foreground: oklch(0.985 0.01 255);
   --secondary: oklch(0.94 0.012 88);     /* warm off-white chips / secondary */
   --secondary-foreground: oklch(0.28 0.01 75);
   --muted: oklch(0.935 0.011 88);
@@ -25,7 +25,7 @@
   --destructive-foreground: oklch(0.98 0.01 90);
   --border: oklch(0.9 0.012 86);
   --input: oklch(0.9 0.012 86);
-  --ring: oklch(0.84 0.145 85);
+  --ring: oklch(0.546 0.245 262.9);
 
   /* Warm near-black for the floating nav pill + dark CTAs (the reference's
      signature dark pill). Its own token so button/nav variants can target it. */
@@ -209,7 +209,7 @@ body::before {
       oklch(0.22 0.01 70 / 0.014) 0 1px,
       transparent 1px 3px
     ),
-    radial-gradient(120% 80% at 50% -10%, oklch(0.86 0.06 88 / 0.35), transparent 60%);
+    radial-gradient(120% 80% at 50% -10%, oklch(0.93 0.015 90 / 0.2), transparent 60%);
 }
 
 /* Long-form prose (blog / docs / compare / use-cases) — warm ink on cream,

@@ -69,9 +69,8 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   installs (enforced by a `verify` check).
 - **Website: warm-cream redesign.** New design language across the whole
   marketing site — warm cream backgrounds, Plus Jakarta Sans display type,
-  fully-rounded pill nav/buttons, soft rounded cards, and a floating
-  dark-pill navbar — with Design Mode's yellow kept as the accent. Fully
-  mobile-responsive.
+  fully-rounded pill nav/buttons, soft rounded cards, a floating dark-pill
+  navbar, and an accessible blue primary CTA. Fully mobile-responsive.
 
 ### Changed
 

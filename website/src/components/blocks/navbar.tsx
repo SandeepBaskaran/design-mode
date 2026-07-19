@@ -49,8 +49,8 @@ function DesignModeMark({ size = 22 }: { size?: number }) {
     >
       <defs>
         <linearGradient id="dm-mark-grad" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#FFCB47" />
-          <stop offset="1" stopColor="#F59E0B" />
+          <stop stopColor="#6366f1" />
+          <stop offset="1" stopColor="#ec4899" />
         </linearGradient>
       </defs>
       <path
