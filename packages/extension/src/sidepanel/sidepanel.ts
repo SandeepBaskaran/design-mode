@@ -5902,6 +5902,10 @@ function renderHeader(): string {
     '<button data-dm-action="toggle-theme" title="Toggle theme" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon(themeIcon as keyof typeof icons, 15) + '</button>' +
     '<button data-dm-action="contribute" title="Contribute" aria-label="Open contribute panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('heartHandshake', 15) + '</button>' +
     '<button data-dm-action="help" title="Help" aria-label="Open help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('helpCircle', 15) + '</button>' +
+    '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button>' +
+    // Docking controls (pop-out / pin-on-top / dock-back) sit last — they
+    // manage the panel window itself, not the page, so they read as a
+    // separate group after Settings.
     (isPip
       ? '<button data-dm-action="pip-unpin" title="Pinned on top — click to unpin back to the floating window" aria-label="Pinned on top — click to unpin back to the floating window" style="background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>' +
         '<button data-dm-action="pip-dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
@@ -5911,7 +5915,7 @@ function renderHeader(): string {
             : '') +
           '<button data-dm-action="dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
         : '<button data-dm-action="pop-out" title="Pop out into a floating window" aria-label="Pop out into a floating window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('externalLink', 15) + '</button>') +
-    '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button></div>';
+    '</div>';
 }
 
 function renderActionRow(): string {
