@@ -62,6 +62,11 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - **Step-based Send to Agent.** The Send-to-Agent flow is now a guided
   modal, and `get_changes` / `get_session_summary` expose a real
   `handoff` field so the agent receives the edit set directly.
+- **Website: download the `/design-mode` workflow file.** The `/mcp`
+  page now offers `design-mode.md` — the command file that tells the
+  agent what to do on Send to Agent — as a direct download, with the
+  per-agent install paths. It stays byte-identical to what the extension
+  installs (enforced by a `verify` check).
 
 ### Changed
 
