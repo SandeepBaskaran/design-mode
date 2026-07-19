@@ -400,8 +400,8 @@ const CORNER_RADIUS_PROPS = new Set([
 // negative value. Same UX as CORNER_RADIUS_PROPS: floor at 0 on commit,
 // block the `-` keystroke, and clamp Arrow-stepping past zero.
 // Skipped here on purpose: width/height (legitimately accept `auto`),
-// lineHeight (unitless decimals + percentages are normal), outlineOffset
-// (negative is meaningful — pulls outline inward).
+// lineHeight / letterSpacing (px lengths where negative is meaningful),
+// outlineOffset (negative is meaningful — pulls outline inward).
 const NON_NEGATIVE_NUMERIC_PROPS = new Set([
   'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth',
   'paddingTop','paddingRight','paddingBottom','paddingLeft','padding',
@@ -6578,7 +6578,7 @@ function renderDesignTab(): string {
     renderFontFamilyPicker(s.fontFamily || '') + sp() +
     grid(2, selKV('Weight', 'fontWeight', fontWeightCur, FONT_WEIGHTS), inp('Size', 'fontSize', s.fontSize || '16px')) + sp() +
     grid(2,
-      inputWithIcon('moveVertical', 'lineHeight', s.lineHeight || 'normal', 'normal', '', 'Line height'),
+      inputWithIcon('moveVertical', 'lineHeight', s.lineHeight || 'normal', 'normal', 'px', 'Line height'),
       inputWithIcon('moveHorizontal', 'letterSpacing', s.letterSpacing || 'normal', 'normal', 'px', 'Letter spacing')
     ) + sp() +
     colorInp('Color', 'color', s.color || '#000') + sp() +
