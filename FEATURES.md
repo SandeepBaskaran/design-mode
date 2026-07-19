@@ -186,7 +186,14 @@ hovered) element. Every field updates the page live.
 
 ### 2.10 Appearance
 
-- Opacity, Rotation (degrees), Visibility, Mix-blend-mode, Cursor.
+- **Icon-first row** — a 12-col grid: Opacity (5) | Corner radius (5) |
+  edit-each-corner toggle (2). Opacity and corner radius are led by an icon
+  (blend / maximize) with the field label moved into the tooltip. Corner
+  radius uses a uniform numeric field by default; typing a value over
+  "Mixed" forces all four corners to match, and the toggle expands to
+  per-corner editing.
+- Rotation (degrees), Visibility, Cursor.
+- **Advanced** (disclosure) — Mix-blend-mode and Isolation.
 - **Transform** (raw text) — for skew, perspective, custom matrix, etc.
 - **Transform components**: Translate (X / Y in px) and Scale (X / Y, unitless).
   Each pre-filled from the element's current value. Standalone CSS props,
@@ -297,10 +304,15 @@ side panel is open.
 - **Primary row** — Kind dropdown + count (or cell size for Grid) +
   settings expand + eye + trash.
 - **Expanded body (Columns / Rows)** — 3×2 grid of Colour + Opacity /
-  Align + Width or Height / Margin + Gutter.
+  Align + Width or Height / Margin + Gutter. The Colour swatch opens a
+  compact color panel (no contrast row, no Site Colors list).
 - **Expanded body (Grid)** — 1×2 of Colour + Opacity.
 - **Section eye** — top-right of the section header toggles every
-  guide on the current element without losing the row config.
+  guide on the current element without losing the row config. Only
+  renders once the element has 2+ guides; with fewer, each guide's own
+  eye is the only toggle. Per-layer eyes dim while the section is
+  hidden (parent/child AND-gate) so a hidden section can't be
+  mistaken for a visible guide.
 
 ### 2.14 Custom curves
 
@@ -484,13 +496,14 @@ Every edit you've made grouped by element.
 
 ### 5.1 Header
 
-- App name + **MCP status chip** — three states: `offline` (grey), `running` (green pulse), `connected` (green glow). The whole chip is clickable; clicking it re-pings the server / agent. The hover tooltip explains the current state and includes the start command (`npm start --prefix packages/mcp-local`) when offline. State changes after the click surface as toasts (`MCP connected`, `MCP running — waiting for agent`, `MCP offline`); a click that doesn't change state still toasts the offline-with-hint message so the user gets feedback.
+- App name + **MCP status chip** — three states: `offline` (grey), `running` (green pulse), `connected` (green glow). The whole chip is clickable; clicking it opens the **MCP page** (see §5.1b) — its trailing icon is a chevron, not a re-ping button. The hover tooltip explains the current state and includes the start command (`npm start --prefix packages/mcp-local`) when offline.
 - **Theme toggle** (cycles system / dark / light), **Contribute**
   (heart-handshake — opens a full-page overlay with ways to support
   the project), **Help** (`?` — opens the Help overlay with "Report
   an issue" and "Copy diagnostics"), and **Settings** (gear). All
   three full-page overlays are mutually exclusive.
-- **Pop out / Pin on top / Dock back** — the panel runs in three surfaces:
+- **Pop out / Pin on top / Dock back** — window-docking controls sit after
+  the Settings icon; the panel runs in three surfaces:
   - Default: Chrome's native **side panel** (docked to the browser). Its
     header shows **Pop out** (`external-link` icon).
   - **Pop out** opens the same panel as a free-floating window bound to the
@@ -519,6 +532,20 @@ Every edit you've made grouped by element.
     never cross-talk. Closing the last surface for a tab deactivates design
     mode on just that tab.
 
+### 5.1b MCP page
+
+A dedicated full-panel page (opened from the header MCP chip) replaces the
+old Settings-panel MCP fields:
+
+- **Mode picker** — Cloud / Local / Self-hosted, in that order.
+- **Port** — the WebSocket port the side panel and content script connect
+  to (Local / Self-hosted).
+- **Auto-connect** — reconnect automatically when the server comes back
+  online.
+- **Token / tenant** — the bearer token (Cloud / Self-hosted) or tenant id.
+- **Copy config / Copy token / Revoke** — copy a ready-to-paste MCP client
+  config, copy the raw token, or revoke and rotate it.
+
 ### 5.2 Action toolbar (between header and tabs)
 
 - **Parent / Child** → walk selection up/down the DOM.
@@ -533,10 +560,12 @@ Every edit you've made grouped by element.
 
 - **Copy as Prompt** → copies the markdown export of every change (see §7) to
   the clipboard.
-- **Send to Agent** → stages a handoff marker over the MCP transport; the
-  agent's next `get_changes` sees a `handoff` field flagging the edits as
-  ready to implement. When MCP is offline or no agent is attached yet, the
-  click opens state-specific setup instructions instead.
+- **Send to Agent** → opens a step-based guided modal (connect → confirm →
+  send) that stages a handoff marker over the MCP transport; the agent's
+  next `get_changes` / `get_session_summary` sees a real `handoff` field
+  flagging the edits as ready to implement. When MCP is offline or no
+  agent is attached yet, the modal's steps walk through state-specific
+  setup instead.
 
 ---
 
@@ -728,10 +757,11 @@ The same data reaches agents over MCP: `get_changes` carries a
 
 Open via the gear icon in the header.
 
+MCP connection settings (mode, port, auto-connect, token/tenant) live on the
+dedicated **MCP page** instead — see §5.1b.
+
 | Setting | What it does | Default |
 |---|---|---|
-| **MCP WebSocket port** | Port the side panel and content script connect to. Persisted to `chrome.storage.local`. The actual server port lives in `packages/mcp-local` config — this UI captures the connect intent. | `9960` |
-| **Auto-connect** | Reconnect to the MCP server automatically when it comes back online. | on |
 | **Inspector hover color** | Colour of the hover overlay. Edits are persisted **and** broadcast to the content script via `SP_SET_INSPECTOR_COLORS` so the live overlay updates immediately. | `#4F9EFF` |
 | **Inspector selection color** | Colour of the selection overlay. Same persistence + broadcast as above. | `#FF6B35` |
 | **Inspector margin overlay color** | Colour of the margin band drawn outside the element box on the hover/selection overlay. Persisted + broadcast; the overlay repaints live. | `#FF6363` |

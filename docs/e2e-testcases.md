@@ -232,6 +232,11 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 3.20 | Motion: Scroll | **When:** → **Scroll** | `animation-timeline: view()` seeded; scrolling the element through the viewport drives the animation |
 | 3.21 | Motion: variant export | Add a Hover interaction, open Copy CSS | Output has a base rule + a real `.selector:hover { … }` rule (SCSS same; Tailwind uses `hover:`) |
 | 3.22 | Motion: Advanced disclosure | Toggle the Motion **sliders** icon | Raw Transition / Animation / Transform / Motion-path / View-transition / Scroll-driven editors appear below the cards |
+| 3.23 | Appearance: icon-first fields | Select an element → expand Appearance | Opacity field is led by a blend icon (no visible "Opacity" label — name shows on hover); Corner radius field is led by a maximize icon (no visible "Corner radius" label). Blend mode and Isolation are not in the main row — open Appearance → Advanced to find them |
+| 3.24 | Corner radius: Mixed → forced uniform | Click the corner-expand (`scan`) toggle, set each of the 4 corners to a different value, collapse back to the primary row, then type a number into the primary field (showing `Mixed`) | Collapsed primary field shows a `Mixed` placeholder before the edit; typing over it writes the `border-radius` shorthand and all four corners snap to the typed value — re-expanding shows all 4 corners equal |
+| 3.25 | Layout guide: section eye visibility gating | Add one layout guide to an element, then add a second | With one guide, no section-level eye appears next to the Layout guide header — only the row's own eye. Once 2+ guides exist, a section eye appears top-right of the section header |
+| 3.26 | Layout guide: parent/child hide | With 2+ guides on an element, click the section eye to hide all guides, then click one dimmed row's own eye | Every guide disappears from the page; each row's own eye dims (~40% opacity) but still reflects and can toggle its individual on/off state; re-enabling the section eye reveals only the rows currently marked visible |
+| 3.27 | Layout guide: compact color panel | On a layout guide's expanded row, click the Colour swatch | The color panel opens with the HSV picker + hex/RGB inputs only — no WCAG contrast row and no Site Colors token list |
 
 ---
 

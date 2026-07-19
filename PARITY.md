@@ -521,9 +521,28 @@ Layered list mechanics:
 | **Per-effect remove** (trash) | Cleanly removes the entry from its CSS chain (preserves siblings). |
 | **+ Add menu** | Single-effect adds (drop / inner / text / filter-drop / layer-blur / backdrop-blur). All adds **append** to the existing chain so multi-shadow / multi-filter stacks naturally. |
 | **+ Add menu — Composed presets** | One-click multi-property recipes: Soft drop · Hard drop · Layered drop (5-shadow stack) · Glow · Embossed · Frosted glass · Neon text. |
-| **+ Add menu — Motion** | Transition · Animation · Transform · Motion path (seeds an oval `offset-path`). |
 
-Motion subsection (renders only when the relevant property is set):
+**Motion — trigger-first.** The primary Motion surface is no longer a raw
+property-editor menu — it's a list of **interactions**, each answering
+_when_ the motion plays:
+
+| Trigger | Plays when | CSS mechanism |
+|---|---|---|
+| **Hover** | pointer is over the element | `:hover` variant rule + base `transition` |
+| **Press** | element is actively pressed | `:active` variant |
+| **Focus** | element is keyboard-focused | `:focus-visible` variant |
+| **Appear** | element first mounts | `@starting-style` (from-values) + `transition` (+ `transition-behavior: allow-discrete`) |
+| **Loop** | continuously | infinite keyframe `animation` |
+| **Scroll** | element scrolls through the viewport | `animation-timeline: view()` + `animation-range` |
+
+Each state card packs change presets (Fade / Lift / Scale / Background), a
+shared easing **Curve** (duration + timing), a plain-English summary, and a
+▶ **Preview** that plays the real interaction (forcing `.dm-force-*` for
+Hover/Press/Focus, re-inserting the element for Appear, restarting the
+keyframe for Loop; Scroll has no time preview — it plays as you scroll).
+
+The raw per-property editors — everything below — moved under **Motion →
+Advanced**, renders only when its property is non-default:
 
 | Subsection | Properties |
 |---|---|
@@ -533,6 +552,16 @@ Motion subsection (renders only when the relevant property is set):
 | **Motion path** | `offset-path`, `offset-distance`, `offset-rotate`, `offset-anchor`, `offset-position`. CSS-native equivalent of SVG `<animateMotion>`. |
 | **View transition** | `view-transition-name`, `view-transition-class`. Bridges the View Transitions API — the CSS metadata is captured statically; the actual transition fires when the page calls `document.startViewTransition()`. The same `view-transition-name` is also exposed in Position → Advanced (both contexts are valid; the property is transferable). |
 | **Scroll-driven animation** | `animation-timeline`, `animation-range` / `-start` / `-end`, `scroll-timeline-name` / `-axis` / `scroll-timeline`, `view-timeline-name` / `-axis` / `-inset` / `view-timeline`, `timeline-scope`. Includes a one-click "Bind to page scroll" preset that writes `animation-timeline: scroll(root block)` + `animation-range: entry 0% exit 100%`. |
+
+**Limits (honest):** this maps the _animation_ subset of Figma prototyping.
+CSS-only, so navigate-between-frames, drag, after-delay chaining, and overlays
+are out of scope. `@starting-style` and scroll-driven timelines need Chrome
+115+/117+, and exported CSS inherits that floor.
+
+The override engine underneath is state-aware: `StyleChange` carries a
+`state` field, the sheet emits `[data-dm-id]:hover { }` / `@starting-style`
+blocks per trigger, and CSS/SCSS/Tailwind/JSX exports plus the agent prompt
+tag each change with its trigger (e.g. "opacity 1 → 0.6 (on hover)").
 
 ### Planned
 
@@ -770,6 +799,8 @@ _Nothing planned for Changes tab._ The active DOM check for the stale badge ship
 | **Drag-to-reorder for layered lists** | HTML5 DnD on every layered list (Fill / Stroke / Effects / Layers tab rows). |
 | **Non-destructive eye for layered lists** | Per-element in-memory hidden map (Fill, Stroke, Effects). The hidden layer's raw CSS is stashed and restored at its original chain index on toggle-back. |
 | **Source detection background** | React-fiber lookup runs invisibly to enrich Copy Prompt with file:line hints. The Layers tab also uses it for the optional component badge. |
+| **CSS custom property (token) authoring** | Shipped — no longer consumption-only. A discovery engine finds vars beyond `:root` (theme scopes, component scopes, `@media`/`@supports`/cascade layers) and labels them by design-system profile (IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, Tailwind v4). Any Design-tab field backed by a var shows a ◆ badge with **Swap token…**, **Edit token globally**, and **Detach from token**. Scope-aware edits write `scope { --token: value !important }` into a managed `dm-token-overrides` stylesheet. |
+| **Select matching layers** | Checkbox in the Indicator row's Selected state, next to the CSS button. Builds the multi-selection from every layer *like* the currently selected one (same tag sharing a class; classless elements match classless same-tag peers under the same parent) so every Design-tab edit fans out to them. Replaces the earlier similarity-wand + threshold-slider control. |
 
 ### Planned
 
@@ -799,7 +830,6 @@ These exist in CSS but don't fit a visual design tab. Listed for completeness.
 | **Houdini Paint / Layout / Animation Worklets** | Programmatic CSS. Niche. |
 | **Print styles** (`@media print`, `page-break-*`) | Print-specific. |
 | **Responsive design queries** (`@media`, `@supports`) | Authoring construct. We expose what's currently computed for the selected element. |
-| **CSS custom property authoring** | The Site Tokens panel covers consumption. Authoring belongs in a dedicated Tokens panel. |
 | **`@scope`** | Authoring scoping. Not visual. |
 | **`@property`** | Custom-property type registration. Authoring. |
 

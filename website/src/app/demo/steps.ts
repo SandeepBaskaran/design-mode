@@ -62,9 +62,10 @@ export const STEPS: Step[] = [
     body: [
       "Hold Shift (or Cmd / Ctrl) and click to select several elements at once — the indicator chip shows a count badge. Every edit in the Design tab now applies to the whole selection, so you can change padding, colour, or type on all of them in one move.",
       "With multiple layers selected, the Position section gains Distribute buttons that space them evenly across the horizontal or vertical axis, exactly like Figma. The Layers tab also has a multi-select toggle for picking elements from the tree.",
+      "The indicator chip's Selected row also has a Select matching layers checkbox — tick it and every layer matching the same tag/class as your selection joins it, in place of the old similarity wand and threshold slider.",
     ],
     tryIt:
-      "Turn on inspect, click the first card below, then Shift-click the other two. Change their fill colour once — all three update together. Open Position and try the Distribute buttons.",
+      "Turn on inspect, click the first card below, then Shift-click the other two. Change their fill colour once — all three update together. Open Position and try the Distribute buttons. Then select one card alone and tick Select matching layers to pull the others back in.",
     targetId: "multi-select",
   },
   {
@@ -95,7 +96,7 @@ export const STEPS: Step[] = [
     title: "Layers panel",
     body: [
       "The Layers tab shows the page's DOM as a tree. Search by tag, class, id, or smart name. Drag layers to reorder them. Toggle visibility with the eye icon. Multi-select to apply edits to several layers at once.",
-      "Each row shows: indentation guide, drag handle, expand/collapse chevron, tag icon, smart name, and a hover-revealed eye toggle.",
+      "Each row shows: indentation guide, drag handle, expand/collapse chevron, tag icon, smart name, and a hover-revealed eye toggle. Long layer names wrap instead of forcing the row to scroll sideways.",
     ],
     tryIt:
       "Switch to the Layers tab. Try the search input — type 'card' or 'demo'. Drag-reorder one of the list items below.",
@@ -151,9 +152,9 @@ export const STEPS: Step[] = [
     id: "design-appearance",
     title: "Appearance",
     body: [
-      "Appearance covers opacity, blend mode, corner radius, and the color-adjust filters (brightness, contrast, saturate, hue-rotate, grayscale, invert, sepia).",
+      "Appearance covers opacity and corner radius as compact, icon-led fields (the label lives in the tooltip), plus the color-adjust filters (brightness, contrast, saturate, hue-rotate, grayscale, invert, sepia). Blend mode and isolation moved into Advanced.",
       "The corner radius has a primary input + a scan toggle that expands a 2×2 grid for individual corners. Click the scan icon and try unequal corners.",
-      "Advanced goes further: a structured clip-path editor with live preview, backdrop blur, scrollbar styling, containment / content-visibility, color-scheme, and pointer / selection interaction controls.",
+      "Advanced goes further: blend mode, isolation, a structured clip-path editor with live preview, backdrop blur, scrollbar styling, containment / content-visibility, color-scheme, and pointer / selection interaction controls.",
     ],
     tryIt:
       "Select the card below. In Appearance, click the scan icon next to Corner radius, set the top-left corner to 24px and the bottom-right to 0.",
@@ -213,12 +214,12 @@ export const STEPS: Step[] = [
     id: "design-motion",
     title: "Motion",
     body: [
-      "Split out from Effects into its own section — Transition, Animation, Transform, Motion path, View transition, Scroll-driven animation. Each editor surfaces every CSS longhand the relevant property exposes, plus a Preview button for transitions and animations.",
-      "The timing-function picker includes a custom-curve (cubic-bézier) editor — drag the curve handles to author your own easing and reuse it across transitions and animations.",
-      "The section starts collapsed by default so the design tab stays compact; expand the chevron next to 'Motion' in the side panel to use it.",
+      "Motion leads with interaction cards organised by trigger — the thing raw CSS transitions leave implicit. Hover / Press / Focus animate to a target state while that state is active; Appear animates from a start state when the element mounts (@starting-style); Loop plays an infinite keyframe; Scroll drives an animation-timeline: view() as the element crosses the viewport.",
+      "Each card has change-row presets (Fade / Lift / Scale / Background), a shared easing Curve, a plain-English summary of what it does, and a real Preview button that plays the interaction on the page — not just a static readout.",
+      "The raw per-property editors (Transition, Animation, Transform, Motion path, View transition, Scroll-driven animation) still exist for power users — they've moved under Motion → Advanced. The custom-curve (cubic-bézier) picker lives in both places.",
     ],
     tryIt:
-      "Select the floating card. Expand Motion. Click + → 'Transition', set duration 0.3s, then change the card's background colour — watch it ease into the new value. Open the timing dropdown and pick 'Custom' to drag a bézier curve. Then click + → 'Animation' and pick a built-in dm-fade-in keyframe to preview a one-shot animation.",
+      "Select the floating card. Expand Motion, add a Hover interaction from the When: row, pick the Background preset, then click Preview to watch it play. Open Advanced underneath to see the raw transition/animation editors, or pick 'Custom' in a timing dropdown to drag a bézier curve.",
     targetId: "design-motion",
     parentId: "design",
   },
@@ -227,7 +228,7 @@ export const STEPS: Step[] = [
     title: "Layout guide",
     body: [
       "Figma-style overlay of Columns / Rows / Grid bars on the selected element. Renders as a ::before pseudo-element so it doesn't touch layout; per-element session memory means the bars stay configured when you reselect the element.",
-      "Each row carries a kind dropdown, count (or cell size for Grid), settings expand, eye, and trash. Settings opens a 3×2 grid for Columns/Rows (Colour + Opacity / Align + Size / Margin + Gutter) or 1×2 for Grid (Colour + Opacity). The section header's eye toggles every guide on the element without losing the row config.",
+      "Each row carries a kind dropdown, count (or cell size for Grid), settings expand, eye, and trash. Settings opens a 3×2 grid for Columns/Rows (Colour + Opacity / Align + Size / Margin + Gutter) or 1×2 for Grid (Colour + Opacity). The section header's eye toggles every guide on the element without losing the row config — it only appears once you've added a second guide row, and per-row eyes dim while the section-level toggle is hiding everything.",
     ],
     tryIt:
       "Select the full-width container below. Open Layout guide → click Add → keep Columns kind, count 12, default 10% red. Toggle the section eye to hide and re-show the overlay. Drag to add a second guide row for Rows.",
@@ -238,11 +239,13 @@ export const STEPS: Step[] = [
     id: "design-tokens",
     title: "Design tokens",
     body: [
-      "When the page exposes a design system — CSS custom properties / theme tokens — every colour picker in the Design tab surfaces them in a Tokens row. A fill, stroke, text, or shadow colour can be set straight from the system palette instead of a raw hex.",
-      "Picking a token stores the variable reference, so the exported diff and Copy as Prompt carry the token name, not a frozen value — your agent writes `var(--brand-500)`, not `#2480ed`.",
+      "The token-discovery engine finds every CSS custom property a page declares — not just :root. Theme scopes (`.dark`, `[data-theme]`), component scopes, matching @media / @supports blocks, and cascade layers are all picked up, so a design-heavy site can surface hundreds of tokens instead of the handful declared globally.",
+      "Known systems — IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, Tailwind v4 — are recognised and labelled by name, with each system's own taxonomy driving how tokens group in the panel.",
+      "Any Design-tab field whose value resolves from a variable shows a ◆ token badge naming it. Click the badge for Swap token… (a matched picker for colour, spacing, radius, typography, or shadow — not just colour), Edit token globally (jumps to the Tokens panel with that token's scope pre-selected), or Detach from token (writes the resolved literal instead).",
+      "Editing stays scope-aware — a token is one value per theme, so a change writes into a managed override stylesheet scoped to where the element actually resolves it, rather than clobbering every theme at once. The exported diff and Copy as Prompt carry the token name and scope, not a frozen value — your agent edits the token's definition, not the component.",
     ],
     tryIt:
-      "Select the swatch below and open its Fill colour picker. Look for the Tokens row at the top of the picker, pick a token, and watch the Changes entry record the variable name.",
+      "Select the swatch below and open its Fill colour picker to see the Tokens row, or look for a ◆ badge on an already token-backed field. Click the badge and try Swap token… or Edit token globally.",
     targetId: "design-tokens",
     parentId: "design",
   },
@@ -302,11 +305,12 @@ export const STEPS: Step[] = [
     id: "mcp",
     title: "MCP server",
     body: [
-      "Design Mode ships with an optional MCP companion that bridges the extension to your coding agent (Claude Code, Cursor, etc.) over a local WebSocket. With MCP running and an agent connected, your changes can be sent live with one click instead of being copied through the clipboard.",
-      "Start it from the repo root with npm start. The panel header indicator turns green when an agent is connected.",
+      "Design Mode ships with an optional MCP companion that bridges the extension to your coding agent (Claude Code, Cursor, etc.). With MCP running and an agent connected, your changes can be sent live with one click instead of being copied through the clipboard.",
+      "MCP configuration lives on its own dedicated page inside the extension — not in Settings. Click the MCP chip in the panel header (its trailing chevron opens the page) to pick a connection mode, watch status, and manage the token.",
+      "Three connection modes: Cloud (default, hosted relay, no install), Local (a companion server on your machine, started with npm start), and Self-hosted (the same relay code on infrastructure you run).",
     ],
     tryIt:
-      "From the repo root: `npm start --prefix packages/mcp-local`. In the panel header, watch the MCP indicator flip from offline (grey) to running (yellow) to connected (green) once your agent attaches.",
+      "Click the MCP chip in the panel header to open the dedicated MCP page. From the repo root: `npm start --prefix packages/mcp-local` for Local mode. Watch the chip flip from offline (grey) to running to connected once your agent attaches.",
     nextLink: { label: "Read the full MCP setup guide →", href: "/mcp" },
   },
   {
@@ -323,12 +327,13 @@ export const STEPS: Step[] = [
     id: "send-to-agent",
     title: "Send to Agent",
     body: [
-      "Send to Agent pushes the same Copy as Prompt payload directly to a connected coding agent over MCP — no clipboard round-trip. Enabled when MCP is running AND an agent is connected. The button's tooltip names the specific blocker if either is missing.",
+      "Send to Agent opens a step-based guided modal — confirm the connection, review what's about to ship, then push it over MCP. No clipboard round-trip. Enabled when MCP is running AND an agent is connected; the button's tooltip names the specific blocker if either is missing.",
+      "Once you send, get_changes and get_session_summary expose a real handoff field, so the agent's next read knows this batch of edits is the one you just approved — an explicit 'these are ready' signal instead of the agent guessing.",
       "This is the fastest path from 'I just designed it in the browser' to 'the source code is now updated'.",
       "Haven't set up an agent yet? The MCP tour walks you through all three connection modes (Local, Cloud, Self-hosted) with copy-paste config snippets for Claude Desktop, Cursor, and Claude Code — `Set up your agent →` link below.",
     ],
     tryIt:
-      "With MCP running and your agent attached, click Send to Agent. The agent receives a structured message with every change in this demo session.",
+      "With MCP running and your agent attached, click Send to Agent and step through the guided modal. The agent receives a structured message with every change in this demo session, flagged via the handoff field.",
     nextLink: { label: "Set up your agent →", href: "/mcp" },
   },
 ];

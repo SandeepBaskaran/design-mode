@@ -42,6 +42,12 @@ Out of scope:
   `packages/extension/src/sidepanel/sidepanel.ts`) before rendering.
   Any code path that interpolates page-derived values into HTML or
   CSS contexts must use `escapeAttr` / `safeCssColor` accordingly.
+  Two CSS-generation surfaces added for 1.9.0 need the same scrutiny:
+  the `dm-token-overrides` stylesheet (`packages/extension/src/content/root-var-store.ts`),
+  which interpolates page-derived scope selectors and token values into
+  `scope { --token: value !important }`, and the state-variant override
+  sheet (`packages/extension/src/content/change-tracker.ts`), which emits
+  `[data-dm-id]:hover { }` / `@starting-style { }` blocks.
 - Don't commit secrets — `.env*` is gitignored. The website's `NEXT_PUBLIC_*`
   vars ship in HTML and are not secrets, but treat anything else as sensitive.
 - Never add `eval`, `new Function`, or inline event-handler injection in the

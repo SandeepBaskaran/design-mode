@@ -6,7 +6,7 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.9.0] — 2026-07-19
 
 ### Added
 
@@ -54,14 +54,60 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   plain-English summary, and a **Preview** that plays the real
   interaction. The raw per-property editors move under a new
   Motion → **Advanced** disclosure.
+- **Dedicated MCP page.** MCP configuration moved out of Settings into
+  its own full-panel page, opened from the header MCP chip (its trailing
+  icon is now a chevron). The page carries the Cloud / Local / Self-hosted
+  mode picker, port, auto-connect, token / tenant, and Copy config /
+  Copy token / Revoke.
+- **Step-based Send to Agent.** The Send-to-Agent flow is now a guided
+  modal, and `get_changes` / `get_session_summary` expose a real
+  `handoff` field so the agent receives the edit set directly.
+
+### Changed
+
+- **Select matching layers.** The similarity wand + threshold slider is
+  replaced by a **Select matching layers** checkbox in the Selected row —
+  it builds the multi-selection from every layer like the selected one.
+- **Appearance section, icon-first.** Opacity and corner-radius are now
+  icon-led fields (label in the tooltip); blend mode + isolation moved
+  into Advanced. Layout guides gained visibility gating (the section eye
+  only appears with 2+ guides; per-layer eyes dim while the section is
+  hidden) and a compact guide colour panel (no contrast row / Site
+  Colors list).
+- **Figma-aligned light/dark palette** to reduce the panel's visual
+  heaviness.
+- **Window-docking controls** moved to sit after the Settings icon in
+  the header.
+- **Prompt export conveys layer reordering** (origin → destination) so
+  the agent can reproduce Layers-tab reorders.
+- **Override engine now emits state-variant rules.** `StyleChange` gained
+  an optional `state` field; the content-side override sheet can emit
+  `[data-dm-id]:hover { … }` and `@starting-style` blocks in addition to
+  the base rule. Exports (CSS / SCSS / Tailwind / JSX) and the agent
+  prompt are state-aware — CSS/SCSS emit real pseudo-class /
+  `@starting-style` rules, Tailwind uses `hover:` variants, and the
+  prompt tags each change with its trigger.
 
 ### Fixed
 
+- Corner-radius: editing the uniform field over a "Mixed" value now
+  forces all four corners to the typed value (previously it silently did
+  nothing). The same shorthand-clears-longhands fix covers margin /
+  padding.
+- Layers tab no longer scrolls horizontally on long layer names.
 - Theme-scoped tokens could not be edited at all: overrides were set
   inline on `documentElement`, which a theme scope's own declaration
   beats, so the edit silently did nothing on design-system sites.
 - Typing `var(--token)` into a radius or stroke-weight field flattened
   it to `0`.
+- Local MCP parity fixes for the Send-to-Agent handoff path.
+
+### Removed
+
+- **Section rearrange** (dragging Design-tab sections into a custom
+  order) — retired in favour of the fixed, predictable section layout.
+- The **similarity wand + threshold slider**, superseded by the Select
+  matching layers checkbox.
 
 ### Internal
 
@@ -70,16 +116,6 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   the two conflicting `DesignToken` interfaces in the side panel are now
   one. `'consolidate'` added to the `groupKind` union it was already
   being passed as.
-
-### Changed
-
-- **Override engine now emits state-variant rules.** `StyleChange` gained
-  an optional `state` field; the content-side override sheet can emit
-  `[data-dm-id]:hover { … }` and `@starting-style` blocks in addition to
-  the base rule. Exports (CSS / SCSS / Tailwind / JSX) and the agent
-  prompt are state-aware — CSS/SCSS emit real pseudo-class /
-  `@starting-style` rules, Tailwind uses `hover:` variants, and the
-  prompt tags each change with its trigger.
 
 ### Notes
 

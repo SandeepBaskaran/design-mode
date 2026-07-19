@@ -209,7 +209,10 @@ export default function McpPage() {
                 state of your live page. Design Mode exposes eight MCP tools
                 so your agent can read every edit you made in the side
                 panel, push patches back to the page, grab screenshots, and
-                mark your comments resolved — all without copy-paste.
+                mark your comments resolved — all without copy-paste. MCP
+                connection, mode, and token management now live on their
+                own dedicated page inside the extension, opened from the
+                header MCP chip.
               </p>
               <p>
                 <strong className="text-foreground">
@@ -283,8 +286,8 @@ export default function McpPage() {
             <code className="bg-muted rounded px-1 py-0.5 text-sm">
               dm_&lt;your-token&gt;
             </code>{" "}
-            placeholder with the bearer token from your side panel, and
-            restart the agent.
+            placeholder with the bearer token from the extension's
+            dedicated MCP page (Copy token), and restart the agent.
           </p>
 
           <Accordion type="single" collapsible className="mt-8 w-full">

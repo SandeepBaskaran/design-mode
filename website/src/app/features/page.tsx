@@ -63,7 +63,7 @@ const headerIcons = [
     icon: Plug,
     title: "MCP status",
     description:
-      "Click-to-refresh chip showing whether the MCP server is offline, running, or has an agent attached.",
+      "Chip showing whether the MCP server is offline, running, or has an agent attached. Click it to open the dedicated MCP page.",
   },
   {
     icon: SunMoon,
@@ -86,7 +86,7 @@ const headerIcons = [
     icon: SettingsIcon,
     title: "Settings",
     description:
-      "Theme, colour format, capture mode, inspector colours, and the MCP mode picker (Cloud / Local / Self-hosted).",
+      "Theme, colour format, capture mode, and inspector colours. MCP configuration (Cloud / Local / Self-hosted) now lives on its own dedicated page, opened from the MCP chip.",
   },
 ];
 
@@ -260,7 +260,10 @@ export default function FeaturesPage() {
                 <p className="text-muted-foreground text-sm leading-relaxed">
                   Nine sections, Figma-aligned. Every input is a real
                   control — sliders, colour pickers, segmented buttons —
-                  not a textarea of CSS.
+                  not a textarea of CSS. Motion leads with trigger-first
+                  interaction cards (Hover / Press / Focus / Appear / Loop
+                  / Scroll); any field bound to a design-system token
+                  shows a ◆ badge for swapping or editing it.
                 </p>
                 <ul className="mt-2 grid grid-cols-1 gap-1.5 text-sm">
                   {designSections.map((s) => {

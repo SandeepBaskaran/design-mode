@@ -63,7 +63,7 @@ const bottomItems: Item[] = [
   {
     title: "Design tab.",
     description:
-      "Nine Figma-aligned sections. Real controls — sliders, colour pickers, segmented buttons — not a textarea of CSS.",
+      "Nine Figma-aligned sections. Real controls — sliders, colour pickers, segmented buttons — not a textarea of CSS. Motion leads with trigger-first interaction cards; design-system tokens surface as swap-and-edit badges.",
     image: {
       src: "/panel-anatomy/design-tab.png",
       alt: "Design tab",

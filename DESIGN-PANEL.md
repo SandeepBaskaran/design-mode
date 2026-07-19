@@ -35,6 +35,7 @@ Always rendered at the very top of the Design tab. Tells you what's currently se
 | **State chip** | A pill showing one of three states: `Selected` (blue, with `crosshair` icon — a real layer is focused), `Hovering` (yellow, with `eye` icon — you're hovering over a layer in the page or Layers tab without committing), or `Page` (blue, with `panel-right` icon — no specific layer is selected, so the Design tab is editing the `<body>` as the implicit context). | Always. |
 | **Tag** | The element's tag name (`<div>`, `<button>`, `<svg>`, etc.) in monospace. | Always. |
 | **Multi-select badge** | A blue chip — `N selected` — appears when multi-select is active and the count is ≥ 1. Tooltip explains that style edits will fan out to every selected layer. | When `multiSelectActive && multiSelectIds.length > 0`. |
+| **Select matching layers** (checkbox) | Builds the multi-selection from every layer *like* the currently selected one — same tag sharing a class (classless elements match classless same-tag peers under the same parent). Checking it calls `SP_FIND_MATCHING` and, with 2+ matches, pushes them all into the multi-selection so every Design-tab edit fans out; fewer than 2 matches shows an error toast and the checkbox stays unchecked. Unchecking clears the multi-selection back to the single layer. Replaces the earlier similarity-wand + threshold-slider control. | Rendered next to the CSS button when a single layer is `Selected`. |
 | **CSS button** (`code` icon) | Opens an overlay showing the computed CSS for the selected layer — every CSS property that's not a browser default — formatted as a CSS selector + declaration block, ready to copy. | Always rendered; disabled (greyed out) when nothing is selected. |
 
 Example layouts:
@@ -481,24 +482,25 @@ How the layer **looks at the surface** — opacity, blend, corner radius, color 
 
 ## Main controls
 
-### Opacity + Blend + Isolation row
+### Opacity + Corner radius row
 
-12-col grid: opacity (4) | blend (6) | isolation (2).
+Icon-first: both fields lead with a glyph instead of a visible label — the
+field name lives in the input's tooltip. 12-col grid: opacity (5) | corner
+radius (5) | edit-each-corner toggle (2). Blend mode and isolation moved
+into the **Advanced** disclosure — see below.
 
 | Field | Property | What | Values |
 |---|---|---|---|
-| **Opacity** | `opacity` | Whole-layer transparency. | `0` (fully transparent) to `1` (fully opaque). |
-| **Blend** | `mix-blend-mode` | How this layer blends with what's behind it. | `normal`, `multiply`, `screen`, `overlay`, `darken`, `lighten`, `color-dodge`, `color-burn`, `hard-light`, `soft-light`, `difference`, `exclusion`, `hue`, `saturation`, `color`, `luminosity`, `plus-lighter`. |
-| **Iso** (toggle) | `isolation` | Forces a new stacking context. Use to keep blend modes from bleeding across siblings. | `auto` (default) ↔ `isolate`. |
+| **Opacity** | `opacity` | Whole-layer transparency. Led by a `blend` glyph; "Opacity" is the tooltip. | `0` (fully transparent) to `1` (fully opaque); shown as 0–100%. |
+| **Corner radius** (`cornerRadiusUniformField`) | `border-radius` (shorthand) | Uniform corner radius for all four corners. Led by a `maximize` glyph; "Corner radius" is the tooltip. Shows a `Mixed` placeholder when the four corners currently differ — typing a value over `Mixed` writes the shorthand and forces all four corners to match. | Length / percent: `0`, `8px`, `1rem`, `50%`. |
+| `scan` icon | Toggle expanded mode | Reveals the per-corner 2×2 below. | — |
 
-**Figma equivalent**: Opacity, Blend mode dropdown. (Figma has no `isolation` analogue — it always isolates per-layer.)
+**Figma equivalent**: Opacity, Corner radius (linked mode). Figma's "Smoothing" / squircle is still skipped (no CSS equivalent).
 
-### Corner radius
+### Corner radius (expanded — edit each corner)
 
 | UI | Property | What | Values |
 |---|---|---|---|
-| Primary input | `border-radius` (shorthand) | Uniform corner radius for all four corners. | Length / percent: `0`, `8px`, `1rem`, `50%`. To go elliptical, type two values: `12px 24px`. |
-| `scan` icon | Toggle expanded mode | Reveals the per-corner 2×2 below. | — |
 | 2×2 grid (per corner) | `border-top-left-radius` · `border-top-right-radius` · `border-bottom-left-radius` · `border-bottom-right-radius` | Individual corner radii. Each cell carries the corner glyph + an **X input** and a **Y input** separated by `/`. | Length / percent. When X = Y the corner is circular; when they differ the corner is elliptical. |
 
 How the 2×2 cell works:
@@ -531,6 +533,15 @@ Each button **toggles** the named function on `filter`. Re-clicking an active fu
 **Figma equivalent**: Effects → adjust effects (Figma's set is narrower; `hue-rotate`, `invert`, `sepia`, and per-element `drop-shadow` are CSS-only).
 
 ## Advanced disclosure
+
+### Blend + stacking
+
+| Field | Property | What | Values |
+|---|---|---|---|
+| **Blend** | `mix-blend-mode` | How this layer blends with what's behind it. | `normal`, `multiply`, `screen`, `overlay`, `darken`, `lighten`, `color-dodge`, `color-burn`, `hard-light`, `soft-light`, `difference`, `exclusion`, `hue`, `saturation`, `color`, `luminosity`, `plus-lighter`. |
+| **Iso** (toggle) | `isolation` | Forces a new stacking context. Use to keep blend modes from bleeding across siblings. | `auto` (default) ↔ `isolate`. |
+
+**Figma equivalent**: Blend mode dropdown. (Figma has no `isolation` analogue — it always isolates per-layer.)
 
 ### Visibility & cursor
 
@@ -1229,6 +1240,63 @@ Marks the current element as a view-progress timeline — progress runs as the e
 | **Clear** | Resets every scroll-driven property back to its default. |
 
 **Figma equivalent**: Effects panel covers Drop / Inner / Layer / Background. Filter drop-shadow, Motion path, View transition, and Scroll-driven animation are CSS-only goodies. Smart Animate maps to Transition / Animation conceptually; View transitions overlap with Smart Animate's intent (carry an element across page states), but the implementation is browser-native.
+
+---
+
+# Layout guide
+
+Figma-style design-aid overlay. Paints Columns / Rows / Grid bars over the
+selected element via a `::before` pseudo-element — session-only, doesn't
+touch the change-tracker, and survives page reload while the side panel
+stays open.
+
+**Visibility**: shown for `text`, `container`, and `page` kinds.
+
+## Layered list
+
+Every guide on the element is one row, up to `LAYOUT_GUIDE_LIMIT`.
+
+| Control | What |
+|---|---|
+| Drag handle | Reorder guides on the element. |
+| **Kind** (select) | `Grid` · `Columns` · `Rows`. |
+| Count / cell size | Compact numeric input — column/row count for Columns/Rows, cell size (px) for Grid. |
+| Settings (`slidersHorizontal`) | Expands the per-guide editor below the row. |
+| Eye | Per-guide visibility — see gating below. |
+| Trash | Removes the guide. Below 2 remaining guides, also clears the section-hide flag (see below). |
+
+## Expanded body
+
+| Kind | Fields |
+|---|---|
+| **Columns / Rows** | 3×2 grid: Colour + Opacity / Type (align: `stretch`/`left`/`center`/`right` for columns, `stretch`/`top`/`center`/`bottom` for rows) + Width or Height / Margin + Gutter. |
+| **Grid** | 1×2: Colour + Opacity. |
+
+The Colour swatch opens a **compact color panel** — the same HSV/hex/RGB
+picker used elsewhere, but with the contrast row and the Site Colors
+(design-token) list dropped. A guide overlay isn't page content, so WCAG
+pairing and token suggestions are noise; only the picker and its value
+inputs render.
+
+## Visibility gating
+
+Parent/child, Figma-style: a guide only paints when **both** the
+section-level eye and its own row eye are on.
+
+- **Section eye** — top-right of the section header, toggles every guide
+  on the current element at once without losing per-row config. It only
+  renders once the element has **2+ guides** — with fewer it would just
+  duplicate that single row's own eye. Dropping below 2 guides (e.g. via
+  trash) clears the section-hide flag so a lone remaining guide can never
+  be stranded invisible with no visible control explaining why.
+- **Per-row eye** — always renders. While the section is hidden, each
+  row's eye still reflects and edits its own state but renders **dimmed**
+  (40% opacity) to signal that the section gate, not the row itself, is
+  what's currently suppressing it.
+
+**Figma equivalent**: Layout grid overlay (Figma has no columns-vs-rows
+split — this panel's `Columns` / `Rows` / `Grid` kinds map to Figma's
+single grid-with-type picker).
 
 ---
 

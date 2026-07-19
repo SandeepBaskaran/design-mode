@@ -6,7 +6,9 @@ Key facts:
 - License: MIT, fully open source
 - Price: free forever, no accounts, no telemetry by default
 - Surface: Chromium-based browsers (Chrome, Edge, Brave, Arc) via Manifest V3 side panel
-- Protocol: Model Context Protocol (MCP) — three connection modes (Cloud default, Local offline, Self-hosted)
+- Design-system tokens: discovers CSS variables beyond :root (theme/component scopes, @media/@supports, cascade layers), recognises IBM Carbon / Material / MUI / Bootstrap / Polaris / Radix / shadcn/ui / Tailwind v4, and badges token-backed fields for scope-aware swap/edit/detach
+- Motion: trigger-first interaction cards (Hover, Press, Focus, Appear, Loop, Scroll) with presets, shared easing curve, and real preview; raw CSS editors under Advanced
+- Protocol: Model Context Protocol (MCP) — three connection modes (Cloud default, Local offline, Self-hosted), configured from a dedicated in-extension MCP page
 - Repo: https://github.com/SandeepBaskaran/design-mode
 - Site: https://designmode.app
 - Author: Sandeep Baskaran (https://sandeepbaskaran.com)
@@ -68,6 +70,7 @@ Key facts:
 - [Vibe coding: how visual editing fits the AI-coding-agent workflow](https://designmode.app/blog/vibe-coding-visual-editing-workflow)
 - [Design Mode 1.5.0 changelog deep-dive](https://designmode.app/blog/design-mode-1-5-0-changelog-deep-dive)
 - [Redesigning a Tailwind landing page with Claude Code](https://designmode.app/blog/redesigning-a-tailwind-landing-page-with-claude-code)
+- [Design Mode 1.9.0 — design tokens, trigger-first motion, and a dedicated MCP page](https://designmode.app/blog/design-mode-1-9-0-release)
 
 ## Privacy & contact
 

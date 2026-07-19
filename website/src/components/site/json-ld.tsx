@@ -58,7 +58,7 @@ export const softwareApplicationSchema = {
   operatingSystem: "Chrome, Edge, Brave, Arc",
   url: SITE_URL,
   downloadUrl: SITE_URL,
-  softwareVersion: "1.5.0",
+  softwareVersion: "1.9.0",
   license: "https://opensource.org/licenses/MIT",
   offers: {
     "@type": "Offer",
@@ -78,10 +78,12 @@ export const softwareApplicationSchema = {
   featureList: [
     "Visual editing of any live website",
     "Layout, typography, colour, spacing, motion, effects",
+    "Design-system token discovery and scope-aware token editing",
+    "Trigger-first motion (Hover, Press, Focus, Appear, Loop, Scroll)",
     "DOM tree editor (Layers)",
     "Persistent change history (Changes tab)",
     "Markdown export of every edit",
-    "Send to AI agent over MCP",
+    "Send to AI agent over MCP via a guided handoff modal",
     "Three MCP modes: Cloud, Local, Self-hosted",
     "Compatible with Claude Code, Cursor, Claude Desktop, Windsurf, Cline",
     "Open source (MIT)",
