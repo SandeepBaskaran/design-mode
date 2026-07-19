@@ -220,6 +220,12 @@ let contrastSettingsOpen = false;
 // background — populated on selection when info.computedStyles.backgroundColor
 // is transparent. Keyed by element id; cleared when selection changes.
 const effectiveBgCache = new Map<string, string>();
+// Count of layers that "match" the selected element (same tag + shared
+// class — see findMatchingElements). Keyed by element id; the value
+// includes the element itself, so >= 2 means real peers exist. Drives
+// whether the "Matching layers" checkbox shows at all. Cleared on any
+// structural DOM refresh since duplicating/deleting changes the matches.
+const matchingCountCache = new Map<string, number>();
 let domTree: DomNode[] = [];
 let hoveredLayerId: string | null = null;
 let undoCount = 0;
@@ -782,7 +788,7 @@ function openPipWindow() {
 async function refreshMcpStatus() { const res = await send({ type: 'SP_GET_MCP_STATUS' }); if (res.mcpState) mcpState = res.mcpState; else if (res.connected && res.agentConnected) mcpState = 'connected'; else if (res.connected) mcpState = 'running'; else mcpState = 'offline'; render(); }
 async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
 async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; render(); }
-async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; render(); }
+async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; matchingCountCache.clear(); render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
 // morphdom hasn't placed the element by the next microtask.
@@ -2688,6 +2694,21 @@ function maybeFetchEffectiveBg() {
       effectiveBgCache.set(id, r.color);
       if (activeColorPickerProp) render();
     }
+  });
+}
+
+// Lazily resolve how many layers match the selected element so the design
+// tab can hide the "Matching layers" checkbox when there are no peers.
+// Mirrors maybeFetchEffectiveBg: cache-guarded so it fires once per element
+// and the render() it triggers doesn't loop.
+function maybeFetchMatchingCount() {
+  if (!info) return;
+  const id = info.id;
+  if (!id || matchingCountCache.has(id)) return;
+  send({ type: 'SP_FIND_MATCHING', elementId: id }).then(r => {
+    const ids: string[] = Array.isArray(r?.ids) ? r.ids : [];
+    matchingCountCache.set(id, ids.length);
+    render();
   });
 }
 
@@ -6589,8 +6610,13 @@ function renderDesignTab(): string {
   // "Matching layers" — one checkbox: checked hands every matching element
   // (same tag sharing a class) to multi-select fan-out; the existing
   // "N selected" badge shows the resulting count. Lives inline in the
-  // Selected row, in front of the CSS button.
-  const matchingCtl = info && !isPageContext && !isHovering
+  // Selected row, in front of the CSS button. Only shown when the element
+  // actually has peers (count includes the element itself, so >= 2), or
+  // when it's already checked so the user can uncheck it.
+  const canMatch = !!info && !isPageContext && !isHovering;
+  if (canMatch) maybeFetchMatchingCount();
+  const hasMatchingPeers = (info && (matchingCountCache.get(info.id) ?? 0) >= 2) || false;
+  const matchingCtl = canMatch && (hasMatchingPeers || matchingLayersChecked)
     ? '<label title="Selects every layer like this one (same tag, shared class) so your edits apply to all of them" style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--dm-text-secondary);cursor:pointer;user-select:none;flex-shrink:0;white-space:nowrap;">' +
       '<input type="checkbox" data-dm-action="toggle-matching-layers"' + (matchingLayersChecked ? ' checked' : '') + ' style="accent-color:var(--dm-accent);margin:0;cursor:pointer;"/>' +
       'Matching layers</label>'
