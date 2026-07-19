@@ -173,6 +173,7 @@ type ColorFormat = 'hex' | 'rgba' | 'hsl';
 let tab: Tab = 'design';
 let settingsOpen = false;
 let helpOpen = false;
+let mcpOpen = false;
 let sendAgentHelpOpen = false;
 
 // "Select matching layers" checkbox — checked hands all matching
@@ -5859,38 +5860,52 @@ function spacingBox(s: Record<string, string>, displayInfo: any): string {
 }
 
 /* ── Layout render helpers ── */
-function renderMcpStatus(): string {
-  let dotStyle = '', tooltipText = '', textColor = '';
+// Single source of truth for the MCP state's visual treatment. The header
+// chip and the MCP page's status card both derive from this so they can't
+// drift. `label` is the human-readable state; `detail` is a one-line
+// explanation shown on the MCP page.
+function mcpStatusDisplay(): { dotStyle: string; textColor: string; label: string; detail: string } {
   const isCloud = mcpMode === 'cloud' || mcpMode === 'self-hosted';
-  const offlineHint = isCloud
-    ? (mcpCloudToken
-        ? 'Cloud relay unreachable. Click to retry. Check Settings → MCP for the server URL + token.'
-        : 'No cloud token yet. Open Settings → MCP and click Connect to Cloud.')
-    : 'MCP not running. Click to retry the connection.\n\nStart the server with `npm start --prefix packages/mcp-local`.';
   if (mcpState === 'offline') {
-    dotStyle = 'width:7px;height:7px;border-radius:50%;background:var(--dm-text-muted);flex-shrink:0;';
-    tooltipText = offlineHint;
-    textColor = 'var(--dm-text-muted)';
-  } else if (mcpState === 'running') {
-    dotStyle = 'width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:dm-pulse 2s ease-in-out infinite;';
-    tooltipText = isCloud
-      ? 'Cloud relay connected. Side panel must stay open for agent calls to land.'
-      : 'MCP server is running, but no agent is connected yet. Click to refresh.';
-    textColor = '#22c55e';
-  } else {
-    dotStyle = 'width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.4);flex-shrink:0;';
-    tooltipText = isCloud
-      ? 'Cloud relay connected and serving an agent.'
-      : 'MCP connected. Click to refresh status.';
-    textColor = '#22c55e';
+    return {
+      dotStyle: 'width:7px;height:7px;border-radius:50%;background:var(--dm-text-muted);flex-shrink:0;',
+      textColor: 'var(--dm-text-muted)',
+      label: 'Offline',
+      detail: isCloud
+        ? (mcpCloudToken
+            ? 'Cloud relay unreachable. Refresh to retry, or check the server URL + token below.'
+            : 'No cloud token yet. Click Connect to Cloud below.')
+        : 'MCP not running. Start the server with `npm start --prefix packages/mcp-local`, then refresh.',
+    };
   }
-  // The whole chip is now clickable — clicking it calls refreshMcpStatus()
-  // which re-pings the content script + server. The icon to the right
-  // signals refreshability without crowding the indicator with two
-  // overlapping click targets.
-  return '<button data-dm-action="refresh-mcp" style="display:flex;align-items:center;gap:5px;padding:4px 8px;background:var(--dm-bg-secondary);border:none;border-radius:6px;cursor:pointer;font-family:inherit;" title="' + escapeAttr(tooltipText) + '">' +
+  if (mcpState === 'running') {
+    return {
+      dotStyle: 'width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:dm-pulse 2s ease-in-out infinite;',
+      textColor: '#22c55e',
+      label: 'Running',
+      detail: isCloud
+        ? 'Cloud relay connected. Side panel must stay open for agent calls to land.'
+        : 'MCP server is running, but no agent is connected yet.',
+    };
+  }
+  return {
+    dotStyle: 'width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.4);flex-shrink:0;',
+    textColor: '#22c55e',
+    label: 'Connected',
+    detail: isCloud
+      ? 'Cloud relay connected and serving an agent.'
+      : 'MCP connected and serving an agent.',
+  };
+}
+
+function renderMcpStatus(): string {
+  const { dotStyle, textColor, label } = mcpStatusDisplay();
+  // The whole chip opens the dedicated MCP page (status + server config +
+  // agent setup). The trailing chevron signals navigation rather than the
+  // old in-place refresh — refreshing now lives on the page itself.
+  return '<button data-dm-action="mcp" style="display:flex;align-items:center;gap:5px;padding:4px 8px;background:var(--dm-bg-secondary);border:none;border-radius:6px;cursor:pointer;font-family:inherit;" title="' + escapeAttr('MCP: ' + label + ' — click to open MCP settings') + '">' +
     '<span style="' + dotStyle + '"></span><span style="font-size:10px;color:' + textColor + ';font-weight:500;">MCP</span>' +
-    '<span style="color:var(--dm-text-secondary);display:flex;padding:2px;">' + icon('rotateCw', 10) + '</span>' +
+    '<span style="color:var(--dm-text-secondary);display:flex;padding:2px;">' + icon('chevronRight', 10) + '</span>' +
     '</button>';
 }
 
@@ -6011,20 +6026,20 @@ function renderSendAgentHelpOverlay(): string {
   if (mcpState === 'running') {
     intro = 'The MCP server is reachable, but no coding agent has connected yet.';
     steps = [
-      'Open <b>Settings → MCP</b> and click <b>Copy MCP config</b>.',
+      'Open the <b>MCP page</b> (click the MCP chip up top) and click <b>Copy MCP config</b>.',
       'Paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …) and restart the agent.',
       'Run ' + code('/design-mode') + ' in the agent — the MCP chip up top turns solid green.',
     ];
   } else if (isCloud && mcpCloudToken) {
     intro = 'The cloud relay is unreachable right now.';
     steps = [
-      'Open <b>Settings → MCP</b> and check the server URL and token.',
-      'Click the <b>MCP</b> chip in the panel header to retry the connection.',
+      'Open the <b>MCP page</b> (click the MCP chip up top) and check the server URL and token.',
+      'Click <b>Refresh status</b> on the MCP page to retry the connection.',
     ];
   } else if (isCloud) {
     intro = 'One-time setup — takes about a minute.';
     steps = [
-      'Open <b>Settings → MCP</b> and click <b>Connect to Cloud</b>.',
+      'Open the <b>MCP page</b> (click the MCP chip up top) and click <b>Connect to Cloud</b>.',
       'Click <b>Copy MCP config</b> and paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …).',
       'Restart the agent, then run ' + code('/design-mode') + ' in it.',
     ];
@@ -6049,7 +6064,7 @@ function renderSendAgentHelpOverlay(): string {
     '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-bottom:14px;line-height:1.5;">Once connected, this button stages your changes for the agent — it implements them and marks each one done in the Changes tab.</div>' +
     '<div style="display:flex;gap:6px;">' +
     '<button data-dm-action="send-agent-help-close" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Close</button>' +
-    '<button data-dm-action="send-agent-help-settings" style="flex:1;padding:6px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Open MCP settings</button>' +
+    '<button data-dm-action="send-agent-help-mcp" style="flex:1;padding:6px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Open MCP settings</button>' +
     '</div></div></div>';
 }
 
@@ -8483,6 +8498,38 @@ function renderAgentCommandCard(sS: string, sT: string, lS: string): string {
     '<div style="display:flex;flex-direction:column;gap:8px;">' + rows + '</div></div>';
 }
 
+// Dedicated MCP page — opened from the header MCP chip. Surfaces live
+// connection status (with refresh), the MCP Server card (mode + config /
+// token), and the agent-setup command card. These used to live inside
+// Settings; they're MCP/agent concerns, so they get their own home.
+function renderMcpView(): string {
+  const activeBtn = 'flex:1;padding:5px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
+  const inactiveBtn = 'flex:1;padding:5px 8px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
+  const sS = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:12px;';
+  const sT = 'font-size:11px;font-weight:600;color:var(--dm-text-secondary);margin-bottom:8px;';
+  const lS = 'font-size:11px;color:var(--dm-text-muted);';
+
+  const { dotStyle, textColor, label, detail } = mcpStatusDisplay();
+  const statusCard = '<div style="' + sS + '">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+    '<div style="display:flex;align-items:center;gap:6px;"><span style="' + dotStyle + '"></span>' +
+    '<span style="font-size:12px;font-weight:600;color:' + textColor + ';">' + escapeAttr(label) + '</span></div>' +
+    '<button data-dm-action="refresh-mcp" title="Re-ping the MCP server" style="display:flex;align-items:center;gap:4px;padding:5px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">' + icon('rotateCw', 11) + ' Refresh status</button>' +
+    '</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);line-height:1.4;">' + escapeAttr(detail) + '</div>' +
+    '</div>';
+
+  return '<div style="padding:16px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
+    '<button data-dm-action="back-from-mcp" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
+    '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">MCP</span></div>' +
+    '<div style="display:flex;flex-direction:column;gap:12px;">' +
+    statusCard +
+    renderMcpServerCard(sS, sT, lS, activeBtn, inactiveBtn) +
+    renderAgentCommandCard(sS, sT, lS) +
+    '</div></div>';
+}
+
 function renderSettingsView(): string {
   const cfHex = colorFormat === 'hex';
   const cfRgba = colorFormat === 'rgba';
@@ -8499,8 +8546,6 @@ function renderSettingsView(): string {
     '<button data-dm-action="back-from-settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Settings</span></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px;">' +
-    renderMcpServerCard(sS, sT, lS, activeBtn, inactiveBtn) +
-    renderAgentCommandCard(sS, sT, lS) +
     (() => {
       const swatch = (key: string, val: string) =>
         '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -8863,6 +8908,8 @@ function render() {
       '</div>';
   } else if (settingsOpen) {
     html = renderHeader() + renderSettingsView() + renderCaptureToast();
+  } else if (mcpOpen) {
+    html = renderHeader() + renderMcpView() + renderCaptureToast();
   } else if (helpOpen) {
     html = renderHeader() + renderHelpView() + renderCaptureToast();
   } else if (contributeOpen) {
@@ -9027,7 +9074,7 @@ function setupDelegation() {
             } else if (mcpState === 'offline') {
               const cloudMode = mcpMode === 'cloud' || mcpMode === 'self-hosted';
               showCaptureToast('error', cloudMode
-                ? (mcpCloudToken ? 'Cloud relay still unreachable.' : 'No cloud token. Open Settings → MCP.')
+                ? (mcpCloudToken ? 'Cloud relay still unreachable.' : 'No cloud token. Click Connect to Cloud below.')
                 : 'MCP still offline. Run `npm start --prefix packages/mcp-local`.');
             }
           });
@@ -9036,7 +9083,7 @@ function setupDelegation() {
         case 'copy-prompt': copyPrompt(); break;
         case 'send-to-agent': sendToAgent(); break;
         case 'send-agent-help-close': sendAgentHelpOpen = false; render(); break;
-        case 'send-agent-help-settings': sendAgentHelpOpen = false; helpOpen = false; contributeOpen = false; settingsOpen = true; render(); break;
+        case 'send-agent-help-mcp': sendAgentHelpOpen = false; helpOpen = false; contributeOpen = false; settingsOpen = false; mcpOpen = true; render(); break;
         case 'toggle-theme': toggleTheme(); break;
         case 'submit-comment': submitComment(); break;
         case 'cancel-comment': cancelComment(); break;
@@ -9139,12 +9186,14 @@ function setupDelegation() {
         case 'clear-changes-search': changesSearch = ''; render(); break;
         case 'reset-changes-filter': changesFilter = 'all'; changesSearch = ''; render(); break;
         case 'back-from-settings': settingsOpen = false; render(); break;
-        case 'settings': helpOpen = false; contributeOpen = false; settingsOpen = !settingsOpen; render(); break;
+        case 'settings': helpOpen = false; contributeOpen = false; mcpOpen = false; settingsOpen = !settingsOpen; render(); break;
+        case 'back-from-mcp': mcpOpen = false; render(); break;
+        case 'mcp': settingsOpen = false; helpOpen = false; contributeOpen = false; mcpOpen = !mcpOpen; if (mcpOpen) refreshMcpStatus(); render(); break;
         case 'back-from-help': helpOpen = false; render(); break;
-        case 'help': settingsOpen = false; contributeOpen = false; helpOpen = !helpOpen; render(); break;
+        case 'help': settingsOpen = false; contributeOpen = false; mcpOpen = false; helpOpen = !helpOpen; render(); break;
         case 'back-from-contribute': contributeOpen = false; render(); break;
         case 'open-file-access-settings': chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id }); break;
-        case 'contribute': settingsOpen = false; helpOpen = false; contributeOpen = !contributeOpen; render(); break;
+        case 'contribute': settingsOpen = false; helpOpen = false; mcpOpen = false; contributeOpen = !contributeOpen; render(); break;
         case 'copy-diagnostics': {
           const payload = buildDiagnostics();
           const flash = (msg: string) => {
@@ -10011,6 +10060,7 @@ function setupDelegation() {
         tokensOpen = true;
         settingsOpen = false;
         helpOpen = false;
+        mcpOpen = false;
         tokensTab = 'declared';
         tokensFocusVar = cssVar;
         // Pin the panel to the scope this element resolves the token

@@ -610,7 +610,7 @@ async function openConfiguredTransport() {
     // No token yet (user picked Cloud mode but hasn't registered) — leave
     // every transport closed instead of dialing localhost. The MCP status
     // dot stays "offline" and the panel's tooltip points the user to
-    // Settings → MCP → Connect to Cloud.
+    // the MCP page → Connect to Cloud.
     if (!cloudToken || !cloudUrl) { disconnectFromServer(); return; }
     connectToServer({ mode, cloudToken, cloudUrl });
   } catch {
