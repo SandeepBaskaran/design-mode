@@ -525,6 +525,7 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | 16.3 | Editing after enabling | Turn the toggle ON (extension reloads), reopen the panel on the file tab | Full editing UI; inspect/select/edit/undo work; header shows the file name (e.g. `test.html`) |
 | 16.4 | Navigate pinned tab to file:// | Toggle OFF again. Open the panel on an http(s) tab, then navigate that tab to the file URL | The guidance card appears; navigating back to the http(s) page restores the editing UI |
 | 16.5 | Pop-out parity | Repeat 16.1 in the floating pop-out window | Same guidance card behaviour |
+| 16.6 | Wrapped-artifact notice + wrapper opt-in | With file access ON, open a page whose whole UI is inside `<iframe sandbox="allow-scripts" srcdoc="…">` (e.g. a saved artifact export) | Layers **and** Design tabs show a "This page wraps a sandboxed HTML artifact" notice (dashed-square icon) explaining the wrapped content can't be reached, with an **Inspect wrapper HTML** button. Clicking it bypasses the notice and shows the normal Layers/Design tree for the outer wrapper document. Not triggered by same-origin / `allow-same-origin` iframes or small incidental iframes; opt-in resets when navigating to a non-wrapped page |
 
 ---
 

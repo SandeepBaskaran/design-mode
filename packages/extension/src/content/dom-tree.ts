@@ -179,3 +179,50 @@ export function buildDomTree(root: HTMLElement = document.body): DomNode[] {
   visit(root, 0, null);
   return tree;
 }
+
+// True when the page's visible content is sealed inside an iframe the
+// inspector can't enter — one sandboxed to an opaque origin (a `sandbox`
+// attribute without `allow-same-origin`) or genuinely cross-origin. The
+// browser walls such a frame off from every extension, so the DOM tree
+// comes up empty even though the page clearly renders UI (e.g. a saved
+// `srcdoc` artifact wrapper). `contentDocument` is null for both the
+// sandboxed-opaque and cross-origin cases and the live document for a
+// reachable same-origin frame, so it's the whole reachability test.
+//
+// The test is content-relative, not viewport-relative: a sizable sealed
+// frame exists AND the top document has no editable content of its own
+// outside that frame. A viewport-area heuristic misses the common wrapper
+// that centers a `max-width`-capped iframe — under 50% of a wide screen
+// yet still the entire point of the page.
+export function isPageContentSealed(): boolean {
+  const frames = Array.from(document.getElementsByTagName('iframe'));
+  const sealed = frames.filter(f => {
+    try { return !f.contentDocument; } catch { return true; }
+  });
+  if (sealed.length === 0) return false;
+  // Ignore tracking-pixel iframes — the sealed frame must be a real region.
+  if (!sealed.some(f => {
+    const r = f.getBoundingClientRect();
+    return r.width >= 200 && r.height >= 200;
+  })) return false;
+
+  const body = document.body;
+  if (!body) return false;
+  // Treat each sealed frame plus its wrapper ancestors as "the frame". If
+  // any other visible, non-DM element remains in the body, the inspector
+  // still has something to edit and shouldn't take over the panel.
+  const framePart = new Set<Element>();
+  for (const f of sealed) {
+    let n: Element | null = f;
+    while (n && n !== body) { framePart.add(n); n = n.parentElement; }
+  }
+  for (const el of Array.from(body.querySelectorAll('*')) as HTMLElement[]) {
+    if (framePart.has(el)) continue;
+    if (SKIP_TAGS.has(el.tagName) || el.tagName === 'BR' || el.tagName === 'HR') continue;
+    if (el.id?.startsWith('dm-') || el.closest('[id^="dm-"]')) continue;
+    if (typeof el.className === 'string' && /(^|\s)dm-/.test(el.className)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width > 8 && r.height > 8) return false;
+  }
+  return true;
+}

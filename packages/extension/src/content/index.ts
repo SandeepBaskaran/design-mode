@@ -22,7 +22,7 @@ import {
 import { getTokenIndex, invalidateTokenIndex } from './token-engine';
 import { setTokenEdit, resetTokenEdit, clearAllTokenEdits, getTokenEdits } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
-import { buildDomTree } from './dom-tree';
+import { buildDomTree, isPageContentSealed } from './dom-tree';
 import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments } from './comments';
 import { startRegionDraw, cancelRegionDraw, clearPendingRegionBox, type Region } from './region-annotate';
 // Source detection — kept; surfaced in the prompt + Design tab
@@ -770,7 +770,7 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     // New: DOM tree for Layers panel
     case 'GET_DOM_TREE': {
       const tree = buildDomTree();
-      sendResponse({ tree });
+      sendResponse({ tree, sealed: isPageContentSealed() });
       break;
     }
 
