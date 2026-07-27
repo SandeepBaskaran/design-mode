@@ -101,7 +101,7 @@ export const posts: BlogPost[] = [
       {
         heading: "What the loop looks like",
         paragraphs: [
-          "Open the page you're iterating on in Chrome. Open Design Mode's side panel. Make the change visually — drag a handle, pick a colour, adjust spacing. Every edit lands in the Changes tab as a structured row: selector, property, before, after.",
+          "Open the page you're iterating on in your browser. Open Design Mode's side panel. Make the change visually — drag a handle, pick a colour, adjust spacing. Every edit lands in the Changes tab as a structured row: selector, property, before, after.",
           "Send to Agent. Claude Code / Cursor / Windsurf / Cline reads the diff via MCP, finds the source file, and writes the production change. You review, you ship.",
           "The loop is fast because the spec is exact. The agent isn't guessing what \"more breathing room\" means; it has a literal `padding-block: 24px` to write.",
         ],

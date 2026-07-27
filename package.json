@@ -20,6 +20,10 @@
     "build:extension": "cd packages/extension && node build.mjs",
     "build:website": "cd website && npm run build",
     "package:extension": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-extension.zip && zip -rq ../design-mode-extension.zip . -x '*.DS_Store' -x '*.map'",
+    "package:extension:firefox": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-addon.zip && zip -rq ../design-mode-addon.zip . -x '*.DS_Store' -x '*.map'",
+    "package:extension:all": "npm run package:extension && cd packages/extension/dist && rm -f ../design-mode-addon.zip && zip -rq ../design-mode-addon.zip . -x '*.DS_Store' -x '*.map'",
+    "lint:extension": "npm run build:extension && web-ext lint -s packages/extension/dist",
+    "dev:firefox": "npm run build:extension && web-ext run -s packages/extension/dist",
     "test:e2e": "echo '➜  Walk through docs/e2e-testcases.md against the freshly-built dist/. Every phase has to pass before publish.'",
     "verify": "node scripts/prepublish-check.mjs",
     "clean": "rm -rf packages/*/dist packages/*/build website/.next website/out"
@@ -29,6 +33,9 @@
   },
   "dependencies": {
     "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "web-ext": "^10.5.0"
   },
   "overrides": {
     "zod": "$zod",

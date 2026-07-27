@@ -6,7 +6,7 @@
 
 ## What is Design Mode?
 
-Design Mode is a free, open-source Chrome extension that turns any live website into a visual design surface. Open the side panel on any URL — your own deploy, a competitor's marketing page, a Tailwind component library, a staging environment — and edit it visually. Drag handles to resize, pick colours, change fonts, swap copy, restructure DOM, hide elements, capture before/after screenshots. Every edit is tracked as a structured change.
+Design Mode is a free, open-source browser extension (Chrome + Firefox) that turns any live website into a visual design surface. Open the side panel (sidebar on Firefox) on any URL — your own deploy, a competitor's marketing page, a Tailwind component library, a staging environment — and edit it visually. Drag handles to resize, pick colours, change fonts, swap copy, restructure DOM, hide elements, capture before/after screenshots. Every edit is tracked as a structured change.
 
 When you're done, ship the changes straight to your AI coding agent over Model Context Protocol (MCP). The agent reads the exact selectors and properties you changed and writes the production code. No mocking, no screenshot guessing, no copy-paste loop.
 
@@ -34,7 +34,7 @@ One design tool for every maker:
 
 ## How does it work?
 
-1. Install Design Mode from the Chrome Web Store. Pin the side panel.
+1. Install Design Mode from the Chrome Web Store (Chrome, Edge, Brave, Arc) or Firefox Add-ons / AMO (Firefox). Pin the side panel / open the sidebar.
 2. Open any page. Click the toolbar icon. The side panel opens with a full design surface — Layers, Design, Changes tabs.
 3. Click anything on the page. Edit it visually — typography, colour, spacing, layout, motion, effects, copy, DOM.
 4. Every change is recorded in the Changes tab with selector + property + old/new value.
@@ -121,7 +121,7 @@ Full disclosure: https://designmode.app/privacy
 Yes — free forever, MIT-licensed, no accounts, no paywalls, no telemetry by default.
 
 **Which browsers does it work in?**
-Any Chromium-based browser with MV3 side-panel support — Chrome, Edge, Arc, Brave. Firefox and Safari are not supported. Desktop-only.
+Chromium browsers with MV3 side-panel support — Chrome, Edge, Arc, Brave — and Firefox (121+), which uses the native sidebar. Safari is not supported (no MV3 side-panel API). Desktop-primary; pop-out window, Picture-in-Picture, and the screen eyedropper are Chrome-only.
 
 **Is Design Mode for designers or developers?**
 Both, plus QA, PMs, content teams, indie hackers, and vibe coders. The shared surface is "edit the live page → ship a precise diff."

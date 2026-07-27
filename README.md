@@ -2,13 +2,13 @@
 
 > Design directly in your browser. Your agent writes the code.
 
-A free, open-source Chromium extension that turns any website into a live design surface. Edit layout, type, colour, spacing and structure with visual controls — then ship the result straight to Claude Code, Cursor, or any AI coding agent over MCP. No mock files, no copy-paste.
+A free, open-source browser extension (Chrome + Firefox) that turns any website into a live design surface. Edit layout, type, colour, spacing and structure with visual controls — then ship the result straight to Claude Code, Cursor, or any AI coding agent over MCP. No mock files, no copy-paste.
 
 ---
 
 ## 🎨 Install in 60 seconds
 
-**1. Add it to Chrome:** **[Get Design Mode from the Chrome Web Store →](https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih)**
+**1. Add it to your browser:** **[Chrome Web Store →](https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih)** (Chrome, Edge, Brave, Arc) · **[Firefox Add-ons →](https://addons.mozilla.org/firefox/addon/design-mode-add-on/)** (Firefox)
 
 **2. Try it without installing:** [walk the interactive demo at designmode.app/demo](https://designmode.app/demo)
 
@@ -16,7 +16,7 @@ A free, open-source Chromium extension that turns any website into a live design
 
 That's it. Pin the extension to your toolbar, open any website, click the toolbar icon to open the side panel. Hover any element to highlight it; click to edit. Everything you change is tracked in the Changes tab and can be sent to your AI coding agent with one click.
 
-> **Editing a local HTML file?** Chrome blocks extensions from `file://` pages by default. Enable **"Allow access to file URLs"** for Design Mode in `chrome://extensions` — the side panel walks you through it when needed.
+> **Editing a local HTML file?** Chrome blocks extensions from `file://` pages by default — enable **"Allow access to file URLs"** for Design Mode in `chrome://extensions` (on Firefox, manage file access from `about:addons`). The side panel walks you through it when needed.
 
 ---
 
@@ -147,7 +147,7 @@ The rest of this README is for people who want to build the project from source,
 ```
 design-mode/
 ├── packages/
-│   ├── extension/    Chrome extension (Manifest V3 side panel, Vite, TypeScript)
+│   ├── extension/    Browser extension — Chrome + Firefox (Manifest V3 side panel / sidebar, Vite, TypeScript)
 │   ├── mcp-local/    MCP companion + WebSocket bridge (Node.js, TypeScript)
 │   ├── mcp-cloud/    Hosted MCP relay (Node.js + Redis; Vercel is our dev/prod target — anywhere works)
 │   └── shared/       Shared types, message schemas, constants

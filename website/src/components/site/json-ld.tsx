@@ -34,7 +34,7 @@ export const websiteSchema = {
   name: "Design Mode",
   url: SITE_URL,
   description:
-    "Free, open-source Chrome extension that turns any live website into a visual design surface and ships edits to AI coding agents over MCP.",
+    "Free, open-source browser extension (Chrome + Firefox) that turns any live website into a visual design surface and ships edits to AI coding agents over MCP.",
   publisher: {
     "@type": "Organization",
     name: "Design Mode",
@@ -52,10 +52,10 @@ export const softwareApplicationSchema = {
   "@type": "SoftwareApplication",
   name: "Design Mode",
   description:
-    "Chrome extension that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM, then ship the diff to Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible AI coding agent.",
+    "Browser extension (Chrome + Firefox) that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM, then ship the diff to Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible AI coding agent.",
   applicationCategory: "DesignApplication",
   applicationSubCategory: "BrowserExtension",
-  operatingSystem: "Chrome, Edge, Brave, Arc",
+  operatingSystem: "Chrome, Edge, Brave, Arc, Firefox",
   url: SITE_URL,
   downloadUrl: SITE_URL,
   softwareVersion: "1.9.0",
@@ -180,7 +180,7 @@ export const personSchema = {
   worksFor: { "@type": "Organization", name: "IBM" },
   sameAs: [X_URL, REPO_URL, AUTHOR_URL],
   description:
-    "Design engineer based in Bengaluru. Creator of Design Mode — an open-source Chrome extension for visual editing with AI coding agents.",
+    "Design engineer based in Bengaluru. Creator of Design Mode — an open-source browser extension for visual editing with AI coding agents.",
 };
 
 export function breadcrumbSchema(items: Array<{ name: string; url: string }>) {

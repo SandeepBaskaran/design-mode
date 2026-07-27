@@ -6,7 +6,7 @@
 
 <!-- Tick all that apply. -->
 
-- [ ] `packages/extension` (Chrome extension)
+- [ ] `packages/extension` (browser extension — Chrome + Firefox)
 - [ ] `packages/mcp-local`
 - [ ] `packages/mcp-cloud`
 - [ ] `packages/shared`

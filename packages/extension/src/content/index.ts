@@ -1,10 +1,11 @@
 // ============================================================
 // Design Mode — Content Script (thin layer)
 // Handles DOM inspection, overlays, editing. NO panel UI.
-// Communicates with Side Panel via chrome.runtime messages.
+// Communicates with Side Panel via browser.runtime messages.
 // Phases 1-9 integrated + new: parent/child, undo/redo, dom tree, comments
 // ============================================================
 
+import '../platform/polyfill';
 import { getElementById, getOrAssignId, generateSelector, reserveIdsAtLeast } from './helpers';
 import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLayoutGuidesFor } from './layout-guides';
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
@@ -77,12 +78,12 @@ function startPanelHeartbeat() {
   if (panelHeartbeatTimer) return;
   panelHeartbeatTimer = setInterval(async () => {
     if (!on) return;
-    // Bail when the extension has been reloaded / disabled — chrome.runtime
+    // Bail when the extension has been reloaded / disabled — browser.runtime
     // is null in orphaned content scripts.
-    if (!chrome.runtime?.id) { disable(); return; }
+    if (!browser.runtime?.id) { disable(); return; }
     try {
       const r: { open?: boolean } | undefined = await new Promise((resolve) => {
-        try { chrome.runtime.sendMessage({ type: 'IS_PANEL_OPEN' }, (resp) => resolve(resp)); }
+        try { browser.runtime.sendMessage({ type: 'IS_PANEL_OPEN' }, (resp) => resolve(resp)); }
         catch { resolve(undefined); }
       });
       if (!r || r.open === false) disable();
@@ -380,20 +381,20 @@ function resolveResourceBytes(src: string): number | undefined {
 // pick up tab A's ELEMENT_SELECTED etc.
 let selfTabId: number | null = null;
 function refreshSelfTabId() {
-  if (!chrome.runtime?.id) return;
+  if (!browser.runtime?.id) return;
   try {
-    chrome.runtime.sendMessage({ type: 'GET_MY_TAB_ID' }, (r) => { selfTabId = r?.tabId ?? null; });
+    browser.runtime.sendMessage({ type: 'GET_MY_TAB_ID' }, (r) => { selfTabId = r?.tabId ?? null; });
   } catch {}
 }
 
 function notifyPanel(type: string, payload?: any) {
-  // chrome.runtime.id goes undefined the moment the extension is reloaded
+  // browser.runtime.id goes undefined the moment the extension is reloaded
   // / disabled / removed while a content script is still alive on a page.
   // Calling sendMessage at that point throws "Extension context
   // invalidated". Guard so the orphan content script just no-ops.
-  if (!chrome.runtime?.id) return;
+  if (!browser.runtime?.id) return;
   try {
-    chrome.runtime.sendMessage({ type, ...payload, _dmTab: selfTabId });
+    browser.runtime.sendMessage({ type, ...payload, _dmTab: selfTabId });
   } catch {}
 }
 
@@ -444,7 +445,7 @@ async function performFullClear() {
   // preview markers — runs synchronously so the state-flip is immediate.
   revertAllPageMutations();
 
-  // Comments live in chrome.storage.local (separate from the change
+  // Comments live in browser.storage.local (separate from the change
   // arrays), so they need their own async cleanup.
   const pageComments = await getPageComments();
   for (const c of pageComments) await deleteComment(c.id);
@@ -602,7 +603,7 @@ setUnhandledMessageHandler(dispatchCloudMessage);
 // then opens the appropriate transport. Falls back to local on any error.
 async function openConfiguredTransport() {
   try {
-    const conf = await chrome.storage.local.get(['dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url']);
+    const conf = await browser.storage.local.get(['dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url']);
     const mode = (conf['dm-mcp-mode'] as 'local' | 'cloud' | 'self-hosted' | undefined) || 'cloud';
     if (mode === 'local') { connectToServer({ mode: 'local' }); return; }
     const cloudToken = conf['dm-mcp-cloud-token'];
@@ -731,7 +732,7 @@ function registerAllShortcuts() {
 
 /* —— Message handler —— */
 
-chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
+browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
   switch (msg.type) {
     // Ping for checking if content script is injected
     case 'PING': sendResponse({ ok: true }); break;

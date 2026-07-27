@@ -47,7 +47,8 @@ Optional cloud mode (you turn it on explicitly in Settings):
 
 There are **no analytics, no telemetry, and no error reporting** in the
 extension or the MCP server. There is no remote update channel beyond the
-Chrome Web Store's standard mechanism.
+standard store mechanism — the Chrome Web Store for Chromium browsers and
+addons.mozilla.org (AMO) for Firefox.
 
 ## What the website (designmode.app) does
 

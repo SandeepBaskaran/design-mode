@@ -416,7 +416,7 @@ export function setOverridesEnabled(enabled: boolean) {
 export function scheduleRestamp() { /* selector-based rules don't need restamping */ }
 
 // ── Session persistence (per URL) ──────────────────────────────────
-// Saves changes to chrome.storage.session keyed by origin+pathname+search,
+// Saves changes to browser.storage.session keyed by origin+pathname+search,
 // so DOM/style/text edits survive page reloads and back/forward navigation
 // within the same browser session.
 
@@ -431,10 +431,10 @@ export function persistSession() {
     persistTimer = null;
     try {
       const payload = { styleChanges, textChanges, domChanges, savedAt: Date.now() };
-      const storage: any = (chrome.storage as any).session || chrome.storage.local;
+      const storage: any = (browser.storage as any).session || browser.storage.local;
       // Callback form: reading lastError swallows the rejection that the
       // sync try/catch can't reach (e.g. access level not yet granted).
-      storage.set({ [sessionKey()]: payload }, () => void chrome.runtime.lastError);
+      storage.set({ [sessionKey()]: payload }, () => void browser.runtime.lastError);
     } catch {}
   }, 100);
 }
@@ -442,9 +442,9 @@ export function persistSession() {
 export function loadSession(): Promise<{ styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] } | null> {
   return new Promise((resolve) => {
     try {
-      const storage: any = (chrome.storage as any).session || chrome.storage.local;
+      const storage: any = (browser.storage as any).session || browser.storage.local;
       storage.get(sessionKey(), (data: any) => {
-        if (chrome.runtime.lastError) return resolve(null);
+        if (browser.runtime.lastError) return resolve(null);
         const payload = data?.[sessionKey()];
         if (!payload) return resolve(null);
         resolve({
@@ -1169,7 +1169,7 @@ function setAgentConnected(next: boolean) {
   if (agentConnected === next) return;
   agentConnected = next;
   try {
-    chrome.runtime.sendMessage({ type: 'AGENT_PRESENCE_UPDATE', connected: next });
+    browser.runtime.sendMessage({ type: 'AGENT_PRESENCE_UPDATE', connected: next });
   } catch { /* SW gone — next status poll will reconcile */ }
 }
 
@@ -1265,10 +1265,10 @@ async function runCloudStream() {
   sseAbort = new AbortController();
   while (sseAbort && !sseAbort.signal.aborted && cloudToken && cloudBaseUrl) {
     // The extension may have been reloaded / disabled while the SSE was
-    // open. The `chrome.runtime.id` check is the cheapest way to notice
+    // open. The `browser.runtime.id` check is the cheapest way to notice
     // an orphan content script — we'd otherwise loop forever calling
     // fetch and logging warnings.
-    if (typeof chrome !== 'undefined' && !chrome.runtime?.id) {
+    if (typeof chrome !== 'undefined' && !browser.runtime?.id) {
       sseAbort?.abort();
       return;
     }

@@ -1,6 +1,10 @@
 #!/usr/bin/env node
-// Build script for Chrome extension
-// Runs vite build once per entry point since content scripts need IIFE format
+// Build script for the browser extension.
+// Runs vite build once per entry point since content scripts need IIFE format.
+// A single dist/ + a single manifest.json serve BOTH Chrome and Firefox: each
+// browser reads its own manifest keys (side_panel/service_worker vs
+// sidebar_action/scripts) and ignores the other's, and the JS detects the
+// browser at runtime (src/platform/target.ts).
 
 import { execSync } from 'child_process';
 import { cpSync, mkdirSync, existsSync } from 'fs';
@@ -12,14 +16,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const entries = ['content', 'background', 'sidepanel'];
 
 // In a linked worktree, re-point dist/ at the primary worktree's copy before
-// building, so every build writes through to the single Chrome-loaded dist.
+// building, so every build writes through to the single loaded dist.
 // (Worktrees provisioned without a git checkout never ran the post-checkout
 // hook that normally creates this symlink.)
 try {
   execSync(`node ${resolve(__dirname, '../../scripts/link-shared-dist.mjs')}`, { stdio: 'inherit' });
 } catch {}
 
-console.log('\n\u25c6 Building Design Mode extension...\n');
+console.log('\n◆ Building Design Mode extension...\n');
 
 for (const entry of entries) {
   console.log(`  Building ${entry}...`);
@@ -34,16 +38,16 @@ for (const entry of entries) {
 console.log('  Copying static assets...');
 try {
   cpSync(resolve(__dirname, 'public/manifest.json'), resolve(__dirname, 'dist/manifest.json'));
-  
+
   // Copy sidepanel HTML
   mkdirSync(resolve(__dirname, 'dist/sidepanel'), { recursive: true });
   cpSync(resolve(__dirname, 'src/sidepanel/index.html'), resolve(__dirname, 'dist/sidepanel/index.html'));
-  
+
   // Copy assets
   if (existsSync(resolve(__dirname, 'public/assets'))) {
     cpSync(resolve(__dirname, 'public/assets'), resolve(__dirname, 'dist/assets'), { recursive: true });
   }
-  
+
   // Copy icons — prefer the repo-root /icons folder (user-provided), fall back to public/icons
   try {
     const rootIcons = resolve(__dirname, '../../icons');
@@ -58,4 +62,4 @@ try {
   console.error('  Warning copying assets:', e.message);
 }
 
-console.log('\n\u2713 Build complete! Load dist/ in chrome://extensions\n');
+console.log('\n✓ Build complete! Load dist/ in chrome://extensions (Chrome) or about:debugging (Firefox)\n');

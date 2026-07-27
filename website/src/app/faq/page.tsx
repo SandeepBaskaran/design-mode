@@ -46,7 +46,7 @@ const groups: Group[] = [
       {
         question: "What is Design Mode?",
         answer:
-          "Design Mode is a free, open-source Chrome extension that turns any live website into a visual design surface. Click any element on any page and edit its layout, typography, colour, spacing, copy, or DOM with real controls — then ship the diff to your AI coding agent over Model Context Protocol (MCP). One design tool for designers, developers, QA testers, PMs, indie hackers, and vibe coders.",
+          "Design Mode is a free, open-source browser extension (Chrome + Firefox) that turns any live website into a visual design surface. Click any element on any page and edit its layout, typography, colour, spacing, copy, or DOM with real controls — then ship the diff to your AI coding agent over Model Context Protocol (MCP). One design tool for designers, developers, QA testers, PMs, indie hackers, and vibe coders.",
       },
       {
         question: "Who is Design Mode for?",
@@ -76,12 +76,12 @@ const groups: Group[] = [
       {
         question: "How do I install it?",
         answer:
-          "Open the Chrome Web Store listing, click Add to Chrome, pin the side panel. Open any web page and click the toolbar icon to open the panel. No account required. Detailed steps: /docs/install.",
+          "On Chrome, Edge, Brave, or Arc: open the Chrome Web Store listing, click Add to Chrome, pin the side panel. On Firefox: open the Firefox Add-ons (AMO) listing and click Add to Firefox — the toolbar button (or Alt+D) toggles the sidebar. Then open any web page and click the toolbar icon. No account required. Detailed steps: /docs/install.",
       },
       {
         question: "Which browsers does it work in?",
         answer:
-          "Any Chromium-based browser that supports Manifest V3 side panels — Chrome, Edge, Arc, Brave. Firefox is not supported today. Safari is out of scope (no MV3 side-panel API). Desktop-only.",
+          "Chromium browsers with Manifest V3 side panels — Chrome, Edge, Arc, Brave — and Firefox (121+), which uses the native sidebar. Safari is out of scope (no MV3 side-panel API). Desktop-primary; the pop-out window, Picture-in-Picture, and screen eyedropper are Chrome-only (Firefox lacks those APIs).",
       },
     ],
   },

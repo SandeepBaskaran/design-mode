@@ -66,12 +66,12 @@ function applyOverlayColors() {
   if (selectPaddingBand) selectPaddingBand.style.borderColor = paddingBandCss;
 }
 
-// Pull the user's overlay colour choices from chrome.storage.local on
-// init, and stay in sync via chrome.storage.onChanged so flipping any
+// Pull the user's overlay colour choices from browser.storage.local on
+// init, and stay in sync via browser.storage.onChanged so flipping any
 // swatch in Settings repaints live without a page reload. Side panel
 // writes the same keys.
 try {
-  chrome.storage?.local?.get?.([
+  browser.storage?.local?.get?.([
     'dm-inspector-hover-color', 'dm-inspector-select-color',
     'dm-overlay-margin-color', 'dm-overlay-padding-color',
   ], (r: any) => {
@@ -92,7 +92,7 @@ try {
     }
     applyOverlayColors();
   });
-  chrome.storage?.onChanged?.addListener?.((changes, area) => {
+  browser.storage?.onChanged?.addListener?.((changes, area) => {
     if (area !== 'local') return;
     let touched = false;
     if (changes['dm-inspector-hover-color']) {

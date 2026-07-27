@@ -1,9 +1,12 @@
 // ============================================================
-// Design Mode — Background Service Worker
-// Opens Chrome Side Panel on action click, relays messages.
-// Pins to the tab that was active when side panel opened.
+// Design Mode — Background (service worker on Chrome, event page on Firefox)
+// Opens the side panel / sidebar on action click, relays messages.
+// Pins to the tab that was active when the panel opened.
 // Auto-activates design mode (with inspect) on open.
 // ============================================================
+import '../platform/polyfill';
+import { IS_FIREFOX } from '../platform/target';
+import { openPanel, enableActionOpensPanel } from '../platform/panel';
 
 const tabStates = new Map<number, { enabled: boolean; connected: boolean }>();
 let pinnedTabId: number | null = null;
@@ -35,18 +38,18 @@ const popoutWindows = new Map<number, number>();
 // can't corrupt each other's routing.
 let currentTargetTab: number | null = null;
 
-// Open side panel when extension icon is clicked. setPanelBehavior is a
-// Promise; in transient SW restart conditions Chrome will reject it with
-// `Error: No SW` if the worker is being torn down. Catch — there's
-// nothing useful to do, the new SW instance will rerun this on boot.
-if (chrome.sidePanel) {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
-}
+// Toolbar icon opens the panel. Chrome: sidePanel.setPanelBehavior (the
+// adapter swallows the transient "No SW" rejection during worker teardown).
+// Firefox: the sidebar_action manifest key wires the button natively, so
+// this is a no-op there.
+enableActionOpensPanel();
 
 // storage.session defaults to trusted (extension-page) contexts only; the
 // change-tracker's session persistence runs in content scripts, which count
 // as untrusted. Without this, every persist/load rejects with "Access to
 // storage is not allowed from this context".
+// setAccessLevel is Chrome-only (not in the polyfill / Firefox). On Firefox
+// content-script session writes fall back to storage.local (change-tracker).
 if (chrome.storage?.session?.setAccessLevel) {
   chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }).catch(() => {});
 }
@@ -58,6 +61,7 @@ function isScriptableUrl(url: string | undefined | null): boolean {
   if (!url) return false;
   if (url.startsWith('chrome://')) return false;
   if (url.startsWith('chrome-extension://')) return false;
+  if (url.startsWith('moz-extension://')) return false;
   if (url.startsWith('chrome-search://')) return false;
   if (url.startsWith('chrome-untrusted://')) return false;
   if (url.startsWith('devtools://')) return false;
@@ -89,7 +93,7 @@ async function isFileAccessBlocked(url: string | undefined | null): Promise<bool
 // The native side panel connects as `sidepanel` (binds to the active tab in
 // the current window). A popped-out floating window connects as
 // `sidepanel:<tabId>` (binds to the tab it was popped out from).
-chrome.runtime.onConnect.addListener((port) => {
+browser.runtime.onConnect.addListener((port) => {
   if (port.name !== 'sidepanel' && !port.name.startsWith('sidepanel:')) return;
 
   const explicitTab = port.name.startsWith('sidepanel:')
@@ -100,10 +104,10 @@ chrome.runtime.onConnect.addListener((port) => {
     let tabId: number | null = Number.isInteger(explicitTab) ? explicitTab : null;
     let tabUrl: string | null = null;
     if (tabId != null) {
-      try { tabUrl = (await chrome.tabs.get(tabId)).url || null; } catch { tabId = null; }
+      try { tabUrl = (await browser.tabs.get(tabId)).url || null; } catch { tabId = null; }
     }
     if (tabId == null) {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       tabId = tab?.id ?? null;
       tabUrl = tab?.url ?? null;
     }
@@ -127,8 +131,8 @@ chrome.runtime.onConnect.addListener((port) => {
     try { await injectContentScript(tabId); } catch {}
     setTimeout(async () => {
       try {
-        await chrome.tabs.sendMessage(tabId!, { type: 'ACTIVATE_DESIGN_MODE' });
-        const state = await chrome.tabs.sendMessage(tabId!, { type: 'GET_STATE' });
+        await browser.tabs.sendMessage(tabId!, { type: 'ACTIVATE_DESIGN_MODE' });
+        const state = await browser.tabs.sendMessage(tabId!, { type: 'GET_STATE' });
         try { port.postMessage({ type: 'INIT_STATE', ...state, pinnedUrl: tabUrl, tabId }); } catch {}
       } catch (err) {
         const m = String((err as any)?.message || err);
@@ -150,7 +154,7 @@ chrome.runtime.onConnect.addListener((port) => {
     // Only deactivate the tab when its LAST surface closes AND it isn't
     // mid-swap (pop-out / dock-back), so the transition never tears it down.
     if (tabId != null && panelsForTab(tabId) === 0 && !transitioningTabs.has(tabId)) {
-      try { chrome.tabs.sendMessage(tabId, { type: 'DEACTIVATE_DESIGN_MODE' }).catch(() => {}); } catch {}
+      try { browser.tabs.sendMessage(tabId, { type: 'DEACTIVATE_DESIGN_MODE' }).catch(() => {}); } catch {}
     }
     if (pinnedTabId === tabId) {
       const remaining = [...panelPorts.values()];
@@ -160,18 +164,20 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-// Toggle via keyboard command
-chrome.commands.onCommand.addListener(async (command) => {
-  if (command === 'toggle-design-mode') {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id && tab.windowId) {
-      try {
-        await chrome.sidePanel.open({ windowId: tab.windowId });
-      } catch (err) {
-        console.error('[DM] Failed to open side panel:', err);
-      }
-    }
+// Toggle via keyboard command (Alt+D). Firefox's sidebarAction.open() must run
+// synchronously inside the user-gesture stack, so on Firefox we open FIRST
+// (it targets the active window, no tab lookup needed) before any await.
+browser.commands.onCommand.addListener((command) => {
+  if (command !== 'toggle-design-mode') return;
+  if (IS_FIREFOX) {
+    openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
+    return;
   }
+  browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+    if (tab?.id && tab.windowId) {
+      openPanel({ windowId: tab.windowId }).catch((err) => console.error('[DM] Failed to open side panel:', err));
+    }
+  });
 });
 
 // Helper: forward message to the tab the sending panel is bound to. Captures
@@ -181,9 +187,9 @@ async function forwardToPinnedTab(message: any, sendResponse: (response?: any) =
   const tabId = currentTargetTab ?? pinnedTabId;
   if (!tabId) {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
-        const response = await chrome.tabs.sendMessage(tab.id, message);
+        const response = await browser.tabs.sendMessage(tab.id, message);
         sendResponse(response);
         return;
       }
@@ -192,7 +198,7 @@ async function forwardToPinnedTab(message: any, sendResponse: (response?: any) =
     return;
   }
   try {
-    const response = await chrome.tabs.sendMessage(tabId, message);
+    const response = await browser.tabs.sendMessage(tabId, message);
     sendResponse(response);
   } catch (err) {
     sendResponse({ error: String(err) });
@@ -200,7 +206,7 @@ async function forwardToPinnedTab(message: any, sendResponse: (response?: any) =
 }
 
 // Message handling — relay between content script and side panel
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Resolve which tab this panel message targets (panel stamps every SP_*).
   // Read synchronously here and again at the top of forwardToPinnedTab.
   currentTargetTab = (typeof msg?.targetTabId === 'number') ? msg.targetTabId : null;
@@ -251,12 +257,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       setTimeout(() => transitioningTabs.delete(tabId), 6000); // safety net
       let b: any = {};
       try {
-        const saved: any = (await chrome.storage.local.get('dm-popout-bounds'))['dm-popout-bounds'];
+        const saved: any = (await browser.storage.local.get('dm-popout-bounds'))['dm-popout-bounds'];
         if (saved && typeof saved.width === 'number') b = saved;
       } catch {}
       try {
-        const win = await chrome.windows.create({
-          url: chrome.runtime.getURL('sidepanel/index.html') + '?tab=' + tabId,
+        const win = await browser.windows.create({
+          url: browser.runtime.getURL('sidepanel/index.html') + '?tab=' + tabId,
           type: 'popup',
           focused: true,
           width: b.width || 420,
@@ -493,21 +499,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'TOGGLE_DESIGN_MODE') {
     const targetTabId = msg.tabId || sender.tab?.id;
     if (targetTabId) {
-      chrome.tabs.sendMessage(targetTabId, { type: 'TOGGLE_DESIGN_MODE' }).then(sendResponse).catch(() => sendResponse({ enabled: false }));
+      browser.tabs.sendMessage(targetTabId, { type: 'TOGGLE_DESIGN_MODE' }).then(sendResponse).catch(() => sendResponse({ enabled: false }));
     }
     return true;
   }
   if (msg.type === 'GET_STATE') {
     const tabId = msg.tabId || sender.tab?.id;
     if (tabId) {
-      chrome.tabs.sendMessage(tabId, { type: 'GET_STATE' }).then(sendResponse).catch(() => sendResponse({ enabled: false, connected: false }));
+      browser.tabs.sendMessage(tabId, { type: 'GET_STATE' }).then(sendResponse).catch(() => sendResponse({ enabled: false, connected: false }));
     } else {
       sendResponse({ enabled: false, connected: false });
     }
     return true;
   }
   if (msg.type === 'CAPTURE_VIEWPORT') {
-    chrome.tabs.captureVisibleTab({ format: 'png' }, (dataUrl) => sendResponse({ dataUrl }));
+    browser.tabs.captureVisibleTab({ format: 'png' }, (dataUrl) => sendResponse({ dataUrl }));
     return true;
   }
 
@@ -515,36 +521,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // Remember a floating window's size/position so the next pop-out restores it.
-chrome.windows.onBoundsChanged?.addListener((win) => {
-  // Skip non-normal states so a minimize (e.g. while pinned to PiP) doesn't
-  // clobber the remembered floating-window bounds.
-  if (win.id != null && win.state === 'normal' && popoutWindows.has(win.id)) {
-    const { left, top, width, height } = win;
-    chrome.storage.local.set({ 'dm-popout-bounds': { left, top, width, height } }).catch(() => {});
-  }
-});
-chrome.windows.onRemoved.addListener((windowId) => {
+// Pop-out is Chrome-only and onBoundsChanged is unsupported on Firefox, so
+// this whole listener tree-shakes out of the Firefox bundle.
+if (!IS_FIREFOX) {
+  browser.windows.onBoundsChanged?.addListener((win) => {
+    // Skip non-normal states so a minimize (e.g. while pinned to PiP) doesn't
+    // clobber the remembered floating-window bounds.
+    if (win.id != null && win.state === 'normal' && popoutWindows.has(win.id)) {
+      const { left, top, width, height } = win;
+      browser.storage.local.set({ 'dm-popout-bounds': { left, top, width, height } }).catch(() => {});
+    }
+  });
+}
+browser.windows.onRemoved.addListener((windowId) => {
   popoutWindows.delete(windowId);
 });
 // If a tab that a floating window is bound to closes, the window can no longer
 // control anything — close it.
-chrome.tabs.onRemoved.addListener((tabId) => {
+browser.tabs.onRemoved.addListener((tabId) => {
   for (const [winId, boundTab] of popoutWindows) {
-    if (boundTab === tabId) { try { void chrome.windows.remove(winId).catch(() => {}); } catch {} }
+    if (boundTab === tabId) { try { void browser.windows.remove(winId).catch(() => {}); } catch {} }
   }
 });
 
 function updateBadge(tabId: number, enabled: boolean) {
-  chrome.action.setBadgeText({ text: enabled ? 'ON' : '', tabId });
-  chrome.action.setBadgeBackgroundColor({ color: enabled ? '#4F9EFF' : '#52525b', tabId });
+  browser.action.setBadgeText({ text: enabled ? 'ON' : '', tabId });
+  browser.action.setBadgeBackgroundColor({ color: enabled ? '#4F9EFF' : '#52525b', tabId });
 }
 
 async function injectContentScript(tabId: number) {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+    await browser.tabs.sendMessage(tabId, { type: 'PING' });
   } catch {
     try {
-      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+      await browser.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
     } catch (err) {
       // Quiet the expected failures: chrome://, chrome-extension://,
       // chromewebstore.google.com, etc. Chrome blocks scripting these by
@@ -558,7 +568,7 @@ async function injectContentScript(tabId: number) {
   }
 }
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+browser.tabs.onRemoved.addListener((tabId) => {
   tabStates.delete(tabId);
   if (tabId === pinnedTabId) {
     pinnedTabId = null;
@@ -569,7 +579,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Re-activate design mode when the pinned tab navigates / reloads —
 // the content script is reinjected on each navigation, so we need to
 // turn inspect back on (replay of session changes happens inside the content script).
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (tabId !== pinnedTabId) return;
   if (changeInfo.status !== 'complete') return;
   pinnedTabUrl = tab.url || pinnedTabUrl;
@@ -584,7 +594,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   try {
     await injectContentScript(tabId);
     setTimeout(async () => {
-      try { await chrome.tabs.sendMessage(tabId, { type: 'ACTIVATE_DESIGN_MODE' }); } catch {}
+      try { await browser.tabs.sendMessage(tabId, { type: 'ACTIVATE_DESIGN_MODE' }); } catch {}
     }, 200);
   } catch {}
 });

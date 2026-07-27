@@ -87,13 +87,13 @@ export function getShortcuts(): KeyboardShortcut[] {
 
 async function saveShortcuts() {
   try {
-    await chrome.storage.local.set({ 'dm-shortcuts': shortcuts });
+    await browser.storage.local.set({ 'dm-shortcuts': shortcuts });
   } catch {}
 }
 
 export async function loadShortcuts() {
   try {
-    const data = await chrome.storage.local.get('dm-shortcuts');
+    const data = await browser.storage.local.get('dm-shortcuts');
     if (data['dm-shortcuts']) {
       shortcuts = data['dm-shortcuts'];
     }

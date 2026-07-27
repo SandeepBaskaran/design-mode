@@ -14,22 +14,24 @@ export const docs: DocPage[] = [
     slug: "install",
     title: "Install Design Mode",
     metaTitle:
-      "Install Design Mode — Chrome, Edge, Brave, Arc installation guide",
+      "Install Design Mode — Chrome, Edge, Brave, Arc, Firefox installation guide",
     metaDescription:
-      "How to install the Design Mode Chrome extension in Chrome, Edge, Brave, or Arc. Pin the side panel, open any page, start designing. No account required.",
+      "How to install the Design Mode browser extension in Chrome, Edge, Brave, Arc, or Firefox. Pin the side panel (sidebar on Firefox), open any page, start designing. No account required.",
     keywords: [
       "install Design Mode",
       "Design Mode Chrome extension",
+      "Design Mode Firefox add-on",
       "install Chrome extension",
+      "install Firefox add-on",
       "Edge extension install",
       "Arc browser extension",
     ],
     intro:
-      "Design Mode is a free Chrome extension. Install once, pin the side panel, open any page and start designing. No account, no setup wizard.",
+      "Design Mode is a free browser extension for Chrome and Firefox. Install once, open the side panel (sidebar on Firefox), open any page and start designing. No account, no setup wizard.",
     sections: [
       {
-        heading: "1. Install from the Chrome Web Store",
-        body: "Open the Design Mode listing on the Chrome Web Store and click Add to Chrome. Edge, Brave, Arc, and other Chromium-based browsers can install the same listing.",
+        heading: "1. Install from your browser's store",
+        body: "On Chrome, Edge, Brave, Arc, or another Chromium browser, open the Chrome Web Store listing and click Add to Chrome. On Firefox, open the Firefox Add-ons (AMO) listing and click Add to Firefox.",
       },
       {
         heading: "2. Pin the extension",
@@ -37,14 +39,50 @@ export const docs: DocPage[] = [
       },
       {
         heading: "3. Open any page and click the icon",
-        body: "Navigate to any URL — your dev server, a staging deploy, a production site — and click the Design Mode toolbar icon. The side panel opens with the design surface.",
+        body: "Navigate to any URL — your dev server, a staging deploy, a production site — and click the Design Mode toolbar icon. The side panel opens with the design surface (on Firefox this is the native sidebar; Alt+D toggles it on any browser).",
       },
       {
         heading: "4. (Optional) Set up MCP for AI agents",
         body: "If you want to ship edits to Claude Code, Cursor, Claude Desktop, Windsurf, or Cline, follow the MCP setup guide. The default Cloud mode requires no local install.",
       },
     ],
-    related: ["mcp-setup", "keyboard-shortcuts", "troubleshooting"],
+    related: ["browser-support", "mcp-setup", "keyboard-shortcuts", "troubleshooting"],
+  },
+  {
+    slug: "browser-support",
+    title: "Browser support & parity",
+    metaTitle:
+      "Browser support — Chrome, Firefox, and feature parity",
+    metaDescription:
+      "Design Mode runs on Chrome, Edge, Brave, Arc, and Firefox. What's identical across browsers, and the few Chrome-only features (pop-out window, Picture-in-Picture, screen eyedropper).",
+    keywords: [
+      "Design Mode browser support",
+      "Design Mode Firefox",
+      "Firefox add-on",
+      "Chrome vs Firefox extension",
+      "browser feature parity",
+    ],
+    intro:
+      "Design Mode runs on Chromium browsers (Chrome, Edge, Brave, Arc) and on Firefox 121+. Everything core is identical across browsers; a few extras depend on APIs that only Chromium ships, so they're hidden on Firefox.",
+    sections: [
+      {
+        heading: "Supported browsers",
+        body: "Chromium browsers with Manifest V3 side panels — Chrome, Edge, Brave, Arc — install from the Chrome Web Store and render the editor in the right-side panel. Firefox (121+) installs from Firefox Add-ons (AMO) and renders in the native sidebar. Safari is not supported (no MV3 side-panel API). It's a desktop-primary experience.",
+      },
+      {
+        heading: "Identical on every browser",
+        body: "The whole editing surface is the same: inspect any element; edit Position, Layout, Typography, Fill, Stroke, Effects, Motion, and Layout Guides; the Layers tree; the Changes tab with export/import; comments; element and viewport screenshots; DOM edits (duplicate, delete, reorder); the design-token engine; and the full MCP / send-to-agent handoff. Alt+D toggles the panel (sidebar on Firefox) everywhere.",
+      },
+      {
+        heading: "Chrome-only features",
+        body: "Three extras rely on Chromium-only browser APIs and are hidden on Firefox: the pop-out floating window (needs the side-panel + windows APIs), Picture-in-Picture “pin on top” (needs the Document Picture-in-Picture API), and the screen eyedropper “Pick” button (needs the EyeDropper API). On Firefox, colour entry still works via the HSV picker, the site-token list, and hex/RGB input — only the whole-screen sampler is unavailable.",
+      },
+      {
+        heading: "Firefox specifics",
+        body: "Design Mode opens as Firefox's native sidebar rather than a right-docked panel; the toolbar button, the View → Sidebar menu, and Alt+D all toggle it. For local files, Firefox manages file:// access from about:addons (there's no per-extension “Allow access to file URLs” toggle like Chrome's).",
+      },
+    ],
+    related: ["install", "keyboard-shortcuts", "troubleshooting"],
   },
   {
     slug: "keyboard-shortcuts",

@@ -16,7 +16,7 @@ const categories: Array<{ title: string; questions: QA[] }> = [
       {
         question: "What is Design Mode?",
         answer:
-          "Design Mode is a free, open-source Chrome extension that turns any live website into a visual design surface. Click any element on any page and edit its layout, typography, colour, spacing, copy, or DOM with real controls — then ship the diff to your AI coding agent over Model Context Protocol (MCP).",
+          "Design Mode is a free, open-source browser extension (Chrome + Firefox) that turns any live website into a visual design surface. Click any element on any page and edit its layout, typography, colour, spacing, copy, or DOM with real controls — then ship the diff to your AI coding agent over Model Context Protocol (MCP).",
       },
       {
         question: "Is it really free?",
@@ -26,7 +26,7 @@ const categories: Array<{ title: string; questions: QA[] }> = [
       {
         question: "Which browsers does it work in?",
         answer:
-          "Any Chromium-based browser that supports Manifest V3 side panels — Chrome, Edge, Arc, Brave. Firefox is not supported today. Safari is out of scope (no MV3 side-panel API). It's also a desktop-only experience — touch-only mobile devices won't have a place to anchor the side panel.",
+          "Chromium browsers with Manifest V3 side panels — Chrome, Edge, Arc, Brave — and Firefox (121+), which uses the native sidebar. Safari is out of scope (no MV3 side-panel API). It's a desktop-primary experience; the pop-out window, Picture-in-Picture, and screen eyedropper are Chrome-only (Firefox lacks those APIs).",
       },
       {
         question: "Is Design Mode for designers or developers?",

@@ -1,12 +1,12 @@
 ## What the extension stores, and where
 
-All extension data lives on **your machine**, in Chrome's extension storage.
+All extension data lives on **your machine**, in the browser's extension storage.
 
 | Storage area              | What's there                                                                        | Lifetime                       |
 | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ |
-| `chrome.storage.local`    | UI preferences: `dm-theme`, `dm-color-format`, `dm-capture-mode`                    | Until you uninstall the ext.   |
-| `chrome.storage.sync`     | User-saved presets you opt to sync across devices                                   | Synced via your Chrome account |
-| `chrome.storage.session`  | Per-page edit sessions (style/text/DOM changes), keyed by `origin + path + search`  | Until tab/browser closes       |
+| `storage.local`           | UI preferences: `dm-theme`, `dm-color-format`, `dm-capture-mode`                    | Until you uninstall the ext.   |
+| `storage.sync`            | User-saved presets you opt to sync across devices                                   | Synced via your browser account (Chrome / Firefox) |
+| `storage.session`         | Per-page edit sessions (style/text/DOM changes), keyed by `origin + path + search`  | Until tab/browser closes       |
 
 The extension never reads form contents, passwords, or page-script
 data. It only reads computed CSS, geometry, and DOM structure for
@@ -43,7 +43,7 @@ leaves the machine.
 
 There are **no analytics, no telemetry, and no error reporting** in
 the extension or the MCP server. There is no remote update channel
-beyond the Chrome Web Store's standard mechanism.
+beyond the standard store mechanism — the Chrome Web Store for Chromium browsers and addons.mozilla.org (AMO) for Firefox.
 
 ## What the website (designmode.app) does
 
@@ -70,7 +70,7 @@ The extension requests:
   tab and re-attach after navigations/reloads.
 - `scripting` — inject the inspector script when you open the panel.
 - `storage` — see the storage table above.
-- `sidePanel` — render the editor in Chrome's side panel.
+- `sidePanel` — render the editor in the browser's side panel (Firefox uses `sidebar_action` for the same purpose).
 - `<all_urls>` — so the editor works on any site you choose to
   inspect. The extension does nothing until you open the panel on a
   tab.

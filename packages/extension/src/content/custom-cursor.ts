@@ -12,7 +12,7 @@ let inspectProbe: () => boolean = () => false;
 // density; the keyword fallback keeps the cursor usable if the image
 // fails to load. The icon must stay listed in web_accessible_resources.
 function iconCursor(fallback: string): string {
-  const url = chrome.runtime.getURL('icons/icon48.png');
+  const url = browser.runtime.getURL('icons/icon48.png');
   return `-webkit-image-set(url("${url}") 2x) 4 4, ${fallback}`;
 }
 
@@ -49,11 +49,11 @@ export function clearBaseCursor() {
 }
 
 try {
-  chrome.storage?.local?.get?.([SETTING_KEY], (r: any) => {
+  browser.storage?.local?.get?.([SETTING_KEY], (r: any) => {
     if (typeof r?.[SETTING_KEY] === 'boolean') enabled = r[SETTING_KEY];
     if (active) repaint();
   });
-  chrome.storage?.onChanged?.addListener?.((changes, area) => {
+  browser.storage?.onChanged?.addListener?.((changes, area) => {
     if (area !== 'local' || !changes[SETTING_KEY]) return;
     enabled = changes[SETTING_KEY].newValue !== false;
     if (active) repaint();

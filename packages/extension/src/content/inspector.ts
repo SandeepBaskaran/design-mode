@@ -116,7 +116,7 @@ export function buildElementInfo(el: HTMLElement, skipTokens = false): ElementIn
   // panel. The previous 2000-char cap was silently truncating long
   // paragraphs — saving would then write back the truncated HTML and
   // destroy the tail. Cap is now 100 KB, which covers the longest
-  // realistic editable text without making chrome.runtime messages
+  // realistic editable text without making browser.runtime messages
   // unreasonably big.
   const innerHTML = el.innerHTML.length > 100_000
     ? el.innerHTML.slice(0, 100_000)
@@ -147,7 +147,7 @@ function isDMElement(el: HTMLElement): boolean {
   // Any Design Mode UI is transparent to the inspector: the hover/select/dim
   // overlays, the axis-guide / distance / resize-dot layers (all `dm-*` ids),
   // the panel, the toolbar, and comment pins. Without this, hovering a resize
-  // dot would draw hover outlines + distance pills on our own chrome.
+  // dot would draw hover outlines + distance pills on our own browser.
   return isOverlayElement(el) ||
     !!el.closest?.('[id^="dm-"]') ||
     !!el.closest?.('.dm-comment-pin');
@@ -182,7 +182,7 @@ function handleMouseOver(e: MouseEvent) {
     if (!active) return;
     const info = buildElementInfo(t, true);
     try {
-      chrome.runtime.sendMessage({
+      browser.runtime.sendMessage({
         type: 'ELEMENT_HOVERED_INFO',
         payload: {
           ...info,
@@ -205,7 +205,7 @@ function handleMouseOut() {
   else hideDistance();
   lastHoveredId = null;
   if (hoverDebounceTimer) { clearTimeout(hoverDebounceTimer); hoverDebounceTimer = null; }
-  try { chrome.runtime.sendMessage({ type: 'ELEMENT_HOVERED_INFO', payload: null }); } catch {}
+  try { browser.runtime.sendMessage({ type: 'ELEMENT_HOVERED_INFO', payload: null }); } catch {}
 }
 
 // Stop the browser starting a text selection on mousedown (especially
@@ -246,7 +246,7 @@ function handleClick(e: MouseEvent) {
   // Cancel any pending hover info — selection takes precedence
   if (hoverDebounceTimer) { clearTimeout(hoverDebounceTimer); hoverDebounceTimer = null; }
   lastHoveredId = null;
-  try { chrome.runtime.sendMessage({ type: 'ELEMENT_HOVERED_INFO', payload: null }); } catch {}
+  try { browser.runtime.sendMessage({ type: 'ELEMENT_HOVERED_INFO', payload: null }); } catch {}
   const id = getOrAssignId(t);
   // Shift-click (or any click while multi-select is already on) builds the
   // measurement selection set. Shift bootstraps the mode and folds in the
@@ -260,7 +260,7 @@ function handleClick(e: MouseEvent) {
     showSelect(t);
     showResizeDots(t);
     try {
-      chrome.runtime.sendMessage({
+      browser.runtime.sendMessage({
         type: 'MULTI_SELECT_UPDATE',
         payload: { ids: getSelectedIds() },
       });

@@ -9,7 +9,7 @@ Larger changes are welcome but please open an issue first to talk through scope.
 ```
 design-mode/
 ├── packages/
-│   ├── extension/    Chrome extension (Manifest V3 side panel, Vite, TypeScript)
+│   ├── extension/    Browser extension — Chrome + Firefox (Manifest V3 side panel / sidebar, Vite, TypeScript)
 │   ├── mcp-local/    MCP companion + WebSocket bridge (Node, TypeScript, tsx)
 │   ├── mcp-cloud/    Hosted MCP relay (Vercel-deployable)
 │   └── shared/       Shared types, message schemas, constants

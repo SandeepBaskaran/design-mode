@@ -34,7 +34,7 @@ export const useCases: UseCase[] = [
       "Claude Code is great at writing CSS once it knows exactly what you want. The bottleneck is conveying design intent. Screenshots are ambiguous. Mock files drift from the production page. \"Make the hero pop more\" is too vague.",
     workflow: [
       {
-        name: "Open the live page in Chrome",
+        name: "Open the live page in your browser",
         text: "Browse to your dev server, your staging URL, or any deployed page. Open the Design Mode side panel.",
       },
       {
@@ -105,7 +105,7 @@ export const useCases: UseCase[] = [
     metaTitle:
       "Redesign any website — browser-as-design-surface with Design Mode",
     metaDescription:
-      "Open any URL in Chrome, click anything, and redesign it visually — no source code, no Figma mock. Every change is a structured diff you can ship to your team or AI agent.",
+      "Open any URL in your browser, click anything, and redesign it visually — no source code, no Figma mock. Every change is a structured diff you can ship to your team or AI agent.",
     keywords: [
       "redesign a website",
       "in-browser website editor",
@@ -290,7 +290,7 @@ export const useCases: UseCase[] = [
     workflow: [
       {
         name: "Walk the build under test",
-        text: "QA opens the staging URL in Chrome and pins the Design Mode side panel. As bugs surface, click the affected element.",
+        text: "QA opens the staging URL in their browser and pins the Design Mode side panel. As bugs surface, click the affected element.",
       },
       {
         name: "Annotate with structured edits",

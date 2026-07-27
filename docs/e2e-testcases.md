@@ -35,7 +35,7 @@ before ticking.
 | 0.9  | Browser-session boundary | Close & reopen browser | Session storage is cleared (per `chrome.storage.session` semantics) — fresh state |
 | 0.10 | Theme toggle | Click sun/moon in header | Side panel + page overlays switch theme; persists across reloads |
 | 0.11 | Side-panel toggle shortcut | Press `Alt+D` (Chrome command, registered in `manifest.json`) | Side panel toggles open / close |
-| 0.12 | Unscriptable page | Open the panel on a `chrome://` page, the Chrome Web Store, or a devtools page | No "cannot be scripted" / "could not establish connection" error spam in the background console; the panel shows a disabled / empty state, not a crash |
+| 0.12 | Unscriptable page | Open the panel on a `chrome://` page, the Chrome Web Store, or a devtools page (on Firefox: an `about:` page such as `about:addons`) | No "cannot be scripted" / "could not establish connection" error spam in the background console; the panel shows a disabled / empty state, not a crash |
 
 ---
 
@@ -74,8 +74,8 @@ any one closes the other three.
 | 0.6.2 | Help links | From Help, click Report an issue / Read the docs / Privacy / Security disclosure | Each opens the right page in a new tab via `target="_blank"` |
 | 0.6.3 | Copy diagnostics | In Help, click Copy diagnostics | Clipboard contains `Design Mode: x.y.z` + Chrome + Platform + Theme; button label flashes "Copied ✓" then reverts after ~1.5s |
 | 0.6.4 | Open / close Contribute | Click heart-handshake icon → click again | Contribute overlay replaces the tabs; second click closes |
-| 0.6.5 | Contribute links | Click each row in Contribute (Star repo, Review on CWS, Report issue, Start a discussion, Open a pull request, Sponsor on GitHub) | Each opens the right URL in a new tab |
-| 0.6.6 | Copy share text | In Contribute, click "Share with your network" | Clipboard contains the prefilled share blurb (extension pitch + CWS link); label flashes "Copied ✓ — paste anywhere" then reverts |
+| 0.6.5 | Contribute links | Click each row in Contribute (Star repo, Review, Report issue, Start a discussion, Open a pull request, Sponsor on GitHub) | Each opens the right URL in a new tab. The Review row is browser-aware: "Review on the Chrome Web Store" (CWS listing) on Chromium; "Review on Firefox Add-ons" (AMO listing `design-mode-add-on`) on Firefox |
+| 0.6.6 | Copy share text | In Contribute, click "Share with your network" | Clipboard contains the prefilled share blurb; browser-aware store link — CWS on Chromium, AMO on Firefox; label flashes "Copied ✓ — paste anywhere" then reverts |
 | 0.6.7 | Mutual exclusivity | Open any one of MCP / Settings / Help / Contribute, then click another header icon | Previous overlay closes, new one opens |
 
 ---
@@ -565,13 +565,41 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 
 ---
 
+## Phase F — Firefox parity (runtime `IS_FIREFOX` divergences)
+
+Same `dist/` as Chrome — build once (`npm run build:extension`), then load it in
+Firefox 121+ via `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on**
+→ pick `packages/extension/dist/manifest.json` (or `npm run dev:firefox`, which
+launches Firefox with the add-on via `web-ext run`). Open a non-trivial site and
+re-walk the core phases; this phase only lists the **Firefox-specific** deltas —
+everything not listed here must behave exactly as on Chrome.
+
+| #    | Test | Steps | Expected |
+|------|------|-------|----------|
+| F.1  | Add-on loads | Load the temporary add-on | Icon appears in the toolbar; no manifest error in the Browser Console (`data_collection_permissions` may log the advisory `KEY_FIREFOX_UNSUPPORTED_BY_MIN_VER` — expected) |
+| F.2  | Sidebar opens (toolbar) | Click the Design Mode toolbar button | The panel opens as Firefox's **native sidebar** (left-docked), not a right-side panel |
+| F.3  | Sidebar opens (View menu) | View → Sidebar → Design Mode | Toggles the same sidebar |
+| F.4  | `Alt+D` toggles sidebar | Press `Alt+D` | Sidebar opens / closes (routed through `sidebarAction.open()`, not `sidePanel`) |
+| F.5  | Core editing parity | Inspect an element, edit a style, add a comment, check the Changes tab | Identical to Chrome — selection, live style apply, comment pin, and change rows all work |
+| F.6  | Pop-out absent | Look at the sidebar header | The **external-link** (pop-out) icon is **not present** (Chrome-only; no `sidePanel`/`windows` popup surface on Firefox) |
+| F.7  | Pin-on-top absent | Look at the sidebar header | The **picture-in-picture** icon is **not present** (Chrome-only; no Document PiP on Firefox) |
+| F.8  | Eyedropper hidden | Open Fill / a colour control | The whole-screen **Pick** (eyedropper) button is **absent**; HSV picker, site-token list, and hex/RGB input still work (no `EyeDropper` API on Firefox) |
+| F.9  | File-access button target | Help / local-file guidance → the settings button | Opens **`about:addons`** (not `chrome://extensions`) |
+| F.10 | Contribute review link | Open the Contribute panel → the store review link | Points at the **AMO** listing (`addons.mozilla.org/firefox/addon/design-mode-add-on/`), not the Chrome Web Store |
+| F.11 | Share text is Firefox-flavoured | Contribute panel → share action | Share copy references Firefox / AMO, not Chrome |
+| F.12 | Unscriptable `about:` page | Open the sidebar on `about:addons` | Disabled / empty state, no "could not establish connection" console spam (mirrors Phase 0.12) |
+| F.13 | `web-ext lint` clean | `npm run lint:extension` | 0 errors (the ~30 documented warnings are expected) |
+
+---
+
 ## Sign-off
 
 After every full pass, tag the run in the project notes:
 
 ```
 v1.6.0 — 2026-MM-DD
-✓ All 14 phases pass
+✓ All 14 phases pass (Chrome)
+✓ Phase F parity pass (Firefox)
 ✓ npm run build:extension clean
 ✓ npm run prepublish:check ran without warnings
 ```

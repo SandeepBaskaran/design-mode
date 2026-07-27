@@ -39,12 +39,15 @@ export const metadata: Metadata = {
     template: "%s | Design Mode",
   },
   description:
-    "Free, open-source Chrome extension that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM structure, then ship the diff to Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible AI coding agent. One design tool for designers, developers, QA testers, PMs, indie hackers, and vibe coders.",
+    "Free, open-source browser extension (Chrome + Firefox) that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM structure, then ship the diff to Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible AI coding agent. One design tool for designers, developers, QA testers, PMs, indie hackers, and vibe coders.",
   applicationName: "Design Mode",
   category: "Developer Tools",
   keywords: [
     "Design Mode",
     "Chrome extension",
+    "Firefox add-on",
+    "Firefox extension",
+    "browser extension",
     "visual editor",
     "live CSS editing",
     "edit any website live",
@@ -68,6 +71,7 @@ export const metadata: Metadata = {
     "visual bug report tool",
     "open source design tool",
     "free Chrome extension for designers",
+    "free Firefox add-on for designers",
     "vs Stagewise",
     "vs Chrome DevTools",
     "vs Figma Dev Mode",
@@ -133,6 +137,15 @@ export default function RootLayout({
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body className={`${dmSans.variable} ${inter.variable} antialiased`}>
+        {/* Tag Firefox before paint so the Firefox brand accent (#8D4ABF) is
+            applied without a blue→purple flash. See :root[data-browser="firefox"]
+            in globals.css. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{if(/firefox/i.test(navigator.userAgent))document.documentElement.setAttribute('data-browser','firefox');}catch(e){}})();",
+          }}
+        />
         <JsonLd data={organizationSchema} />
         <JsonLd data={websiteSchema} />
         <Navbar />

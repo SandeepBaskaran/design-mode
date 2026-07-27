@@ -11,7 +11,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, realpathSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -75,14 +75,14 @@ step('Extension bundle integrity', () => {
   for (const f of expected) assertFile(f);
 });
 
-// ── 3. Validate manifest.json ─────────────────────────────────────────────
-step('Manifest sanity', () => {
+// ── 3. Validate the shared manifest.json (Chrome + Firefox keys) ──────────
+// One manifest serves both browsers: each reads its own keys and ignores the
+// other's. Assert BOTH sets are present so a target never loses its wiring.
+step('Manifest sanity (Chrome + Firefox)', () => {
   const manifest = JSON.parse(
     readFileSync(resolve(root, 'packages/extension/dist/manifest.json'), 'utf8')
   );
   if (manifest.manifest_version !== 3) throw new Error('manifest_version must be 3');
-  if (!manifest.side_panel?.default_path) throw new Error('side_panel.default_path missing');
-  if (!manifest.background?.service_worker) throw new Error('background.service_worker missing');
   if (!manifest.content_scripts?.[0]?.js?.includes('content.js')) {
     throw new Error('content_scripts must reference content.js');
   }
@@ -92,9 +92,28 @@ step('Manifest sanity', () => {
   if (!manifest.permissions?.includes('storage')) {
     throw new Error('storage permission missing (needed for session persistence)');
   }
-  if (!manifest.permissions?.includes('sidePanel')) {
-    throw new Error('sidePanel permission missing');
+  // Chrome keys
+  if (!manifest.side_panel?.default_path) throw new Error('side_panel.default_path missing (Chrome)');
+  if (!manifest.background?.service_worker) throw new Error('background.service_worker missing (Chrome)');
+  if (!manifest.permissions?.includes('sidePanel')) throw new Error('sidePanel permission missing (Chrome)');
+  // Firefox keys
+  if (!manifest.sidebar_action?.default_panel) throw new Error('sidebar_action.default_panel missing (Firefox)');
+  if (!manifest.background?.scripts?.includes('background.js')) {
+    throw new Error('background.scripts must reference background.js (Firefox event page)');
   }
+  if (!manifest.browser_specific_settings?.gecko?.id) {
+    throw new Error('browser_specific_settings.gecko.id missing (required for AMO signing)');
+  }
+});
+
+// ── 3b. web-ext lint the shared build (0 errors required; warnings ok) ────
+// Resolve the real dist path — in a linked worktree dist/ is a symlink and
+// web-ext's file walker doesn't follow it. web-ext exits non-zero only on
+// errors; the ~29 warnings (innerHTML, Chrome-only APIs, ignored sidePanel
+// permission, service-worker-ignored) are expected and pass.
+step('web-ext lint (0 errors)', () => {
+  const distReal = realpathSync(resolve(root, 'packages/extension/dist'));
+  run(`npx web-ext lint -s "${distReal}" --output text`, { stdio: 'pipe' });
 });
 
 // ── 4. MCP tool count check (catch accidental tool deletions) ─────────────

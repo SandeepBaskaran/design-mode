@@ -59,6 +59,15 @@
   --text-weight: 400;
 }
 
+/* Firefox brand accent. The pre-paint script in layout.tsx tags the document
+   with data-browser="firefox"; we swap the blue primary/ring for Firefox
+   purple (#8D4ABF) so the CTA and every accent follows the user's browser.
+   White-on-#8D4ABF is 5.4:1 (WCAG AA). */
+:root[data-browser="firefox"] {
+  --primary: oklch(0.544 0.181 307.9);
+  --ring: oklch(0.544 0.181 307.9);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

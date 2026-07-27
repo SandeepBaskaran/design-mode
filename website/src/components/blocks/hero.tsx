@@ -56,7 +56,7 @@ export const Hero = () => {
         </h1>
 
         <p className="text-muted-foreground mx-auto mt-5 max-w-[848px] text-lg">
-          Design Mode is a free, open-source Chrome extension that turns any
+          Design Mode is a free, open-source browser extension that turns any
           live website into a visual design surface — one design tool for
           every maker, from designers and developers to QA testers, PMs,
           indie hackers, and vibe coders.

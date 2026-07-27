@@ -2,9 +2,11 @@
 // Design Mode Cloud — CORS helpers.
 // The browser extension's content script fetches /api/extension/*
 // from third-party page origins (https://example.com etc.) and from
-// the chrome-extension:// origin. Both are cross-origin to
+// the extension origin (chrome-extension:// on Chromium,
+// moz-extension:// on Firefox). All are cross-origin to
 // mcp.designmode.app, so every route must answer preflight + return
-// the appropriate Allow-* headers on real responses.
+// the appropriate Allow-* headers on real responses (ALLOW_ORIGIN is
+// `*`, so every extension origin is covered).
 // ============================================================
 
 const ALLOW_ORIGIN = '*';

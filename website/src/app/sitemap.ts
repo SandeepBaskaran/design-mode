@@ -38,6 +38,7 @@ const compareSlugs = [
 
 const docsSlugs = [
   "install",
+  "browser-support",
   "keyboard-shortcuts",
   "mcp-setup",
   "changes-tab",

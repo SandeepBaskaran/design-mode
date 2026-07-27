@@ -19,7 +19,7 @@ export const STEPS: Step[] = [
     id: "get-started",
     title: "Get started",
     body: [
-      "Design Mode is a Chromium extension that turns any website into a live design surface. Edit layout, type, colour, and structure with visual controls — then ship the result to your AI coding agent.",
+      "Design Mode is a browser extension (Chrome + Firefox) that turns any website into a live design surface. Edit layout, type, colour, and structure with visual controls — then ship the result to your AI coding agent.",
       "First time? Pin the extension to your toolbar so it's always one click away, then click the Design Mode icon to open the side panel on this page. Once it's open, every in-page shortcut (Alt+I to inspect, Alt+A to comment, Alt+D to draw, …) is listed and remappable in Settings.",
     ],
     tryIt:

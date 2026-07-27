@@ -7,6 +7,9 @@
 // Phase 4: Grouped changes, keyboard nav, transitions
 // ============================================================
 
+import '../platform/polyfill';
+import { IS_FIREFOX } from '../platform/target';
+import { openPanel } from '../platform/panel';
 import morphdom from 'morphdom';
 import { icon, icons } from '../content/icons';
 import { escapeAttr, rgbToHex } from '../content/helpers';
@@ -24,8 +27,8 @@ import {
    selected element's innerHTML so bold / italic / links round-trip.
    Inspected pages are untrusted: raw HTML can carry `<img onerror=…>`,
    `<svg onload=…>`, `<iframe srcdoc=…>` payloads that would execute
-   inside the side-panel context — handing a malicious site chrome.tabs
-   / chrome.scripting / chrome.storage. This sanitizer parses the input
+   inside the side-panel context — handing a malicious site browser.tabs
+   / browser.scripting / browser.storage. This sanitizer parses the input
    in a sandboxed DOMParser (which does NOT fire scripts or events on
    parse) and walks the tree keeping only structural formatting tags
    and explicitly allow-listed attributes. Anything outside the
@@ -211,7 +214,7 @@ let activeColorPickerProp: string | null = null;
 let tokensDropdownProp: string | null = null;
 let colorPickerSearch = '';
 // Inline contrast checker (WCAG ratio + AA/AAA badge + rating label)
-// shown above the SV gradient. Category / Level live in chrome.storage.local
+// shown above the SV gradient. Category / Level live in browser.storage.local
 // so the user's preferred threshold sticks across selections + sessions.
 let a11yCategory: A11yCategory = 'auto';
 let a11yLevel: A11yLevel = 'AA';
@@ -343,7 +346,7 @@ let tokenFilter: TokenFilter = 'all';
 let tokenUsedOnlyFilter = false;
 // User-defined preset bundles for the Defined tab. Empty by default —
 // the user adds them manually from the panel. Persisted via
-// chrome.storage.sync (handled in content-script presets module).
+// browser.storage.sync (handled in content-script presets module).
 let customPresets: PresetLocal[] = [];
 let presetAddingKind: PresetKindLocal | null = null;
 // Tracks presets the user has Applied in this session. Maps presetId
@@ -511,7 +514,7 @@ function resolveTheme() {
 }
 resolveTheme();
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (theme === 'system') { resolveTheme(); render(); } });
-// Persisted settings — restored from chrome.storage.local on boot.
+// Persisted settings — restored from browser.storage.local on boot.
 let mcpPort = 9960;
 let mcpAutoConnect = true;
 // Cloud / self-hosted MCP. Mode picks where the extension dials; the
@@ -544,10 +547,10 @@ let remRootPx = 16;
 // (plain Arrow steps by 1). User-editable in Settings.
 let nudgeAmount = 10;
 // App-icon cursor on the inspected page while the panel is open. The
-// content script reads the same key via chrome.storage.onChanged.
+// content script reads the same key via browser.storage.onChanged.
 let customCursor = true;
 
-chrome.storage?.local?.get?.([
+browser.storage?.local?.get?.([
   'dm-theme', 'dm-color-format', 'dm-capture-mode',
   'dm-mcp-port', 'dm-mcp-auto-connect',
   'dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url', 'dm-mcp-cloud-tenant',
@@ -594,7 +597,7 @@ chrome.storage?.local?.get?.([
 });
 // Section expand/collapse state — restore the user's per-section
 // preference so the panel opens at the same shape they last left it.
-chrome.storage?.session?.get?.(['dm-section-states'], (result: any) => {
+browser.storage?.session?.get?.(['dm-section-states'], (result: any) => {
   if (result?.['dm-section-states'] && typeof result['dm-section-states'] === 'object') {
     Object.assign(sectionStates, result['dm-section-states']);
   }
@@ -662,7 +665,7 @@ function send(msg: any): Promise<any> {
   const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
     ? { ...msg, targetTabId: myTabId }
     : msg;
-  return new Promise((resolve) => chrome.runtime.sendMessage(stamped, (r) => resolve(r || {})));
+  return new Promise((resolve) => browser.runtime.sendMessage(stamped, (r) => resolve(r || {})));
 }
 
 // file:// URLs have an empty hostname — show the file name instead.
@@ -680,7 +683,7 @@ function domainLabel(url: string): string {
 /* ── Chrome Port ── */
 // Popped-out windows announce their bound tab in the port name so the
 // background binds correctly even before INIT_STATE.
-const port = chrome.runtime.connect({ name: isPopout ? 'sidepanel:' + popoutTabParam : 'sidepanel' });
+const port = browser.runtime.connect({ name: isPopout ? 'sidepanel:' + popoutTabParam : 'sidepanel' });
 port.onMessage.addListener((msg) => {
   if (msg.type === 'INIT_STATE') {
     enabled = msg.enabled ?? false; inspecting = msg.inspecting ?? true;
@@ -701,7 +704,7 @@ port.onMessage.addListener((msg) => {
 // The background's port.onDisconnect handler is the third belt in case
 // either of these gets dropped while the service worker is spinning down.
 function signalPanelClosing() {
-  try { chrome.runtime.sendMessage({ type: 'SP_PANEL_CLOSING' }); } catch {}
+  try { browser.runtime.sendMessage({ type: 'SP_PANEL_CLOSING' }); } catch {}
 }
 window.addEventListener('pagehide', signalPanelClosing);
 window.addEventListener('beforeunload', signalPanelClosing);
@@ -723,8 +726,8 @@ function onPipClosed() {
   }
   if (pipMinimizedSelf) {
     pipMinimizedSelf = false;
-    chrome.windows?.getCurrent?.().then((win) => {
-      if (win?.id != null) return chrome.windows.update(win.id, { state: 'normal', focused: true });
+    browser.windows?.getCurrent?.().then((win) => {
+      if (win?.id != null) return browser.windows.update(win.id, { state: 'normal', focused: true });
     }).catch(() => {});
   }
   render();
@@ -738,7 +741,7 @@ function savePipSizeDebounced() {
       width: Math.max(pipWindow.innerWidth, PIP_MIN_WIDTH),
       height: Math.max(pipWindow.innerHeight, PIP_MIN_HEIGHT),
     };
-    chrome.storage?.local?.set?.({ 'dm-pip-size': pipSavedSize });
+    browser.storage?.local?.set?.({ 'dm-pip-size': pipSavedSize });
   }, 300);
 }
 
@@ -757,7 +760,7 @@ function openPipWindow() {
     pipWindow = pw;
     pw.document.body.style.margin = '0';
     const frame = pw.document.createElement('iframe');
-    frame.src = chrome.runtime.getURL('sidepanel/index.html') + '?tab=' + myTabId + '&pip=1';
+    frame.src = browser.runtime.getURL('sidepanel/index.html') + '?tab=' + myTabId + '&pip=1';
     frame.style.cssText = 'border:0;display:block;width:100vw;height:100vh;';
     frame.addEventListener('load', () => { try { frame.contentWindow?.focus(); } catch {} });
     pw.document.body.appendChild(frame);
@@ -770,15 +773,15 @@ function openPipWindow() {
     pipPinned = true;
     render();
     try {
-      const win = await chrome.windows.getCurrent();
+      const win = await browser.windows.getCurrent();
       if (win?.id != null) {
         pipMinimizedSelf = true;
-        await chrome.windows.update(win.id, { state: 'minimized' });
+        await browser.windows.update(win.id, { state: 'minimized' });
       }
     } catch {}
   }).catch(() => {
     pipUnsupported = true;
-    chrome.storage?.local?.set?.({ 'dm-pip-unsupported': true });
+    browser.storage?.local?.set?.({ 'dm-pip-unsupported': true });
     showCaptureToast('error', 'Pin on top isn’t available in this Chrome.');
     render();
   });
@@ -1754,7 +1757,7 @@ async function sendToAgent() {
     showCaptureToast('error', 'Could not reach the agent — check the MCP status and retry.');
   }
 }
-function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); chrome.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
+function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); browser.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
 
 /* ── Select matching layers ── */
 async function toggleMatchingLayers(next: boolean) {
@@ -1826,7 +1829,7 @@ function dropZoneAt(target: HTMLElement, clientY: number): 'before' | 'inside' |
 }
 
 /* ── Message handling ── */
-chrome.runtime.onMessage.addListener((msg) => {
+browser.runtime.onMessage.addListener((msg) => {
   // Content scripts broadcast to every panel context. Ignore broadcasts from
   // a tab this surface isn't bound to (multiple side panels / floating windows
   // can be open at once). Messages without `_dmTab` (or before we know our
@@ -2813,14 +2816,15 @@ function renderInlineColorPicker(prop: string, value: string, compact = false): 
     '<div data-dm-color-hue="' + escapeAttr(prop) + '" style="position:relative;width:100%;height:14px;margin-top:8px;border-radius:5px;background:linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);cursor:ew-resize;user-select:none;touch-action:none;">' +
       '<div style="position:absolute;left:' + hueX + '%;top:50%;width:14px;height:18px;background:#fff;border:1px solid rgba(0,0,0,0.4);border-radius:3px;transform:translate(-50%,-50%);pointer-events:none;"></div>' +
     '</div>' +
-    // Format cycle button + eyedropper. The eyedropper uses Chrome's
-    // built-in EyeDropper API (Chrome 95+). On unsupported browsers the
-    // click handler shows a tooltip explaining the requirement.
+    // Format cycle button + eyedropper. The eyedropper uses the EyeDropper
+    // API (Chrome 95+); Firefox has no EyeDropper, so the button is hidden
+    // there (the HSV picker + token list still cover colour entry).
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:10px;">' +
-      '<button data-dm-eyedropper="' + escapeAttr(prop) + '" title="Eyedropper — pick a colour from anywhere on screen" style="display:flex;align-items:center;gap:4px;padding:3px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">' +
-        icon('penTool', 11) +
-        '<span>Pick</span>' +
-      '</button>' +
+      (IS_FIREFOX ? '<span></span>' :
+        '<button data-dm-eyedropper="' + escapeAttr(prop) + '" title="Eyedropper — pick a colour from anywhere on screen" style="display:flex;align-items:center;gap:4px;padding:3px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">' +
+          icon('penTool', 11) +
+          '<span>Pick</span>' +
+        '</button>') +
       '<button data-dm-cycle-color-format style="display:flex;align-items:center;gap:4px;padding:3px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;letter-spacing:0.4px;text-transform:uppercase;" title="Cycle color format">' +
         '<span>' + (colorFormat === 'hex' ? 'HEX' : colorFormat === 'rgba' ? 'RGB' : 'HSL') + '</span>' +
         icon('chevronsUpDown', 11) +
@@ -6173,8 +6177,10 @@ function renderHeader(): string {
     '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button>' +
     // Docking controls (pop-out / pin-on-top / dock-back) sit last — they
     // manage the panel window itself, not the page, so they read as a
-    // separate group after Settings.
-    (isPip
+    // separate group after Settings. Firefox has neither the sidePanel API
+    // nor Document Picture-in-Picture, so the whole group is hidden there
+    // (the docked sidebar is the only surface) — this tree-shakes out.
+    (IS_FIREFOX ? '' : isPip
       ? '<button data-dm-action="pip-unpin" title="Pinned on top — click to unpin back to the floating window" aria-label="Pinned on top — click to unpin back to the floating window" style="background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>' +
         '<button data-dm-action="pip-dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
       : isPopout
@@ -6654,7 +6660,7 @@ function renderDesignTab(): string {
   // SECURITY: inspected pages are untrusted. The raw innerHTML they
   // produce can contain `<img onerror=...>`, `<svg onload=...>`, etc. —
   // executing inside the side-panel context would hand a malicious site
-  // chrome.tabs / chrome.scripting / chrome.storage. Strip every tag
+  // browser.tabs / browser.scripting / browser.storage. Strip every tag
   // outside the structural-formatting allow-list and every attribute
   // that isn't explicitly safe (href is the only allowed one, and only
   // when it points to http(s) / fragment / relative path).
@@ -8894,7 +8900,7 @@ function renderSettingsView(): string {
 // Read the live manifest version so the Settings footer stays in lockstep
 // with the published build — no more hard-coded strings drifting from the
 // actual release. Guards for the (impossible in MV3 but cheap) case where
-// chrome.runtime is missing so dev / fixture pages don't crash.
+// browser.runtime is missing so dev / fixture pages don't crash.
 function extensionVersion(): string {
   try {
     return chrome?.runtime?.getManifest?.()?.version || '';
@@ -9086,7 +9092,9 @@ function renderContributeView(): string {
     '<div><div style="' + sectionLabel + '">Spread the word</div>' +
     '<div style="' + card + '"><div style="display:flex;flex-direction:column;gap:8px;">' +
     row('star', 'Star the repo on GitHub', 'https://github.com/SandeepBaskaran/design-mode') +
-    row('messageSquare', 'Review on the Chrome Web Store', 'https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih') +
+    (IS_FIREFOX
+      ? row('messageSquare', 'Review on Firefox Add-ons', 'https://addons.mozilla.org/firefox/addon/design-mode-add-on/')
+      : row('messageSquare', 'Review on the Chrome Web Store', 'https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih')) +
     row('productHunt', 'Upvote on Product Hunt', 'https://www.producthunt.com/products/design-mode') +
     shareRow +
     '</div></div></div>' +
@@ -9381,7 +9389,7 @@ function setupDelegation() {
           inspectorSelectColor = '#FF6B35';
           overlayMarginColor = OVERLAY_MARGIN_DEFAULT;
           overlayPaddingColor = OVERLAY_PADDING_DEFAULT;
-          chrome.storage?.local?.set?.({
+          browser.storage?.local?.set?.({
             'dm-inspector-hover-color': inspectorHoverColor,
             'dm-inspector-select-color': inspectorSelectColor,
             'dm-overlay-margin-color': overlayMarginColor,
@@ -9395,7 +9403,7 @@ function setupDelegation() {
           const next = actionBtn.dataset.dmCat;
           if (next === 'auto' || next === 'large' || next === 'normal' || next === 'graphics') {
             a11yCategory = next;
-            chrome.storage?.local?.set?.({ 'dm-a11y-category': a11yCategory });
+            browser.storage?.local?.set?.({ 'dm-a11y-category': a11yCategory });
             contrastSettingsOpen = false;
             render();
           }
@@ -9405,7 +9413,7 @@ function setupDelegation() {
           const next = actionBtn.dataset.dmLevel;
           if (next === 'AA' || next === 'AAA') {
             a11yLevel = next;
-            chrome.storage?.local?.set?.({ 'dm-a11y-level': a11yLevel });
+            browser.storage?.local?.set?.({ 'dm-a11y-level': a11yLevel });
             render();
           }
           break;
@@ -9467,7 +9475,15 @@ function setupDelegation() {
         case 'back-from-help': helpOpen = false; render(); break;
         case 'help': settingsOpen = false; contributeOpen = false; mcpOpen = false; helpOpen = !helpOpen; render(); break;
         case 'back-from-contribute': contributeOpen = false; render(); break;
-        case 'open-file-access-settings': chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id }); break;
+        case 'open-file-access-settings': {
+          // Chrome: the per-extension "Allow access to file URLs" toggle lives
+          // at chrome://extensions. Firefox has no such URL — about:addons is
+          // the equivalent management page. Best-effort (Firefox may refuse to
+          // open about: pages from an extension).
+          const url = IS_FIREFOX ? 'about:addons' : 'chrome://extensions/?id=' + browser.runtime.id;
+          browser.tabs.create({ url }).catch(() => {});
+          break;
+        }
         case 'contribute': settingsOpen = false; helpOpen = false; mcpOpen = false; contributeOpen = !contributeOpen; render(); break;
         case 'copy-diagnostics': {
           const payload = buildDiagnostics();
@@ -9485,7 +9501,9 @@ function setupDelegation() {
           break;
         }
         case 'copy-share-text': {
-          const payload = 'I’ve been using Design Mode — a Chrome side-panel extension that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih';
+          const payload = IS_FIREFOX
+            ? 'I’ve been using Design Mode — a Firefox sidebar add-on that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://addons.mozilla.org/firefox/addon/design-mode-add-on/'
+            : 'I’ve been using Design Mode — a Chrome side-panel extension that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih';
           const flash = (msg: string) => {
             const lbl = document.querySelector('[data-dm-share-label]') as HTMLElement | null;
             if (!lbl) return;
@@ -9529,10 +9547,10 @@ function setupDelegation() {
           break;
         }
         case 'dock-back': {
-          // chrome.sidePanel.open needs the click's user gesture, so call it
+          // browser.sidePanel.open needs the click's user gesture, so call it
           // FIRST (synchronously, before any await). Then guard the swap and
           // close this floating window.
-          if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
+          if (myTabId != null) openPanel({ tabId: myTabId }).catch(() => {});
           send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { window.close(); } catch {} });
           break;
         }
@@ -9541,7 +9559,7 @@ function setupDelegation() {
           // it goes first. The broadcast tells the floating-window opener to
           // close itself instead of restoring when the PiP dies; the small
           // delay lets that flag land before pagehide fires.
-          if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
+          if (myTabId != null) openPanel({ tabId: myTabId }).catch(() => {});
           try { new BroadcastChannel('dm-pip-' + myTabId).postMessage('dock-back'); } catch {}
           send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => {
             setTimeout(() => { try { window.parent.close(); } catch {} }, 50);
@@ -9549,7 +9567,7 @@ function setupDelegation() {
           break;
         }
         case 'pip-dock-back-from-launcher': {
-          if (myTabId != null) { try { (chrome as any).sidePanel?.open({ tabId: myTabId }); } catch {} }
+          if (myTabId != null) openPanel({ tabId: myTabId }).catch(() => {});
           pipDockingBack = true;
           send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { pipWindow?.close(); } catch {} });
           break;
@@ -9573,7 +9591,7 @@ function setupDelegation() {
             }
             mcpCloudToken = r.token;
             mcpCloudTenantId = r.tenantId || '';
-            chrome.storage?.local?.set?.({
+            browser.storage?.local?.set?.({
               'dm-mcp-cloud-token': mcpCloudToken,
               'dm-mcp-cloud-tenant': mcpCloudTenantId,
               'dm-mcp-cloud-url': mcpCloudUrl,
@@ -9606,7 +9624,7 @@ function setupDelegation() {
           send({ type: 'SP_MCP_REVOKE_TOKEN', cloudUrl: mcpCloudUrl, token: mcpCloudToken }).then(r => {
             mcpCloudToken = '';
             mcpCloudTenantId = '';
-            chrome.storage?.local?.remove?.(['dm-mcp-cloud-token', 'dm-mcp-cloud-tenant']);
+            browser.storage?.local?.remove?.(['dm-mcp-cloud-token', 'dm-mcp-cloud-tenant']);
             send({ type: 'SP_RECONFIGURE_TRANSPORT' });
             showCaptureToast(r?.ok ? 'success' : 'error', r?.ok ? 'Token revoked.' : 'Local token cleared (server may be unreachable).');
             render();
@@ -9631,7 +9649,7 @@ function setupDelegation() {
           inspectorHoverColor = '#4F9EFF'; inspectorSelectColor = '#FF6B35';
           customCursor = true;
           pipSavedSize = null; pipUnsupported = false;
-          chrome.storage?.local?.remove?.([
+          browser.storage?.local?.remove?.([
             'dm-theme', 'dm-color-format', 'dm-capture-mode',
             'dm-mcp-port', 'dm-mcp-auto-connect',
             'dm-inspector-hover-color', 'dm-inspector-select-color',
@@ -9647,7 +9665,7 @@ function setupDelegation() {
           tokensOpen = true;
           tokensFocusVar = null;
           // Restore the user's last-active tab within the session.
-          chrome.storage?.session?.get?.(['dm-tokens-tab'], (r: any) => {
+          browser.storage?.session?.get?.(['dm-tokens-tab'], (r: any) => {
             const t = r?.['dm-tokens-tab'];
             if (t === 'declared' || t === 'detected' || t === 'defined') tokensTab = t;
             render();
@@ -9676,7 +9694,7 @@ function setupDelegation() {
           const next = actionBtn.dataset.tokensTab as TokensTab | undefined;
           if (next === 'declared' || next === 'detected' || next === 'defined') {
             tokensTab = next;
-            chrome.storage?.session?.set?.({ 'dm-tokens-tab': tokensTab });
+            browser.storage?.session?.set?.({ 'dm-tokens-tab': tokensTab });
             // Lazy-fetch the Defined list the first time the user opens it.
             if (next === 'defined') refreshCustomPresets();
             render();
@@ -9901,7 +9919,7 @@ function setupDelegation() {
       const isOpen = current !== undefined ? current : (body ? !body.classList.contains('dm-collapsed') : true);
       sectionStates[sid] = !isOpen;
       // Persist so the user's expand/collapse choices survive panel reloads.
-      chrome.storage?.session?.set?.({ 'dm-section-states': sectionStates });
+      browser.storage?.session?.set?.({ 'dm-section-states': sectionStates });
       render();
       return;
     }
@@ -10144,7 +10162,7 @@ function setupDelegation() {
           if (!sectionKey) return;
           tab = 'design';
           sectionStates['dm-sec-' + sectionKey] = true;
-          chrome.storage?.session?.set?.({ 'dm-section-states': sectionStates });
+          browser.storage?.session?.set?.({ 'dm-section-states': sectionStates });
           render();
           setTimeout(() => {
             const headerEl = root.querySelector<HTMLElement>('[data-dm-toggle-section="dm-sec-' + sectionKey + '"]');
@@ -10160,7 +10178,7 @@ function setupDelegation() {
     if (themeBtn) {
       theme = themeBtn.dataset.dmTheme as Theme;
       resolveTheme();
-      chrome.storage?.local?.set?.({ 'dm-theme': theme });
+      browser.storage?.local?.set?.({ 'dm-theme': theme });
       render();
       return;
     }
@@ -10171,7 +10189,7 @@ function setupDelegation() {
       const next = mcpModeBtn.dataset.dmMcpMode as McpMode;
       if (next !== mcpMode) {
         mcpMode = next;
-        chrome.storage?.local?.set?.({ 'dm-mcp-mode': mcpMode });
+        browser.storage?.local?.set?.({ 'dm-mcp-mode': mcpMode });
         // Tell the content script to swap transports.
         send({ type: 'SP_RECONFIGURE_TRANSPORT' });
       }
@@ -10183,7 +10201,7 @@ function setupDelegation() {
     const colorFormatBtn = target.closest<HTMLElement>('[data-dm-color-format]');
     if (colorFormatBtn) {
       colorFormat = colorFormatBtn.dataset.dmColorFormat as ColorFormat;
-      chrome.storage?.local?.set?.({ 'dm-color-format': colorFormat });
+      browser.storage?.local?.set?.({ 'dm-color-format': colorFormat });
       render();
       return;
     }
@@ -10192,17 +10210,17 @@ function setupDelegation() {
     const captureModeBtn = target.closest<HTMLElement>('[data-dm-capture-mode]');
     if (captureModeBtn) {
       captureMode = captureModeBtn.dataset.dmCaptureMode as CaptureMode;
-      chrome.storage?.local?.set?.({ 'dm-capture-mode': captureMode });
+      browser.storage?.local?.set?.({ 'dm-capture-mode': captureMode });
       render();
       return;
     }
 
     // Page cursor (on / off) — the content script picks the key up via
-    // chrome.storage.onChanged, so writing it is the whole propagation.
+    // browser.storage.onChanged, so writing it is the whole propagation.
     const customCursorBtn = target.closest<HTMLElement>('[data-dm-custom-cursor]');
     if (customCursorBtn) {
       customCursor = customCursorBtn.dataset.dmCustomCursor === 'on';
-      chrome.storage?.local?.set?.({ 'dm-custom-cursor': customCursor });
+      browser.storage?.local?.set?.({ 'dm-custom-cursor': customCursor });
       render();
       return;
     }
@@ -10214,7 +10232,7 @@ function setupDelegation() {
       const next = inputUnitBtn.dataset.dmInputUnit as 'px' | 'rem';
       if (next === 'px' || next === 'rem') {
         inputUnit = next;
-        chrome.storage?.local?.set?.({ 'dm-input-unit': inputUnit });
+        browser.storage?.local?.set?.({ 'dm-input-unit': inputUnit });
         render();
       }
       return;
@@ -10436,8 +10454,9 @@ function setupDelegation() {
       return;
     }
 
-    // Eyedropper — Chrome's built-in EyeDropper API. Falls back to a
-    // friendly alert when unsupported (Firefox / Safari today).
+    // Eyedropper — the EyeDropper API. The button is hidden on Firefox
+    // (IS_FIREFOX, no EyeDropper there), so this alert only ever shows on a
+    // Chromium browser too old to have the API (< Chrome 95).
     const eyedropBtn = target.closest<HTMLElement>('[data-dm-eyedropper]');
     if (eyedropBtn) {
       e.stopPropagation();
@@ -12480,53 +12499,53 @@ function setupDelegation() {
     }
 
     // Settings inputs (port, auto-connect, hover/select colours). Each is
-    // persisted to chrome.storage.local so the next session starts where
+    // persisted to browser.storage.local so the next session starts where
     // the user left off.
     const settingInput = target.closest<HTMLInputElement>('[data-dm-setting]');
     if (settingInput) {
       const key = settingInput.dataset.dmSetting!;
       if (key === 'wsPort') {
         const n = parseInt(settingInput.value, 10);
-        if (isFinite(n) && n > 0) { mcpPort = n; chrome.storage?.local?.set?.({ 'dm-mcp-port': n }); }
+        if (isFinite(n) && n > 0) { mcpPort = n; browser.storage?.local?.set?.({ 'dm-mcp-port': n }); }
         return;
       }
       if (key === 'autoConnect') {
         mcpAutoConnect = settingInput.checked;
-        chrome.storage?.local?.set?.({ 'dm-mcp-auto-connect': mcpAutoConnect });
+        browser.storage?.local?.set?.({ 'dm-mcp-auto-connect': mcpAutoConnect });
         return;
       }
       if (key === 'nudge-amount') {
         const n = parseFloat(settingInput.value);
         if (isFinite(n) && n > 0) {
           nudgeAmount = n;
-          chrome.storage?.local?.set?.({ 'dm-nudge-amount': nudgeAmount });
+          browser.storage?.local?.set?.({ 'dm-nudge-amount': nudgeAmount });
         }
         settingInput.value = String(nudgeAmount);
         return;
       }
       if (key === 'hoverColor') {
         inspectorHoverColor = settingInput.value;
-        chrome.storage?.local?.set?.({ 'dm-inspector-hover-color': inspectorHoverColor });
+        browser.storage?.local?.set?.({ 'dm-inspector-hover-color': inspectorHoverColor });
         send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
         return;
       }
       if (key === 'selectColor') {
         inspectorSelectColor = settingInput.value;
-        chrome.storage?.local?.set?.({ 'dm-inspector-select-color': inspectorSelectColor });
+        browser.storage?.local?.set?.({ 'dm-inspector-select-color': inspectorSelectColor });
         send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
         return;
       }
       if (key === 'marginColor') {
         overlayMarginColor = settingInput.value;
-        // Content script subscribes to chrome.storage.onChanged for the
+        // Content script subscribes to browser.storage.onChanged for the
         // band colours so a write here triggers a live repaint there.
-        chrome.storage?.local?.set?.({ 'dm-overlay-margin-color': overlayMarginColor });
+        browser.storage?.local?.set?.({ 'dm-overlay-margin-color': overlayMarginColor });
         render();
         return;
       }
       if (key === 'paddingColor') {
         overlayPaddingColor = settingInput.value;
-        chrome.storage?.local?.set?.({ 'dm-overlay-padding-color': overlayPaddingColor });
+        browser.storage?.local?.set?.({ 'dm-overlay-padding-color': overlayPaddingColor });
         render();
         return;
       }
@@ -12535,7 +12554,7 @@ function setupDelegation() {
         // reconnect on every keystroke — only when the user clicks
         // Connect or flips a mode chip.
         mcpCloudUrl = settingInput.value.replace(/\/$/, '');
-        chrome.storage?.local?.set?.({ 'dm-mcp-cloud-url': mcpCloudUrl });
+        browser.storage?.local?.set?.({ 'dm-mcp-cloud-url': mcpCloudUrl });
         return;
       }
     }

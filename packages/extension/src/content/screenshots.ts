@@ -1,6 +1,6 @@
 // ============================================================
 // Design Mode — Screenshots
-// Captures the visible viewport via chrome.tabs.captureVisibleTab and
+// Captures the visible viewport via browser.tabs.captureVisibleTab and
 // crops to the selected element when needed. The previous SVG-foreignObject
 // approach was unreliable because it can't paint cross-origin images,
 // background-image URLs, or external fonts — most real pages came out blank.
@@ -13,7 +13,7 @@ import { setPinsHiddenForCapture } from './comments';
 export async function captureViewportScreenshot(): Promise<string | null> {
   return new Promise((resolve) => {
     try {
-      chrome.runtime.sendMessage({ type: 'CAPTURE_VIEWPORT' }, (response) => {
+      browser.runtime.sendMessage({ type: 'CAPTURE_VIEWPORT' }, (response) => {
         resolve(response?.dataUrl || null);
       });
     } catch {

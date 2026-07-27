@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
-// Chrome extension multi-entry build config
+// Browser extension (Chrome + Firefox) multi-entry build config
 // Content scripts must be IIFE (not ES modules) since manifest content_scripts
 // loads them as classic scripts. We build each entry separately via the build script.
 
@@ -47,7 +47,8 @@ export default defineConfig({
     },
     cssCodeSplit: false,
     sourcemap: process.env.NODE_ENV === 'development' ? 'inline' : false,
-    target: 'chrome110',
+    // One bundle serves both browsers; downlevel to satisfy the older of the two.
+    target: ['chrome110', 'firefox121'],
     minify: process.env.NODE_ENV === 'development' ? false : 'esbuild',
   },
   define: {

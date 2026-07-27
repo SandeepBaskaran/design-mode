@@ -15,12 +15,12 @@ body:
     attributes:
       label: Which part of Design Mode?
       options:
-        - Chrome extension — Design tab (Position, Layout, Typography, Fill, Stroke, Effects, Motion, Layout Guide)
-        - Chrome extension — Layers tab
-        - Chrome extension — Changes tab
-        - Chrome extension — Comments
-        - Chrome extension — MCP integration
-        - Chrome extension — Other
+        - Extension — Design tab (Position, Layout, Typography, Fill, Stroke, Effects, Motion, Layout Guide)
+        - Extension — Layers tab
+        - Extension — Changes tab
+        - Extension — Comments
+        - Extension — MCP integration
+        - Extension — Other
         - MCP server (local or cloud)
         - Website / docs
     validations:

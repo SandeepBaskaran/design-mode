@@ -1,10 +1,10 @@
 export const metadata = {
   title: "Privacy — Design Mode runs locally by default",
   description:
-    "Design Mode is a privacy-first Chrome extension. No telemetry by default, no accounts, no training on your edits. Here's exactly what data leaves your machine in each MCP mode (Cloud, Local, Self-hosted), when, and why.",
+    "Design Mode is a privacy-first browser extension (Chrome + Firefox). No telemetry by default, no accounts, no training on your edits. Here's exactly what data leaves your machine in each MCP mode (Cloud, Local, Self-hosted), when, and why.",
   keywords: [
     "Design Mode privacy",
-    "privacy-first Chrome extension",
+    "privacy-first browser extension",
     "no telemetry design tool",
     "open source privacy",
     "MCP privacy",

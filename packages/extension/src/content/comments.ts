@@ -29,13 +29,13 @@ const regionBoxes = new Map<string, HTMLDivElement>();
 
 export async function loadComments(): Promise<CommentData[]> {
   try {
-    const data = await chrome.storage.local.get(STORAGE_KEY);
+    const data = await browser.storage.local.get(STORAGE_KEY);
     return data[STORAGE_KEY] || [];
   } catch { return []; }
 }
 
 export async function saveComments(comments: CommentData[]) {
-  try { await chrome.storage.local.set({ [STORAGE_KEY]: comments }); } catch {}
+  try { await browser.storage.local.set({ [STORAGE_KEY]: comments }); } catch {}
 }
 
 export async function addComment(elementId: string, selector: string, text: string): Promise<CommentData> {

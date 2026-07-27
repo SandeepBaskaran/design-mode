@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
+import { AddToChromeCta, OtherStoreLink } from "@/components/site/add-to-chrome-cta";
 import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
@@ -116,7 +116,7 @@ export const Navbar = () => {
           </NavigationMenuList>
         </NavigationMenu>
 
-        {/* CTA cluster: github → Add to Chrome */}
+        {/* CTA cluster: github → other-store icon → primary install CTA */}
         <div className="flex items-center gap-2">
           <a
             href={REPO_URL}
@@ -133,6 +133,9 @@ export const Navbar = () => {
               <GithubMark size={16} />
             </Button>
           </a>
+          {/* "Also available on the other browser" — Firefox icon on Chrome,
+              Chrome icon on Firefox. Signals cross-browser availability. */}
+          <OtherStoreLink className="hover:bg-white/10" />
           <div className="max-lg:hidden">
             <AddToChromeCta size="sm" />
           </div>

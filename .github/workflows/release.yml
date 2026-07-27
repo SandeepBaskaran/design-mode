@@ -17,7 +17,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run package:extension
+      - run: npm run package:extension:all
       - name: Extract CHANGELOG section for this tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -32,5 +32,7 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v3
         with:
-          files: packages/extension/design-mode-extension.zip
+          files: |
+            packages/extension/design-mode-extension.zip
+            packages/extension/design-mode-addon.zip
           body_path: release-notes.md

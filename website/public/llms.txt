@@ -1,11 +1,11 @@
 # Design Mode
 
-> Design Mode is a free, open-source Chrome extension that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM structure with real controls, then ship the diff straight to any AI coding agent — Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible tool. One design tool for every maker: designers, developers, design engineers, QA testers, PMs, indie hackers, agencies, and vibe coders.
+> Design Mode is a free, open-source browser extension (Chrome + Firefox) that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM structure with real controls, then ship the diff straight to any AI coding agent — Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible tool. One design tool for every maker: designers, developers, design engineers, QA testers, PMs, indie hackers, agencies, and vibe coders.
 
 Key facts:
 - License: MIT, fully open source
 - Price: free forever, no accounts, no telemetry by default
-- Surface: Chromium-based browsers (Chrome, Edge, Brave, Arc) via Manifest V3 side panel
+- Surface: Chromium-based browsers (Chrome, Edge, Brave, Arc) via the Manifest V3 side panel, and Firefox (121+) via the native sidebar
 - Design-system tokens: discovers CSS variables beyond :root (theme/component scopes, @media/@supports, cascade layers), recognises IBM Carbon / Material / MUI / Bootstrap / Polaris / Radix / shadcn/ui / Tailwind v4, and badges token-backed fields for scope-aware swap/edit/detach
 - Motion: trigger-first interaction cards (Hover, Press, Focus, Appear, Loop, Scroll) with presets, shared easing curve, and real preview; raw CSS editors under Advanced
 - Protocol: Model Context Protocol (MCP) — three connection modes (Cloud default, Local offline, Self-hosted), configured from a dedicated in-extension MCP page

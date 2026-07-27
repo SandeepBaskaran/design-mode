@@ -8,7 +8,7 @@
 //        • annotateDrift()   — flags near-matches against a token
 //        • findTokenUsages() — DOM lookup for "Find uses" overlay
 //   2. User-defined style-bundle PRESETS for the Defined tab:
-//        • getCustomPresets()    — read from chrome.storage.sync
+//        • getCustomPresets()    — read from browser.storage.sync
 //        • saveCustomPreset()    — capture computed styles + store
 //        • deleteCustomPreset()  — drop by id
 //
@@ -188,7 +188,7 @@ export function findTokenUsages(cssVar: string): string[] {
 }
 
 // ── User-defined preset bundles ───────────────────────────────
-// chrome.storage.sync key + simple CRUD. Empty by default; no seeding.
+// browser.storage.sync key + simple CRUD. Empty by default; no seeding.
 
 export type PresetKind =
   | 'position' | 'layout' | 'appearance' | 'typography'
@@ -205,7 +205,7 @@ export interface Preset {
 const PRESETS_STORAGE_KEY = 'dm_custom_presets';
 
 function quotaErrorMessage(): string {
-  return 'Storage full — chrome.storage.sync caps at 100 KB total. Delete an old preset and try again.';
+  return 'Storage full — browser.storage.sync caps at 100 KB total. Delete an old preset and try again.';
 }
 
 function dedupName(base: string, existing: Preset[]): string {
@@ -218,7 +218,7 @@ function dedupName(base: string, existing: Preset[]): string {
 
 export async function getCustomPresets(): Promise<Preset[]> {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(PRESETS_STORAGE_KEY, (data) => {
+    browser.storage.sync.get(PRESETS_STORAGE_KEY, (data) => {
       const list: Preset[] = Array.isArray(data?.[PRESETS_STORAGE_KEY]) ? data[PRESETS_STORAGE_KEY] : [];
       resolve(list);
     });
@@ -256,8 +256,8 @@ export async function saveCustomPreset(
   };
   const next = [...existing, preset];
   return new Promise((resolve) => {
-    chrome.storage.sync.set({ [PRESETS_STORAGE_KEY]: next }, () => {
-      const err = chrome.runtime.lastError;
+    browser.storage.sync.set({ [PRESETS_STORAGE_KEY]: next }, () => {
+      const err = browser.runtime.lastError;
       if (err) {
         resolve({ error: /QUOTA/i.test(err.message || '') ? quotaErrorMessage() : (err.message || 'Save failed') });
         return;
@@ -271,6 +271,6 @@ export async function deleteCustomPreset(id: string): Promise<void> {
   const existing = await getCustomPresets();
   const next = existing.filter(p => p.id !== id);
   await new Promise<void>((resolve) => {
-    chrome.storage.sync.set({ [PRESETS_STORAGE_KEY]: next }, () => resolve());
+    browser.storage.sync.set({ [PRESETS_STORAGE_KEY]: next }, () => resolve());
   });
 }
