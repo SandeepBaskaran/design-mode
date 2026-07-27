@@ -899,12 +899,32 @@ export function applyTextChange(
 ): TextChange | null {
   const el = getElementById(elementId);
   if (!el) return null;
-  const oldText = el.textContent || '';
+  const priorText = el.textContent || '';
   el.textContent = text;
+  // Dedup per element (mirrors applyStyleChange): one TextChange row per
+  // element, preserving the ORIGINAL oldText. Returning to that original
+  // drops the row — this is what makes undo step cleanly back to plain
+  // text (and keeps the Changes tab in lockstep with the page).
+  const existingIdx = textChanges.findIndex(c => c.elementId === elementId);
+  if (existingIdx !== -1) {
+    const existing = textChanges[existingIdx];
+    if (text === existing.oldText) {
+      textChanges.splice(existingIdx, 1);
+      persistSession();
+      if (refreshPanel) refreshPanel();
+      return null;
+    }
+    const merged: TextChange = { ...existing, newText: text, timestamp: Date.now(), isHtml: false };
+    textChanges[existingIdx] = merged;
+    syncTextChange(merged);
+    persistSession();
+    if (refreshPanel) refreshPanel();
+    return merged;
+  }
   const change: TextChange = {
     id: crypto.randomUUID(), elementId, selector: generateSelector(el),
     label: describeElement(el),
-    oldText, newText: text, timestamp: Date.now(),
+    oldText: priorText, newText: text, timestamp: Date.now(),
   };
   textChanges.push(change);
   syncTextChange(change);
@@ -924,12 +944,30 @@ export function applyHtmlChange(
 ): TextChange | null {
   const el = getElementById(elementId);
   if (!el) return null;
-  const oldHtml = el.innerHTML || '';
+  const priorHtml = el.innerHTML || '';
   el.innerHTML = html;
+  // Dedup per element, same as applyTextChange — one row, original oldText
+  // preserved, dropped when the HTML returns to its original.
+  const existingIdx = textChanges.findIndex(c => c.elementId === elementId);
+  if (existingIdx !== -1) {
+    const existing = textChanges[existingIdx];
+    if (html === existing.oldText) {
+      textChanges.splice(existingIdx, 1);
+      persistSession();
+      if (refreshPanel) refreshPanel();
+      return null;
+    }
+    const merged: TextChange = { ...existing, newText: html, timestamp: Date.now(), isHtml: true };
+    textChanges[existingIdx] = merged;
+    syncTextChange(merged);
+    persistSession();
+    if (refreshPanel) refreshPanel();
+    return merged;
+  }
   const change: TextChange = {
     id: crypto.randomUUID(), elementId, selector: generateSelector(el),
     label: describeElement(el),
-    oldText: oldHtml, newText: html, timestamp: Date.now(), isHtml: true,
+    oldText: priorHtml, newText: html, timestamp: Date.now(), isHtml: true,
   };
   textChanges.push(change);
   syncTextChange(change);

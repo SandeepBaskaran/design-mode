@@ -6,6 +6,34 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Undo/redo reliability.** Rich-text undo/redo no longer injects literal
+  HTML tags into the text — it now restores with the matching DOM property
+  (`innerHTML` for rich text, `textContent` for plain), tracked by an
+  `isHtml` flag. Style undo/redo (including resize and move) now re-apply the
+  recorded value **through the change-tracker** instead of deleting a change by
+  id, so: undo no longer silently no-ops when an entry had no change id;
+  editing one property twice now steps back one edit at a time instead of
+  jumping straight to the original; and the page and the Changes tab stay in
+  lockstep (text edits also dedup to one row per element). Motion state-variant
+  (`:hover` etc.) edits undo against the correct rule.
+- **Escape returns to hover mode.** Pressing Escape on a selected element now
+  clears the selection (and resize handles) and drops back to hover mode with
+  the page still inspectable — previously it turned inspection off entirely and
+  left the selection box painted. Escape also works when the side panel has
+  focus (the panel now tells the page to deselect).
+- **Multi-select: plain click collapses the set (Figma parity).** With a
+  multi-selection active, a plain (no-Shift) click now clears the whole set and
+  selects only the clicked element; Shift-click still adds/toggles.
+
+### Notes
+
+- Undo/redo history is per-session and in-memory: after a full page reload the
+  recorded changes persist but step-by-step undo resets (see CHANGES.md).
+
 ## [1.9.0] — 2026-07-19
 
 ### Added

@@ -5,7 +5,7 @@
 import { getOrAssignId, getElementById, getElementRect, generateSelector, getBreadcrumbs, getComputedStyleSubset } from './helpers';
 import { getAuthoredVarsForElement, type PropToken } from './token-engine';
 import { showHover, hideHover, showSelect, updateSelectPosition, isOverlayElement } from './overlays';
-import { isMultiSelectActive, enableMultiSelect, toggleSelection, getSelectedIds } from './multi-select';
+import { isMultiSelectActive, enableMultiSelect, disableMultiSelect, toggleSelection, getSelectedIds } from './multi-select';
 import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag } from './measure-guides';
 import { baseCursor, restoreBaseCursor } from './custom-cursor';
 
@@ -248,6 +248,14 @@ function handleClick(e: MouseEvent) {
   lastHoveredId = null;
   try { chrome.runtime.sendMessage({ type: 'ELEMENT_HOVERED_INFO', payload: null }); } catch {}
   const id = getOrAssignId(t);
+  // Figma parity: a plain (no-shift) click while a multi-selection exists
+  // collapses the whole set and selects only the clicked element. Clear the
+  // set first, then fall through to the single-select path below. Shift-click
+  // still routes into the toggle/add path.
+  if (isMultiSelectActive() && !e.shiftKey) {
+    disableMultiSelect();
+    try { chrome.runtime.sendMessage({ type: 'MULTI_SELECT_UPDATE', payload: { ids: [] } }); } catch {}
+  }
   // Shift-click (or any click while multi-select is already on) builds the
   // measurement selection set. Shift bootstraps the mode and folds in the
   // current single selection as an anchor so the first shift-click yields a
