@@ -135,6 +135,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 0.10.21 | Multi-select plain-click collapse | Multi-select 3 elements, then plain-click (no Shift) a 4th element | The whole set clears and **only the 4th** is selected (Figma parity); Shift-click still adds/toggles set membership. |
 | 0.10.22 | Undo rich-text keeps formatting, no tags | Bold a word in the rich-text editor, save, then Ctrl/⌘+Z, then redo | Text restores as **formatted text** — no literal `<b>`/`<tags>` appear as visible characters; the Changes row appears/disappears in sync. |
 | 0.10.23 | Undo steps back one edit | Set font-size 16→20, then 20→28 on one element, then Ctrl/⌘+Z | First undo returns to **20** (not straight to 16); a second undo returns to 16 and the Changes row clears. Resize-width-only and move also actually revert on undo. |
+| 0.10.23b | Tabs work after early panel-open (no duplicate injection) | On a slow/SPA page (e.g. designmode.app), open the side panel while the page is still loading, then click **Layers** and **Changes** | Both tabs switch and populate (DOM tree / change list); the page console shows the "Content script loaded" line **once** per document load, not repeated |
 | 0.10.24 | Ctrl/⌘+Enter on comment textarea | Focus a comment textarea → Ctrl/⌘+Enter | Comment submits |
 | 0.10.25 | Enter on colour-picker hex input | Type a hex value (e.g. `#abc123`) in the picker → Enter | Value applied; picker dropdown closes |
 

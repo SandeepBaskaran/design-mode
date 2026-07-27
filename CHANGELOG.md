@@ -10,6 +10,15 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Layers / Changes tabs could hang (duplicate content-script injection).**
+  When the side panel opened before the page finished loading, the content
+  script could be injected twice into one document, registering duplicate
+  `chrome.runtime.onMessage` listeners that corrupted every panel round-trip —
+  so the Layers and Changes tabs (which fetch live from the page) did nothing
+  when clicked. Each injection now stamps a per-instance token and only the
+  newest instance answers messages, so exactly one handler is ever active
+  (and a fresh injection correctly supersedes a dead one after an extension
+  reload). Also fixed the content-script load log reporting a stale `v0.3.0`.
 - **Undo/redo reliability.** Rich-text undo/redo no longer injects literal
   HTML tags into the text — it now restores with the matching DOM property
   (`innerHTML` for rich text, `textContent` for plain), tracked by an

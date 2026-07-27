@@ -47,6 +47,25 @@ import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } fr
 // Keyboard shortcuts
 import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts } from './keyboard-shortcuts';
 
+// Re-injection guard. The manifest injects content.js at document_idle AND
+// the background re-injects it on panel-connect (a fallback for tabs open
+// before the extension loaded). When both fire — common on SPAs / slow pages
+// where the panel opens before document_idle — multiple instances register
+// `chrome.runtime.onMessage` listeners in one document. Duplicate listeners
+// fight over the single response channel, so GET_DOM_TREE / GET_CHANGES
+// round-trips never resolve and the Layers / Changes tabs hang.
+//
+// Each injection stamps a fresh token on the shared `window`; the message
+// listener below only handles a message while it's still the newest instance,
+// so exactly one handler ever answers. Using the newest (not the first) means
+// a fresh injection after an extension reload correctly takes over from the
+// old, now-dead context instead of being locked out by a stale flag.
+const dmInstanceToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+(window as unknown as { __dmActiveInstance?: string }).__dmActiveInstance = dmInstanceToken;
+function dmIsActiveInstance(): boolean {
+  return (window as unknown as { __dmActiveInstance?: string }).__dmActiveInstance === dmInstanceToken;
+}
+
 let on = false;
 // Lets the cursor module repaint correctly on a live settings toggle
 // without importing the inspector (which imports the cursor module).
@@ -752,6 +771,10 @@ function registerAllShortcuts() {
 /* —— Message handler —— */
 
 chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
+  // Decline if a newer injection has superseded this instance (see the
+  // re-injection guard at the top). Exactly one instance answers each
+  // message, so the panel's round-trips can't be corrupted by duplicates.
+  if (!dmIsActiveInstance()) return;
   switch (msg.type) {
     // Ping for checking if content script is injected
     case 'PING': sendResponse({ ok: true }); break;
@@ -2258,4 +2281,4 @@ window.addEventListener('dm-comment-pin-dragged', (e: any) => {
   },
 };
 
-console.log('[Design Mode] Content script loaded (v0.3.0). All phases active.');
+console.log(`[Design Mode] Content script loaded (v${chrome.runtime.getManifest().version}). All phases active.`);
