@@ -1951,6 +1951,11 @@ chrome.runtime.onMessage.addListener((msg) => {
     multiSelectActive = multiSelectIds.length > 0;
     render();
   }
+  // Page cleared its selection (Escape on the page) — drop the Design tab back
+  // to the hovering / page state so the panel matches the page.
+  if (msg.type === 'ELEMENT_DESELECTED') {
+    info = null; hoverInfo = null; render();
+  }
   if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; render(); }
   if (msg.type === 'AGENT_PRESENCE_UPDATE') {
     // Transport state is implicit from current mcpState — if we were
@@ -13282,10 +13287,12 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undoAction(); }
   if ((e.ctrlKey || e.metaKey) && ((e.key === 'z' && e.shiftKey) || e.key === 'y')) { e.preventDefault(); redoAction(); }
 
-  // Escape to deselect
+  // Escape to deselect. Also tell the PAGE to clear its selection + resize
+  // dots and drop back to hover — the page never receives this keydown when
+  // the panel has focus, so without the message the orange select box lingers.
   if (e.key === 'Escape') {
     if (commentMode) { cancelComment(); return; }
-    if (info) { info = null; hoverInfo = null; render(); return; }
+    if (info) { info = null; hoverInfo = null; send({ type: 'SP_DESELECT' }); render(); return; }
   }
 
   // Arrow keys in layers tab

@@ -26,9 +26,9 @@ before ticking.
 |------|------|-------|----------|
 | 0.1  | Extension loads | Load unpacked → check the icon in the toolbar | Design Mode icon appears, no error in `chrome://extensions` |
 | 0.2  | Side panel opens | Click the toolbar icon | Side panel slides in on the right |
-| 0.3  | Auto-activate inspect | Open the side panel for the first time | Cursor becomes a crosshair on the page; Design tab shows the page-context view (`<body>` selected with a "Page" indicator chip) |
+| 0.3  | Auto-activate inspect | Open the side panel for the first time | The page cursor becomes the **Design Mode app icon** (the default; Settings → Page cursor → Off falls back to a plain crosshair); Design tab shows the page-context view (`<body>` selected with a "Page" indicator chip) |
 | 0.4  | Pinned-tab behaviour | Open the panel on tab A, switch to tab B | The panel keeps showing data for tab A (it pins to the tab where it was opened) |
-| 0.5  | Side-panel close → inspect off | Close the side panel | Crosshair cursor disappears within ~50ms; hover overlays don't follow the mouse anymore |
+| 0.5  | Side-panel close → inspect off | Close the side panel | The Design Mode page cursor disappears within ~50ms; hover overlays don't follow the mouse anymore |
 | 0.6  | Re-open keeps state | Re-open the panel on the same URL | Previously-applied edits are replayed (delete / hide / styles); changes badge counts match |
 | 0.7  | Page reload preserves changes | Make 3 style edits + 1 hide + 1 delete, reload | All 5 are re-applied automatically when the panel re-opens |
 | 0.8  | URL navigation isolates | Navigate to a different URL in the same tab | Changes from URL A do **not** apply to URL B; Changes tab resets |
@@ -117,7 +117,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 0.10.3 | Alt+P — Pause motion | Press | Toggles a global freeze: CSS animations + transitions + Web-Animations API instances + `<video>` elements pause; press again to resume |
 | 0.10.4 | Alt+S — Element screenshot | Select element → press | PNG of the cropped element downloads with timestamp filename |
 | 0.10.5 | Alt+X — Export CSS | Make any change → press | Generated CSS block copied to clipboard |
-| 0.10.6 | Esc — Deselect / cancel | While selected | Multi-select tears down first if active, then inspect, then plain selection |
+| 0.10.6 | Esc — Deselect back to hover | Select an element, press Esc | Selection + resize handles clear and the page returns to **hover mode** (hovering still highlights; inspection stays ON — Esc does NOT turn inspect off). Panel Design tab drops to the page/hover view. With a multi-selection active, the first Esc clears the whole set. |
 | 0.10.7 | Delete — Remove selected element | Select element → press | Element removed; "delete" entry in Changes tab |
 | 0.10.8 | Ctrl/⌘+Z, Ctrl/⌘+⇧+Z — Undo/Redo | Make change → undo → redo | Style/text/DOM/visibility all reversible; works from anywhere except a focused input |
 | 0.10.9 | Alt+1 — Layers tab | Press Alt+1 from anywhere on the page (no input focused) | Side panel jumps to Layers tab; that tab's saved scroll position is restored |
@@ -130,7 +130,11 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 0.10.16 | Enter to collapse/expand a container row | In Layers tab, select a container row with children → Enter | Children collapse; press Enter again → re-expand |
 | 0.10.17 | Numeric Arrow stepping (px props) | Click any pixel input (e.g. font-size) → ↑ | Value increments by 1; Shift+↑ by the Settings → Nudge amount (default 10) |
 | 0.10.18 | Numeric Arrow stepping (unitless props) | Click a unitless input (e.g. line-height) → ↑ | Value increments by 0.1; Shift+↑ by 1 |
-| 0.10.19 | Esc priority | With multi-select active AND inspect on AND something selected, press Esc three times | First press tears down multi-select; second turns inspect off; third clears the selection |
+| 0.10.19 | Esc priority | With a multi-selection active, press Esc twice | First press clears the multi-selection; second clears the single selection back to hover. Esc never turns inspection off. |
+| 0.10.20 | Esc with panel focused | Select an element, click into the side panel (panel has focus), press Esc | The page selection + resize handles clear and the Design tab drops to the page/hover view (the panel forwards a deselect to the page). |
+| 0.10.21 | Multi-select plain-click collapse | Multi-select 3 elements, then plain-click (no Shift) a 4th element | The whole set clears and **only the 4th** is selected (Figma parity); Shift-click still adds/toggles set membership. |
+| 0.10.22 | Undo rich-text keeps formatting, no tags | Bold a word in the rich-text editor, save, then Ctrl/⌘+Z, then redo | Text restores as **formatted text** — no literal `<b>`/`<tags>` appear as visible characters; the Changes row appears/disappears in sync. |
+| 0.10.23 | Undo steps back one edit | Set font-size 16→20, then 20→28 on one element, then Ctrl/⌘+Z | First undo returns to **20** (not straight to 16); a second undo returns to 16 and the Changes row clears. Resize-width-only and move also actually revert on undo. |
 | 0.10.20 | Ctrl/⌘+Enter on comment textarea | Focus a comment textarea → Ctrl/⌘+Enter | Comment submits |
 | 0.10.21 | Enter on colour-picker hex input | Type a hex value (e.g. `#abc123`) in the picker → Enter | Value applied; picker dropdown closes |
 

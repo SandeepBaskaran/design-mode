@@ -52,7 +52,7 @@ export const docs: DocPage[] = [
     metaTitle:
       "Keyboard shortcuts — Design Mode side panel shortcuts reference",
     metaDescription:
-      "Every keyboard shortcut in the Design Mode side panel — inspector, undo/redo, navigation, screenshot, presets. Designed for fast iteration without leaving the keyboard.",
+      "Every keyboard shortcut in Design Mode — inspector, comments, tabs, undo/redo, screenshot, export CSS — plus the one browser-level shortcut you can rebind. Designed for fast iteration without leaving the keyboard.",
     keywords: [
       "Design Mode keyboard shortcuts",
       "design tool shortcuts",
@@ -60,23 +60,23 @@ export const docs: DocPage[] = [
       "keyboard reference",
     ],
     intro:
-      "Most of Design Mode is built around keyboard-driven iteration. These are the shortcuts worth knowing.",
+      "Design Mode has 13 shortcuts that work directly on the page while the side panel is open, plus one browser-level shortcut that opens the panel itself — 14 in total.",
     sections: [
       {
-        heading: "Selection & navigation",
-        body: "Click any element to select. ↑ / ↓ walks the DOM tree (parent / child). ← / → walks siblings. Escape clears the selection.",
+        heading: "In-page shortcuts",
+        body: "These fire on the page itself while the side panel is open: Alt+I toggles Inspect, Alt+C drops a comment pin, Alt+R starts a region comment (drag a rectangle), Alt+P pauses/resumes all motion on the page, Alt+S screenshots the selected element, and Alt+X copies the exported CSS to your clipboard.",
+      },
+      {
+        heading: "Tabs & selection",
+        body: "Alt+1 / Alt+2 / Alt+3 jump to the Layers / Design / Changes tab. Escape deselects back to hover mode. Delete removes the selected element.",
       },
       {
         heading: "Undo & redo",
         body: "Cmd/Ctrl + Z undoes the last style, text, or DOM change. Cmd/Ctrl + Shift + Z redoes it. Every change in the Changes tab is reversible individually too.",
       },
       {
-        heading: "Screenshot",
-        body: "Cmd/Ctrl + Shift + S captures the visible tab to clipboard (or downloads, depending on the capture mode in Settings).",
-      },
-      {
-        heading: "Send to agent",
-        body: "Cmd/Ctrl + Enter from the panel sends the current change set to your connected AI agent over MCP. Only fires if an agent is attached.",
+        heading: "Opening the side panel",
+        body: "Alt+D is a separate, browser-level shortcut — it's registered as a Chrome extension command, not handled by the page, and it's the only one of the 14 you can rebind. Change it at chrome://extensions/shortcuts (Chrome allows up to 4 extension shortcuts; Design Mode registers 1). None of the 13 in-page shortcuts above can be remapped from Settings — that list is read-only.",
       },
     ],
     related: ["install", "changes-tab", "mcp-setup"],

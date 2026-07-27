@@ -294,6 +294,7 @@ Items within a group are sorted by **timestamp** (creation order — earliest fi
 ## Generic semantics worth knowing
 
 - **Reverting one change doesn't reset the whole element** — it removes that one property override (or undoes that one DOM operation). Other changes on the same element stay.
+- **Undo/redo (Ctrl/⌘+Z) is a per-session, in-memory step history** — separate from the Changes tab's per-row revert. Undo and redo re-apply the recorded value through the change-tracker, so the page and the Changes tab stay in sync, and text edits restore with the right DOM property (rich text vs plain). Note: the step history is **not** rebuilt after a full page reload — your recorded changes persist (per-URL session storage), but step-by-step undo starts fresh; use the Changes tab's per-row revert to undo individual changes after a reload.
 - **Reverting a DOM change is reversible** — the change-tracker stores enough info to reverse the operation (e.g., a deleted element's full HTML + position).
 - **Batch-apply is a flag, not a permanent commitment** — toggling it on adds the same change record to every matching element; toggling off removes the flag but leaves the changes (you'd need to revert each individually). Use it as "apply this everywhere" when you want a sitewide edit.
 - **The override stylesheet** is the mechanism behind every style change — Design Mode injects a `<style id="dm-applied-styles">` tag and rewrites it on every edit. Your changes survive page reloads (per-URL via `chrome.storage.session`) but not extension reloads.
