@@ -23,7 +23,7 @@ import {
 import { getTokenIndex, invalidateTokenIndex } from './token-engine';
 import { setTokenEdit, resetTokenEdit, clearAllTokenEdits, getTokenEdits } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
-import { buildDomTree } from './dom-tree';
+import { buildDomTree, isPageContentSealed } from './dom-tree';
 import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments } from './comments';
 import { startRegionDraw, cancelRegionDraw, clearPendingRegionBox, type Region } from './region-annotate';
 // Source detection — kept; surfaced in the prompt + Design tab
@@ -42,11 +42,30 @@ import {
 // Design/Layout mode — component palette + wireframe placement
 import { getComponentsByCategory, placeComponent } from './design-mode';
 // Measurement guides — axis lines, distance pills, resize handles
-import { setResizeCommitHandler, setResizePreviewHandler, setMoveCommitHandler, setMovePreviewHandler, teardownMeasureGuides, resetMeasureTeardown, showResizeDots, repositionResizeDots } from './measure-guides';
+import { setResizeCommitHandler, setResizePreviewHandler, setMoveCommitHandler, setMovePreviewHandler, teardownMeasureGuides, resetMeasureTeardown, showResizeDots, repositionResizeDots, hideResizeDots } from './measure-guides';
 // Enhanced export — markdown for Copy Prompt
 import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } from './enhanced-export';
 // Keyboard shortcuts
 import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts } from './keyboard-shortcuts';
+
+// Re-injection guard. The manifest injects content.js at document_idle AND
+// the background re-injects it on panel-connect (a fallback for tabs open
+// before the extension loaded). When both fire — common on SPAs / slow pages
+// where the panel opens before document_idle — multiple instances register
+// `chrome.runtime.onMessage` listeners in one document. Duplicate listeners
+// fight over the single response channel, so GET_DOM_TREE / GET_CHANGES
+// round-trips never resolve and the Layers / Changes tabs hang.
+//
+// Each injection stamps a fresh token on the shared `window`; the message
+// listener below only handles a message while it's still the newest instance,
+// so exactly one handler ever answers. Using the newest (not the first) means
+// a fresh injection after an extension reload correctly takes over from the
+// old, now-dead context instead of being locked out by a stale flag.
+const dmInstanceToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+(window as unknown as { __dmActiveInstance?: string }).__dmActiveInstance = dmInstanceToken;
+function dmIsActiveInstance(): boolean {
+  return (window as unknown as { __dmActiveInstance?: string }).__dmActiveInstance === dmInstanceToken;
+}
 
 let on = false;
 // Lets the cursor module repaint correctly on a live settings toggle
@@ -98,9 +117,17 @@ function stopPanelHeartbeat() {
 }
 
 // Undo/Redo stacks
-interface StyleUndoEntry { kind: "style"; elementId: string; property: string; oldValue: string; newValue: string; changeId?: string; }
+// `state` carries the Motion state-variant suffix (':hover' etc.) so undo/redo
+// re-apply to the same variant, not the base rule. `changeId` is retained for
+// back-compat but no longer drives revert — style undo/redo now re-apply the
+// recorded value through the change-tracker so the page and the Changes tab
+// stay in lockstep (and the old "no changeId → no-op" gap disappears).
+interface StyleUndoEntry { kind: "style"; elementId: string; property: string; oldValue: string; newValue: string; changeId?: string; state?: string; }
 interface DomUndoEntry { kind: "dom"; action: string; elementId: string; html: string; parentId: string; nextSiblingId: string | null; oldText?: string; newText?: string; }
-interface TextUndoEntry { kind: "text"; elementId: string; oldText: string; newText: string; }
+// `isHtml` distinguishes a rich-text (innerHTML) edit from a plain-text
+// (textContent) one, so undo/redo restore with the matching DOM property —
+// without it, old innerHTML was written into textContent and the tags showed.
+interface TextUndoEntry { kind: "text"; elementId: string; oldText: string; newText: string; isHtml?: boolean; }
 interface VisibilityUndoEntry { kind: "visibility"; elementId: string; wasHidden: boolean; oldDisplay: string; }
 type UndoEntry = StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoEntry;
 const undoStack: UndoEntry[] = [];
@@ -671,6 +698,19 @@ function disable() {
   clearBaseCursor();
 }
 
+// Clear the current single selection and return to hover mode — inspect stays
+// ON so the page keeps highlighting on hover (this is the Figma-like "Esc =
+// deselect back to hover", NOT "Esc = turn inspection off"). Used by the
+// Escape shortcut (page focus) and the DESELECT message (panel focus). Notifies
+// the panel so its Design tab drops back to the hovering/page state too.
+function clearSelectionToHover() {
+  if (!getSelectedElementId()) return;
+  hideSelect();
+  hideResizeDots();
+  setSelectedElementId(null);
+  notifyPanel('ELEMENT_DESELECTED', {});
+}
+
 function registerAllShortcuts() {
   registerShortcut('toggle-inspect', () => {
     if (isInspectActive()) disableInspect();
@@ -684,8 +724,7 @@ function registerAllShortcuts() {
   });
   registerShortcut('deselect', () => {
     if (isMultiSelectActive()) disableMultiSelect();
-    else if (isInspectActive()) disableInspect();
-    else { hideSelect(); setSelectedElementId(null); }
+    else clearSelectionToHover();
     notifyPanel('STATE_UPDATE', getFullState());
   });
   registerShortcut('delete-element', () => {
@@ -733,6 +772,10 @@ function registerAllShortcuts() {
 /* —— Message handler —— */
 
 browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
+  // Decline if a newer injection has superseded this instance (see the
+  // re-injection guard at the top). Exactly one instance answers each
+  // message, so the panel's round-trips can't be corrupted by duplicates.
+  if (!dmIsActiveInstance()) return;
   switch (msg.type) {
     // Ping for checking if content script is injected
     case 'PING': sendResponse({ ok: true }); break;
@@ -771,7 +814,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     // New: DOM tree for Layers panel
     case 'GET_DOM_TREE': {
       const tree = buildDomTree();
-      sendResponse({ tree });
+      sendResponse({ tree, sealed: isPageContentSealed() });
       break;
     }
 
@@ -913,15 +956,28 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
+    // Panel-focus Escape: the page never received the keydown, so the panel
+    // asks the page to clear its selection and drop back to hover mode.
+    case 'DESELECT': {
+      if (isMultiSelectActive()) disableMultiSelect();
+      else clearSelectionToHover();
+      notifyPanel('STATE_UPDATE', getFullState());
+      sendResponse({ ok: true });
+      break;
+    }
+
     // Undo (supports style, dom, text, visibility)
     case 'UNDO': {
       if (undoStack.length > 0) {
         const entry = undoStack.pop()!;
         if (entry.kind === 'style') {
-          // Remove the rule; computed style returns to its natural cascaded
-          // value (which is what we recorded as oldValue). No inline write
-          // — that would shadow future re-applies.
-          if (entry.changeId) removeStyleChange(entry.changeId);
+          // Re-apply the recorded oldValue through the change-tracker rather
+          // than deleting by id. The tracker drops the record when the value
+          // returns to its original oldValue (and otherwise steps newValue
+          // back one edit) — so undo works even without a changeId, steps a
+          // multi-edit history back one at a time, and keeps the Changes tab
+          // in sync. `state` targets the right rule (base vs :hover variant).
+          applyStyleChange(entry.elementId, entry.property, entry.oldValue, undefined, undefined, entry.state || '');
         } else if (entry.kind === 'dom') {
           if (entry.action === 'delete') {
             const parent = getElementById(entry.parentId);
@@ -939,8 +995,11 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
             if (dup) dup.remove();
           }
         } else if (entry.kind === 'text') {
-          const el = getElementById(entry.elementId);
-          if (el) el.textContent = entry.oldText;
+          // Restore through the tracker so the correct DOM property is used
+          // (innerHTML for rich text, textContent for plain) and the row is
+          // dropped when text returns to its original.
+          if (entry.isHtml) applyHtmlChange(entry.elementId, entry.oldText);
+          else applyTextChange(entry.elementId, entry.oldText);
         } else if (entry.kind === 'visibility') {
           const el = getElementById(entry.elementId);
           if (el) {
@@ -967,8 +1026,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       if (redoStack.length > 0) {
         const entry = redoStack.pop()!;
         if (entry.kind === 'style') {
-          const change = applyStyleChange(entry.elementId, entry.property, entry.newValue);
-          if (change) (entry as StyleUndoEntry).changeId = change.id;
+          applyStyleChange(entry.elementId, entry.property, entry.newValue, undefined, undefined, entry.state || '');
         } else if (entry.kind === 'dom') {
           if (entry.action === 'delete') {
             const el = getElementById(entry.elementId);
@@ -986,8 +1044,8 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
             }
           }
         } else if (entry.kind === 'text') {
-          const el = getElementById(entry.elementId);
-          if (el) el.textContent = entry.newText;
+          if (entry.isHtml) applyHtmlChange(entry.elementId, entry.newText);
+          else applyTextChange(entry.elementId, entry.newText);
         } else if (entry.kind === 'visibility') {
           const el = getElementById(entry.elementId);
           if (el) {
@@ -1222,7 +1280,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           const oldHtml = el.innerHTML || '';
           if (oldHtml !== msg.html) {
             applyHtmlChange(sid, msg.html);
-            undoStack.push({ kind: 'text', elementId: sid, oldText: oldHtml, newText: msg.html });
+            undoStack.push({ kind: 'text', elementId: sid, oldText: oldHtml, newText: msg.html, isHtml: true });
             redoStack.length = 0;
           }
           const info = buildElementInfo(el);
@@ -1273,7 +1331,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           }, groupMeta, msg.state || '');
           const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
           if (afterValue !== beforeValue) {
-            undoStack.push({ kind: 'style', elementId: id, property: msg.property, oldValue: beforeValue, newValue: msg.value, changeId: change?.id });
+            undoStack.push({ kind: 'style', elementId: id, property: msg.property, oldValue: beforeValue, newValue: msg.value, changeId: change?.id, state: msg.state || '' });
           }
         }
         if (targetIds.length > 0) redoStack.length = 0;
@@ -2224,4 +2282,4 @@ window.addEventListener('dm-comment-pin-dragged', (e: any) => {
   },
 };
 
-console.log('[Design Mode] Content script loaded (v0.3.0). All phases active.');
+console.log(`[Design Mode] Content script loaded (v${browser.runtime.getManifest().version}). All phases active.`);

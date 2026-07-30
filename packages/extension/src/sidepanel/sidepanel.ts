@@ -188,6 +188,16 @@ let matchingLayersChecked = false;
 let shortcutsOpen = false;
 let contributeOpen = false;
 let fileAccessBlocked = false;
+// True when the page's visible content is sealed inside a sandboxed /
+// cross-origin iframe the inspector can't enter (e.g. a saved `srcdoc`
+// artifact). The Layers + Design tabs swap in an explanatory notice
+// instead of an empty tree. Set from the GET_DOM_TREE response.
+let pageSealed = false;
+// Set when the user opts in (from the wrapped-artifact notice) to inspect
+// the WRAPPER html anyway — the inspector can't reach the sandboxed inner
+// content, but the outer wrapper document is fully editable. Bypasses the
+// notice so the normal Layers/Design tabs render for the wrapper.
+let inspectWrapperOptedIn = false;
 let enabled = false;
 let inspecting = true;
 // While a comment composer is open (add / edit / region) we suspend inspect
@@ -791,7 +801,7 @@ function openPipWindow() {
 async function refreshMcpStatus() { const res = await send({ type: 'SP_GET_MCP_STATUS' }); if (res.mcpState) mcpState = res.mcpState; else if (res.connected && res.agentConnected) mcpState = 'connected'; else if (res.connected) mcpState = 'running'; else mcpState = 'offline'; render(); }
 async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
 async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; render(); }
-async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; matchingCountCache.clear(); render(); }
+async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
 // morphdom hasn't placed the element by the next microtask.
@@ -1948,11 +1958,19 @@ browser.runtime.onMessage.addListener((msg) => {
     // reload, this branch never runs and the page stays clean.
     restoreLayoutGuidesAfterReload();
     render();
+    // Re-sync the layers tree + pageSealed after a reload / SPA nav so the
+    // sealed-frame notice appears (or clears) for the page now in the tab.
+    void refreshDomTree();
   }
   if (msg.type === 'MULTI_SELECT_UPDATE') {
     multiSelectIds = msg.payload?.ids || [];
     multiSelectActive = multiSelectIds.length > 0;
     render();
+  }
+  // Page cleared its selection (Escape on the page) — drop the Design tab back
+  // to the hovering / page state so the panel matches the page.
+  if (msg.type === 'ELEMENT_DESELECTED') {
+    info = null; hoverInfo = null; render();
   }
   if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; render(); }
   if (msg.type === 'AGENT_PRESENCE_UPDATE') {
@@ -6328,7 +6346,23 @@ function renderSendAgentHelpOverlay(): string {
 }
 
 /* ── Phase 2: Layers Tab ── */
+// Shown in the Layers + Design tabs when the page's visible content is
+// sealed inside a sandboxed srcdoc artifact (pageSealed). The browser walls
+// the wrapped content off from every extension, so we can't reach inside it
+// — but the OUTER wrapper HTML is fully editable. We explain that and offer
+// an opt-in to inspect the wrapper anyway (which just bypasses this notice).
+function renderSealedFrameNotice(): string {
+  return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;gap:12px;">' +
+    '<div style="color:var(--dm-text-dimmer);">' + icon('squareDashed', 32) + '</div>' +
+    '<div style="font-size:12px;font-weight:600;color:var(--dm-text-muted);">This page wraps a sandboxed HTML artifact</div>' +
+    '<div style="font-size:11px;line-height:1.55;color:var(--dm-text-dim);max-width:280px;">The visible content lives inside an <code style="font-family:SF Mono,monospace;font-size:10px;">&lt;iframe sandbox&gt;</code> with its own locked-down origin. The browser walls that off from every extension, so Design Mode can’t inspect or edit the <b>wrapped</b> content — this isn’t a bug.</div>' +
+    '<div style="font-size:11px;line-height:1.55;color:var(--dm-text-dim);max-width:280px;">You can still inspect and edit the <b>wrapper</b> HTML (the outer document). To reach the inner content, open the artifact’s own HTML file directly.</div>' +
+    '<button data-dm-action="inspect-wrapper" style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;">' + icon('code', 13) + ' Inspect wrapper HTML</button>' +
+    '</div>';
+}
+
 function renderLayersTab(): string {
+  if (pageSealed && !inspectWrapperOptedIn) return renderSealedFrameNotice();
   if (domTree.length === 0) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;"><div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('crosshair', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">Click the inspector icon to start selecting elements</div></div>';
 
   const selectedId = info?.id || '';
@@ -6575,6 +6609,10 @@ function visibleSections(kind: LayerKind): SectionVisibility {
 /* ── Phase 3: Design Tab ── */
 let pageContextInflight = false; // prevents duplicate SP_INSPECT_PAGE while one is in flight
 function renderDesignTab(): string {
+  // A sandboxed/cross-origin iframe seals the real content off — the top
+  // document body is reachable but empty of anything worth editing, so
+  // explain rather than load a pointless <body> context.
+  if (pageSealed && !inspectWrapperOptedIn) return renderSealedFrameNotice();
   const displayInfo = info ?? hoverInfo;
   const isHovering = !info && !!hoverInfo;
 
@@ -9363,6 +9401,7 @@ function setupDelegation() {
           });
           break;
         }
+        case 'inspect-wrapper': inspectWrapperOptedIn = true; refreshDomTree(); break;
         case 'copy-prompt': copyPrompt(); break;
         case 'send-to-agent': sendToAgent(); break;
         case 'send-agent-help-close': sendAgentHelpOpen = false; render(); break;
@@ -13301,10 +13340,12 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undoAction(); }
   if ((e.ctrlKey || e.metaKey) && ((e.key === 'z' && e.shiftKey) || e.key === 'y')) { e.preventDefault(); redoAction(); }
 
-  // Escape to deselect
+  // Escape to deselect. Also tell the PAGE to clear its selection + resize
+  // dots and drop back to hover — the page never receives this keydown when
+  // the panel has focus, so without the message the orange select box lingers.
   if (e.key === 'Escape') {
     if (commentMode) { cancelComment(); return; }
-    if (info) { info = null; hoverInfo = null; render(); return; }
+    if (info) { info = null; hoverInfo = null; send({ type: 'SP_DESELECT' }); render(); return; }
   }
 
   // Arrow keys in layers tab

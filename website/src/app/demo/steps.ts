@@ -20,10 +20,10 @@ export const STEPS: Step[] = [
     title: "Get started",
     body: [
       "Design Mode is a browser extension (Chrome + Firefox) that turns any website into a live design surface. Edit layout, type, colour, and structure with visual controls — then ship the result to your AI coding agent.",
-      "First time? Pin the extension to your toolbar so it's always one click away, then click the Design Mode icon to open the side panel on this page. Once it's open, every in-page shortcut (Alt+I to inspect, Alt+A to comment, Alt+D to draw, …) is listed and remappable in Settings.",
+      "First time? Pin the extension to your toolbar so it's always one click away, then click the Design Mode icon to open the side panel on this page. Once it's open, every in-page shortcut (Alt+I to inspect, Alt+C to comment, Alt+X to export CSS, …) is listed in Settings — the one shortcut you can rebind is Alt+D, which opens the panel itself, through your browser's extension-shortcuts settings (chrome://extensions/shortcuts on Chrome, about:addons on Firefox).",
     ],
     tryIt:
-      "Pin Design Mode in your Chrome toolbar, then click its icon to open the side panel on the right.",
+      "Pin Design Mode in your browser toolbar, then click its icon to open the side panel (the sidebar on Firefox).",
   },
   {
     id: "panel-modes",
@@ -82,13 +82,13 @@ export const STEPS: Step[] = [
   },
   {
     id: "annotate-draw",
-    title: "Annotate & draw",
+    title: "Comments & regions",
     body: [
-      "Design Mode overlays two annotation tools on the live page. Comment pins (the comment icon in the action row, or Alt+A) drop a numbered marker on any element — resolve, reopen, or edit them, and they collect in the Changes tab under the Comments filter so they ship alongside your edits.",
-      "Freehand Drawing mode (Alt+D) lets you sketch straight over the page to point things out. Both are overlay-only — they annotate without ever touching the page's own styles.",
+      "Design Mode overlays two annotation tools on the live page. Comment pins (the comment icon in the action row, or Alt+C) drop a numbered marker on any element — resolve, reopen, or edit them, and they collect in the Changes tab under the Comments filter so they ship alongside your edits.",
+      "Region comment (Alt+R) works the same way but lets you drag a rectangle over an area first, for feedback that isn't tied to a single element. Both are overlay-only — they annotate without ever touching the page's own styles.",
     ],
     tryIt:
-      "Press Alt+A (or click the comment icon) and drop a pin on the note below. Then press Alt+D and sketch over it. Open the Changes tab → Comments filter to see the pin tracked.",
+      "Press Alt+C (or click the comment icon) and drop a pin on the note below. Then press Alt+R and drag a box around it. Open the Changes tab → Comments filter to see both tracked.",
     targetId: "annotate-draw",
   },
   {
@@ -266,7 +266,7 @@ export const STEPS: Step[] = [
     body: [
       "Every edit is tracked in the Changes tab — grouped by element with friendly group labels (preset / multi-select / visibility) when one action touched many properties at once. The 'View Original' / 'View Changes' toggle previews the page with or without your edits.",
       "Per-change actions: Revert (trash icon, actually reverses the change on the page), Batch apply (zap icon, applies the change to all matching elements with a count badge ×N). Clear All wipes everything in one click.",
-      "Export / Import move the whole diff to and from a JSON file, so a session can be saved, shared, or replayed on another page. Export CSS (Alt+E) copies the generated stylesheet for the session straight to your clipboard.",
+      "Export / Import move the whole diff to and from a JSON file, so a session can be saved, shared, or replayed on another page. Export CSS (Alt+X) copies the generated stylesheet for the session straight to your clipboard.",
     ],
     tryIt:
       "Switch to the Changes tab after making edits in the previous sections. Click 'View Original' to flip back. Try Batch apply (zap) on a style change, then Export to download the diff as JSON.",
@@ -286,7 +286,7 @@ export const STEPS: Step[] = [
     id: "settings",
     title: "Settings",
     body: [
-      "Click the gear icon in the panel header to open Settings. Pick your color format (HEX / RGB), capture mode for screenshots (clipboard / download / both), and toggle MCP auto-connect.",
+      "Click the gear icon in the panel header to open Settings. Pick your color format (HEX / RGB), capture mode for screenshots (clipboard / download / both), and toggle MCP auto-connect. The page cursor defaults to the Design Mode app icon — turn off Page cursor for a plain crosshair. Every preference is stored locally in your browser and persists until you uninstall.",
     ],
     tryIt:
       "Open Settings. Switch the color format from HEX to RGBA. Notice how color values in the Design tab re-render in the chosen format.",

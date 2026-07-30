@@ -24,6 +24,36 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   extension" to "browser extension"; the website's install CTA, accent
   colour, and navbar now adapt to the visitor's browser.
 
+### Fixed
+
+- **Layers / Changes tabs could hang (duplicate content-script injection).**
+  When the side panel opened before the page finished loading, the content
+  script could be injected twice into one document, registering duplicate
+  `runtime.onMessage` listeners that corrupted every panel round-trip —
+  so the Layers and Changes tabs (which fetch live from the page) did nothing
+  when clicked. Each injection now stamps a per-instance token and only the
+  newest instance answers messages, so exactly one handler is ever active
+  (and a fresh injection correctly supersedes a dead one after an extension
+  reload). Also fixed the content-script load log reporting a stale version.
+- **Undo/redo reliability.** Rich-text undo/redo no longer injects literal
+  HTML tags into the text — it now restores with the matching DOM property
+  (`innerHTML` for rich text, `textContent` for plain), tracked by an
+  `isHtml` flag. Style undo/redo (including resize and move) now re-apply the
+  recorded value **through the change-tracker** instead of deleting a change by
+  id, so: undo no longer silently no-ops when an entry had no change id;
+  editing one property twice now steps back one edit at a time instead of
+  jumping straight to the original; and the page and the Changes tab stay in
+  lockstep (text edits also dedup to one row per element). Motion state-variant
+  (`:hover` etc.) edits undo against the correct rule.
+- **Escape returns to hover mode.** Pressing Escape on a selected element now
+  clears the selection (and resize handles) and drops back to hover mode with
+  the page still inspectable — previously it turned inspection off entirely and
+  left the selection box painted. Escape also works when the side panel has
+  focus (the panel now tells the page to deselect).
+- **Multi-select: plain click collapses the set (Figma parity).** With a
+  multi-selection active, a plain (no-Shift) click now clears the whole set and
+  selects only the clicked element; Shift-click still adds/toggles.
+
 ### Internal
 
 - New `src/platform` layer (webextension-polyfill so `browser.*` returns
@@ -34,6 +64,11 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   writes both `design-mode-extension.zip` (CWS) and `design-mode-addon.zip`
   (AMO) from identical content; `prepublish-check` asserts both browsers'
   manifest keys and runs `web-ext lint`.
+
+### Notes
+
+- Undo/redo history is per-session and in-memory: after a full page reload the
+  recorded changes persist but step-by-step undo resets (see CHANGES.md).
 
 ## [1.9.0] — 2026-07-19
 

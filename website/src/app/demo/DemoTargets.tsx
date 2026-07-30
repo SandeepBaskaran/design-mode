@@ -52,8 +52,8 @@ export const DEMO_TARGETS: Record<string, () => ReactElement> = {
     <div id="demo-annotate-card" className={styles.targetCard}>
       <h3>Pin a comment on me</h3>
       <p>
-        Drop a comment pin here with Alt+A, then sketch over me with Alt+D.
-        Both stay as overlays — my own styles never change.
+        Drop a comment pin here with Alt+C, then drag a region comment around
+        me with Alt+R. Both stay as overlays — my own styles never change.
       </p>
     </div>
   ),

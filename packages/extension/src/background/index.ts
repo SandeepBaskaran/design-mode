@@ -364,6 +364,10 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     forwardToPinnedTab({ type: 'REDO' }, sendResponse);
     return true;
   }
+  if (msg.type === 'SP_DESELECT') {
+    forwardToPinnedTab({ type: 'DESELECT' }, sendResponse);
+    return true;
+  }
   if (msg.type === 'SP_SET_TEXT') { forwardToPinnedTab({ type: 'SET_TEXT', text: msg.text }, sendResponse); return true; }
   if (msg.type === 'SP_ADD_COMMENT') {
     forwardToPinnedTab({ type: 'ADD_COMMENT', text: msg.text }, sendResponse);
