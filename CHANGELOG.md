@@ -27,6 +27,13 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Color picker opens as a compact solid picker.** Clicking a colour swatch
+  now shows just the essentials — a live swatch, a Hex field, the eyedropper,
+  and the HEX/RGB/HSL format cycle — with the Site Colors list below. The
+  full HSV square + hue slider + numeric channels moved behind a **Custom
+  colour** disclosure (collapsed by default), so the panel is far less
+  overwhelming while every control is still one click away. Layout-guide
+  swatches (compact mode) keep the HSV surface inline as before.
 - Copy across the extension and website generalised from "Chrome
   extension" to "browser extension"; the website's install CTA, accent
   colour, and navbar now adapt to the visitor's browser.
