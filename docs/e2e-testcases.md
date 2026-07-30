@@ -164,7 +164,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 1.17 | Shift-select pairwise distances | Select an element, then Shift+click a second | Both outline (dashed); pairwise distance pills render between them; Shift+click more to extend |
 | 1.18 | Pairwise distances persist on hover/scroll | With ≥2 shift-selected, move the mouse away and scroll | Pairwise pills remain and stay anchored (not cleared by mouse-out) |
 | 1.19 | Move cursor over selection | Select an element, then hover its body (not a handle) | Cursor swaps to `move`; cursor returns to crosshair when hovering any non-selected element |
-| 1.20 | Drag-to-move is live + guided | Select a non-static element, drag its body | Element moves live; orange outline + handles follow the cursor; Design-tab **X** / **Y** fields tick during the drag; orange axis guides show new edges |
+| 1.20 | Drag-to-move is live + guided | Select a non-static element, drag its body | Element moves live; orange outline + handles follow the cursor; Design-tab **X** / **Y** fields tick during the drag; magenta alignment guides appear when edges/centres line up with siblings (see 1.28) |
 | 1.21 | Move persists + exports | Release the drag, open Changes tab + Export CSS | New `left`/`top` appear as a single **Move** group in Changes and in the exported CSS; Cmd/Ctrl+Z reverts both offsets together |
 | 1.22 | Move under-threshold = click | Mousedown on the selected element, release without moving | No drag fires; no Changes entry; selection stays as-is |
 | 1.23 | Shift-axis lock | Drag the selected element with **Shift** held | Motion locks to the dominant axis (purely horizontal or purely vertical) |
@@ -172,6 +172,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 1.25 | Multi-select drag in lockstep | Shift-click two elements, then drag either one | Both elements translate by the same delta; one undo reverts the whole gesture |
 | 1.26 | Move follows scroll | Move an element, then scroll the page | The selection box + handles stay anchored to the element |
 | 1.27 | Margin/padding overlay bands | Hover or select an element with non-zero margin **and** padding | Light-red margin band paints outside the element box; light-green padding band paints between border and content; bands hide when the spacing is all-zero; colours follow Settings → Inspector overlay |
+| 1.28 | Alignment guides + snap on move | Select an element in a container with siblings, drag it so an edge/centre nears a sibling's edge/centre (or the parent's) | A **solid magenta** guide appears through the match and the element **snaps** onto that line; releasing commits the snapped `left`/`top`. Hold **Alt** while dragging → no snap, no guides (free move). Shift-axis-lock still applies (only the free axis snaps). Multi-select drag snaps as a group. Guides clear on drop |
 
 ---
 
@@ -193,8 +194,9 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 2.11 | Arrow stepping | Click size, press ↑ | Increments by 1 (px appended automatically) |
 | 2.12 | Shift + arrow stepping | `Shift+↑` | Increments by 10 |
 | 2.13 | Bold / italic / underline / strike toggles in Typography section | Click each B / I / U / S below the rich text editor | Toggles apply visually; toggle again to remove |
-| 2.14 | Color picker — inline HSV + hue slider | Click any colour swatch | Inline picker drops down with HSV gradient, hue slider, hex/RGB or hex/HSL inputs (depending on Settings → Color Format) |
-| 2.15 | Color picker — eyedropper | Click "Pick" with a Chrome 95+ browser | EyeDropper API engages; pick a colour from anywhere on screen → applied |
+| 2.14 | Color picker — compact solid default | Click any colour swatch | Picker opens **compact**: a live swatch, a focused Hex field, the eyedropper (Chrome), the HEX/RGB/HSL format cycle, a **Custom colour** disclosure (collapsed), and the Site Colors list below. The big HSV square + hue slider are **not** shown until Custom is expanded |
+| 2.14b | Color picker — Custom colour disclosure | In an open picker, click **Custom colour** | The HSV square + hue slider + numeric channels (R/G/B, or H/S/L per Settings → Color Format) expand below; the chevron flips; clicking again collapses them. Re-opening the picker starts collapsed again |
+| 2.15 | Color picker — eyedropper | Click the eyedropper (pen) icon with a Chrome 95+ browser | EyeDropper API engages; pick a colour from anywhere on screen → applied |
 | 2.16 | Color token dropdown | Click the swatch button → click any token row | `var(--token)` is set on the property; row appears in Changes tab |
 | 2.17 | Color token search | With dropdown open, type "primary" | Token list filters to only `--*primary*` rows |
 | 2.18 | Custom hex via Enter | Type `#abc123` and press Enter in the hex input | `#abc123` applied as the colour |
@@ -202,7 +204,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 2.20 | Format cycle button | With colour dropdown open, click the format button | Cycles HEX → RGB → HSL; Settings → Color Format also reflects |
 | 2.21 | HEX vs RGBA format | Settings → Color Format → HEX | All colour text inputs render `#xxxxxx`; switch to RGBA → `rgba(...)` |
 | 2.22 | Text alignment / transform / decoration | Change each control | Element updates instantly |
-| 2.23 | Contrast checker — ratio | Open the colour picker on a text colour over a known background | A contrast row above the HSV gradient shows the ratio vs the effective background (e.g. `4.5:1`) with a diagonal-split chip |
+| 2.23 | Contrast checker — ratio | Open the colour picker on a text colour over a known background | A contrast row at the top of the picker (above the essentials row) shows the ratio vs the effective background (e.g. `4.5:1`) with a diagonal-split chip |
 | 2.24 | Contrast checker — rating + AA/AAA | Read the contrast row | Absolute rating pill (Excellent / Good / Poor / Very Poor) plus AA and AAA tabs showing both pass/fail verdicts at once |
 | 2.25 | Contrast checker — category override | Open the Category popover, switch Auto → Large → Normal → Graphics | The pass/fail verdict updates to the chosen threshold; the choice + AA/AAA level persist across reloads |
 
@@ -241,7 +243,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 3.24 | Corner radius: Mixed → forced uniform | Click the corner-expand (`scan`) toggle, set each of the 4 corners to a different value, collapse back to the primary row, then type a number into the primary field (showing `Mixed`) | Collapsed primary field shows a `Mixed` placeholder before the edit; typing over it writes the `border-radius` shorthand and all four corners snap to the typed value — re-expanding shows all 4 corners equal |
 | 3.25 | Layout guide: section eye visibility gating | Add one layout guide to an element, then add a second | With one guide, no section-level eye appears next to the Layout guide header — only the row's own eye. Once 2+ guides exist, a section eye appears top-right of the section header |
 | 3.26 | Layout guide: parent/child hide | With 2+ guides on an element, click the section eye to hide all guides, then click one dimmed row's own eye | Every guide disappears from the page; each row's own eye dims (~40% opacity) but still reflects and can toggle its individual on/off state; re-enabling the section eye reveals only the rows currently marked visible |
-| 3.27 | Layout guide: compact color panel | On a layout guide's expanded row, click the Colour swatch | The color panel opens with the HSV picker + hex/RGB inputs only — no WCAG contrast row and no Site Colors token list |
+| 3.27 | Layout guide: compact color panel | On a layout guide's expanded row, click the Colour swatch | The color panel opens with the essentials row (swatch + hex + eyedropper + format) and the HSV picker inline (compact mode keeps Custom expanded — no disclosure toggle) — no WCAG contrast row and no Site Colors token list |
 
 ---
 

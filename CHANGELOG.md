@@ -10,6 +10,13 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Alignment guides while dragging (Slides / Keynote style).** Dragging the
+  body of a selected element now snaps its edges and centres to its siblings
+  and the parent box, drawing a solid magenta guide through each match.
+  Snapping is per-axis and composes with the existing Shift axis-lock; hold
+  **Alt** to drag freely without snapping. Candidates are the dragged
+  element's siblings plus the parent container (multi-select drags snap as a
+  group). Guides clear on drop.
 - **Firefox support (Gecko MV3).** Design Mode now installs on Firefox
   121+ from Firefox Add-ons (AMO) alongside the Chrome Web Store build.
   It ships from a **single `dist/` and one merged `manifest.json`** — the
@@ -20,6 +27,13 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Color picker opens as a compact solid picker.** Clicking a colour swatch
+  now shows just the essentials — a live swatch, a Hex field, the eyedropper,
+  and the HEX/RGB/HSL format cycle — with the Site Colors list below. The
+  full HSV square + hue slider + numeric channels moved behind a **Custom
+  colour** disclosure (collapsed by default), so the panel is far less
+  overwhelming while every control is still one click away. Layout-guide
+  swatches (compact mode) keep the HSV surface inline as before.
 - Copy across the extension and website generalised from "Chrome
   extension" to "browser extension"; the website's install CTA, accent
   colour, and navbar now adapt to the visitor's browser.
@@ -53,6 +67,31 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - **Multi-select: plain click collapses the set (Figma parity).** With a
   multi-selection active, a plain (no-Shift) click now clears the whole set and
   selects only the clicked element; Shift-click still adds/toggles.
+- **Resize past a min/max cap now moves the cap.** Dragging a resize handle
+  (or typing a width/height) beyond a numeric `max-width`/`max-height` — or
+  below a numeric `min-width`/`min-height` — was silently clamped, so the
+  element wouldn't visibly change size. The opposing cap is now widened to the
+  requested dimension (and recorded as a companion change), so the resize
+  actually renders. `auto`/`none` caps impose no bound and are left alone.
+- **Position alignment aligns a single flex child correctly.** The Position
+  section's align buttons used `justify-self`, which flex items ignore, so
+  aligning one child inside a flex container did nothing. Alignment now uses
+  auto-margins on the flex main axis and `align-self` on the cross axis, with
+  the axes flipping for `flex-direction: column`. Grid parents keep
+  `justify-self`/`align-self` (grid items honour both).
+- **Drop shadow on a text layer applies to the text, not a box.** Adding a
+  drop shadow to a text element (`p`, `h1`–`h6`, `span`, `a`, `li`, `button`,
+  `label`) now seeds a glyph-hugging `text-shadow` instead of a `box-shadow`
+  rectangle around the text box. Non-text elements still get a `box-shadow`.
+- **Texture / Noise eye toggle un-hides again.** Hiding then re-showing an
+  overlay effect (Noise or Texture) via its row eye left it hidden — the
+  restore path was gated on a stashed CSS string that overlay effects don't
+  use. Overlay visibility now round-trips through the effect's own flag.
+- **Texture effect is actually visible, with an Opacity control.** The Texture
+  overlay defaulted to a heavy blur radius and a fixed low alpha, so the grain
+  barely showed. The default radius is lower and the editor gains an
+  **Opacity %** field (threaded into the grain's alpha) so the texture reads
+  and is tunable.
 
 ### Internal
 

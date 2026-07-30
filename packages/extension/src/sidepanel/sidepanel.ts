@@ -219,6 +219,9 @@ let batchAppliedChanges: Set<string> = new Set();
 let mediaInfo: { kind: string; src: string; alt?: string; naturalWidth?: number; naturalHeight?: number; filename?: string; markup?: string; isObjectUrl?: boolean; poster?: string; bytes?: number } | null = null;
 let lastMediaElementId: string | null = null;
 let activeColorPickerProp: string | null = null;
+// Which open picker has its "Custom colour" (HSV) sub-view expanded. The
+// panel opens as a compact solid picker; this reveals the full HSV surface.
+let colorAdvancedProp: string | null = null;
 // Tokens-only dropdown (a focus-driven shortcut on hex inputs) — distinct
 // from the full HSV+tokens panel that opens on swatch click.
 let tokensDropdownProp: string | null = null;
@@ -1481,33 +1484,56 @@ function applyStrokeProperty(prop: string, value: string) {
 }
 
 // Pragmatic mapping for Figma's Position-section alignment buttons.
-// Flex/grid parents → align-self / justify-self.
-// Block parent      → margin-left/right auto for horizontal centering.
-// Absolute/fixed    → top/left + translate shortcuts on the element itself.
-function applyPositionAlign(which: string, ctx: { isFlex: boolean; isGrid: boolean; isAbs: boolean }) {
-  const isFlexLike = ctx.isFlex || ctx.isGrid;
-  if (which === 'h-left') {
-    if (isFlexLike) applyStyle('justifySelf', 'start');
-    else if (ctx.isAbs) { applyStyle('left', '0px'); applyStyle('right', 'auto'); applyStyle('translate', '0px 0px'); }
-    else { applyStyle('marginLeft', '0px'); applyStyle('marginRight', 'auto'); }
-  } else if (which === 'h-center') {
-    if (isFlexLike) applyStyle('justifySelf', 'center');
-    else if (ctx.isAbs) { applyStyle('left', '50%'); applyStyle('right', 'auto'); applyStyle('translate', '-50% 0px'); }
-    else { applyStyle('marginLeft', 'auto'); applyStyle('marginRight', 'auto'); }
-  } else if (which === 'h-right') {
-    if (isFlexLike) applyStyle('justifySelf', 'end');
-    else if (ctx.isAbs) { applyStyle('left', 'auto'); applyStyle('right', '0px'); applyStyle('translate', '0px 0px'); }
-    else { applyStyle('marginLeft', 'auto'); applyStyle('marginRight', '0px'); }
-  } else if (which === 'v-top') {
-    if (isFlexLike) applyStyle('alignSelf', 'start');
-    else if (ctx.isAbs) { applyStyle('top', '0px'); applyStyle('bottom', 'auto'); }
-  } else if (which === 'v-middle') {
-    if (isFlexLike) applyStyle('alignSelf', 'center');
-    else if (ctx.isAbs) { applyStyle('top', '50%'); applyStyle('bottom', 'auto'); applyStyle('translate', '-50% -50%'); }
-  } else if (which === 'v-bottom') {
-    if (isFlexLike) applyStyle('alignSelf', 'end');
-    else if (ctx.isAbs) { applyStyle('top', 'auto'); applyStyle('bottom', '0px'); }
+// Grid parent   → justify-self / align-self (grid items honour both).
+// Flex parent   → auto-margins on the MAIN axis (justify-self is inert on
+//                 flex items), align-self on the CROSS axis; which axis is
+//                 which flips with flex-direction.
+// Block parent  → margin-left/right auto for horizontal centering.
+// Absolute/fixed → top/left + translate shortcuts on the element itself.
+function applyPositionAlign(
+  which: string,
+  ctx: { isFlex: boolean; isGrid: boolean; isAbs: boolean; flexDirection?: string },
+) {
+  const isColumn = /column/.test(ctx.flexDirection || 'row');
+  // Auto-margin recipe pushing a single item to start / center / end along one
+  // axis. `a`/`b` are the two margin sides for that axis.
+  const marginAlign = (a: string, b: string, pos: 'start' | 'center' | 'end') => {
+    applyStyle(a, pos === 'start' ? '0px' : 'auto');
+    applyStyle(b, pos === 'end' ? '0px' : 'auto');
+  };
+  const horiz = which.startsWith('h-');
+  const pos: 'start' | 'center' | 'end' =
+    which.endsWith('-center') || which.endsWith('-middle') ? 'center'
+      : which.endsWith('-left') || which.endsWith('-top') ? 'start' : 'end';
+
+  if (ctx.isGrid) {
+    applyStyle(horiz ? 'justifySelf' : 'alignSelf', pos);
+    return;
   }
+  if (ctx.isFlex) {
+    // Horizontal is the main axis for a row, the cross axis for a column.
+    const horizIsMain = !isColumn;
+    if (horiz === horizIsMain) {
+      // Main axis → auto-margins.
+      if (horiz) marginAlign('marginLeft', 'marginRight', pos);
+      else marginAlign('marginTop', 'marginBottom', pos);
+    } else {
+      applyStyle('alignSelf', pos === 'start' ? 'flex-start' : pos === 'end' ? 'flex-end' : 'center');
+    }
+    return;
+  }
+  if (ctx.isAbs) {
+    if (which === 'h-left') { applyStyle('left', '0px'); applyStyle('right', 'auto'); applyStyle('translate', '0px 0px'); }
+    else if (which === 'h-center') { applyStyle('left', '50%'); applyStyle('right', 'auto'); applyStyle('translate', '-50% 0px'); }
+    else if (which === 'h-right') { applyStyle('left', 'auto'); applyStyle('right', '0px'); applyStyle('translate', '0px 0px'); }
+    else if (which === 'v-top') { applyStyle('top', '0px'); applyStyle('bottom', 'auto'); }
+    else if (which === 'v-middle') { applyStyle('top', '50%'); applyStyle('bottom', 'auto'); applyStyle('translate', '-50% -50%'); }
+    else if (which === 'v-bottom') { applyStyle('top', 'auto'); applyStyle('bottom', '0px'); }
+    return;
+  }
+  // Plain block parent — horizontal centering via auto-margins (vertical has
+  // no block-flow equivalent, so it's a no-op, matching prior behaviour).
+  if (horiz) marginAlign('marginLeft', 'marginRight', pos);
 }
 
 // Pragmatic CSS mapping for Figma's Stroke position selector. Single
@@ -2819,83 +2845,79 @@ function renderInlineColorPicker(prop: string, value: string, compact = false): 
   const svY = ((1 - v) * 100).toFixed(1);
   const hueX = (h / 360 * 100).toFixed(1);
   const hex = rgbToHexStr(r, g, b);
+  const swatchBg = formatColorForDisplay(value) || hex;
+  // The heavy HSV surface (saturation/value square, hue slider, numeric
+  // channels) is a "Custom colour" sub-view, collapsed by default so the
+  // panel opens as a compact solid picker — swatch + hex + eyedropper, with
+  // the Site Colors list below. Compact callers (e.g. layout-guide overlays)
+  // have no token list to pick from, so the custom view stays inline there.
+  const advancedOpen = compact || colorAdvancedProp === prop;
 
-  return (
-    // Contrast checker — pairs the edited colour against the element's
-    // effective background (or the element's text colour when the prop is
-    // itself a fill). Hidden for box-shadow colours via getContrastContext.
-    (compact ? '' : renderContrastRow(prop, value)) +
-    // SV (saturation × value) gradient. Bottom→top black overlay handles
-    // the V axis; left→right white→hue handles the S axis. Marker dot
-    // positioned on top via percentage offsets.
-    '<div data-dm-color-sv="' + escapeAttr(prop) + '" data-dm-color-h="' + h.toFixed(2) + '" style="position:relative;width:100%;height:140px;border-radius:5px;background:linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ' + hueColor + ');cursor:crosshair;user-select:none;touch-action:none;">' +
+  const channel = (label: string, attrName: string, c: string, val: string, min: string, max: string) =>
+    '<div style="display:flex;flex-direction:column;gap:2px;">' +
+      '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</label>' +
+      '<input type="number" class="dm-input" ' + attrName + '="' + escapeAttr(prop) + '" data-c="' + c + '" min="' + min + '" max="' + max + '" value="' + val + '" style="padding:5px 6px;font-size:10px;"/>' +
+    '</div>';
+
+  // Numeric channels — R/G/B, or H/S/L when the format cycle is on HSL.
+  const channels = colorFormat === 'hsl'
+    ? (() => {
+        const hh = Math.round(h);
+        const sPct = Math.round(s * 100);
+        // HSV {h,s,v} → HSL lightness: l = v * (1 - s/2).
+        const lPct = Math.round(v * (1 - s / 2) * 100);
+        return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px;">' +
+          channel('H', 'data-dm-color-hsl', 'h', String(hh), '0', '360') +
+          channel('S', 'data-dm-color-hsl', 's', String(sPct), '0', '100') +
+          channel('L', 'data-dm-color-hsl', 'l', String(lPct), '0', '100') +
+        '</div>';
+      })()
+    : '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px;">' +
+        channel('R', 'data-dm-color-rgb', 'r', String(r), '0', '255') +
+        channel('G', 'data-dm-color-rgb', 'g', String(g), '0', '255') +
+        channel('B', 'data-dm-color-rgb', 'b', String(b), '0', '255') +
+      '</div>';
+
+  // SV (saturation × value) gradient + hue slider + numeric channels — the
+  // full custom-colour surface.
+  const advancedBlock =
+    '<div data-dm-color-sv="' + escapeAttr(prop) + '" data-dm-color-h="' + h.toFixed(2) + '" style="position:relative;width:100%;height:140px;margin-top:8px;border-radius:5px;background:linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, ' + hueColor + ');cursor:crosshair;user-select:none;touch-action:none;">' +
       '<div style="position:absolute;left:' + svX + '%;top:' + svY + '%;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.5);transform:translate(-50%,-50%);pointer-events:none;"></div>' +
     '</div>' +
     '<div data-dm-color-hue="' + escapeAttr(prop) + '" style="position:relative;width:100%;height:14px;margin-top:8px;border-radius:5px;background:linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);cursor:ew-resize;user-select:none;touch-action:none;">' +
       '<div style="position:absolute;left:' + hueX + '%;top:50%;width:14px;height:18px;background:#fff;border:1px solid rgba(0,0,0,0.4);border-radius:3px;transform:translate(-50%,-50%);pointer-events:none;"></div>' +
     '</div>' +
-    // Format cycle button + eyedropper. The eyedropper uses the EyeDropper
-    // API (Chrome 95+); Firefox has no EyeDropper, so the button is hidden
-    // there (the HSV picker + token list still cover colour entry).
-    '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:10px;">' +
-      (IS_FIREFOX ? '<span></span>' :
-        '<button data-dm-eyedropper="' + escapeAttr(prop) + '" title="Eyedropper — pick a colour from anywhere on screen" style="display:flex;align-items:center;gap:4px;padding:3px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">' +
+    channels;
+
+  return (
+    // Contrast checker — pairs the edited colour against the element's
+    // effective background (or its text colour when the prop is a fill).
+    (compact ? '' : renderContrastRow(prop, value)) +
+    // Essentials row (always visible): live swatch, hex field (focused on
+    // open), eyedropper (Chrome only), and the HEX/RGB/HSL format cycle.
+    '<div style="display:flex;align-items:flex-end;gap:6px;">' +
+      '<span style="width:28px;height:28px;border-radius:5px;flex-shrink:0;background:' + escapeAttr(swatchBg) + ';border:1px solid var(--dm-separator);"></span>' +
+      '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">' +
+        '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Hex</label>' +
+        '<input type="text" class="dm-input" data-dm-color-hex="' + escapeAttr(prop) + '" value="' + escapeAttr(hex.slice(1)) + '" style="padding:5px 6px;font-size:10px;font-family:SF Mono,Monaco,monospace;text-transform:uppercase;"/>' +
+      '</div>' +
+      (IS_FIREFOX ? '' :
+        '<button data-dm-eyedropper="' + escapeAttr(prop) + '" title="Eyedropper — pick a colour from anywhere on screen" style="display:flex;align-items:center;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;">' +
           icon('penTool', 11) +
-          '<span>Pick</span>' +
         '</button>') +
-      '<button data-dm-cycle-color-format style="display:flex;align-items:center;gap:4px;padding:3px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;letter-spacing:0.4px;text-transform:uppercase;" title="Cycle color format">' +
+      '<button data-dm-cycle-color-format style="display:flex;align-items:center;gap:3px;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;letter-spacing:0.4px;text-transform:uppercase;" title="Cycle color format">' +
         '<span>' + (colorFormat === 'hex' ? 'HEX' : colorFormat === 'rgba' ? 'RGB' : 'HSL') + '</span>' +
         icon('chevronsUpDown', 11) +
       '</button>' +
     '</div>' +
-    // When the format cycle is on HSL, swap the R/G/B sub-inputs for H/S/L
-    // so the panel matches the format the user types in. Each H/S/L
-    // input writes back via `data-dm-color-hsl` (handled in the input
-    // listener below).
-    (colorFormat === 'hsl' ? (() => {
-      const hh = Math.round(h);
-      const sPct = Math.round(s * 100);
-      // HSL "L" is from HSL space (different from HSV "V"). Convert.
-      // HSV {h,s,v} → HSL: l = v * (1 - s/2), s_hsl = (v-l) / min(l, 1-l)
-      const lDec = v * (1 - s / 2);
-      const lPct = Math.round(lDec * 100);
-      return '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:6px;margin-top:6px;">' +
-        '<div style="display:flex;flex-direction:column;gap:2px;">' +
-          '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Hex</label>' +
-          '<input type="text" class="dm-input" data-dm-color-hex="' + escapeAttr(prop) + '" value="' + escapeAttr(hex.slice(1)) + '" style="padding:5px 6px;font-size:10px;font-family:SF Mono,Monaco,monospace;text-transform:uppercase;"/>' +
-        '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:2px;">' +
-          '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">H</label>' +
-          '<input type="number" class="dm-input" data-dm-color-hsl="' + escapeAttr(prop) + '" data-c="h" min="0" max="360" value="' + hh + '" style="padding:5px 6px;font-size:10px;"/>' +
-        '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:2px;">' +
-          '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">S</label>' +
-          '<input type="number" class="dm-input" data-dm-color-hsl="' + escapeAttr(prop) + '" data-c="s" min="0" max="100" value="' + sPct + '" style="padding:5px 6px;font-size:10px;"/>' +
-        '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:2px;">' +
-          '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">L</label>' +
-          '<input type="number" class="dm-input" data-dm-color-hsl="' + escapeAttr(prop) + '" data-c="l" min="0" max="100" value="' + lPct + '" style="padding:5px 6px;font-size:10px;"/>' +
-        '</div>' +
-      '</div>';
-    })() :
-    '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:6px;margin-top:6px;">' +
-      '<div style="display:flex;flex-direction:column;gap:2px;">' +
-        '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Hex</label>' +
-        '<input type="text" class="dm-input" data-dm-color-hex="' + escapeAttr(prop) + '" value="' + escapeAttr(hex.slice(1)) + '" style="padding:5px 6px;font-size:10px;font-family:SF Mono,Monaco,monospace;text-transform:uppercase;"/>' +
-      '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:2px;">' +
-        '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">R</label>' +
-        '<input type="number" class="dm-input" data-dm-color-rgb="' + escapeAttr(prop) + '" data-c="r" min="0" max="255" value="' + r + '" style="padding:5px 6px;font-size:10px;"/>' +
-      '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:2px;">' +
-        '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">G</label>' +
-        '<input type="number" class="dm-input" data-dm-color-rgb="' + escapeAttr(prop) + '" data-c="g" min="0" max="255" value="' + g + '" style="padding:5px 6px;font-size:10px;"/>' +
-      '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:2px;">' +
-        '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">B</label>' +
-        '<input type="number" class="dm-input" data-dm-color-rgb="' + escapeAttr(prop) + '" data-c="b" min="0" max="255" value="' + b + '" style="padding:5px 6px;font-size:10px;"/>' +
-      '</div>' +
-    '</div>')
+    // "Custom colour" disclosure — reveals the HSV square + hue + channels.
+    // Compact callers render it inline (no toggle, no token list to fall back on).
+    (compact ? advancedBlock :
+      '<button data-dm-color-advanced="' + escapeAttr(prop) + '" style="display:flex;align-items:center;gap:4px;margin-top:8px;padding:3px 2px;background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">' +
+        icon(advancedOpen ? 'chevronDown' : 'chevronRight', 11) +
+        '<span>Custom colour</span>' +
+      '</button>' +
+      (advancedOpen ? advancedBlock : ''))
   );
 }
 
@@ -3140,7 +3162,7 @@ function popover(items: PopoverItem[]): string {
 }
 
 function detectParentContext(displayInfo: any, s: Record<string, string>): {
-  display: string; isFlex: boolean; isGrid: boolean; isAbs: boolean;
+  display: string; isFlex: boolean; isGrid: boolean; isAbs: boolean; flexDirection: string;
 } {
   const display = (displayInfo?.parentDisplay as string) || '';
   const ownPos = (s.position || '').trim();
@@ -3149,6 +3171,7 @@ function detectParentContext(displayInfo: any, s: Record<string, string>): {
     isFlex: display === 'flex' || display === 'inline-flex',
     isGrid: display === 'grid' || display === 'inline-grid',
     isAbs: ownPos === 'absolute' || ownPos === 'fixed',
+    flexDirection: (displayInfo?.parentFlexDirection as string) || 'row',
   };
 }
 
@@ -4558,7 +4581,7 @@ type OverlayEntry =
       color2: string; color2Opacity: number;
       opacity: number }
   | { id: string; kind: 'texture'; chain: 'overlay'; chainIdx: number; raw: string; visible: boolean;
-      sizeX: number; sizeY: number; radius: number; clipToShape: boolean };
+      sizeX: number; sizeY: number; radius: number; clipToShape: boolean; opacity: number };
 type EffectEntry =
   | { id: string; kind: 'inner-shadow'; chain: 'box'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean }
   | { id: string; kind: 'drop-shadow'; chain: 'box' | 'filter' | 'text'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean; showBehindTransparent: boolean }
@@ -4598,8 +4621,9 @@ function defaultTextureEntry(): OverlayEntry {
     visible: true,
     sizeX: 0.5,
     sizeY: 0.5,
-    radius: 4,
+    radius: 1,
     clipToShape: false,
+    opacity: 40,
   };
 }
 
@@ -5004,7 +5028,10 @@ function renderTextureEntryEditor(entry: Extract<OverlayEntry, { kind: 'texture'
     decField('Size X', 'sizeX', entry.sizeX, '0.1', '0.1', '5'),
     decField('Size Y', 'sizeY', entry.sizeY, '0.1', '0.1', '5'),
   );
-  const radiusRow = grid(1, decField('Radius', 'radius', entry.radius, '1', '0'));
+  const radiusRow = grid(2,
+    decField('Radius', 'radius', entry.radius, '1', '0'),
+    decField('Opacity %', 'opacity', entry.opacity == null ? 40 : entry.opacity, '1', '0', '100'),
+  );
   const clipRow =
     '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--dm-text-secondary);cursor:pointer;">' +
       '<input type="checkbox" data-dm-prop="' + prefix + 'clipToShape"' + (entry.clipToShape ? ' checked' : '') + ' style="margin:0;"/>' +
@@ -10359,6 +10386,7 @@ function setupDelegation() {
       const val = pickColorBtn.dataset.dmPickColor!;
       const prop = pickColorBtn.dataset.dmPickProp!;
       activeColorPickerProp = null;
+      colorAdvancedProp = null;
       tokensDropdownProp = null;
       colorPickerSearch = '';
       applyStyle(prop, val);
@@ -10430,6 +10458,17 @@ function setupDelegation() {
       return;
     }
 
+    // "Custom colour" disclosure inside an open picker — reveals / hides the
+    // HSV square + hue + numeric channels.
+    const colorAdvanced = target.closest<HTMLElement>('[data-dm-color-advanced]');
+    if (colorAdvanced) {
+      e.stopPropagation();
+      const prop = colorAdvanced.dataset.dmColorAdvanced!;
+      colorAdvancedProp = colorAdvancedProp === prop ? null : prop;
+      render();
+      return;
+    }
+
     // Color trigger swatch — toggles the picker. Clicking the same
     // swatch twice closes it (matches the popover's click-outside
     // behaviour so users don't have to aim at empty space).
@@ -10438,12 +10477,14 @@ function setupDelegation() {
       const prop = colorTrigger.dataset.dmColorTrigger!;
       if (activeColorPickerProp === prop) {
         activeColorPickerProp = null;
+        colorAdvancedProp = null;
         tokensDropdownProp = null;
         colorPickerSearch = '';
         render();
         return;
       }
       activeColorPickerProp = prop;
+      colorAdvancedProp = null;
       colorPickerSearch = '';
       render();
       // After the picker re-renders, focus the hex input inside it so the
@@ -10471,6 +10512,7 @@ function setupDelegation() {
     // Click outside any color popover closes it
     if (activeColorPickerProp && !target.closest('[data-dm-color-popover]') && !target.closest('[data-dm-color-trigger]')) {
       activeColorPickerProp = null;
+      colorAdvancedProp = null;
       colorPickerSearch = '';
       contrastSettingsOpen = false;
       render();
@@ -11175,12 +11217,14 @@ function setupDelegation() {
       if (!hidden) { hidden = new Set<string>(); hiddenEffectsByElement.set(id, hidden); }
       const stashKey = id + '::' + target2.id;
       if (hidden.has(target2.id)) {
-        // Restore — read the stashed raw entry and splice back into chain.
+        // Restore — CSS-chain effects splice their stashed raw entry back in;
+        // overlay effects (Noise / Texture) carry their own `visible` flag and
+        // have an empty `raw`, so the stash is falsy and must not gate them.
         const stashed = stashedEffectByKey.get(stashKey);
+        const t2chain2 = (target2 as any).chain;
         hidden.delete(target2.id);
         stashedEffectByKey.delete(stashKey);
-        if (stashed) {
-          const t2chain2 = (target2 as any).chain;
+        if (stashed || t2chain2 === 'overlay') {
           if (t2chain2 === 'box') {
             const entries = parseCssCommaList(cs.boxShadow || '');
             entries.splice(target2.chainIdx, 0, stashed);
@@ -11335,10 +11379,15 @@ function setupDelegation() {
       };
       // Single-effect adds — always APPEND so multi-shadow / multi-filter
       // stacks naturally instead of overwriting an existing effect.
-      // Drop shadow defaults to a non-inset box-shadow (checkbox ON in
-      // the row UI). The user toggles the row's checkbox OFF to switch
-      // to text-shadow (text element) or filter:drop-shadow (others).
-      if (kind === 'drop-shadow') appendBoxShadow('0px 4px 12px 0px rgba(0, 0, 0, 0.12)');
+      // Drop shadow on a text layer seeds a glyph-hugging `text-shadow`
+      // (box-shadow would draw a rectangle around the text box); everything
+      // else gets a non-inset box-shadow. Either way the row's checkbox lets
+      // the user flip chains afterwards.
+      const isTextLayer = info ? classifyTag((info.tagName || '').toLowerCase()) === 'text' : false;
+      if (kind === 'drop-shadow') {
+        if (isTextLayer) applyStyle('textShadow', '0px 2px 4px rgba(0, 0, 0, 0.25)');
+        else appendBoxShadow('0px 4px 12px 0px rgba(0, 0, 0, 0.12)');
+      }
       else if (kind === 'inner-shadow') appendBoxShadow('inset 0px 2px 6px 0px rgba(0, 0, 0, 0.18)');
       else if (kind === 'layer-blur') appendFilter('blur(4px)');
       else if (kind === 'backdrop-blur') appendBackdrop('blur(8px)');
@@ -12049,7 +12098,7 @@ function setupDelegation() {
           }
         } else if (entry.kind === 'texture') {
           if (field === 'clipToShape') (entry as any).clipToShape = cb.type === 'checkbox' ? cb.checked : raw === 'true';
-          else if (field === 'sizeX' || field === 'sizeY' || field === 'radius') {
+          else if (field === 'sizeX' || field === 'sizeY' || field === 'radius' || field === 'opacity') {
             const n = parseFloat(raw);
             (entry as any)[field] = isFinite(n) ? n : 0;
           }
@@ -12760,6 +12809,7 @@ function setupDelegation() {
       if (e.key === 'Escape') {
         e.preventDefault();
         activeColorPickerProp = null;
+        colorAdvancedProp = null;
         colorPickerSearch = '';
         render();
         return;
@@ -12769,6 +12819,7 @@ function setupDelegation() {
         const val = colorTriggerKey.value.trim();
         const prop = colorTriggerKey.dataset.dmColorTrigger!;
         activeColorPickerProp = null;
+        colorAdvancedProp = null;
         colorPickerSearch = '';
         if (val) applyStyle(prop, val); else render();
         return;
