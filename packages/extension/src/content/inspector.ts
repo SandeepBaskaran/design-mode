@@ -254,7 +254,7 @@ function handleClick(e: MouseEvent) {
   // still routes into the toggle/add path.
   if (isMultiSelectActive() && !e.shiftKey) {
     disableMultiSelect();
-    try { chrome.runtime.sendMessage({ type: 'MULTI_SELECT_UPDATE', payload: { ids: [] } }); } catch {}
+    try { browser.runtime.sendMessage({ type: 'MULTI_SELECT_UPDATE', payload: { ids: [] } }); } catch {}
   }
   // Shift-click (or any click while multi-select is already on) builds the
   // measurement selection set. Shift bootstraps the mode and folds in the
