@@ -427,7 +427,7 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 ## Phase 11 — MCP server (local + cloud)
 
 The local server lives in `packages/mcp-local`; the cloud relay in `packages/mcp-cloud` (deployed
-at `https://mcp.designmode.app`). Both expose the **same seven MCP tools**.
+at `https://mcp.designmode.app`). Both expose the **same eight MCP tools**.
 
 ### 11.A — Local mode (`npm start` in `packages/mcp-local`)
 
@@ -553,10 +553,10 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 14.1 | Build clean | `npm run build:website` | No type errors |
-| 14.2 | Landing page | Visit `/` | Header (icon + "Design Mode" + GitHub button + Add to Chrome), divider, hero, then sections: How you use it, Three panels, Other features, Copy as Prompt, MCP, Install, Licensing |
+| 14.2 | Landing page | Visit `/` | Header (icon + "Design Mode" + GitHub button + browser-adaptive install button — "Add to Chrome" / "Add to Firefox"), divider, hero, then sections: How you use it, Three panels, Other features, Copy as Prompt, MCP, Install, Licensing |
 | 14.3 | Demo route | Visit `/demo` | Interactive demo loads with left nav and step targets |
 | 14.4 | MCP route | Visit `/mcp` | MCP setup / docs page |
-| 14.5 | Anchor scroll | Click "Add to Chrome" | Page scrolls to `#install` |
+| 14.5 | Anchor scroll | Click the install button ("Add to Chrome" / "Add to Firefox") | Page scrolls to `#install` |
 | 14.6 | GitHub button | Click GitHub icon | Opens repo in a new tab |
 | 14.7 | Favicon | Hard reload | Browser tab icon is the Design Mode logo (matches `/icon.png`) |
 | 14.8 | 720px column | Inspect at desktop width | Article + footer are both 720px wide and centered |
@@ -605,8 +605,8 @@ everything not listed here must behave exactly as on Chrome.
 After every full pass, tag the run in the project notes:
 
 ```
-v1.6.0 — 2026-MM-DD
-✓ All 14 phases pass (Chrome)
+v2.0.0 — 2026-MM-DD
+✓ All phases pass (Chrome)
 ✓ Phase F parity pass (Firefox)
 ✓ npm run build:extension clean
 ✓ npm run prepublish:check ran without warnings

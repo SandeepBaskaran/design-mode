@@ -37,7 +37,12 @@ outline). The side panel mirrors whatever you have selected.
   outside the 8 handles) to reposition it. The cursor switches to `move`
   the moment you're over the selection; the outline + handles follow the
   cursor, and the Design tab's **X** / **Y** fields tick along. Hold
-  **Shift** to lock motion to the dominant axis. On release the new
+  **Shift** to lock motion to the dominant axis. **Alignment guides**
+  (Slides / Keynote style) appear as you drag: the element's edges and
+  centres snap to its siblings and the parent box, with a solid magenta
+  guide through each match — per-axis, composing with the Shift axis-lock.
+  Hold **Alt** to drag freely without snapping; guides clear on drop
+  (multi-select drags snap as a group). On release the new
   `left`/`top` land in the **Changes** tab as a grouped "Move" entry and
   in the CSS export. Elements that were `position: static` auto-promote
   to `relative` on first drag (so `left`/`top` actually take effect) —
@@ -333,6 +338,12 @@ side panel is open.
 
 ### 2.16 Color picker — design-system tokens
 
+- The picker opens **compact** — a live swatch, a Hex field, the
+  eyedropper (Chrome only — no `EyeDropper` API on Firefox), and the
+  HEX/RGB/HSL format cycle — with the site-colour token list below. The
+  full HSV square, hue slider, and numeric channels sit behind a **Custom
+  colour** disclosure, collapsed by default, so the panel stays light
+  while every control is one click away.
 - The color picker dropdown lists every `--var` declared on the page,
   grouped (Colors, Backgrounds, Buttons, Borders, etc.) and filtered by
   the kind of element you have selected.
@@ -504,8 +515,10 @@ Every edit you've made grouped by element.
   three full-page overlays are mutually exclusive.
 - **Pop out / Pin on top / Dock back** — window-docking controls sit after
   the Settings icon; the panel runs in three surfaces:
-  - Default: Chrome's native **side panel** (docked to the browser). Its
-    header shows **Pop out** (`external-link` icon).
+  - Default: Chrome's native **side panel** (docked to the browser), or
+    Firefox's native **sidebar**. On Chrome the header shows **Pop out**
+    (`external-link` icon); pop-out and Pin-on-top are **Chrome-only** and
+    are hidden on Firefox (no `sidePanel` / Document-PiP APIs there).
   - **Pop out** opens the same panel as a free-floating window bound to the
     tab it was popped from; size/position are remembered
     (`dm-popout-bounds`). Its header shows **Pin on top**

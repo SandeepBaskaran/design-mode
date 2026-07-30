@@ -151,7 +151,7 @@ design-mode/
 │   ├── mcp-local/    MCP companion + WebSocket bridge (Node.js, TypeScript)
 │   ├── mcp-cloud/    Hosted MCP relay (Node.js + Redis; Vercel is our dev/prod target — anywhere works)
 │   └── shared/       Shared types, message schemas, constants
-├── website/          Marketing site: landing, demo, MCP, features, FAQ, use-cases, comparisons, docs, blog + LLM-SEO infra (Next.js 14)
+├── website/          Marketing site: landing, demo, MCP, features, FAQ, use-cases, comparisons, docs, blog + LLM-SEO infra (Next.js 16)
 ├── docs/             Project docs (e2e-testcases.md)
 ├── icons/            Extension icons (16 / 48 / 128 PNG + chrome.svg)
 ├── scripts/          Repo helpers (pre-publish check)
@@ -182,6 +182,8 @@ Output: `packages/extension/dist/`.
 2. Enable **Developer mode**
 3. **Load unpacked** → select `packages/extension/dist`
 4. Pin **Design Mode** in the toolbar; click it on any page to open the side panel
+
+Firefox: `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** → select `packages/extension/dist/manifest.json`. The same `dist/` serves both browsers; on Firefox the panel opens as the native sidebar (`Alt+D`).
 
 ### 4. (Optional) Run the MCP server
 
@@ -246,7 +248,7 @@ Run `npm start` for the full ASCII banner.
 
 | Shortcut | Action |
 |---|---|
-| `Alt+D` | Toggle the side panel (rebindable at `chrome://extensions/shortcuts`) |
+| `Alt+D` | Toggle the panel (rebindable at `chrome://extensions/shortcuts` on Chrome, `about:addons` → Manage Extension Shortcuts on Firefox) |
 | `Alt+I` | Toggle inspect mode |
 | `Alt+1` / `Alt+2` / `Alt+3` | Jump to Layers / Design / Changes tab |
 | `Alt+C` | Comment on the selected element |
@@ -339,9 +341,9 @@ reminder. The manual checklist covers:
 
 ## Tech stack
 
-- **Extension**: Vite, TypeScript, Chrome Manifest V3 side panel
+- **Extension**: Vite, TypeScript, Manifest V3 (Chrome side panel / Firefox sidebar)
 - **Server**: Node.js, MCP SDK, WebSocket (`ws`), TypeScript
-- **Website**: Next.js 14 (App Router), TypeScript, Sass, Manrope
+- **Website**: Next.js 16 (App Router), TypeScript, Sass, Manrope
 - **Monorepo**: npm workspaces
 
 ## Privacy & security

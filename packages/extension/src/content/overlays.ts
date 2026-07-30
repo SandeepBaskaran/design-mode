@@ -74,7 +74,7 @@ try {
   browser.storage?.local?.get?.([
     'dm-inspector-hover-color', 'dm-inspector-select-color',
     'dm-overlay-margin-color', 'dm-overlay-padding-color',
-  ], (r: any) => {
+  ])?.then((r: any) => {
     if (typeof r?.['dm-inspector-hover-color'] === 'string') {
       hoverHex = r['dm-inspector-hover-color'];
       hoverFillCss = hexToRgba(hoverHex, HOVER_FILL_ALPHA);

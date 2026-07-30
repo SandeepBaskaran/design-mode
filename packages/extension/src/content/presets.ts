@@ -217,12 +217,12 @@ function dedupName(base: string, existing: Preset[]): string {
 }
 
 export async function getCustomPresets(): Promise<Preset[]> {
-  return new Promise((resolve) => {
-    browser.storage.sync.get(PRESETS_STORAGE_KEY, (data) => {
-      const list: Preset[] = Array.isArray(data?.[PRESETS_STORAGE_KEY]) ? data[PRESETS_STORAGE_KEY] : [];
-      resolve(list);
-    });
-  });
+  try {
+    const data = await browser.storage.sync.get(PRESETS_STORAGE_KEY);
+    return Array.isArray(data?.[PRESETS_STORAGE_KEY]) ? data[PRESETS_STORAGE_KEY] : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function saveCustomPreset(
@@ -255,22 +255,17 @@ export async function saveCustomPreset(
     createdAt: Date.now(),
   };
   const next = [...existing, preset];
-  return new Promise((resolve) => {
-    browser.storage.sync.set({ [PRESETS_STORAGE_KEY]: next }, () => {
-      const err = browser.runtime.lastError;
-      if (err) {
-        resolve({ error: /QUOTA/i.test(err.message || '') ? quotaErrorMessage() : (err.message || 'Save failed') });
-        return;
-      }
-      resolve({ preset });
-    });
-  });
+  try {
+    await browser.storage.sync.set({ [PRESETS_STORAGE_KEY]: next });
+    return { preset };
+  } catch (e) {
+    const message = (e as Error)?.message || '';
+    return { error: /QUOTA/i.test(message) ? quotaErrorMessage() : (message || 'Save failed') };
+  }
 }
 
 export async function deleteCustomPreset(id: string): Promise<void> {
   const existing = await getCustomPresets();
   const next = existing.filter(p => p.id !== id);
-  await new Promise<void>((resolve) => {
-    browser.storage.sync.set({ [PRESETS_STORAGE_KEY]: next }, () => resolve());
-  });
+  await browser.storage.sync.set({ [PRESETS_STORAGE_KEY]: next });
 }

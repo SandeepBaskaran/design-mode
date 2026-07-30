@@ -311,6 +311,61 @@ export const posts: BlogPost[] = [
       "design-mode-1-5-0-changelog-deep-dive",
     ],
   },
+  {
+    slug: "design-mode-2-0-0-release",
+    title: "Design Mode 2.0.0 — now on Firefox, with alignment guides and a calmer color picker",
+    metaTitle:
+      "Design Mode 2.0.0 — Firefox support, alignment guides, compact color picker",
+    metaDescription:
+      "Design Mode 2.0.0 brings the extension to Firefox (Gecko MV3) from a single shared build, adds Slides/Keynote-style alignment guides while dragging, and slims the color picker down to a compact solid picker with the full HSV surface behind a disclosure.",
+    keywords: [
+      "Design Mode 2.0.0",
+      "Design Mode Firefox",
+      "Firefox extension for designers",
+      "browser extension for designers",
+      "alignment guides",
+      "Design Mode changelog",
+    ],
+    datePublished: "2026-07-30",
+    excerpt:
+      "The big one: Design Mode now runs on Firefox, from the same single build that already serves Chrome. Plus alignment guides while you drag, and a color picker that stops shouting at you.",
+    body: [
+      {
+        paragraphs: [
+          "Design Mode 2.0.0 is a milestone release — the extension is no longer Chrome-only. It now installs on Firefox too, and it does so without a second codebase or a separate build. Alongside the Firefox launch, dragging an element now snaps to alignment guides the way Slides and Keynote do, and the color picker opens in a much lighter compact form.",
+        ],
+      },
+      {
+        heading: "Firefox, from a single build",
+        paragraphs: [
+          "Design Mode now installs on Firefox 121+ from Firefox Add-ons (AMO), right alongside the Chrome Web Store build. The important part: it ships from one dist/ and one merged manifest.json. There is no separate Firefox build — the same bundle serves both browsers and detects the platform at runtime, so every feature that can work on Firefox stays in lockstep with Chrome instead of drifting behind a fork.",
+          "On Firefox the panel renders as the browser's native sidebar; on Chrome it's the native side panel. Alt+D opens it on both. A few things are genuinely Chrome-only because Firefox has no equivalent API — the pop-out floating window, the always-on-top Picture-in-Picture window, and the screen eyedropper — and those controls are simply hidden on Firefox rather than shown broken.",
+        ],
+      },
+      {
+        heading: "Alignment guides while you drag",
+        paragraphs: [
+          "Drag the body of a selected element and its edges and centres now snap to its siblings and to the parent box, with a solid magenta guide drawn through each match — the same feel as dragging a shape around in Slides or Keynote. Snapping is per-axis and composes with the existing Shift axis-lock, so you can constrain to one direction and still snap along it. Hold Alt to drag freely with snapping off, and the guides clear the moment you drop. Multi-select drags snap as a group.",
+        ],
+      },
+      {
+        heading: "A calmer color picker",
+        paragraphs: [
+          "Clicking a color swatch used to throw the full HSV square, hue slider, and numeric channels at you every time. Now the picker opens compact — a live swatch, a Hex field, the eyedropper (Chrome only), and the HEX/RGB/HSL format cycle, with the site's design-token colors listed below. The full HSV surface is still one click away behind a Custom colour disclosure; it's just collapsed by default so the common case stays quiet.",
+        ],
+      },
+      {
+        heading: "Everything else",
+        paragraphs: [
+          "Undo/redo got more reliable — it no longer injects literal HTML tags into text, and style/resize/move steps replay through the change-tracker so the page and the Changes tab never drift apart. Escape now drops back to hover mode instead of turning inspection off. With a multi-selection active, a plain click collapses the set to the one element you clicked (Shift-click still adds). Resizing past a min/max cap now widens the cap so the element actually moves. Aligning a single flex child works. Drop shadows on text layers hug the glyphs instead of boxing the text. And the texture effect is visible again, with an Opacity control.",
+        ],
+      },
+    ],
+    related: [
+      "design-mode-1-9-0-release",
+      "why-we-built-an-mcp-server-for-design-edits",
+    ],
+  },
 ];
 
 export function getPost(slug: string): BlogPost | undefined {

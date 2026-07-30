@@ -11,15 +11,12 @@ import { setGuidesHiddenForCapture } from './measure-guides';
 import { setPinsHiddenForCapture } from './comments';
 
 export async function captureViewportScreenshot(): Promise<string | null> {
-  return new Promise((resolve) => {
-    try {
-      browser.runtime.sendMessage({ type: 'CAPTURE_VIEWPORT' }, (response) => {
-        resolve(response?.dataUrl || null);
-      });
-    } catch {
-      resolve(null);
-    }
-  });
+  try {
+    const response = await browser.runtime.sendMessage({ type: 'CAPTURE_VIEWPORT' });
+    return response?.dataUrl || null;
+  } catch {
+    return null;
+  }
 }
 
 // Hide every Design Mode overlay (selection / hover outlines, margin & padding

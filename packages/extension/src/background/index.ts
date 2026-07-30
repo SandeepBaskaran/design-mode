@@ -44,6 +44,15 @@ let currentTargetTab: number | null = null;
 // this is a no-op there.
 enableActionOpensPanel();
 
+// Firefox's `action` button has no native open behaviour (only the separate
+// `sidebar_action` button does), so wire its click to open the sidebar —
+// synchronously, inside the user-gesture stack, like the Alt+D command.
+if (IS_FIREFOX) {
+  browser.action.onClicked.addListener(() => {
+    openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
+  });
+}
+
 // storage.session defaults to trusted (extension-page) contexts only; the
 // change-tracker's session persistence runs in content scripts, which count
 // as untrusted. Without this, every persist/load rejects with "Access to
@@ -517,7 +526,9 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'CAPTURE_VIEWPORT') {
-    browser.tabs.captureVisibleTab({ format: 'png' }, (dataUrl) => sendResponse({ dataUrl }));
+    browser.tabs.captureVisibleTab({ format: 'png' })
+      .then((dataUrl) => sendResponse({ dataUrl }))
+      .catch(() => sendResponse({ dataUrl: null }));
     return true;
   }
 

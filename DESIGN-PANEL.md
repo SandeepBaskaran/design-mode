@@ -4,7 +4,7 @@ User-facing reference for every property surfaced in Design Mode's Design tab. F
 
 For implementation status (At parity / Planned / Skipped) and CSS-spec coverage tracking, see **PARITY.md**. This document is for **understanding what each control does**.
 
-Last updated: 2026-05-19 (release 1.2.0).
+Last updated: 2026-07-30 (release 2.0.0).
 
 ---
 
@@ -814,10 +814,10 @@ The colour picker has three entry points, each surfacing the same site-colour to
 
 | Entry point | What opens | When to use |
 |---|---|---|
-| Click the **swatch** (left button) | Full HSV + tokens panel below the row | Pick any colour from the wheel; tokens shown beneath the picker. |
-| Focus the **hex input** | Tokens-only dropdown floating beneath the input | Quick access to site colours without opening the full HSV. Closes when focus leaves. |
+| Click the **swatch** (left button) | Compact solid picker — live swatch, Hex field, eyedropper (Chrome only), and the HEX/RGB/HSL format cycle, with the site-colour token list below. The full HSV square + hue slider + numeric channels sit behind a **Custom colour** disclosure, collapsed by default. | Pick or paste a colour fast; open **Custom colour** when you need the wheel. |
+| Focus the **hex input** | Tokens-only dropdown floating beneath the input | Quick access to site colours without opening Custom colour. Closes when focus leaves. |
 | Type into the **hex input** | (Same input, no popup) — typed value applies on commit | Paste a hex / rgb / hsl / colour-name / `var(--token)` directly. |
-| **Pick** button (inside HSV panel) | Chrome `EyeDropper` system picker | Sample any pixel on screen. Falls back to a friendly alert on Firefox / Safari. |
+| **Eyedropper** button (in the compact picker) | Chrome `EyeDropper` system picker | Sample any pixel on screen. **Hidden on Firefox** — no `EyeDropper` API there. |
 
 ### Token badges (all field types)
 

@@ -8,6 +8,8 @@ Key facts:
 - Surface: Chromium-based browsers (Chrome, Edge, Brave, Arc) via the Manifest V3 side panel, and Firefox (121+) via the native sidebar
 - Design-system tokens: discovers CSS variables beyond :root (theme/component scopes, @media/@supports, cascade layers), recognises IBM Carbon / Material / MUI / Bootstrap / Polaris / Radix / shadcn/ui / Tailwind v4, and badges token-backed fields for scope-aware swap/edit/detach
 - Motion: trigger-first interaction cards (Hover, Press, Focus, Appear, Loop, Scroll) with presets, shared easing curve, and real preview; raw CSS editors under Advanced
+- Alignment & snap guides: dragging an element snaps its edges/centres to siblings and the parent (Slides/Keynote style), magenta guide per match, per-axis, composes with Shift axis-lock, hold Alt to disable, works across multi-select drags
+- Colour picker: opens compact (swatch, Hex field, eyedropper on Chrome, HEX/RGB/HSL cycle, site-colour tokens); full HSV square + numeric channels behind a Custom colour disclosure
 - Protocol: Model Context Protocol (MCP) — three connection modes (Cloud default, Local offline, Self-hosted), configured from a dedicated in-extension MCP page
 - Repo: https://github.com/SandeepBaskaran/design-mode
 - Site: https://designmode.app
@@ -71,6 +73,7 @@ Key facts:
 - [Design Mode 1.5.0 changelog deep-dive](https://designmode.app/blog/design-mode-1-5-0-changelog-deep-dive)
 - [Redesigning a Tailwind landing page with Claude Code](https://designmode.app/blog/redesigning-a-tailwind-landing-page-with-claude-code)
 - [Design Mode 1.9.0 — design tokens, trigger-first motion, and a dedicated MCP page](https://designmode.app/blog/design-mode-1-9-0-release)
+- [Design Mode 2.0.0 — now on Firefox, with alignment guides and a calmer color picker](https://designmode.app/blog/design-mode-2-0-0-release)
 
 ## Privacy & contact
 

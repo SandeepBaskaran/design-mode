@@ -4,7 +4,7 @@ User-facing reference for everything in the Changes tab. Each control + each ent
 
 For implementation status see PARITY.md (where applicable). This document is for **understanding what each thing in the Changes tab does**.
 
-Last updated: 2026-05-11.
+Last updated: 2026-07-30.
 
 ---
 

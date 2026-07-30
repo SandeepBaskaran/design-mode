@@ -642,7 +642,7 @@ export const comparisons: Comparison[] = [
       "Design Mode vs VisBug",
       "VisBug alternative",
       "live page editor",
-      "Chrome design extension",
+      "browser design extension",
     ],
     oneLiner:
       "VisBug edits the live page but has no agent / MCP handoff and no session persistence.",

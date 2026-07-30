@@ -5,12 +5,12 @@ activity, page contents, or edits to any server controlled by us.
 
 ## What the extension stores, and where
 
-All extension data lives on **your machine**, in Chrome's extension storage.
+All extension data lives on **your machine**, in the browser's extension storage.
 
 | Storage area              | What's there                                                                        | Lifetime                       |
 | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ |
 | `chrome.storage.local`    | UI preferences: `dm-theme`, `dm-color-format`, `dm-capture-mode`, active Tokens-panel tab (`dm-tokens-tab`), inspector overlay colours (`dm-inspector-hover-color`, `dm-inspector-select-color`, `dm-overlay-margin-color`, `dm-overlay-padding-color`), contrast-checker settings (`dm-a11y-category`, `dm-a11y-level`), nudge-amount (`dm-nudge-amount`), page-cursor toggle (`dm-custom-cursor`), pop-out window bounds (`dm-popout-bounds`), pinned PiP window size + support flag (`dm-pip-size`, `dm-pip-unsupported`) | Until you uninstall the ext.   |
-| `chrome.storage.sync`     | User-saved presets you opt to sync across devices                                   | Synced via your Chrome account |
+| `chrome.storage.sync`     | User-saved presets you opt to sync across devices                                   | Synced via your browser's sync account (Chrome Sync / Firefox Sync) |
 | `chrome.storage.session`  | Per-page edit sessions (style/text/DOM changes), keyed by `origin + path + search`  | Until tab/browser closes       |
 
 The extension never reads form contents, passwords, or page-script data.
@@ -73,7 +73,7 @@ The extension requests:
   re-attach after navigations/reloads.
 - `scripting` — inject the inspector script when you open the panel.
 - `storage` — see the storage table above.
-- `sidePanel` — render the editor in Chrome's side panel.
+- `sidePanel` (Chrome) / `sidebar_action` (Firefox) — render the editor in the browser's side panel / sidebar.
 - `<all_urls>` — so the editor works on any site you choose to inspect.
   The extension does nothing until you open the panel on a tab.
 

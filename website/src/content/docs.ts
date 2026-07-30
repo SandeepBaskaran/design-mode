@@ -114,7 +114,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Opening the side panel",
-        body: "Alt+D is a separate, browser-level shortcut — it's registered as a Chrome extension command, not handled by the page, and it's the only one of the 14 you can rebind. Change it at chrome://extensions/shortcuts (Chrome allows up to 4 extension shortcuts; Design Mode registers 1). None of the 13 in-page shortcuts above can be remapped from Settings — that list is read-only.",
+        body: "Alt+D is a separate, browser-level shortcut — it opens the panel on both Chrome and Firefox (the side panel on Chrome, the sidebar on Firefox), it's not handled by the page, and it's the only one of the 14 you can rebind. Change it at chrome://extensions/shortcuts on Chrome, or about:addons › Manage Extension Shortcuts on Firefox. None of the 13 in-page shortcuts above can be remapped from Settings — that list is read-only.",
       },
     ],
     related: ["install", "changes-tab", "mcp-setup"],

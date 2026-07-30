@@ -674,11 +674,16 @@ let pipChannel: BroadcastChannel | null = null;
 let pipUnsupported = false;
 let pipSavedSize: { width: number; height: number } | null = null;
 
-function send(msg: any): Promise<any> {
+async function send(msg: any): Promise<any> {
   const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
     ? { ...msg, targetTabId: myTabId }
     : msg;
-  return new Promise((resolve) => browser.runtime.sendMessage(stamped, (r) => resolve(r || {})));
+  try {
+    const r = await browser.runtime.sendMessage(stamped);
+    return r || {};
+  } catch {
+    return {};
+  }
 }
 
 // file:// URLs have an empty hostname — show the file name instead.
@@ -2896,7 +2901,7 @@ function renderInlineColorPicker(prop: string, value: string, compact = false): 
     // Essentials row (always visible): live swatch, hex field (focused on
     // open), eyedropper (Chrome only), and the HEX/RGB/HSL format cycle.
     '<div style="display:flex;align-items:flex-end;gap:6px;">' +
-      '<span style="width:28px;height:28px;border-radius:5px;flex-shrink:0;background:' + escapeAttr(swatchBg) + ';border:1px solid var(--dm-separator);"></span>' +
+      '<span style="width:28px;height:28px;border-radius:5px;flex-shrink:0;background:' + safeCssColor(swatchBg) + ';border:1px solid var(--dm-separator);"></span>' +
       '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">' +
         '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Hex</label>' +
         '<input type="text" class="dm-input" data-dm-color-hex="' + escapeAttr(prop) + '" value="' + escapeAttr(hex.slice(1)) + '" style="padding:5px 6px;font-size:10px;font-family:SF Mono,Monaco,monospace;text-transform:uppercase;"/>' +
@@ -3009,7 +3014,7 @@ function renderColorPanel(prop: string, value: string, compact = false): string 
           const tokenDisplay = formatTokenForDisplay(tokenVal);
           const isCurrent = tokenVal === value || tokenHex === hex || ('var(' + t.cssVar + ')') === value;
           return '<button data-dm-pick-color="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;border-radius:0;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
-            '<span style="width:14px;height:14px;border-radius:3px;background:' + escapeAttr(tokenVal) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>' +
+            '<span style="width:14px;height:14px;border-radius:3px;background:' + safeCssColor(tokenVal) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>' +
             '<span style="flex:1;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
             '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;">' + escapeAttr(tokenDisplay) + '</span>' +
             '</button>';

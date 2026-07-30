@@ -23,7 +23,8 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   same bundle serves both browsers, detecting the platform at runtime
   (`src/platform/target.ts` → `IS_FIREFOX`) rather than building two
   artifacts. The panel renders as Firefox's native sidebar; `Alt+D`
-  toggles it on both browsers.
+  toggles it on both browsers, and the toolbar button opens it on both
+  (the side panel on Chrome, the sidebar on Firefox).
 
 ### Changed
 
@@ -37,6 +38,9 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - Copy across the extension and website generalised from "Chrome
   extension" to "browser extension"; the website's install CTA, accent
   colour, and navbar now adapt to the visitor's browser.
+- **Dark-theme palette refresh** for crisper contrast — panel background
+  `#2E2E2E → #2C2C2C`, primary text `#DEDEDE → #FFFFFF`, secondary text
+  `#989898 → #BFBFBF`.
 
 ### Fixed
 

@@ -101,10 +101,7 @@ function startPanelHeartbeat() {
     // is null in orphaned content scripts.
     if (!browser.runtime?.id) { disable(); return; }
     try {
-      const r: { open?: boolean } | undefined = await new Promise((resolve) => {
-        try { browser.runtime.sendMessage({ type: 'IS_PANEL_OPEN' }, (resp) => resolve(resp)); }
-        catch { resolve(undefined); }
-      });
+      const r: { open?: boolean } | undefined = await browser.runtime.sendMessage({ type: 'IS_PANEL_OPEN' });
       if (!r || r.open === false) disable();
     } catch {
       // Extension context invalidated or SW gone — definitely no panel.
@@ -409,9 +406,9 @@ function resolveResourceBytes(src: string): number | undefined {
 let selfTabId: number | null = null;
 function refreshSelfTabId() {
   if (!browser.runtime?.id) return;
-  try {
-    browser.runtime.sendMessage({ type: 'GET_MY_TAB_ID' }, (r) => { selfTabId = r?.tabId ?? null; });
-  } catch {}
+  browser.runtime.sendMessage({ type: 'GET_MY_TAB_ID' })
+    .then((r) => { selfTabId = r?.tabId ?? null; })
+    .catch(() => {});
 }
 
 function notifyPanel(type: string, payload?: any) {

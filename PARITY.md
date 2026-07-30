@@ -10,7 +10,7 @@ Each entry is bucketed:
 
 When CSS and Figma diverge, the section calls it out.
 
-Last updated: 2026-05-14 (release 1.1.0).
+Last updated: 2026-07-30 (release 2.0.0).
 
 Release 1.1.0 highlights: **In-panel Help view** added (Report an
 issue + Copy diagnostics), **Alt+1/2/3 tab shortcuts** wired,
@@ -346,8 +346,8 @@ Layered list:
 | Drag-to-reorder | HTML5 drag-and-drop on the row itself. Solid is anchored to the bottom. |
 | Per-fill visibility (eye) | In-memory `Map<elementId, FillLayer[]>` so a hidden layer keeps its raw CSS until the user toggles it back on. |
 | + Add fill (inline menu) | 5 type pills below the trigger: Solid / Linear / Radial / **Conic** / Image. No popover (the previous absolute-positioned popover was unanchored — fixed). |
-| Eyedropper | Chrome `EyeDropper` API. Opens the system colour picker; on unsupported browsers a tooltip explains the requirement. |
-| Site-colour tokens dropdown on hex input | Focusing any colour-input's hex field opens a tokens-only dropdown beneath it (no HSV picker). Click a token to apply. The full HSV+tokens panel still opens when the swatch is clicked — this is the lightweight shortcut. |
+| Eyedropper | Chrome `EyeDropper` API — opens the system colour picker. **Hidden on Firefox** (no `EyeDropper` API); on Chromium older than 95 an alert explains the requirement. |
+| Site-colour tokens dropdown on hex input | Focusing any colour-input's hex field opens a tokens-only dropdown beneath it (no HSV picker). Click a token to apply. Clicking the swatch opens the **compact solid picker** (full HSV behind a **Custom colour** disclosure) — the hex-focus dropdown is the even-lighter shortcut. |
 | Image fit mode segmented (Fill / Fit / Crop / Tile) | 4-button row above an image layer's Size + Repeat selects. Each writes a {size, repeat} pair atomically (Fill = `cover` + `no-repeat`; Fit = `contain` + `no-repeat`; Crop = `100% 100%` + `no-repeat`; Tile = `auto` + `repeat`). |
 | 9-cell position pad | 3×3 visual grid replacing the position keyword select. Each cell writes one of nine `X% Y%` pairs to the layer's `background-position` slot; the active cell is highlighted from the parsed current position. |
 

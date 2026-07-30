@@ -55,12 +55,12 @@ The side panel has three rows.
 
 **Row 2 — Three middle panels.**
 - *Layers* — full DOM tree, searchable, multi-select, drag-to-reorder, visibility toggle per row. Long names wrap instead of scrolling horizontally.
-- *Design* — nine Figma-aligned sections (Typography, Position, Layout, Size & spacing, Border, Appearance, Effects, Motion, Variants). Real controls — sliders, colour pickers, segmented buttons. Not a textarea of CSS. Motion leads with trigger-first interaction cards (Hover, Press, Focus, Appear, Loop, Scroll) — presets, a shared easing curve, a plain-English summary, and a real preview; raw per-property editors moved under Motion → Advanced. Any field bound to a design-system token shows a ◆ badge for Swap token… / Edit token globally / Detach.
+- *Design* — nine Figma-aligned sections (Typography, Position, Layout, Size & spacing, Border, Appearance, Effects, Motion, Variants). Real controls — sliders, colour pickers, segmented buttons. Colour fields open a compact solid picker by default (swatch, Hex, eyedropper, HEX/RGB/HSL cycle, site-colour tokens), with the full HSV square + numeric channels behind a Custom colour disclosure. Not a textarea of CSS. Motion leads with trigger-first interaction cards (Hover, Press, Focus, Appear, Loop, Scroll) — presets, a shared easing curve, a plain-English summary, and a real preview; raw per-property editors moved under Motion → Advanced. Any field bound to a design-system token shows a ◆ badge for Swap token… / Edit token globally / Detach.
 - *Changes* — every style, text, DOM, and comment edit in reverse chronological order. Group by selector, filter by kind, search by value, resolve or revert anything. Export / import as JSON.
 
 **Row 3 — Handoff.** Copy Prompt → clipboard. Send to Agent → MCP push (only enables when an agent is actually attached).
 
-**Canvas overlays.** Hover shows pixel spacing to nearest elements. Eight resize handles per selection. Comment pins with numbered badges. Margin/padding overlay bands. WCAG contrast checker on the colour picker. Layout guides (grid, columns, baselines).
+**Canvas overlays.** Hover shows pixel spacing to nearest elements. Eight resize handles per selection. Comment pins with numbered badges. Margin/padding overlay bands. Move-time alignment & snap guides — dragging snaps edges/centres to siblings and the parent (magenta guide per match, per-axis, Shift-aware, hold Alt to disable, multi-select group). WCAG contrast checker on the colour picker. Layout guides (grid, columns, baselines).
 
 ---
 

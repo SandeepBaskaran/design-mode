@@ -51,6 +51,7 @@ const blogSlugs = [
   "design-mode-1-5-0-changelog-deep-dive",
   "redesigning-a-tailwind-landing-page-with-claude-code",
   "design-mode-1-9-0-release",
+  "design-mode-2-0-0-release",
 ];
 
 const now = new Date();

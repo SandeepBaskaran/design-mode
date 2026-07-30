@@ -16,7 +16,7 @@ export const metadata = {
     "try visual editor for websites",
     "live design tool demo",
     "in-browser design surface",
-    "Chrome extension demo",
+    "browser extension demo",
   ],
   alternates: { canonical: "https://designmode.app/demo" },
   openGraph: {

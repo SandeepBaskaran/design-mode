@@ -43,7 +43,7 @@ export const metadata = {
     "visual CSS editor",
     "DOM tree editor",
     "in-browser design tool",
-    "Chrome extension for designers",
+    "browser extension for designers",
     "Copy Prompt",
     "Send to Agent",
   ],

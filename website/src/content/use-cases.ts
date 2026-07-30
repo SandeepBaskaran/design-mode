@@ -111,7 +111,7 @@ export const useCases: UseCase[] = [
       "in-browser website editor",
       "live website design tool",
       "edit any website CSS",
-      "Chrome extension for designers",
+      "browser extension for designers",
     ],
     intro:
       "Most design tools want you to start in a file. Design Mode lets you start on the actual page — your site, a competitor's, an open-source landing page, anything on the open web — and redesign it visually in your browser.",
