@@ -6,6 +6,35 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-07-30
+
+### Added
+
+- **Firefox support (Gecko MV3).** Design Mode now installs on Firefox
+  121+ from Firefox Add-ons (AMO) alongside the Chrome Web Store build.
+  It ships from a **single `dist/` and one merged `manifest.json`** — the
+  same bundle serves both browsers, detecting the platform at runtime
+  (`src/platform/target.ts` → `IS_FIREFOX`) rather than building two
+  artifacts. The panel renders as Firefox's native sidebar; `Alt+D`
+  toggles it on both browsers.
+
+### Changed
+
+- Copy across the extension and website generalised from "Chrome
+  extension" to "browser extension"; the website's install CTA, accent
+  colour, and navbar now adapt to the visitor's browser.
+
+### Internal
+
+- New `src/platform` layer (webextension-polyfill so `browser.*` returns
+  promises on both browsers, `IS_FIREFOX` flag, side-panel/sidebar open
+  adapter). Pop-out, Picture-in-Picture, and the screen eyedropper are
+  Chrome-only and hidden on Firefox (no equivalent APIs).
+- Build, packaging, and CI are dual-browser: `package:extension:all`
+  writes both `design-mode-extension.zip` (CWS) and `design-mode-addon.zip`
+  (AMO) from identical content; `prepublish-check` asserts both browsers'
+  manifest keys and runs `web-ext lint`.
+
 ## [1.9.0] — 2026-07-19
 
 ### Added
