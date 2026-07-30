@@ -172,6 +172,7 @@ interface TextureOverlay {
   kind: 'texture';
   visible?: boolean;
   sizeX: number; sizeY: number; radius: number; clipToShape: boolean;
+  opacity?: number;
 }
 type OverlayEntry = NoiseOverlay | TextureOverlay;
 
@@ -244,13 +245,14 @@ function buildTextureDataUri(entry: TextureOverlay): string {
   const sizeX = Math.max(0.1, Math.min(5, entry.sizeX || 0.5));
   const sizeY = Math.max(0.1, Math.min(5, entry.sizeY || 0.5));
   const radius = Math.max(0, Math.min(20, entry.radius || 0));
+  const alpha = (Math.max(0, Math.min(100, entry.opacity == null ? 40 : entry.opacity)) / 100).toFixed(3);
   const baseFreqX = (0.04 / sizeX).toFixed(3);
   const baseFreqY = (0.04 / sizeY).toFixed(3);
   const tile = 256;
   const filterBody =
     `<feTurbulence type='turbulence' baseFrequency='${baseFreqX} ${baseFreqY}' numOctaves='3' stitchTiles='stitch'/>` +
     (radius > 0 ? `<feGaussianBlur stdDeviation='${radius.toFixed(2)}'/>` : '') +
-    `<feColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.35 0'/>`;
+    `<feColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 ${alpha} 0'/>`;
   const svg =
     `<svg xmlns='http://www.w3.org/2000/svg' width='${tile}' height='${tile}'>` +
       `<filter id='t'>${filterBody}</filter>` +
@@ -732,6 +734,20 @@ export function computeCompanions(
     property === 'textDecorationThickness' || property === 'text-decoration-thickness'
   ) {
     if (get('text-decoration-line') === 'none') out.push({ property: 'text-decoration-line', value: 'underline' });
+  }
+  // A width/height set in px is silently clamped by an opposing numeric
+  // min/max cap — so a resize-drag (or typed dimension) past the cap doesn't
+  // visibly move. Widen the cap to the requested size so it renders (auto /
+  // none caps impose no bound, so they're left alone).
+  if (property === 'width' || property === 'height') {
+    if (/px$/.test(v)) {
+      const px = asPxNumber(v);
+      const maxProp = `max-${property}`, minProp = `min-${property}`;
+      const maxPx = asPxNumber(get(maxProp));
+      if (maxPx > 0 && px > maxPx) out.push({ property: maxProp, value: v });
+      const minPx = asPxNumber(get(minProp));
+      if (minPx > 0 && px < minPx) out.push({ property: minProp, value: v });
+    }
   }
   return out;
 }

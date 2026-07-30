@@ -1481,33 +1481,56 @@ function applyStrokeProperty(prop: string, value: string) {
 }
 
 // Pragmatic mapping for Figma's Position-section alignment buttons.
-// Flex/grid parents → align-self / justify-self.
-// Block parent      → margin-left/right auto for horizontal centering.
-// Absolute/fixed    → top/left + translate shortcuts on the element itself.
-function applyPositionAlign(which: string, ctx: { isFlex: boolean; isGrid: boolean; isAbs: boolean }) {
-  const isFlexLike = ctx.isFlex || ctx.isGrid;
-  if (which === 'h-left') {
-    if (isFlexLike) applyStyle('justifySelf', 'start');
-    else if (ctx.isAbs) { applyStyle('left', '0px'); applyStyle('right', 'auto'); applyStyle('translate', '0px 0px'); }
-    else { applyStyle('marginLeft', '0px'); applyStyle('marginRight', 'auto'); }
-  } else if (which === 'h-center') {
-    if (isFlexLike) applyStyle('justifySelf', 'center');
-    else if (ctx.isAbs) { applyStyle('left', '50%'); applyStyle('right', 'auto'); applyStyle('translate', '-50% 0px'); }
-    else { applyStyle('marginLeft', 'auto'); applyStyle('marginRight', 'auto'); }
-  } else if (which === 'h-right') {
-    if (isFlexLike) applyStyle('justifySelf', 'end');
-    else if (ctx.isAbs) { applyStyle('left', 'auto'); applyStyle('right', '0px'); applyStyle('translate', '0px 0px'); }
-    else { applyStyle('marginLeft', 'auto'); applyStyle('marginRight', '0px'); }
-  } else if (which === 'v-top') {
-    if (isFlexLike) applyStyle('alignSelf', 'start');
-    else if (ctx.isAbs) { applyStyle('top', '0px'); applyStyle('bottom', 'auto'); }
-  } else if (which === 'v-middle') {
-    if (isFlexLike) applyStyle('alignSelf', 'center');
-    else if (ctx.isAbs) { applyStyle('top', '50%'); applyStyle('bottom', 'auto'); applyStyle('translate', '-50% -50%'); }
-  } else if (which === 'v-bottom') {
-    if (isFlexLike) applyStyle('alignSelf', 'end');
-    else if (ctx.isAbs) { applyStyle('top', 'auto'); applyStyle('bottom', '0px'); }
+// Grid parent   → justify-self / align-self (grid items honour both).
+// Flex parent   → auto-margins on the MAIN axis (justify-self is inert on
+//                 flex items), align-self on the CROSS axis; which axis is
+//                 which flips with flex-direction.
+// Block parent  → margin-left/right auto for horizontal centering.
+// Absolute/fixed → top/left + translate shortcuts on the element itself.
+function applyPositionAlign(
+  which: string,
+  ctx: { isFlex: boolean; isGrid: boolean; isAbs: boolean; flexDirection?: string },
+) {
+  const isColumn = /column/.test(ctx.flexDirection || 'row');
+  // Auto-margin recipe pushing a single item to start / center / end along one
+  // axis. `a`/`b` are the two margin sides for that axis.
+  const marginAlign = (a: string, b: string, pos: 'start' | 'center' | 'end') => {
+    applyStyle(a, pos === 'start' ? '0px' : 'auto');
+    applyStyle(b, pos === 'end' ? '0px' : 'auto');
+  };
+  const horiz = which.startsWith('h-');
+  const pos: 'start' | 'center' | 'end' =
+    which.endsWith('-center') || which.endsWith('-middle') ? 'center'
+      : which.endsWith('-left') || which.endsWith('-top') ? 'start' : 'end';
+
+  if (ctx.isGrid) {
+    applyStyle(horiz ? 'justifySelf' : 'alignSelf', pos);
+    return;
   }
+  if (ctx.isFlex) {
+    // Horizontal is the main axis for a row, the cross axis for a column.
+    const horizIsMain = !isColumn;
+    if (horiz === horizIsMain) {
+      // Main axis → auto-margins.
+      if (horiz) marginAlign('marginLeft', 'marginRight', pos);
+      else marginAlign('marginTop', 'marginBottom', pos);
+    } else {
+      applyStyle('alignSelf', pos === 'start' ? 'flex-start' : pos === 'end' ? 'flex-end' : 'center');
+    }
+    return;
+  }
+  if (ctx.isAbs) {
+    if (which === 'h-left') { applyStyle('left', '0px'); applyStyle('right', 'auto'); applyStyle('translate', '0px 0px'); }
+    else if (which === 'h-center') { applyStyle('left', '50%'); applyStyle('right', 'auto'); applyStyle('translate', '-50% 0px'); }
+    else if (which === 'h-right') { applyStyle('left', 'auto'); applyStyle('right', '0px'); applyStyle('translate', '0px 0px'); }
+    else if (which === 'v-top') { applyStyle('top', '0px'); applyStyle('bottom', 'auto'); }
+    else if (which === 'v-middle') { applyStyle('top', '50%'); applyStyle('bottom', 'auto'); applyStyle('translate', '-50% -50%'); }
+    else if (which === 'v-bottom') { applyStyle('top', 'auto'); applyStyle('bottom', '0px'); }
+    return;
+  }
+  // Plain block parent — horizontal centering via auto-margins (vertical has
+  // no block-flow equivalent, so it's a no-op, matching prior behaviour).
+  if (horiz) marginAlign('marginLeft', 'marginRight', pos);
 }
 
 // Pragmatic CSS mapping for Figma's Stroke position selector. Single
@@ -3140,7 +3163,7 @@ function popover(items: PopoverItem[]): string {
 }
 
 function detectParentContext(displayInfo: any, s: Record<string, string>): {
-  display: string; isFlex: boolean; isGrid: boolean; isAbs: boolean;
+  display: string; isFlex: boolean; isGrid: boolean; isAbs: boolean; flexDirection: string;
 } {
   const display = (displayInfo?.parentDisplay as string) || '';
   const ownPos = (s.position || '').trim();
@@ -3149,6 +3172,7 @@ function detectParentContext(displayInfo: any, s: Record<string, string>): {
     isFlex: display === 'flex' || display === 'inline-flex',
     isGrid: display === 'grid' || display === 'inline-grid',
     isAbs: ownPos === 'absolute' || ownPos === 'fixed',
+    flexDirection: (displayInfo?.parentFlexDirection as string) || 'row',
   };
 }
 
@@ -4558,7 +4582,7 @@ type OverlayEntry =
       color2: string; color2Opacity: number;
       opacity: number }
   | { id: string; kind: 'texture'; chain: 'overlay'; chainIdx: number; raw: string; visible: boolean;
-      sizeX: number; sizeY: number; radius: number; clipToShape: boolean };
+      sizeX: number; sizeY: number; radius: number; clipToShape: boolean; opacity: number };
 type EffectEntry =
   | { id: string; kind: 'inner-shadow'; chain: 'box'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean }
   | { id: string; kind: 'drop-shadow'; chain: 'box' | 'filter' | 'text'; chainIdx: number; raw: string; shadow: ShadowParts; visible: boolean; showBehindTransparent: boolean }
@@ -4598,8 +4622,9 @@ function defaultTextureEntry(): OverlayEntry {
     visible: true,
     sizeX: 0.5,
     sizeY: 0.5,
-    radius: 4,
+    radius: 1,
     clipToShape: false,
+    opacity: 40,
   };
 }
 
@@ -5004,7 +5029,10 @@ function renderTextureEntryEditor(entry: Extract<OverlayEntry, { kind: 'texture'
     decField('Size X', 'sizeX', entry.sizeX, '0.1', '0.1', '5'),
     decField('Size Y', 'sizeY', entry.sizeY, '0.1', '0.1', '5'),
   );
-  const radiusRow = grid(1, decField('Radius', 'radius', entry.radius, '1', '0'));
+  const radiusRow = grid(2,
+    decField('Radius', 'radius', entry.radius, '1', '0'),
+    decField('Opacity %', 'opacity', entry.opacity == null ? 40 : entry.opacity, '1', '0', '100'),
+  );
   const clipRow =
     '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:11px;color:var(--dm-text-secondary);cursor:pointer;">' +
       '<input type="checkbox" data-dm-prop="' + prefix + 'clipToShape"' + (entry.clipToShape ? ' checked' : '') + ' style="margin:0;"/>' +
@@ -11175,12 +11203,14 @@ function setupDelegation() {
       if (!hidden) { hidden = new Set<string>(); hiddenEffectsByElement.set(id, hidden); }
       const stashKey = id + '::' + target2.id;
       if (hidden.has(target2.id)) {
-        // Restore — read the stashed raw entry and splice back into chain.
+        // Restore — CSS-chain effects splice their stashed raw entry back in;
+        // overlay effects (Noise / Texture) carry their own `visible` flag and
+        // have an empty `raw`, so the stash is falsy and must not gate them.
         const stashed = stashedEffectByKey.get(stashKey);
+        const t2chain2 = (target2 as any).chain;
         hidden.delete(target2.id);
         stashedEffectByKey.delete(stashKey);
-        if (stashed) {
-          const t2chain2 = (target2 as any).chain;
+        if (stashed || t2chain2 === 'overlay') {
           if (t2chain2 === 'box') {
             const entries = parseCssCommaList(cs.boxShadow || '');
             entries.splice(target2.chainIdx, 0, stashed);
@@ -11335,10 +11365,15 @@ function setupDelegation() {
       };
       // Single-effect adds — always APPEND so multi-shadow / multi-filter
       // stacks naturally instead of overwriting an existing effect.
-      // Drop shadow defaults to a non-inset box-shadow (checkbox ON in
-      // the row UI). The user toggles the row's checkbox OFF to switch
-      // to text-shadow (text element) or filter:drop-shadow (others).
-      if (kind === 'drop-shadow') appendBoxShadow('0px 4px 12px 0px rgba(0, 0, 0, 0.12)');
+      // Drop shadow on a text layer seeds a glyph-hugging `text-shadow`
+      // (box-shadow would draw a rectangle around the text box); everything
+      // else gets a non-inset box-shadow. Either way the row's checkbox lets
+      // the user flip chains afterwards.
+      const isTextLayer = info ? classifyTag((info.tagName || '').toLowerCase()) === 'text' : false;
+      if (kind === 'drop-shadow') {
+        if (isTextLayer) applyStyle('textShadow', '0px 2px 4px rgba(0, 0, 0, 0.25)');
+        else appendBoxShadow('0px 4px 12px 0px rgba(0, 0, 0, 0.12)');
+      }
       else if (kind === 'inner-shadow') appendBoxShadow('inset 0px 2px 6px 0px rgba(0, 0, 0, 0.18)');
       else if (kind === 'layer-blur') appendFilter('blur(4px)');
       else if (kind === 'backdrop-blur') appendBackdrop('blur(8px)');
@@ -12049,7 +12084,7 @@ function setupDelegation() {
           }
         } else if (entry.kind === 'texture') {
           if (field === 'clipToShape') (entry as any).clipToShape = cb.type === 'checkbox' ? cb.checked : raw === 'true';
-          else if (field === 'sizeX' || field === 'sizeY' || field === 'radius') {
+          else if (field === 'sizeX' || field === 'sizeY' || field === 'radius' || field === 'opacity') {
             const n = parseFloat(raw);
             (entry as any)[field] = isFinite(n) ? n : 0;
           }

@@ -53,6 +53,31 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - **Multi-select: plain click collapses the set (Figma parity).** With a
   multi-selection active, a plain (no-Shift) click now clears the whole set and
   selects only the clicked element; Shift-click still adds/toggles.
+- **Resize past a min/max cap now moves the cap.** Dragging a resize handle
+  (or typing a width/height) beyond a numeric `max-width`/`max-height` — or
+  below a numeric `min-width`/`min-height` — was silently clamped, so the
+  element wouldn't visibly change size. The opposing cap is now widened to the
+  requested dimension (and recorded as a companion change), so the resize
+  actually renders. `auto`/`none` caps impose no bound and are left alone.
+- **Position alignment aligns a single flex child correctly.** The Position
+  section's align buttons used `justify-self`, which flex items ignore, so
+  aligning one child inside a flex container did nothing. Alignment now uses
+  auto-margins on the flex main axis and `align-self` on the cross axis, with
+  the axes flipping for `flex-direction: column`. Grid parents keep
+  `justify-self`/`align-self` (grid items honour both).
+- **Drop shadow on a text layer applies to the text, not a box.** Adding a
+  drop shadow to a text element (`p`, `h1`–`h6`, `span`, `a`, `li`, `button`,
+  `label`) now seeds a glyph-hugging `text-shadow` instead of a `box-shadow`
+  rectangle around the text box. Non-text elements still get a `box-shadow`.
+- **Texture / Noise eye toggle un-hides again.** Hiding then re-showing an
+  overlay effect (Noise or Texture) via its row eye left it hidden — the
+  restore path was gated on a stashed CSS string that overlay effects don't
+  use. Overlay visibility now round-trips through the effect's own flag.
+- **Texture effect is actually visible, with an Opacity control.** The Texture
+  overlay defaulted to a heavy blur radius and a fixed low alpha, so the grain
+  barely showed. The default radius is lower and the editor gains an
+  **Opacity %** field (threaded into the grain's alpha) so the texture reads
+  and is tunable.
 
 ### Internal
 
