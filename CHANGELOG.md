@@ -10,6 +10,13 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Alignment guides while dragging (Slides / Keynote style).** Dragging the
+  body of a selected element now snaps its edges and centres to its siblings
+  and the parent box, drawing a solid magenta guide through each match.
+  Snapping is per-axis and composes with the existing Shift axis-lock; hold
+  **Alt** to drag freely without snapping. Candidates are the dragged
+  element's siblings plus the parent container (multi-select drags snap as a
+  group). Guides clear on drop.
 - **Firefox support (Gecko MV3).** Design Mode now installs on Firefox
   121+ from Firefox Add-ons (AMO) alongside the Chrome Web Store build.
   It ships from a **single `dist/` and one merged `manifest.json`** — the

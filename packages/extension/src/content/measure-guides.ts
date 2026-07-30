@@ -12,8 +12,12 @@ import { showSelect, setOverlayTransitions } from './overlays';
 
 const HOVER_COLOR = '#4F9EFF';
 const SELECT_COLOR = '#FF6B35';
+const ALIGN_COLOR = '#FF3D9A';
 const MIN_GAP = 0.5;
 const MIN_SIZE = 8;
+// How close (CSS px) a dragged edge/centre must be to a sibling's edge/centre
+// before it snaps and a guide is drawn.
+const SNAP_THRESHOLD = 6;
 
 // Resize commit is owned by index.ts (it holds the change-tracker import,
 // the undo stack, and the panel-notify path). We just hand it the final
@@ -78,6 +82,7 @@ const DRAG_THRESHOLD_PX = 3;
 let teardown = false;
 
 let axisLayer: HTMLDivElement | null = null;
+let alignLayer: HTMLDivElement | null = null;
 let distanceLayer: HTMLDivElement | null = null;
 let dotsLayer: HTMLDivElement | null = null;
 let resizeDotsForId: string | null = null;
@@ -115,11 +120,96 @@ export function hideAxisGuides() {
   axisLayer?.replaceChildren();
 }
 
+// ── Alignment guides (Slides / Keynote style) ───────────────────────────
+// While the body of a selected element is dragged, its edges and centres
+// snap to the same lines on its siblings (and the parent box), drawing a
+// solid magenta guide through each match. Candidates are captured once at
+// drag start (siblings share a parent → O(siblings), no per-frame DOM walk).
+
+interface AlignCandidate { rect: Rect; xs: [number, number, number]; ys: [number, number, number]; }
+interface AlignGuide { axis: 'x' | 'y'; pos: number; min: number; max: number; }
+
+function candidateFrom(rect: Rect): AlignCandidate {
+  return {
+    rect,
+    xs: [rect.left, (rect.left + rect.right) / 2, rect.right],
+    ys: [rect.top, (rect.top + rect.bottom) / 2, rect.bottom],
+  };
+}
+
+function collectAlignCandidates(anchor: HTMLElement, members: HTMLElement[]): AlignCandidate[] {
+  const parent = anchor.parentElement;
+  if (!parent) return [];
+  const out: AlignCandidate[] = [];
+  const pr = getElementRect(parent);
+  if (pr.width > 0 || pr.height > 0) out.push(candidateFrom(pr));
+  for (const child of Array.from(parent.children) as HTMLElement[]) {
+    if (members.includes(child)) continue;
+    if (child.id && child.id.startsWith('dm-')) continue;
+    const cr = getElementRect(child);
+    if (cr.width <= 0 && cr.height <= 0) continue;
+    out.push(candidateFrom(cr));
+  }
+  return out;
+}
+
+// Smallest signed delta (candidateLine − anchorEdge) within threshold that
+// lands any anchor edge on any candidate line on this axis; null = no snap.
+function bestAxisSnap(anchorLines: number[], candidates: AlignCandidate[], axis: 'xs' | 'ys'): number | null {
+  let best: number | null = null;
+  let bestAbs = SNAP_THRESHOLD + 1;
+  for (const c of candidates) {
+    for (const cl of c[axis]) {
+      for (const a of anchorLines) {
+        const d = cl - a;
+        const ad = Math.abs(d);
+        if (ad <= SNAP_THRESHOLD && ad < bestAbs) { bestAbs = ad; best = d; }
+      }
+    }
+  }
+  return best;
+}
+
+// After snapping, every candidate line coinciding with a dragged edge becomes
+// a guide spanning both rects' extent on the cross axis.
+function collectAlignGuides(snapped: Rect, candidates: AlignCandidate[]): AlignGuide[] {
+  const ax = [snapped.left, (snapped.left + snapped.right) / 2, snapped.right];
+  const ay = [snapped.top, (snapped.top + snapped.bottom) / 2, snapped.bottom];
+  const guides: AlignGuide[] = [];
+  for (const c of candidates) {
+    for (const cl of c.xs) {
+      if (ax.some(a => Math.abs(a - cl) < 0.5)) {
+        guides.push({ axis: 'x', pos: cl, min: Math.min(snapped.top, c.rect.top), max: Math.max(snapped.bottom, c.rect.bottom) });
+      }
+    }
+    for (const cl of c.ys) {
+      if (ay.some(a => Math.abs(a - cl) < 0.5)) {
+        guides.push({ axis: 'y', pos: cl, min: Math.min(snapped.left, c.rect.left), max: Math.max(snapped.right, c.rect.right) });
+      }
+    }
+  }
+  return guides;
+}
+
+function showAlignGuides(guides: AlignGuide[]) {
+  if (teardown) return;
+  alignLayer = ensureLayer(alignLayer, 'dm-align-guides');
+  alignLayer.replaceChildren();
+  for (const g of guides) {
+    if (g.axis === 'x') addLine(alignLayer, g.pos, g.min, g.pos, g.max, ALIGN_COLOR, false);
+    else addLine(alignLayer, g.min, g.pos, g.max, g.pos, ALIGN_COLOR, false);
+  }
+}
+
+function hideAlignGuides() {
+  alignLayer?.replaceChildren();
+}
+
 // Hide the axis / distance / resize-dot layers for a screenshot capture, then
 // restore. `visibility` preserves their contents so they resume unchanged.
 export function setGuidesHiddenForCapture(hidden: boolean) {
   const v = hidden ? 'hidden' : '';
-  for (const layer of [axisLayer, distanceLayer, dotsLayer]) {
+  for (const layer of [axisLayer, alignLayer, distanceLayer, dotsLayer]) {
     if (layer) layer.style.visibility = v;
   }
 }
@@ -421,6 +511,9 @@ function startMove(anchor: HTMLElement, members: HTMLElement[], previewId: strin
   }
   setOverlayTransitions(false);
   const previewState = previewId ? states.find(s => s.id === previewId) : null;
+  // Alignment-guide inputs, captured once while the element is still at rest.
+  const anchorStartRect = getElementRect(anchor);
+  const alignCandidates = collectAlignCandidates(anchor, members);
 
   return {
     onMove(ev: MouseEvent) {
@@ -430,15 +523,37 @@ function startMove(anchor: HTMLElement, members: HTMLElement[], previewId: strin
       if (ev.shiftKey) {
         if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0;
       }
+      // Alignment snapping — snap the dragged anchor's edges/centres to its
+      // siblings and the parent box. Alt frees the drag (no snap); a Shift
+      // axis-lock already zeroed one axis, so only the free axis snaps.
+      let guides: AlignGuide[] = [];
+      if (!ev.altKey && alignCandidates.length) {
+        const freeX = !(ev.shiftKey && dx === 0);
+        const freeY = !(ev.shiftKey && dy === 0);
+        const cx = (anchorStartRect.left + anchorStartRect.right) / 2;
+        const cy = (anchorStartRect.top + anchorStartRect.bottom) / 2;
+        if (freeX) {
+          const s = bestAxisSnap([anchorStartRect.left + dx, cx + dx, anchorStartRect.right + dx], alignCandidates, 'xs');
+          if (s != null) dx += s;
+        }
+        if (freeY) {
+          const s = bestAxisSnap([anchorStartRect.top + dy, cy + dy, anchorStartRect.bottom + dy], alignCandidates, 'ys');
+          if (s != null) dy += s;
+        }
+        guides = collectAlignGuides({
+          left: anchorStartRect.left + dx, right: anchorStartRect.right + dx,
+          top: anchorStartRect.top + dy, bottom: anchorStartRect.bottom + dy,
+          width: anchorStartRect.width, height: anchorStartRect.height,
+        }, alignCandidates);
+      }
       for (const s of states) {
         // !important so the live drag overrides any existing tracked left/top
         // rule (the change-tracker writes !important too).
         s.el.style.setProperty('left', (s.baseLeft + dx) + 'px', 'important');
         s.el.style.setProperty('top',  (s.baseTop  + dy) + 'px', 'important');
       }
-      const rect = getElementRect(anchor);
       showSelect(anchor);
-      showAxisGuides(rect, 'select');
+      showAlignGuides(guides);
       repositionResizeDots();
       if (previewState && previewState.id) {
         scheduleMovePreview(
@@ -452,6 +567,7 @@ function startMove(anchor: HTMLElement, members: HTMLElement[], previewId: strin
     onUp() {
       setOverlayTransitions(true);
       hideAxisGuides();
+      hideAlignGuides();
       const entries: MoveCommitEntry[] = [];
       for (const s of states) {
         const left = s.el.style.getPropertyValue('left');
@@ -515,8 +631,8 @@ function paintSegments(layer: HTMLDivElement, seg: DistanceSegments) {
 export function teardownMeasureGuides() {
   teardown = true;
   resizeDotsForId = null;
-  [axisLayer, distanceLayer, dotsLayer].forEach(l => l?.remove());
-  axisLayer = distanceLayer = dotsLayer = null;
+  [axisLayer, alignLayer, distanceLayer, dotsLayer].forEach(l => l?.remove());
+  axisLayer = alignLayer = distanceLayer = dotsLayer = null;
 }
 
 export function resetMeasureTeardown() {

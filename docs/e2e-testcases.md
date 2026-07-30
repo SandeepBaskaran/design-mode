@@ -164,7 +164,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 1.17 | Shift-select pairwise distances | Select an element, then Shift+click a second | Both outline (dashed); pairwise distance pills render between them; Shift+click more to extend |
 | 1.18 | Pairwise distances persist on hover/scroll | With ≥2 shift-selected, move the mouse away and scroll | Pairwise pills remain and stay anchored (not cleared by mouse-out) |
 | 1.19 | Move cursor over selection | Select an element, then hover its body (not a handle) | Cursor swaps to `move`; cursor returns to crosshair when hovering any non-selected element |
-| 1.20 | Drag-to-move is live + guided | Select a non-static element, drag its body | Element moves live; orange outline + handles follow the cursor; Design-tab **X** / **Y** fields tick during the drag; orange axis guides show new edges |
+| 1.20 | Drag-to-move is live + guided | Select a non-static element, drag its body | Element moves live; orange outline + handles follow the cursor; Design-tab **X** / **Y** fields tick during the drag; magenta alignment guides appear when edges/centres line up with siblings (see 1.28) |
 | 1.21 | Move persists + exports | Release the drag, open Changes tab + Export CSS | New `left`/`top` appear as a single **Move** group in Changes and in the exported CSS; Cmd/Ctrl+Z reverts both offsets together |
 | 1.22 | Move under-threshold = click | Mousedown on the selected element, release without moving | No drag fires; no Changes entry; selection stays as-is |
 | 1.23 | Shift-axis lock | Drag the selected element with **Shift** held | Motion locks to the dominant axis (purely horizontal or purely vertical) |
@@ -172,6 +172,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 1.25 | Multi-select drag in lockstep | Shift-click two elements, then drag either one | Both elements translate by the same delta; one undo reverts the whole gesture |
 | 1.26 | Move follows scroll | Move an element, then scroll the page | The selection box + handles stay anchored to the element |
 | 1.27 | Margin/padding overlay bands | Hover or select an element with non-zero margin **and** padding | Light-red margin band paints outside the element box; light-green padding band paints between border and content; bands hide when the spacing is all-zero; colours follow Settings → Inspector overlay |
+| 1.28 | Alignment guides + snap on move | Select an element in a container with siblings, drag it so an edge/centre nears a sibling's edge/centre (or the parent's) | A **solid magenta** guide appears through the match and the element **snaps** onto that line; releasing commits the snapped `left`/`top`. Hold **Alt** while dragging → no snap, no guides (free move). Shift-axis-lock still applies (only the free axis snaps). Multi-select drag snaps as a group. Guides clear on drop |
 
 ---
 
