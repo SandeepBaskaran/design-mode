@@ -1633,31 +1633,44 @@ async function selectChild() { const res = await send({ type: 'SP_SELECT_CHILD' 
 async function undoAction() { const res = await send({ type: 'SP_UNDO' }); if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; if (res.info) info = res.info; undoCount = res.undoCount ?? Math.max(0, undoCount - 1); redoCount = res.redoCount ?? redoCount + 1; render(); await refreshDomTree(); await refreshChanges(); }
 async function redoAction() { const res = await send({ type: 'SP_REDO' }); if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; if (res.info) info = res.info; undoCount = res.undoCount ?? undoCount + 1; redoCount = res.redoCount ?? Math.max(0, redoCount - 1); render(); await refreshDomTree(); await refreshChanges(); }
 async function moveLayer(dir: 'up' | 'down') { const res = await send({ type: 'SP_DOM_ACTION', action: 'move-' + dir }); if (res.domChanges) domChanges = res.domChanges; await refreshDomTree(); }
+// Briefly swap an action button's contents to a check + confirmation label,
+// then re-render to restore it — the same transient feedback the screenshot
+// button uses. Restores automatically because render() rebuilds from state.
+function flashActionButton(action: string, html: string, ms = 1200) {
+  const btn = root.querySelector('[data-dm-action="' + action + '"]');
+  if (btn) { btn.innerHTML = html; setTimeout(() => render(), ms); }
+}
+
 async function downloadMedia() {
   if (!mediaInfo) return;
   const m = mediaInfo;
+  let ok = false;
   try {
     if (m.kind === 'svg' && m.markup) {
       const blob = new Blob([m.markup], { type: 'image/svg+xml' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = m.filename || 'icon.svg'; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      return;
+      ok = true;
+    } else {
+      const resp = await fetch(m.src);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = m.filename || (m.kind + '-' + Date.now()); a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      ok = true;
     }
-    const resp = await fetch(m.src);
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = m.filename || (m.kind + '-' + Date.now()); a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (err) {
     console.error('[DM] Media download failed:', err);
     const a = document.createElement('a'); a.href = m.src; a.download = m.filename || ''; a.target = '_blank'; a.click();
   }
+  if (ok) flashActionButton('download-media', icon('check', 11) + ' Downloaded');
 }
 async function copySvgMarkup() {
-  if (mediaInfo?.markup) {
-    try { await navigator.clipboard.writeText(mediaInfo.markup); } catch {}
-  }
+  if (!mediaInfo?.markup) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(mediaInfo.markup); ok = true; } catch {}
+  if (ok) flashActionButton('copy-svg-markup', icon('check', 9) + ' Copied');
 }
 function showCaptureToast(kind: 'success' | 'error', text: string) {
   captureToast = { kind, text };

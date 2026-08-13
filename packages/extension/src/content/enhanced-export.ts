@@ -221,12 +221,21 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     entries.push({ t: earliest, line: `- ${label(ctx)}${sourcePointer(ctx)}: ${decls}` });
   }
 
-  // Text changes
+  // Text changes carry the full authored copy — never truncate, or the agent
+  // receives a clipped string it can't reproduce. Single-line edits stay
+  // inline; multi-line edits keep every line (indented) so paragraph breaks
+  // survive into the prompt.
   for (const c of textChanges) {
     const ctx = ensureCtx(c.elementId, c.selector);
-    const oldSnip = shortenValue(c.oldText, 60);
-    const newSnip = shortenValue(c.newText, 60);
-    entries.push({ t: c.timestamp, line: `- ${label(ctx)}${sourcePointer(ctx)} text: "${oldSnip}" → "${newSnip}"` });
+    const oldText = c.oldText || '';
+    const newText = c.newText || '';
+    const head = `${label(ctx)}${sourcePointer(ctx)}`;
+    if (oldText.includes('\n') || newText.includes('\n')) {
+      const indent = (t: string) => t.split('\n').map(l => '  ' + l).join('\n');
+      entries.push({ t: c.timestamp, line: `- ${head} text changed:\n  from:\n${indent(oldText)}\n  to:\n${indent(newText)}` });
+    } else {
+      entries.push({ t: c.timestamp, line: `- ${head} text: "${oldText}" → "${newText}"` });
+    }
   }
 
   // DOM changes (delete/duplicate/insert/move). Moves surface BOTH ends:

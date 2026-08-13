@@ -252,9 +252,9 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | #   | Test | Steps | Expected |
 |-----|------|-------|----------|
 | 4.1 | Image preview | Select an `<img>` | Media section shows preview thumbnail + dimensions + transferred file size (e.g. `124 KB`) + "Download {filename}" button |
-| 4.2 | Image download | Click Download | Browser downloads the original image with its filename |
+| 4.2 | Image download | Click Download | Browser downloads the original image with its filename; the button briefly shows a check + "Downloaded" (~1.2s) then restores |
 | 4.3 | SVG inline | Select an inline `<svg>` | Media section shows rendered SVG, "Download icon.svg" + "Copy SVG markup" |
-| 4.4 | Copy SVG markup | Click "Copy SVG markup" | SVG `outerHTML` ends up in the clipboard (paste into a text file to verify) |
+| 4.4 | Copy SVG markup | Click "Copy SVG markup" | SVG `outerHTML` ends up in the clipboard (paste into a text file to verify); the button briefly shows a check + "Copied" (~1.2s) then restores |
 | 4.5 | Video element | Select a `<video>` | Embedded `<video>` controls + Download button |
 | 4.6 | Background image | Select a div with `background-image: url(...)` | Media section detects the URL, offers download |
 | 4.7 | Icon library detection | Select a Lucide / Heroicons / Remix icon | Icon section appears showing library + name; if multiple matches in the library, a replace-icon dropdown |
@@ -411,7 +411,7 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 | 10.3 | Copy as Prompt format — header | Make any change → Copy as Prompt | Clipboard opens with `# Visual changes — {{page title}}` then `<{{page url}}>` on the next line (title falls back to `untitled` when the page has none). No boilerplate above the heading |
 | 10.4 | Copy as Prompt format — body | Make 3 style + 1 text + 1 DOM change → Copy as Prompt | Changes sit under a `## Changes` heading, one bullet `- {label}: {detail}` each, ordered chronologically. Only the documented sections appear (`## Tokens changed`, `## Comments`, `## Design tokens used` — each omitted when empty); no code fences, no "How to apply" prose, no framework section |
 | 10.5 | Style grouping per element | Edit two properties on the same `.btn` | Single bullet groups them: `- button.btn: padding 8px → 12px; border-radius 4px → 8px` |
-| 10.6 | Text change format | Edit a heading's text | Bullet reads `- {label} text: "{old}" → "{new}"` (truncated to ~60 chars per side) |
+| 10.6 | Text change format | Edit a heading's text | Bullet reads `- {label} text: "{old}" → "{new}"` with the **full** text, no truncation. A multi-line edit instead renders a `text changed:` block that keeps every line (indented under `from:` / `to:`) |
 | 10.7 | DOM change format | Duplicate / delete / move an element | Bullet reads `- {label} duplicated` (or `deleted` / `moved` / `inserted`) |
 | 10.7a | Move conveys origin → destination + chronology | Edit a style on `.card` → drag it to another parent in Layers → edit another style → Copy as Prompt | Move bullet reads `- {label} moved: {oldParent}[i] → {newParent}[j]`; the pre-move style bullet appears BEFORE the move line and the post-move one AFTER it; ambiguous labels (e.g. `div.card` matching several nodes) carry the full post-move selector in parens; MCP `get_changes` shows the same `origin`/`destination` on the move record and live (post-move) selectors on every change |
 | 10.8 | Comment lines | Add a comment | Bullet reads `- note on {selector}: {text}` |
