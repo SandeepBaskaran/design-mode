@@ -6286,11 +6286,23 @@ function renderCommentCard(): string {
   const tagLabel = regionCommentPending
     ? '<span style="display:inline-flex;align-items:center;gap:3px;">' + icon('squareDashed', 9) + 'region</span>'
     : (info ? '&lt;' + escapeAttr(info.tagName?.toLowerCase() || 'div') + '&gt;' : '');
+  // Region annotations reach the coding agent only over the MCP pipeline —
+  // Copy as Prompt exports them with no usable selector, so without a live
+  // MCP connection they'd go nowhere. Warn only in that exact case (region
+  // composer + no agent connected); element comments export fine, so no
+  // alert for them.
+  const annotationAlert = (regionCommentPending && mcpState !== 'connected')
+    ? '<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px;padding:7px 9px;background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.35);border-radius:6px;font-size:10px;line-height:1.45;color:var(--dm-text-secondary);">' +
+      '<span style="color:#f59e0b;display:flex;flex-shrink:0;margin-top:1px;">' + icon('alertTriangle', 12) + '</span>' +
+      '<span>Annotations are delivered to your coding agent <b>only via MCP</b> — Copy as Prompt won’t include them. Connect MCP, or add an element comment instead.</span>' +
+      '</div>'
+    : '';
   return '<div style="padding:10px 12px;border-bottom:1px solid var(--dm-separator-strong);background:var(--dm-purple-bg);">' +
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
     '<span style="color:var(--dm-purple);display:flex;">' + icon('messageSquare', 14) + '</span>' +
     '<span style="font-size:11px;font-weight:600;color:var(--dm-text);">' + (isEditing ? 'Edit Comment' : 'Add Comment') + '</span>' +
     '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,monospace;">' + tagLabel + '</span></div>' +
+    annotationAlert +
     '<textarea data-dm-comment-input style="width:100%;min-height:60px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:6px;color:var(--dm-text);font-size:11px;padding:8px;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;">' + escapeAttr(commentText) + '</textarea>' +
     '<div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">' +
     '<button data-dm-action="cancel-comment" style="padding:5px 12px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Cancel</button>' +
