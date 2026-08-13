@@ -137,9 +137,14 @@ interface ElementInfo {
   parentGap?: string;
 }
 type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
+// Responsive breakpoint a change was recorded at (page viewport width at
+// record time). Mirrors @design-mode/shared.
+type Breakpoint = 'mobile' | 'tablet' | 'desktop';
+
 interface StyleChange {
   id?: string; elementId: string; selector: string; label?: string;
   property: string; oldValue: string; newValue: string; timestamp?: number;
+  viewportWidth?: number; breakpoint?: Breakpoint;
   // State-variant suffix for Motion interactions (':hover', '@starting', …).
   state?: string;
   // Optional grouping envelope. Multiple StyleChanges sharing a `groupId`
@@ -151,13 +156,14 @@ interface StyleChange {
   groupLabel?: string;
   status?: ChangeStatus;
 }
-interface TextChange { id: string; elementId: string; selector: string; label?: string; oldText: string; newText: string; timestamp?: number; status?: ChangeStatus; }
+interface TextChange { id: string; elementId: string; selector: string; label?: string; oldText: string; newText: string; timestamp?: number; status?: ChangeStatus; viewportWidth?: number; breakpoint?: Breakpoint; }
 interface DomChange {
   id?: string; action: string; tagName: string; selector: string; label?: string;
   elementId?: string; timestamp?: number;
   destination?: { parentSelector: string; index: number };
   origin?: { parentSelector: string; index: number };
   status?: ChangeStatus;
+  viewportWidth?: number; breakpoint?: Breakpoint;
 }
 interface CommentEntry { id: string; elementId: string; text: string; selector: string; timestamp: number; updatedAt?: number; resolved?: boolean; pinOffset?: { x: number; y: number }; region?: { x: number; y: number; w: number; h: number } }
 interface DomNode {
@@ -8599,6 +8605,7 @@ function renderChangesTab(): string {
           checkbox(cid) +
           rowIcon +
           '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' + innerLabel + '</div>' +
+          breakpointBadge(c) +
           changeStatusBadge((c as any).status) +
           '<button data-dm-batch-apply="' + cid + '" title="' + zapTitle + '" style="' + zapStyle + '" aria-label="Batch apply">' + icon('zap', 10) + countBadge + '</button>' +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
@@ -8615,6 +8622,7 @@ function renderChangesTab(): string {
           checkbox(cid) +
           '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;margin-top:2px;">' + icon('type', 10) + '</span>' +
           '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' + inner + '</div>' +
+          breakpointBadge(c) +
           changeStatusBadge((c as any).status) +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else if (item.type === 'dom') {
@@ -8641,7 +8649,7 @@ function renderChangesTab(): string {
           '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' +
           '<div style="font-size:10px;color:' + (colors[c.action] || 'var(--dm-text-muted)') + ';">' + c.action.toUpperCase() + ' &lt;' + c.tagName + '&gt;</div>' +
           origLine + destLine +
-          '</div>' + changeStatusBadge((c as any).status) + '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
+          '</div>' + breakpointBadge(c) + changeStatusBadge((c as any).status) + '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else if (item.type === 'token') {
         const c = item.data;
         const shortOld = escapeAttr((c.original || '').slice(0, 20));
@@ -8851,6 +8859,14 @@ function maskToken(t: string): string {
 
 // Small pill shown on a change row once an agent moves it off 'todo'.
 // 'todo' renders nothing so the default solo-editing view stays clean.
+// Breakpoint pill on a Changes-tab row — only mobile/tablet (desktop is the
+// implicit default). Mirrors the tag in the agent Markdown export.
+function breakpointBadge(c: { breakpoint?: Breakpoint; viewportWidth?: number }): string {
+  if (!c.breakpoint || c.breakpoint === 'desktop') return '';
+  const title = 'Edited at ' + c.breakpoint + (c.viewportWidth ? ' · ' + c.viewportWidth + 'px' : '');
+  return '<span title="' + escapeAttr(title) + '" style="background:var(--dm-bg-active);color:var(--dm-text-muted);font-size:8px;font-weight:700;padding:1px 5px;border-radius:9999px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.3px;">' + escapeAttr(c.breakpoint) + '</span>';
+}
+
 function changeStatusBadge(s?: ChangeStatus): string {
   if (s === 'in_progress') return '<span title="Agent is implementing this" style="background:rgba(245,158,11,0.18);color:#f59e0b;font-size:8px;font-weight:700;padding:1px 5px;border-radius:9999px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.3px;">WIP</span>';
   if (s === 'resolved') return '<span title="Agent marked this done" style="background:rgba(34,197,94,0.18);color:rgb(34,197,94);font-size:8px;font-weight:700;padding:1px 5px;border-radius:9999px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.3px;">DONE</span>';

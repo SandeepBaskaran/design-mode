@@ -15,3 +15,13 @@ export const Z_INDEX = {
   TOOLBAR: 2147483647,
 } as const;
 export const DEFAULT_WS_PORT = 9960;
+
+// Responsive breakpoint tiers, Tailwind-aligned (md=768, lg=1024). Mirrors
+// @design-mode/shared constants for content-script bundling.
+export type Breakpoint = 'mobile' | 'tablet' | 'desktop';
+export const BREAKPOINT_MAX = { mobile: 767, tablet: 1023 } as const;
+export function classifyBreakpoint(width: number): Breakpoint {
+  if (width <= BREAKPOINT_MAX.mobile) return 'mobile';
+  if (width <= BREAKPOINT_MAX.tablet) return 'tablet';
+  return 'desktop';
+}

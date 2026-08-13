@@ -177,6 +177,10 @@ export interface ElementInfo {
 // → done. Absent ⇒ treated as 'todo'.
 export type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
 
+// Responsive breakpoint a change was recorded at (page viewport width at
+// record time), so agents can scope the edit to a media query.
+export type Breakpoint = 'mobile' | 'tablet' | 'desktop';
+
 // --- Style Change ---
 
 export interface StyleChange {
@@ -188,6 +192,10 @@ export interface StyleChange {
   newValue: string;
   timestamp: number;
   status?: ChangeStatus;
+  // Page viewport width + derived breakpoint at record time. Absent on
+  // changes recorded before this shipped.
+  viewportWidth?: number;
+  breakpoint?: Breakpoint;
 }
 
 // --- Text Change ---
@@ -200,6 +208,8 @@ export interface TextChange {
   newText: string;
   timestamp: number;
   status?: ChangeStatus;
+  viewportWidth?: number;
+  breakpoint?: Breakpoint;
 }
 
 // --- Comment ---

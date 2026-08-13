@@ -333,6 +333,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 7.25  | Batch apply — fill | Click the zap | Icon becomes filled accent; the same change applies to every matching element on the page |
 | 7.26  | Batch unflag | Click zap again | Icon returns to outline (does NOT un-apply the changes — that's the trash button's job) |
 | 7.27  | Tab badge count | Make 5 changes | "Changes" tab shows badge `5` (style + text + DOM + comments combined) |
+| 7.28  | Breakpoint pill on rows | Narrow the browser so the page viewport is < 1024px → edit a style / text / duplicate an element | Each such row shows a small `MOBILE` / `TABLET` pill (next to the status badge); hovering it shows `Edited at {bp} · {width}px`. Desktop-width edits show no pill; the pill survives reload (persisted on the change) |
 
 ---
 
@@ -421,6 +422,10 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 | 10.12 | Send to Agent — local offline | No local server in Local mode → click | Instructions overlay with `claude mcp add design-mode …` registration hint; button styled enabled (accent), not greyed out |
 | 10.13 | Send to Agent — cloud, no token | Cloud mode without token → click | Instructions overlay pointing to the MCP page's "Connect to Cloud" |
 | 10.14 | Handoff cleared | Send to Agent → Clear All → agent calls `get_changes` | No `handoff` field in the response |
+| 10.15 | Breakpoint tag — mobile/tablet | Narrow the browser so the **page** viewport is < 768px → edit a style → Copy as Prompt | The change bullet ends with `_(mobile · {width}px)_`; a one-line legend appears once under `## Changes` explaining the tag. 768–1023px tags as `tablet`. Works with the side panel open (width = page render width, not window) |
+| 10.16 | Breakpoint tag — desktop untagged | At ≥ 1024px viewport → edit a style → Copy as Prompt | No breakpoint tag on the bullet; no legend line (desktop is the implicit default) |
+| 10.17 | Breakpoint tag — grouped / mixed | Edit two props on one element at mobile width, then (resize to tablet) edit a third → Copy as Prompt | The grouped bullet tags the narrowest width when uniform; if the group spans breakpoints it lists them narrowest-first, e.g. `_(mobile, tablet)_` |
+| 10.18 | Breakpoint in `get_changes` | Edit at mobile width → agent calls `get_changes` | The style/text/DOM record carries `viewportWidth` + `breakpoint: "mobile"` |
 
 ---
 

@@ -4,7 +4,7 @@
 // ============================================================
 
 import { getElementById, generateSelector, describeElement, getComputedStyleSubset, reserveIdsAtLeast } from './helpers';
-import { DEFAULT_WS_PORT, DATA_ATTR } from '../shared';
+import { DEFAULT_WS_PORT, DATA_ATTR, classifyBreakpoint, type Breakpoint } from '../shared';
 import { BUILTIN_KEYFRAMES } from './keyframes-library';
 import { captureElementScreenshot, captureViewportScreenshotClean, captureRegionScreenshot } from './screenshots';
 import { loadComments } from './comments';
@@ -33,6 +33,8 @@ export interface StyleChange {
   groupId?: string;
   groupKind?: 'preset' | 'multi-select' | 'visibility' | 'consolidate';
   groupLabel?: string;
+  viewportWidth?: number;
+  breakpoint?: Breakpoint;
 }
 
 export interface StyleChangeMeta {
@@ -49,6 +51,8 @@ export interface TextChange {
   // use el.innerHTML, not el.textContent. Set by applyHtmlChange.
   isHtml?: boolean;
   status?: ChangeStatus;
+  viewportWidth?: number;
+  breakpoint?: Breakpoint;
 }
 
 export interface DomChange {
@@ -69,6 +73,16 @@ export interface DomChange {
   origin?: { parentSelector: string; index: number; parentId?: string };
   timestamp: number;
   status?: ChangeStatus;
+  viewportWidth?: number;
+  breakpoint?: Breakpoint;
+}
+
+// Breakpoint metadata captured at record time. The page viewport width here
+// is the content-script window's width — the page's real render width,
+// unaffected by the side panel (which is browser chrome, not page layout).
+function bpMeta(): { viewportWidth: number; breakpoint: Breakpoint } {
+  const viewportWidth = window.innerWidth;
+  return { viewportWidth, breakpoint: classifyBreakpoint(viewportWidth) };
 }
 
 const styleChanges: StyleChange[] = [];
@@ -835,7 +849,7 @@ export function applyStyleChange(
     // Rules are keyed by elementId so the live CSS scope-by-data-dm-id
     // doesn't move when the element's user-friendly selector drifts.
     upsertRule(elementId, property, value, state);
-    const merged: StyleChange = { ...existing, newValue: value, timestamp: Date.now() };
+    const merged: StyleChange = { ...existing, newValue: value, timestamp: Date.now(), ...bpMeta() };
     if (!merged.label) merged.label = describeElement(el);
     if (meta) {
       merged.groupId = meta.groupId;
@@ -862,6 +876,7 @@ export function applyStyleChange(
     groupId: meta?.groupId,
     groupKind: meta?.groupKind,
     groupLabel: meta?.groupLabel,
+    ...bpMeta(),
   };
   styleChanges.push(change);
   syncChange(change);
@@ -930,7 +945,7 @@ export function applyTextChange(
       if (refreshPanel) refreshPanel();
       return null;
     }
-    const merged: TextChange = { ...existing, newText: text, timestamp: Date.now(), isHtml: false };
+    const merged: TextChange = { ...existing, newText: text, timestamp: Date.now(), isHtml: false, ...bpMeta() };
     textChanges[existingIdx] = merged;
     syncTextChange(merged);
     persistSession();
@@ -941,6 +956,7 @@ export function applyTextChange(
     id: crypto.randomUUID(), elementId, selector: generateSelector(el),
     label: describeElement(el),
     oldText: priorText, newText: text, timestamp: Date.now(),
+    ...bpMeta(),
   };
   textChanges.push(change);
   syncTextChange(change);
@@ -973,7 +989,7 @@ export function applyHtmlChange(
       if (refreshPanel) refreshPanel();
       return null;
     }
-    const merged: TextChange = { ...existing, newText: html, timestamp: Date.now(), isHtml: true };
+    const merged: TextChange = { ...existing, newText: html, timestamp: Date.now(), isHtml: true, ...bpMeta() };
     textChanges[existingIdx] = merged;
     syncTextChange(merged);
     persistSession();
@@ -984,6 +1000,7 @@ export function applyHtmlChange(
     id: crypto.randomUUID(), elementId, selector: generateSelector(el),
     label: describeElement(el),
     oldText: priorHtml, newText: html, timestamp: Date.now(), isHtml: true,
+    ...bpMeta(),
   };
   textChanges.push(change);
   syncTextChange(change);
@@ -1076,6 +1093,7 @@ export function recordDomChange(
     tagName, outerHTML, destination,
     origin: inheritedOrigin,
     timestamp: Date.now(),
+    ...bpMeta(),
   };
   domChanges.push(change);
   syncDomChange(change);
