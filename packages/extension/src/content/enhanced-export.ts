@@ -43,11 +43,12 @@ function shortenValue(v: string, max = 32): string {
   return v.length > max ? v.slice(0, max - 1) + '…' : v;
 }
 
-// Word-level diff for text edits. Emitting only the changed words — old struck,
-// new bold — with a few words of context, instead of the whole before+after
-// paragraph, keeps the exported prompt small (it's fed to the agent as input
-// tokens). The element pointer already localises the edit, so the agent just
-// needs to know which words changed.
+// Word-level diff for text edits, in git `--word-diff` notation
+// (`[-removed-]` / `{+added+}`). Emitting only the changed words with a few
+// words of context, instead of the whole before+after paragraph, keeps the
+// exported prompt small (it's fed to the agent as input tokens). The element
+// pointer already localises the edit, so the agent just needs which words
+// changed. A legend in the ## Changes header explains the markers.
 type DiffOp = { type: 'eq' | 'del' | 'ins'; text: string };
 
 function wordDiff(a: string[], b: string[]): DiffOp[] {
@@ -68,10 +69,10 @@ function wordDiff(a: string[], b: string[]): DiffOp[] {
   return ops;
 }
 
-// Render the diff inline: `~~removed~~ **added**`, plain unchanged context, and
+// Render the diff inline: `[-removed-] {+added+}`, plain unchanged context, and
 // `…` where a long unchanged run is elided (keeping CTX words each side of a
 // change). Returns null when the two share no words — the caller then emits the
-// new text alone, since a full-strike of the old paragraph would only add noise.
+// new text alone, since diffing two unrelated strings only adds noise.
 function inlineTextDiff(oldText: string, newText: string): string | null {
   const a = oldText.split(/\s+/).filter(Boolean);
   const b = newText.split(/\s+/).filter(Boolean);
@@ -95,8 +96,11 @@ function inlineTextDiff(oldText: string, newText: string): string | null {
       while (k < ops.length && ops[k].type !== 'eq') {
         (ops[k].type === 'del' ? dels : inss).push(ops[k].text); k++;
       }
-      if (dels.length) out.push('~~' + dels.join(' ') + '~~');
-      if (inss.length) out.push('**' + inss.join(' ') + '**');
+      // Adjacent del+ins render as one token (`[-old-]{+new+}`) — the git
+      // word-diff form for a substitution.
+      const del = dels.length ? '[-' + dels.join(' ') + '-]' : '';
+      const ins = inss.length ? '{+' + inss.join(' ') + '+}' : '';
+      if (del || ins) out.push(del + ins);
     }
   }
   return out.join(' ');
@@ -347,7 +351,7 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     lines.push('');
     lines.push('## Changes');
     if (textChanges.length > 0) {
-      lines.push('_Text edits are inline diffs: ~~removed~~, **added**, `…` = unchanged text omitted._');
+      lines.push('> Text edits use git word-diff notation: `[-…-]` = removed, `{+…+}` = added, unmarked words are unchanged, and `…` marks unchanged text omitted for brevity. Apply the edit to the element — do not write the markers into the text.');
     }
     for (const e of entries) lines.push(e.line);
   }

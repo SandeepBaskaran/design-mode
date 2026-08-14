@@ -98,12 +98,14 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   and is tunable.
 - **Copy as Prompt sends text edits as a compact inline diff.** Text-content
   changes were clipped to 60 characters, so a rewritten heading or paragraph
-  reached the agent half-finished. They now export as a word-level diff —
-  `~~removed~~ **added**` with unchanged runs elided to `…` — instead of the
-  whole before+after paragraph. The agent gets exactly the corrections (the
-  element pointer already localises them), which conveys the full change *and*
-  cuts the input tokens fed to the coding agent. A total rewrite or oversized
-  edit falls back to the new text alone.
+  reached the agent half-finished. They now export as a word-level diff in git
+  `--word-diff` notation — `[-removed-] {+added+}` with unchanged runs elided to
+  `…` — instead of the whole before+after paragraph. The agent gets exactly the
+  corrections (the element pointer already localises them), which conveys the
+  full change *and* cuts the input tokens fed to the coding agent. A one-line
+  legend in the `## Changes` header explains the markers (and that they must not
+  be written into the text). A total rewrite or oversized edit falls back to the
+  new text alone.
 - **Copy / Download SVG buttons confirm the action.** Copying an SVG's markup or
   downloading media now briefly flips the button to a check with "Copied" /
   "Downloaded" for ~1.2s (matching the screenshot button), so there's clear
