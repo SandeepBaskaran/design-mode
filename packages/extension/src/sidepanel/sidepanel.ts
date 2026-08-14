@@ -206,6 +206,18 @@ let pageSealed = false;
 let inspectWrapperOptedIn = false;
 let enabled = false;
 let inspecting = true;
+// Hover capability of the inspected tab. Chrome's device toolbar / Firefox RDM
+// emulate touch → `(hover: none)` → our mouseover-driven hover stops firing.
+// The content script reports this; while it's false we show a browser-aware
+// guide (hoverGuideProceeded gates "Continue anyway"). Both reset when hover
+// returns so the panel auto-restores the normal experience.
+let hoverAvailable = true;
+let hoverGuideProceeded = false;
+function applyHoverAvailable(next: boolean) {
+  if (next === hoverAvailable) return;
+  hoverAvailable = next;
+  if (next) hoverGuideProceeded = false;
+}
 // While a comment composer is open (add / edit / region) we suspend inspect
 // so page clicks don't hijack what the user is annotating, then restore it.
 let inspectSuspendedForComment = false;
@@ -813,7 +825,7 @@ function openPipWindow() {
 
 /* ── Async actions ── */
 async function refreshMcpStatus() { const res = await send({ type: 'SP_GET_MCP_STATUS' }); if (res.mcpState) mcpState = res.mcpState; else if (res.connected && res.agentConnected) mcpState = 'connected'; else if (res.connected) mcpState = 'running'; else mcpState = 'offline'; render(); }
-async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
+async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; if (typeof res.hoverAvailable === 'boolean') applyHoverAvailable(res.hoverAvailable); undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
 async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; render(); }
 async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
@@ -1996,6 +2008,7 @@ browser.runtime.onMessage.addListener((msg) => {
     fileAccessBlocked = false;
     enabled = msg.enabled ?? enabled;
     inspecting = msg.inspecting ?? inspecting;
+    if (typeof msg.hoverAvailable === 'boolean') applyHoverAvailable(msg.hoverAvailable);
     undoCount = msg.undoCount ?? undoCount;
     redoCount = msg.redoCount ?? redoCount;
     if (msg.multiSelect !== undefined) multiSelectActive = !!msg.multiSelect;
@@ -2015,6 +2028,13 @@ browser.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'MULTI_SELECT_UPDATE') {
     multiSelectIds = msg.payload?.ids || [];
     multiSelectActive = multiSelectIds.length > 0;
+    render();
+  }
+  // Tab's hover capability changed (touch emulation toggled on/off in the
+  // browser's responsive mode). applyHoverAvailable resets the "proceed" gate
+  // when hover returns, so the panel auto-restores the normal experience.
+  if (msg.type === 'HOVER_CAPABILITY_UPDATE') {
+    applyHoverAvailable(!!msg.hoverAvailable);
     render();
   }
   // Page cleared its selection (Escape on the page) — drop the Design tab back
@@ -9165,6 +9185,37 @@ function renderFileAccessView(): string {
     '</div>';
 }
 
+// Shown full-panel when the inspected tab reports no hover (touch emulation in
+// the browser's responsive/device mode). Touch has no hover, so our mouseover
+// preview can't fire — but tap→click still selects. We give the one real fix
+// (turn touch emulation off; width is irrelevant) and a "Continue anyway"
+// escape. Auto-dismisses when hover returns (applyHoverAvailable resets it).
+function renderHoverGuideView(): string {
+  const card = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:14px;';
+  const primaryBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px 12px;background:var(--dm-text);border:1px solid var(--dm-text);border-radius:6px;color:var(--dm-bg);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;';
+  const b = (t: string) => '<strong style="color:var(--dm-text);">' + t + '</strong>';
+  const li = (t: string) => '<li style="margin:0 0 6px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">' + t + '</li>';
+
+  const steps = IS_FIREFOX
+    ? li('In the ' + b('Responsive Design Mode') + ' toolbar, click the ' + b('touch simulation') + ' button (the finger / pointer icon) to turn it ' + b('off') + '.') +
+      li('Keep any width you like — only touch simulation matters for hover.')
+    : li('Click the ' + b('⋮') + ' menu in the device toolbar, then ' + b('Add device type') + ' (skip if you see ' + b('Remove device type') + ' already there).') +
+      li('Open the ' + b('device type') + ' dropdown and pick ' + b('Desktop') + ' or ' + b('Mobile (no touch)') + '.') +
+      li('Keep ' + b('Dimensions') + ' on ' + b('Responsive') + ' and drag to any width — width doesn’t affect hover.');
+
+  return '<div style="padding:16px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
+    '<span style="display:flex;color:var(--dm-text-secondary);">' + icon('mousePointer2', 14) + '</span>' +
+    '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Hover is off in responsive mode</span></div>' +
+    '<div style="' + card + '">' +
+    '<p style="margin:0 0 10px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">Your browser is emulating touch, and touch has no hover — so element preview is off. Tapping still selects.</p>' +
+    '<p style="margin:0 0 6px 0;font-size:11px;font-weight:600;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.3px;">Get hover back</p>' +
+    '<ul style="margin:0 0 12px 0;padding-left:18px;">' + steps + '</ul>' +
+    '<button data-dm-action="hover-guide-proceed" style="' + primaryBtn + '">Continue anyway — tap to select</button>' +
+    '</div>' +
+    '</div>';
+}
+
 function renderContributeView(): string {
   const card = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:14px;';
   const primaryBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px 12px;background:var(--dm-text);border:1px solid var(--dm-text);border-radius:6px;color:var(--dm-bg);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;text-decoration:none;';
@@ -9313,6 +9364,8 @@ function render() {
       renderHeader() + renderTokensView() + renderCaptureToast() + '</div>';
   } else if (fileAccessBlocked) {
     html = renderHeader() + renderFileAccessView() + renderCaptureToast();
+  } else if (!hoverAvailable && !hoverGuideProceeded) {
+    html = renderHeader() + renderHoverGuideView() + renderCaptureToast();
   } else {
     let tabContent = '';
     if (tab === 'layers') tabContent = renderLayersTab();
@@ -9475,6 +9528,7 @@ function setupDelegation() {
           break;
         }
         case 'inspect-wrapper': inspectWrapperOptedIn = true; refreshDomTree(); break;
+        case 'hover-guide-proceed': hoverGuideProceeded = true; render(); break;
         case 'copy-prompt': copyPrompt(); break;
         case 'send-to-agent': sendToAgent(); break;
         case 'send-agent-help-close': sendAgentHelpOpen = false; render(); break;

@@ -197,12 +197,26 @@ setMovePreviewHandler((id, left, top, promotedPosition) => {
 
 /* —— Helpers —— */
 
+// Hover-capability watcher. Chrome's device toolbar and Firefox's Responsive
+// Design Mode emulate touch, so the browser reports `(hover: none)` and stops
+// firing the mouseover events our hover overlay relies on (tap→click still
+// fires, which is why select survives but hover dies). We surface the state to
+// the panel so it can guide the user; the query flips back the instant touch
+// emulation is turned off, so the panel auto-restores. Evaluated here in the
+// page context — the emulation applies to the tab, not the side panel.
+const hoverMql = window.matchMedia('(hover: none)');
+function isHoverAvailable(): boolean { return !hoverMql.matches; }
+hoverMql.addEventListener('change', () => {
+  try { browser.runtime.sendMessage({ type: 'HOVER_CAPABILITY_UPDATE', hoverAvailable: isHoverAvailable() }); } catch {}
+});
+
 function getFullState() {
   return {
     enabled: on,
     connected: isConnected(),
     agentConnected: isAgentConnected(),
     inspecting: isInspectActive(),
+    hoverAvailable: isHoverAvailable(),
     frozen: isFrozen(),
     multiSelect: isMultiSelectActive(),
     multiSelectIds: getMultiSelectIds(),
