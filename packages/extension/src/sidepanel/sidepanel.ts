@@ -6294,7 +6294,7 @@ function renderCommentCard(): string {
   const annotationAlert = (regionCommentPending && mcpState !== 'connected')
     ? '<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px;padding:7px 9px;background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.35);border-radius:6px;font-size:10px;line-height:1.45;color:var(--dm-text-secondary);">' +
       '<span style="color:#f59e0b;display:flex;flex-shrink:0;margin-top:1px;">' + icon('alertTriangle', 12) + '</span>' +
-      '<span>Annotations are delivered to your coding agent <b>only via MCP</b> — Copy as Prompt won’t include them. Connect MCP, or add an element comment instead.</span>' +
+      '<span>Annotations <b>only reach the agent via MCP</b>, not Copy as Prompt. Use a comment instead.</span>' +
       '</div>'
     : '';
   return '<div style="padding:10px 12px;border-bottom:1px solid var(--dm-separator-strong);background:var(--dm-purple-bg);">' +
