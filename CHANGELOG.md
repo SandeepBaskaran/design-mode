@@ -96,11 +96,14 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   barely showed. The default radius is lower and the editor gains an
   **Opacity %** field (threaded into the grain's alpha) so the texture reads
   and is tunable.
-- **Copy as Prompt no longer truncates text edits.** Text-content changes were
-  clipped to 60 characters in the exported prompt, so a rewritten heading or
-  paragraph reached the agent half-finished. The full authored text is now
-  included — single-line edits stay inline, multi-line edits keep every line —
-  so the agent gets the complete copy.
+- **Copy as Prompt sends text edits as a compact inline diff.** Text-content
+  changes were clipped to 60 characters, so a rewritten heading or paragraph
+  reached the agent half-finished. They now export as a word-level diff —
+  `~~removed~~ **added**` with unchanged runs elided to `…` — instead of the
+  whole before+after paragraph. The agent gets exactly the corrections (the
+  element pointer already localises them), which conveys the full change *and*
+  cuts the input tokens fed to the coding agent. A total rewrite or oversized
+  edit falls back to the new text alone.
 - **Copy / Download SVG buttons confirm the action.** Copying an SVG's markup or
   downloading media now briefly flips the button to a check with "Copied" /
   "Downloaded" for ~1.2s (matching the screenshot button), so there's clear

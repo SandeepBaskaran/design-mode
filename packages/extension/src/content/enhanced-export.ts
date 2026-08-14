@@ -43,6 +43,65 @@ function shortenValue(v: string, max = 32): string {
   return v.length > max ? v.slice(0, max - 1) + '…' : v;
 }
 
+// Word-level diff for text edits. Emitting only the changed words — old struck,
+// new bold — with a few words of context, instead of the whole before+after
+// paragraph, keeps the exported prompt small (it's fed to the agent as input
+// tokens). The element pointer already localises the edit, so the agent just
+// needs to know which words changed.
+type DiffOp = { type: 'eq' | 'del' | 'ins'; text: string };
+
+function wordDiff(a: string[], b: string[]): DiffOp[] {
+  const n = a.length, m = b.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const ops: DiffOp[] = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { ops.push({ type: 'eq', text: a[i] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ type: 'del', text: a[i] }); i++; }
+    else { ops.push({ type: 'ins', text: b[j] }); j++; }
+  }
+  while (i < n) ops.push({ type: 'del', text: a[i++] });
+  while (j < m) ops.push({ type: 'ins', text: b[j++] });
+  return ops;
+}
+
+// Render the diff inline: `~~removed~~ **added**`, plain unchanged context, and
+// `…` where a long unchanged run is elided (keeping CTX words each side of a
+// change). Returns null when the two share no words — the caller then emits the
+// new text alone, since a full-strike of the old paragraph would only add noise.
+function inlineTextDiff(oldText: string, newText: string): string | null {
+  const a = oldText.split(/\s+/).filter(Boolean);
+  const b = newText.split(/\s+/).filter(Boolean);
+  const bSet = new Set(b);
+  if (!a.some(w => bSet.has(w))) return null;
+  const ops = wordDiff(a, b);
+  const CTX = 4;
+  const out: string[] = [];
+  let k = 0;
+  while (k < ops.length) {
+    if (ops[k].type === 'eq') {
+      const run: string[] = [];
+      while (k < ops.length && ops[k].type === 'eq') run.push(ops[k++].text);
+      const atStart = out.length === 0, atEnd = k >= ops.length;
+      if (run.length <= CTX * 2) out.push(...run);
+      else if (atStart) out.push('…', ...run.slice(-CTX));
+      else if (atEnd) out.push(...run.slice(0, CTX), '…');
+      else out.push(...run.slice(0, CTX), '…', ...run.slice(-CTX));
+    } else {
+      const dels: string[] = [], inss: string[] = [];
+      while (k < ops.length && ops[k].type !== 'eq') {
+        (ops[k].type === 'del' ? dels : inss).push(ops[k].text); k++;
+      }
+      if (dels.length) out.push('~~' + dels.join(' ') + '~~');
+      if (inss.length) out.push('**' + inss.join(' ') + '**');
+    }
+  }
+  return out.join(' ');
+}
+
 function gatherElementContext(elementId: string, selector: string): ElementContext {
   const el = getElementById(elementId);
   let tagName = '';
@@ -221,21 +280,23 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     entries.push({ t: earliest, line: `- ${label(ctx)}${sourcePointer(ctx)}: ${decls}` });
   }
 
-  // Text changes carry the full authored copy — never truncate, or the agent
-  // receives a clipped string it can't reproduce. Single-line edits stay
-  // inline; multi-line edits keep every line (indented) so paragraph breaks
-  // survive into the prompt.
+  // Text changes ship as a compact inline word-diff (`~~removed~~ **added**`,
+  // unchanged runs elided) instead of the whole before+after paragraph, so the
+  // agent gets only the corrections. A total rewrite (no shared words) or an
+  // oversized edit falls back to the new text alone.
   for (const c of textChanges) {
     const ctx = ensureCtx(c.elementId, c.selector);
-    const oldText = c.oldText || '';
-    const newText = c.newText || '';
+    const oldText = (c.oldText || '').trim();
+    const newText = (c.newText || '').trim();
     const head = `${label(ctx)}${sourcePointer(ctx)}`;
-    if (oldText.includes('\n') || newText.includes('\n')) {
-      const indent = (t: string) => t.split('\n').map(l => '  ' + l).join('\n');
-      entries.push({ t: c.timestamp, line: `- ${head} text changed:\n  from:\n${indent(oldText)}\n  to:\n${indent(newText)}` });
-    } else {
-      entries.push({ t: c.timestamp, line: `- ${head} text: "${oldText}" → "${newText}"` });
-    }
+    const wordCount = (s: string) => s.split(/\s+/).filter(Boolean).length;
+    const diff = wordCount(oldText) > 400 || wordCount(newText) > 400
+      ? null
+      : inlineTextDiff(oldText, newText);
+    entries.push({
+      t: c.timestamp,
+      line: diff !== null ? `- ${head} text: ${diff}` : `- ${head} text → "${newText}"`,
+    });
   }
 
   // DOM changes (delete/duplicate/insert/move). Moves surface BOTH ends:
@@ -285,6 +346,9 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     entries.sort((a, b) => a.t - b.t);
     lines.push('');
     lines.push('## Changes');
+    if (textChanges.length > 0) {
+      lines.push('_Text edits are inline diffs: ~~removed~~, **added**, `…` = unchanged text omitted._');
+    }
     for (const e of entries) lines.push(e.line);
   }
 
