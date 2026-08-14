@@ -684,6 +684,12 @@ function disable() {
   destroyOverlays();
   teardownMeasureGuides();
   hideCommentPins();
+  // Region annotation cleanup — hideCommentPins only clears COMMITTED region
+  // boxes; a box drawn but not yet committed lives in region-annotate's own
+  // state, and an in-flight drag has its overlay. Tear both down so no dashed
+  // box lingers on the page after the panel closes.
+  clearPendingRegionBox();
+  cancelRegionDraw();
   if (isFrozen()) unfreezeAnimations();
   disconnectFromServer();
   disableShortcuts();
@@ -691,7 +697,7 @@ function disable() {
   // Final sweep — if any other module attached an overlay-like element, this
   // catches the strays so the page goes back to a pristine state the moment
   // the panel closes.
-  document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-axis-guides, #dm-distance, #dm-resize-dots, #dm-toolbar, .dm-multi-overlay, .dm-comment-pin').forEach(el => el.remove());
+  document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-axis-guides, #dm-distance, #dm-resize-dots, #dm-toolbar, .dm-multi-overlay, .dm-comment-pin, .dm-comment-region').forEach(el => el.remove());
   clearBaseCursor();
 }
 
