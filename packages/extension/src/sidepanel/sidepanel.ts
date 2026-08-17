@@ -2293,6 +2293,21 @@ function fmtNum(n: number): string {
   return rounded === 0 ? '0' : String(rounded);
 }
 
+// Collapse float-noise length tokens to `0`, so a radius that resolved to
+// `1.67772e-14px` (or the two-token elliptical form) never reaches the display
+// formatter as scientific notation. No-op for ordinary values; non-numeric
+// tokens (`auto`, `calc(...)`) pass through untouched.
+function clampLenTokens(v: string): string {
+  const toks = v.trim().split(/\s+/).filter(Boolean).map(t => {
+    const p = parseNumeric(t);
+    if (!p) return t;
+    const n = Math.round(p.num * 10000) / 10000;
+    return (n === 0 ? '0' : String(n)) + (p.unit || 'px');
+  });
+  if (!toks.length) return v;
+  return toks.every(t => t === toks[0]) ? toks[0] : toks.join(' ');
+}
+
 function formatPxValueForDisplay(value: string): { display: string; unit: string; writeUnit: string } {
   const parsed = parseNumeric(value);
   if (!parsed) return { display: value, unit: 'px', writeUnit: 'px' };
@@ -3444,7 +3459,7 @@ function cornerRadiusPrimary(s: Record<string, string>): string {
 function cornerRadiusUniformField(s: Record<string, string>): string {
   const primary = cornerRadiusPrimary(s);
   const isMixed = primary === 'Mixed';
-  const formatted = formatPxValueForDisplay(isMixed ? '0px' : primary);
+  const formatted = formatPxValueForDisplay(isMixed ? '0px' : clampLenTokens(primary));
   return '<div class="dm-field">' +
     '<div class="dm-input-shell" title="Corner radius">' +
     '<span class="dm-input-icon">' + icon('maximize', 12) + '</span>' +
@@ -10682,7 +10697,15 @@ function setupDelegation() {
     const cornerShapeTrigger = target.closest<HTMLElement>('[data-dm-corner-shape-trigger]');
     if (cornerShapeTrigger) { e.stopPropagation(); cornerShapePickerOpen = !cornerShapePickerOpen; render(); return; }
     const cornerShapeOpt = target.closest<HTMLElement>('[data-dm-corner-shape]');
-    if (cornerShapeOpt) { e.stopPropagation(); applyStyle('cornerShape', cornerShapeOpt.dataset.dmCornerShape!); cornerShapePickerOpen = false; render(); return; }
+    if (cornerShapeOpt) {
+      e.stopPropagation();
+      // Close first, then apply — applyStyle re-renders once it resolves (with
+      // the row already closed), so we avoid a second, stale synchronous
+      // render that dropped the first click.
+      cornerShapePickerOpen = false;
+      applyStyle('cornerShape', cornerShapeOpt.dataset.dmCornerShape!);
+      return;
+    }
 
     const cornerLinkBtn = target.closest<HTMLElement>('[data-dm-corner-link]');
     if (cornerLinkBtn) { e.stopPropagation(); cornerRadiusLinked = !cornerRadiusLinked; render(); return; }
