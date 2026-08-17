@@ -6,6 +6,31 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Hover-unavailable guide for responsive/touch mode.** When the browser's
+  device toolbar (Chrome) or Responsive Design Mode (Firefox) emulates touch,
+  the browser reports `(hover: none)` and stops firing the hover events the
+  inspector relies on — so element preview goes dead while tap-to-select still
+  works. The content script now detects this and the side panel shows a
+  browser-aware full-panel guide with the one real fix (turn touch emulation
+  off — the device *type*, not the width) and a **Continue anyway** button to
+  keep working via tap-select. It re-appears if touch is switched back on and
+  auto-dismisses the moment hover returns — no reload.
+
+- **Breakpoint tags on changes.** Every recorded change now captures the
+  page's viewport width at edit time and derives a responsive breakpoint
+  (mobile < 768px, tablet 768–1023px, desktop ≥ 1024px, Tailwind-aligned).
+  The Markdown / Copy-as-Prompt / Send-to-Agent output tags each
+  mobile/tablet change inline — e.g. `color #000 → #fff _(mobile · 375px)_`
+  — so coding agents know to scope the edit to a media query (desktop stays
+  the untagged default). The width is the page's real render width, so it
+  works with the side panel open. `viewportWidth` + `breakpoint` also ride
+  along on each change in `get_changes`. Each mobile/tablet row in the
+  Changes tab also shows a small breakpoint pill.
+
 ## [2.0.0] — 2026-07-30
 
 ### Added

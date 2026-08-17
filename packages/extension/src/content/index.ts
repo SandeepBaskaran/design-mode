@@ -197,12 +197,26 @@ setMovePreviewHandler((id, left, top, promotedPosition) => {
 
 /* —— Helpers —— */
 
+// Hover-capability watcher. Chrome's device toolbar and Firefox's Responsive
+// Design Mode emulate touch, so the browser reports `(hover: none)` and stops
+// firing the mouseover events our hover overlay relies on (tap→click still
+// fires, which is why select survives but hover dies). We surface the state to
+// the panel so it can guide the user; the query flips back the instant touch
+// emulation is turned off, so the panel auto-restores. Evaluated here in the
+// page context — the emulation applies to the tab, not the side panel.
+const hoverMql = window.matchMedia('(hover: none)');
+function isHoverAvailable(): boolean { return !hoverMql.matches; }
+hoverMql.addEventListener('change', () => {
+  try { browser.runtime.sendMessage({ type: 'HOVER_CAPABILITY_UPDATE', hoverAvailable: isHoverAvailable() }); } catch {}
+});
+
 function getFullState() {
   return {
     enabled: on,
     connected: isConnected(),
     agentConnected: isAgentConnected(),
     inspecting: isInspectActive(),
+    hoverAvailable: isHoverAvailable(),
     frozen: isFrozen(),
     multiSelect: isMultiSelectActive(),
     multiSelectIds: getMultiSelectIds(),
@@ -684,6 +698,12 @@ function disable() {
   destroyOverlays();
   teardownMeasureGuides();
   hideCommentPins();
+  // Region annotation cleanup — hideCommentPins only clears COMMITTED region
+  // boxes; a box drawn but not yet committed lives in region-annotate's own
+  // state, and an in-flight drag has its overlay. Tear both down so no dashed
+  // box lingers on the page after the panel closes.
+  clearPendingRegionBox();
+  cancelRegionDraw();
   if (isFrozen()) unfreezeAnimations();
   disconnectFromServer();
   disableShortcuts();
@@ -691,7 +711,7 @@ function disable() {
   // Final sweep — if any other module attached an overlay-like element, this
   // catches the strays so the page goes back to a pristine state the moment
   // the panel closes.
-  document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-axis-guides, #dm-distance, #dm-resize-dots, #dm-toolbar, .dm-multi-overlay, .dm-comment-pin').forEach(el => el.remove());
+  document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-axis-guides, #dm-distance, #dm-resize-dots, #dm-toolbar, .dm-multi-overlay, .dm-comment-pin, .dm-comment-region').forEach(el => el.remove());
   clearBaseCursor();
 }
 

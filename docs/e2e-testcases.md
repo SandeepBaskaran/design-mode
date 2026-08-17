@@ -173,6 +173,9 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 1.26 | Move follows scroll | Move an element, then scroll the page | The selection box + handles stay anchored to the element |
 | 1.27 | Margin/padding overlay bands | Hover or select an element with non-zero margin **and** padding | Light-red margin band paints outside the element box; light-green padding band paints between border and content; bands hide when the spacing is all-zero; colours follow Settings → Inspector overlay |
 | 1.28 | Alignment guides + snap on move | Select an element in a container with siblings, drag it so an edge/centre nears a sibling's edge/centre (or the parent's) | A **solid magenta** guide appears through the match and the element **snaps** onto that line; releasing commits the snapped `left`/`top`. Hold **Alt** while dragging → no snap, no guides (free move). Shift-axis-lock still applies (only the free axis snaps). Multi-select drag snaps as a group. Guides clear on drop |
+| 1.29 | Hover-off guide in touch/responsive mode | Turn on the browser's device toolbar with touch emulation (Chrome: device type **Mobile** — the default in Responsive; Firefox: touch simulation on) so the tab reports `(hover: none)` | The panel replaces its tabs with a full-panel **"Hover is off in responsive mode"** guide with short **bulleted** browser-aware steps (Chrome: ⋮ → Add device type → set **Desktop** or **Mobile (no touch)**, width doesn't matter; Firefox: click the **touch simulation** toggle off) + a "returns to normal on its own" note and a **Continue anyway** button |
+| 1.30 | Continue anyway keeps all tabs | On the 1.29 guide, click **Continue anyway** | The guide dismisses to the normal UI with **all three tabs (Layers/Design/Changes)** present; tapping an element selects it and edits/record normally |
+| 1.31 | Re-show + auto-restore | From 1.30, set device **type** to Desktop (hover returns) → then back to Mobile/touch | When hover returns the panel restores normal on its own (no reload); switching touch back on **re-shows** the guide |
 
 ---
 
@@ -335,6 +338,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 7.25  | Batch apply — fill | Click the zap | Icon becomes filled accent; the same change applies to every matching element on the page |
 | 7.26  | Batch unflag | Click zap again | Icon returns to outline (does NOT un-apply the changes — that's the trash button's job) |
 | 7.27  | Tab badge count | Make 5 changes | "Changes" tab shows badge `5` (style + text + DOM + comments combined) |
+| 7.28  | Breakpoint pill on rows | Narrow the browser so the page viewport is < 1024px → edit a style / text / duplicate an element | Each such row shows a small `MOBILE` / `TABLET` pill (next to the status badge); hovering it shows `Edited at {bp} · {width}px`. Desktop-width edits show no pill; the pill survives reload (persisted on the change) |
 
 ---
 
@@ -423,6 +427,10 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 | 10.12 | Send to Agent — local offline | No local server in Local mode → click | Instructions overlay with `claude mcp add design-mode …` registration hint; button styled enabled (accent), not greyed out |
 | 10.13 | Send to Agent — cloud, no token | Cloud mode without token → click | Instructions overlay pointing to the MCP page's "Connect to Cloud" |
 | 10.14 | Handoff cleared | Send to Agent → Clear All → agent calls `get_changes` | No `handoff` field in the response |
+| 10.15 | Breakpoint tag — mobile/tablet | Narrow the browser so the **page** viewport is < 768px → edit a style → Copy as Prompt | The change bullet ends with `_(mobile · {width}px)_`; a one-line legend appears once under `## Changes` explaining the tag. 768–1023px tags as `tablet`. Works with the side panel open (width = page render width, not window) |
+| 10.16 | Breakpoint tag — desktop untagged | At ≥ 1024px viewport → edit a style → Copy as Prompt | No breakpoint tag on the bullet; no legend line (desktop is the implicit default) |
+| 10.17 | Breakpoint tag — grouped / mixed | Edit two props on one element at mobile width, then (resize to tablet) edit a third → Copy as Prompt | The grouped bullet tags the narrowest width when uniform; if the group spans breakpoints it lists them narrowest-first, e.g. `_(mobile, tablet)_` |
+| 10.18 | Breakpoint in `get_changes` | Edit at mobile width → agent calls `get_changes` | The style/text/DOM record carries `viewportWidth` + `breakpoint: "mobile"` |
 
 ---
 

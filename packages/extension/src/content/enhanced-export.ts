@@ -12,6 +12,24 @@ import { getSourceLocation } from './source-detection';
 import type { CommentData } from './comments';
 import { getTokenEdits } from './root-var-store';
 import { getTokenIndex, type PageToken } from './token-engine';
+import { type Breakpoint } from '../shared';
+
+// Breakpoint annotation for the agent. Only mobile/tablet are tagged —
+// desktop is the implicit default. Takes every change on a line (style
+// groups collapse multiple edits) and renders one suffix; a group spanning
+// breakpoints lists them narrowest-first instead of a single px.
+function breakpointTag(items: { breakpoint?: Breakpoint; viewportWidth?: number }[]): string {
+  const tagged = items.filter(i => i.breakpoint && i.breakpoint !== 'desktop');
+  if (tagged.length === 0) return '';
+  const kinds = [...new Set(tagged.map(i => i.breakpoint!))];
+  if (kinds.length === 1) {
+    const widths = tagged.map(i => i.viewportWidth).filter((w): w is number => typeof w === 'number');
+    const px = widths.length ? ` · ${Math.min(...widths)}px` : '';
+    return ` _(${kinds[0]}${px})_`;
+  }
+  const order: Record<Breakpoint, number> = { mobile: 0, tablet: 1, desktop: 2 };
+  return ` _(${kinds.sort((a, b) => order[a] - order[b]).join(', ')})_`;
+}
 
 // Human trigger labels for Motion state-variants in the agent prompt.
 const MOTION_STATE_LABEL: Record<string, string> = {
@@ -281,7 +299,7 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
       })
       .join('; ');
     const earliest = Math.min(...list.map(c => c.timestamp));
-    entries.push({ t: earliest, line: `- ${label(ctx)}${sourcePointer(ctx)}: ${decls}` });
+    entries.push({ t: earliest, line: `- ${label(ctx)}${sourcePointer(ctx)}: ${decls}${breakpointTag(list)}` });
   }
 
   // Text changes ship as a compact inline word-diff (`~~removed~~ **added**`,
@@ -299,7 +317,7 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
       : inlineTextDiff(oldText, newText);
     entries.push({
       t: c.timestamp,
-      line: diff !== null ? `- ${head} text: ${diff}` : `- ${head} text → "${newText}"`,
+      line: (diff !== null ? `- ${head} text: ${diff}` : `- ${head} text → "${newText}"`) + breakpointTag([c]),
     });
   }
 
@@ -333,7 +351,7 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
         c.action === 'move' ? 'moved' : c.action;
       line = `- ${label(ctx)}${sourcePointer(ctx)} ${verb}`;
     }
-    entries.push({ t: c.timestamp, line });
+    entries.push({ t: c.timestamp, line: line + breakpointTag([c]) });
   }
 
   // Reviewer comments — promoted to their own section below for visibility.
@@ -352,6 +370,11 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     lines.push('## Changes');
     if (textChanges.length > 0) {
       lines.push('> Text edits use git word-diff notation: `[-…-]` = removed, `{+…+}` = added, unmarked words are unchanged, and `…` marks unchanged text omitted for brevity. Apply the edit to the element — do not write the markers into the text.');
+    }
+    const hasBreakpoints = [...styleChanges, ...textChanges, ...domChanges]
+      .some(c => c.breakpoint && c.breakpoint !== 'desktop');
+    if (hasBreakpoints) {
+      lines.push('_A trailing `(breakpoint · width)` marks the responsive width the edit was made at — scope it to that breakpoint (e.g. a media query). Untagged changes are desktop._');
     }
     for (const e of entries) lines.push(e.line);
   }

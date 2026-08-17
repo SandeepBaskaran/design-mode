@@ -8,6 +8,15 @@ export const APP_VERSION = '2.0.0';
 // Default WebSocket port for companion server
 export const DEFAULT_WS_PORT = 9960;
 
+// Responsive breakpoint tiers, Tailwind-aligned (md=768, lg=1024). A change
+// is classified by the page's viewport width when it was recorded.
+export const BREAKPOINT_MAX = { mobile: 767, tablet: 1023 } as const;
+export function classifyBreakpoint(width: number): 'mobile' | 'tablet' | 'desktop' {
+  if (width <= BREAKPOINT_MAX.mobile) return 'mobile';
+  if (width <= BREAKPOINT_MAX.tablet) return 'tablet';
+  return 'desktop';
+}
+
 // MCP server name
 export const MCP_SERVER_NAME = 'design-mode';
 
