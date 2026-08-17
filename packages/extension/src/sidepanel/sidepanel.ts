@@ -2280,19 +2280,25 @@ function opacityInput(value: string): string {
 // so a user-typed edit lands in the change tracker as `rem`, not `px`.
 // Non-px units (`%`, `em`, `vw`, …) pass through unchanged; they already
 // carry an explicit unit and the user's px ↔ rem toggle doesn't apply.
+// Round to 4 decimals and stringify — but never in scientific notation.
+// A computed radius resolved from a percentage / transform can come back as
+// float noise like 1.67772e-14, which `String()` renders as `1.67772e-`;
+// anything that rounds to zero at 4dp is really zero.
+function fmtNum(n: number): string {
+  if (!isFinite(n)) return '0';
+  const rounded = Math.round(n * 10000) / 10000;
+  return rounded === 0 ? '0' : String(rounded);
+}
+
 function formatPxValueForDisplay(value: string): { display: string; unit: string; writeUnit: string } {
   const parsed = parseNumeric(value);
   if (!parsed) return { display: value, unit: 'px', writeUnit: 'px' };
   const sourceUnit = parsed.unit || 'px';
   if (sourceUnit !== 'px' || inputUnit !== 'rem') {
-    return { display: String(parsed.num), unit: sourceUnit, writeUnit: sourceUnit };
+    return { display: fmtNum(parsed.num), unit: sourceUnit, writeUnit: sourceUnit };
   }
   const rem = parsed.num / remRootPx;
-  // Round to 4 decimals, then strip trailing zeros so 16px reads as `1`
-  // not `1.0000` and 24px reads as `1.5` not `1.5000`.
-  const rounded = Math.round(rem * 10000) / 10000;
-  const display = String(rounded);
-  return { display, unit: 'rem', writeUnit: 'rem' };
+  return { display: fmtNum(rem), unit: 'rem', writeUnit: 'rem' };
 }
 
 function inp(label: string, prop: string, value: string, unit = 'px'): string {
@@ -3444,27 +3450,25 @@ function cornerRadiusUniformField(s: Record<string, string>): string {
     '</div></div>';
 }
 
-// corner-shape (CSS Borders L4) preview swatch — a live div styled with the
-// actual `corner-shape`, so it renders exactly what lands on the page (and
-// degrades to a rounded square on browsers that don't support it yet, where
-// the option's text label keeps it legible).
-function cornerShapeSwatch(shape: string, px: number): string {
-  const r = Math.max(4, Math.round(px * 0.3));
-  return '<span aria-hidden="true" style="display:inline-block;width:' + px + 'px;height:' + px + 'px;background:var(--dm-accent);border-radius:' + r + 'px;corner-shape:' + shape + ';"></span>';
+// corner-shape (CSS Borders L4) glyph — an outlined box styled with the actual
+// `corner-shape`, drawn in the current icon colour (inherits `currentColor`),
+// so it reads like the panel's other icons and renders exactly the shape that
+// lands on the page. Degrades to a rounded square where unsupported.
+function cornerShapeGlyph(shape: string, px: number): string {
+  const r = Math.max(3, Math.round(px * 0.28));
+  return '<span aria-hidden="true" style="display:inline-block;width:' + px + 'px;height:' + px + 'px;border:1.5px solid currentColor;border-radius:' + r + 'px;corner-shape:' + shape + ';box-sizing:border-box;"></span>';
 }
 
-// The corner-shape options as a vertical labelled list that expands inline
-// below the Appearance row (like the per-corner 2×2) — an overlay popover got
-// clipped by the next section. Each row: live swatch + shape name, current
-// one highlighted with a check.
-function cornerShapeList(current: string, shapes: string[]): string {
-  return '<div data-dm-corner-shape-popover style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;overflow:hidden;">' +
-    shapes.map((sh, i) => {
+// The corner-shape options as a single inline row of icon-only buttons (name on
+// hover via title). Expands below the Appearance row — an overlay popover got
+// clipped by the next section. Picking one closes the row (handled in the
+// click switch). Current shape is highlighted; colours follow the icon palette.
+function cornerShapeRow(current: string, shapes: string[]): string {
+  return '<div data-dm-corner-shape-popover style="display:flex;gap:6px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:6px;">' +
+    shapes.map(sh => {
       const active = sh === current;
-      return '<button data-dm-corner-shape="' + sh + '" style="width:100%;display:flex;align-items:center;gap:10px;padding:7px 10px;background:' + (active ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;' + (i < shapes.length - 1 ? 'border-bottom:1px solid var(--dm-separator);' : '') + 'cursor:pointer;text-align:left;color:var(--dm-text);font-family:inherit;">' +
-        cornerShapeSwatch(sh, 22) +
-        '<span style="flex:1;font-size:11px;text-transform:capitalize;">' + sh + '</span>' +
-        (active ? icon('check', 12) : '') +
+      return '<button data-dm-corner-shape="' + sh + '" title="' + sh + '" style="flex:1;display:flex;align-items:center;justify-content:center;padding:7px;background:' + (active ? 'var(--dm-bg-active)' : 'transparent') + ';border:1px solid ' + (active ? 'var(--dm-text-dim)' : 'var(--dm-separator)') + ';border-radius:5px;cursor:pointer;color:' + (active ? 'var(--dm-text)' : 'var(--dm-text-secondary)') + ';">' +
+        cornerShapeGlyph(sh, 18) +
       '</button>';
     }).join('') +
     '</div>';
@@ -7446,7 +7450,7 @@ function renderDesignTab(): string {
   })();
   const cornerShapeCell = '<div class="dm-field">' +
     '<button class="dm-icon-row-button" data-dm-corner-shape-trigger title="Corner shape: ' + cornerShapeVal + ' (needs a non-zero radius)" data-active="' + (cornerShapePickerOpen ? 'true' : 'false') + '" style="width:100%;">' +
-    cornerShapeSwatch(cornerShapeVal, 15) + '</button></div>';
+    cornerShapeGlyph(cornerShapeVal, 15) + '</button></div>';
   const appearanceContent =
     grid12([
       { span: 4, content: opacityInput(s.opacity || '1') },
@@ -7454,7 +7458,7 @@ function renderDesignTab(): string {
       { span: 2, content: cornerShapeCell },
       { span: 2, content: cornerExpandRowBtn },
     ]) + sp() +
-    (cornerShapePickerOpen ? cornerShapeList(cornerShapeVal, CORNER_SHAPES) + sp() : '') +
+    (cornerShapePickerOpen ? cornerShapeRow(cornerShapeVal, CORNER_SHAPES) + sp() : '') +
     (cornerRadiusExpanded ? cornerRadius2x2(s) + sp() : '') +
     advancedDisclosure('appearance', appearanceAdvOpen,
       // Blend mode + isolation live up here in Advanced. They drive

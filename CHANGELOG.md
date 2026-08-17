@@ -17,7 +17,8 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   `square`, `bevel`, `scoop`, `notch` — that reshape the corners `border-radius`
   rounds (the CSS equivalent of Figma's corner smoothing / squircle). It writes
   the standard `corner-shape` property, needs a non-zero radius to show, and is
-  harmlessly ignored on browsers that don't support it yet.
+  harmlessly ignored on browsers that don't support it yet. The picker is an
+  inline row of shape icons (name on hover) in the panel's icon colour.
 - **Alignment guides while dragging (Slides / Keynote style).** Dragging the
   body of a selected element now snaps its edges and centres to its siblings
   and the parent box, drawing a solid magenta guide through each match.
@@ -114,6 +115,10 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   legend in the `## Changes` header explains the markers (and that they must not
   be written into the text). A total rewrite or oversized edit falls back to the
   new text alone.
+- **Corner-radius field no longer shows scientific notation.** A radius that
+  resolved to float noise (e.g. `1.67772e-14px` from a percentage / transform)
+  rendered as a broken `1.67772e-` in the field; values that round to zero at
+  four decimals now display as `0`, and no value is ever shown in exponent form.
 - **Copy / Download SVG buttons confirm the action.** Copying an SVG's markup or
   downloading media now briefly flips the button to a check with "Copied" /
   "Downloaded" for ~1.2s (matching the screenshot button), so there's clear
