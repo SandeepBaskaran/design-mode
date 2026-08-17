@@ -2293,15 +2293,16 @@ function fmtNum(n: number): string {
   return rounded === 0 ? '0' : String(rounded);
 }
 
-// Collapse float-noise length tokens to `0`, so a radius that resolved to
-// `1.67772e-14px` (or the two-token elliptical form) never reaches the display
-// formatter as scientific notation. No-op for ordinary values; non-numeric
-// tokens (`auto`, `calc(...)`) pass through untouched.
+// Normalise corner-radius length tokens to at most two decimals — real
+// precision like `8.33px` is kept, `8.3336px` reads `8.34px`, and float noise
+// that resolved to `1.67772e-14px` (or the two-token elliptical form) collapses
+// to `0` instead of reaching the display formatter as scientific notation.
+// Non-numeric tokens (`auto`, `calc(...)`) pass through untouched.
 function clampLenTokens(v: string): string {
   const toks = v.trim().split(/\s+/).filter(Boolean).map(t => {
     const p = parseNumeric(t);
     if (!p) return t;
-    const n = Math.round(p.num * 10000) / 10000;
+    const n = Math.round(p.num * 100) / 100;
     return (n === 0 ? '0' : String(n)) + (p.unit || 'px');
   });
   if (!toks.length) return v;
