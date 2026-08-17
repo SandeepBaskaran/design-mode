@@ -495,7 +495,7 @@ into the **Advanced** disclosure — see below.
 | **Corner radius** (`cornerRadiusUniformField`) | `border-radius` (shorthand) | Uniform corner radius for all four corners. Led by a `maximize` glyph; "Corner radius" is the tooltip. Shows a `Mixed` placeholder when the four corners currently differ — typing a value over `Mixed` writes the shorthand and forces all four corners to match. | Length / percent: `0`, `8px`, `1rem`, `50%`. |
 | `scan` icon | Toggle expanded mode | Reveals the per-corner 2×2 below. | — |
 
-**Figma equivalent**: Opacity, Corner radius (linked mode). Figma's "Smoothing" / squircle is still skipped (no CSS equivalent).
+**Figma equivalent**: Opacity, Corner radius (linked mode). Figma's "Smoothing" / squircle now maps to **Corner shape** in Advanced (CSS `corner-shape: squircle`).
 
 ### Corner radius (expanded — edit each corner)
 
@@ -509,7 +509,7 @@ How the 2×2 cell works:
 - Set X = Y → output collapses back to a single value (`10px` instead of `10px 10px`).
 - Empty input falls back to the current axis value (so blanking Y == circular).
 
-**Figma equivalent**: Corner radius (linked + individual mode). Figma's "Smoothing" / squircle is **skipped** (proprietary `SuperEllipse` math, no CSS equivalent).
+**Figma equivalent**: Corner radius (linked + individual mode). Figma's "Smoothing" / squircle is now covered by **Corner shape** in Advanced — CSS `corner-shape` (Borders Level 4) reshapes the same corners the radius rounds.
 
 ### Color adjust filters (icon button row)
 
@@ -533,6 +533,12 @@ Each button **toggles** the named function on `filter`. Re-clicking an active fu
 **Figma equivalent**: Effects → adjust effects (Figma's set is narrower; `hue-rotate`, `invert`, `sepia`, and per-element `drop-shadow` are CSS-only).
 
 ## Advanced disclosure
+
+### Corner shape
+
+| Field | Property | What | Values |
+|---|---|---|---|
+| **Corner shape** | `corner-shape` | Reshapes the corners that `border-radius` rounds — the CSS equivalent of Figma's corner smoothing. Only shows with a non-zero `border-radius`; newest Chromium only (harmlessly ignored elsewhere). | `round` (default), `squircle` (iOS-style superellipse), `bevel` (flat diagonal cut), `scoop` (concave inward curve), `notch` (90° inward cutout), `square` (sharp outward corner). |
 
 ### Blend + stacking
 

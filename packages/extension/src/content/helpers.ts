@@ -162,6 +162,7 @@ export function getComputedStyleSubset(el: HTMLElement): Record<string, string> 
     'borderTopColor','borderRightColor','borderBottomColor','borderLeftColor',
     'borderImageSource','borderImageSlice','borderImageWidth','borderImageOutset','borderImageRepeat',
     'borderTopLeftRadius','borderTopRightRadius','borderBottomRightRadius','borderBottomLeftRadius',
+    'cornerShape',
     'boxShadow','textShadow','outline','outlineOffset','filter','backdropFilter','transition',
     'transitionProperty','transitionDuration','transitionTimingFunction','transitionDelay',
     'animation','animationName','animationDuration','animationTimingFunction','animationDelay',

@@ -2142,6 +2142,7 @@ const SECTION_PROPS: Record<string, string[]> = {
     // Primary
     'opacity','mixBlendMode','isolation',
     'borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius','borderRadius',
+    'cornerShape',
     'filter','backdropFilter',
     // Visibility & cursor
     'visibility','cursor','colorScheme','forcedColorAdjust',
@@ -7406,6 +7407,14 @@ function renderDesignTab(): string {
   const cornerExpandRowBtn = '<div class="dm-field">' +
     '<button class="dm-icon-row-button" data-dm-corner-expand title="' + (cornerRadiusExpanded ? 'Collapse corners' : 'Edit each corner separately') + '" data-active="' + (cornerRadiusExpanded ? 'true' : 'false') + '" style="width:100%;">' +
     icon('scan', 14) + '</button></div>';
+  // corner-shape (CSS Borders L4) is a keyword that reshapes the rounded
+  // corners; getComputedStyle can report it as four repeated tokens, so read
+  // the first and fall back to `round` for unknown / superellipse() values.
+  const CORNER_SHAPES = ['round', 'squircle', 'bevel', 'scoop', 'notch', 'square'];
+  const cornerShapeVal = (() => {
+    const first = (((s as any).cornerShape as string) || '').trim().split(/\s+/)[0];
+    return CORNER_SHAPES.includes(first) ? first : 'round';
+  })();
   const appearanceContent =
     grid12([
       { span: 5, content: opacityInput(s.opacity || '1') },
@@ -7414,6 +7423,12 @@ function renderDesignTab(): string {
     ]) + sp() +
     (cornerRadiusExpanded ? cornerRadius2x2(s) + sp() : '') +
     advancedDisclosure('appearance', appearanceAdvOpen,
+      // corner-shape pairs with border-radius above (it only shows with a
+      // non-zero radius) but is occasional-use, so it lives in Advanced.
+      sub('Corner shape') +
+      '<div title="CSS corner-shape (Borders Level 4) — reshapes the rounded corners. Needs a non-zero border-radius to show; newest Chromium only.">' +
+      grid12([{ span: 12, content: sel('Corner shape', 'cornerShape', cornerShapeVal, CORNER_SHAPES) }]) +
+      '</div>' + sp() +
       // Blend mode + isolation live up here in Advanced. They drive
       // stacking-context behaviour rather than visual style, so they
       // belong with the other context-y controls (visibility, pointer
