@@ -3453,14 +3453,18 @@ function cornerShapeSwatch(shape: string, px: number): string {
   return '<span aria-hidden="true" style="display:inline-block;width:' + px + 'px;height:' + px + 'px;background:var(--dm-accent);border-radius:' + r + 'px;corner-shape:' + shape + ';"></span>';
 }
 
-// Icon-dropdown popover: a grid of shape swatches + names, current one ringed.
-function cornerShapePopover(current: string, shapes: string[]): string {
-  return '<div data-dm-corner-shape-popover style="position:absolute;right:0;top:calc(100% + 4px);z-index:40;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:8px;display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;width:210px;">' +
-    shapes.map(sh => {
+// The corner-shape options as a vertical labelled list that expands inline
+// below the Appearance row (like the per-corner 2×2) — an overlay popover got
+// clipped by the next section. Each row: live swatch + shape name, current
+// one highlighted with a check.
+function cornerShapeList(current: string, shapes: string[]): string {
+  return '<div data-dm-corner-shape-popover style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;overflow:hidden;">' +
+    shapes.map((sh, i) => {
       const active = sh === current;
-      return '<button data-dm-corner-shape="' + sh + '" title="corner-shape: ' + sh + '" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 4px;background:' + (active ? 'var(--dm-accent-bg)' : 'transparent') + ';border:1px solid ' + (active ? 'var(--dm-accent)' : 'var(--dm-separator)') + ';border-radius:6px;cursor:pointer;color:var(--dm-text);font-family:inherit;">' +
-        cornerShapeSwatch(sh, 30) +
-        '<span style="font-size:9px;text-transform:capitalize;letter-spacing:0.2px;">' + sh + '</span>' +
+      return '<button data-dm-corner-shape="' + sh + '" style="width:100%;display:flex;align-items:center;gap:10px;padding:7px 10px;background:' + (active ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;' + (i < shapes.length - 1 ? 'border-bottom:1px solid var(--dm-separator);' : '') + 'cursor:pointer;text-align:left;color:var(--dm-text);font-family:inherit;">' +
+        cornerShapeSwatch(sh, 22) +
+        '<span style="flex:1;font-size:11px;text-transform:capitalize;">' + sh + '</span>' +
+        (active ? icon('check', 12) : '') +
       '</button>';
     }).join('') +
     '</div>';
@@ -7440,11 +7444,9 @@ function renderDesignTab(): string {
     const first = (((s as any).cornerShape as string) || '').trim().split(/\s+/)[0];
     return CORNER_SHAPES.includes(first) ? first : 'round';
   })();
-  const cornerShapeCell = '<div class="dm-field" style="position:relative;">' +
+  const cornerShapeCell = '<div class="dm-field">' +
     '<button class="dm-icon-row-button" data-dm-corner-shape-trigger title="Corner shape: ' + cornerShapeVal + ' (needs a non-zero radius)" data-active="' + (cornerShapePickerOpen ? 'true' : 'false') + '" style="width:100%;">' +
-    cornerShapeSwatch(cornerShapeVal, 15) + '</button>' +
-    (cornerShapePickerOpen ? cornerShapePopover(cornerShapeVal, CORNER_SHAPES) : '') +
-    '</div>';
+    cornerShapeSwatch(cornerShapeVal, 15) + '</button></div>';
   const appearanceContent =
     grid12([
       { span: 4, content: opacityInput(s.opacity || '1') },
@@ -7452,6 +7454,7 @@ function renderDesignTab(): string {
       { span: 2, content: cornerShapeCell },
       { span: 2, content: cornerExpandRowBtn },
     ]) + sp() +
+    (cornerShapePickerOpen ? cornerShapeList(cornerShapeVal, CORNER_SHAPES) + sp() : '') +
     (cornerRadiusExpanded ? cornerRadius2x2(s) + sp() : '') +
     advancedDisclosure('appearance', appearanceAdvOpen,
       // Blend mode + isolation live up here in Advanced. They drive
