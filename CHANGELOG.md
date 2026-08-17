@@ -10,11 +10,13 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Corner shape control (CSS `corner-shape`, Borders Level 4).** Appearance →
-  Advanced gains a **Corner shape** dropdown — `round`, `squircle`, `bevel`,
-  `scoop`, `notch`, `square` — that reshapes the corners `border-radius` rounds
-  (the CSS equivalent of Figma's corner smoothing / squircle). It writes the
-  standard `corner-shape` property, needs a non-zero radius to show, and is
+- **Corner shape control (CSS `corner-shape`, Borders Level 4).** The Appearance
+  Opacity/Corner-radius row gains a **Corner shape** icon dropdown, between the
+  radius value and the per-corner expand icon. The trigger previews the current
+  shape; the popover offers six swatches — `round` (default), `squircle`,
+  `square`, `bevel`, `scoop`, `notch` — that reshape the corners `border-radius`
+  rounds (the CSS equivalent of Figma's corner smoothing / squircle). It writes
+  the standard `corner-shape` property, needs a non-zero radius to show, and is
   harmlessly ignored on browsers that don't support it yet.
 - **Alignment guides while dragging (Slides / Keynote style).** Dragging the
   body of a selected element now snaps its edges and centres to its siblings

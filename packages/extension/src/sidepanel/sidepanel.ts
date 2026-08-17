@@ -412,6 +412,7 @@ const strokeStyleByElement = new Map<string, 'solid' | 'dashed'>();
 // Figma-style Design tab state
 let cornerRadiusLinked = true;
 let cornerRadiusExpanded = false;
+let cornerShapePickerOpen = false;
 let marginExpanded = false;
 let paddingExpanded = false;
 const CORNER_RADIUS_PROPS = new Set([
@@ -3441,6 +3442,28 @@ function cornerRadiusUniformField(s: Record<string, string>): string {
     '<input type="text" class="dm-input dm-input-bare" data-dm-prop="borderRadius" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" placeholder="' + (isMixed ? 'Mixed' : '0') + '" value="' + escapeAttr(isMixed ? '' : formatted.display) + '"/>' +
     '<span class="dm-input-unit">' + formatted.unit + '</span>' +
     '</div></div>';
+}
+
+// corner-shape (CSS Borders L4) preview swatch — a live div styled with the
+// actual `corner-shape`, so it renders exactly what lands on the page (and
+// degrades to a rounded square on browsers that don't support it yet, where
+// the option's text label keeps it legible).
+function cornerShapeSwatch(shape: string, px: number): string {
+  const r = Math.max(4, Math.round(px * 0.3));
+  return '<span aria-hidden="true" style="display:inline-block;width:' + px + 'px;height:' + px + 'px;background:var(--dm-accent);border-radius:' + r + 'px;corner-shape:' + shape + ';"></span>';
+}
+
+// Icon-dropdown popover: a grid of shape swatches + names, current one ringed.
+function cornerShapePopover(current: string, shapes: string[]): string {
+  return '<div data-dm-corner-shape-popover style="position:absolute;right:0;top:calc(100% + 4px);z-index:40;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:8px;display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;width:210px;">' +
+    shapes.map(sh => {
+      const active = sh === current;
+      return '<button data-dm-corner-shape="' + sh + '" title="corner-shape: ' + sh + '" style="display:flex;flex-direction:column;align-items:center;gap:5px;padding:8px 4px;background:' + (active ? 'var(--dm-accent-bg)' : 'transparent') + ';border:1px solid ' + (active ? 'var(--dm-accent)' : 'var(--dm-separator)') + ';border-radius:6px;cursor:pointer;color:var(--dm-text);font-family:inherit;">' +
+        cornerShapeSwatch(sh, 30) +
+        '<span style="font-size:9px;text-transform:capitalize;letter-spacing:0.2px;">' + sh + '</span>' +
+      '</button>';
+    }).join('') +
+    '</div>';
 }
 
 // Expanded 2×2 panel that drops below the Appearance row when the user
@@ -7407,28 +7430,30 @@ function renderDesignTab(): string {
   const cornerExpandRowBtn = '<div class="dm-field">' +
     '<button class="dm-icon-row-button" data-dm-corner-expand title="' + (cornerRadiusExpanded ? 'Collapse corners' : 'Edit each corner separately') + '" data-active="' + (cornerRadiusExpanded ? 'true' : 'false') + '" style="width:100%;">' +
     icon('scan', 14) + '</button></div>';
-  // corner-shape (CSS Borders L4) is a keyword that reshapes the rounded
-  // corners; getComputedStyle can report it as four repeated tokens, so read
-  // the first and fall back to `round` for unknown / superellipse() values.
-  const CORNER_SHAPES = ['round', 'squircle', 'bevel', 'scoop', 'notch', 'square'];
+  // corner-shape (CSS Borders L4) reshapes the corners border-radius rounds.
+  // getComputedStyle can report it as four repeated tokens, so read the first
+  // and fall back to `round` for unknown / superellipse() values. It sits as
+  // an icon dropdown between the radius value and the per-corner expand icon,
+  // since it works in tandem with the radius.
+  const CORNER_SHAPES = ['round', 'squircle', 'square', 'bevel', 'scoop', 'notch'];
   const cornerShapeVal = (() => {
     const first = (((s as any).cornerShape as string) || '').trim().split(/\s+/)[0];
     return CORNER_SHAPES.includes(first) ? first : 'round';
   })();
+  const cornerShapeCell = '<div class="dm-field" style="position:relative;">' +
+    '<button class="dm-icon-row-button" data-dm-corner-shape-trigger title="Corner shape: ' + cornerShapeVal + ' (needs a non-zero radius)" data-active="' + (cornerShapePickerOpen ? 'true' : 'false') + '" style="width:100%;">' +
+    cornerShapeSwatch(cornerShapeVal, 15) + '</button>' +
+    (cornerShapePickerOpen ? cornerShapePopover(cornerShapeVal, CORNER_SHAPES) : '') +
+    '</div>';
   const appearanceContent =
     grid12([
-      { span: 5, content: opacityInput(s.opacity || '1') },
-      { span: 5, content: cornerRadiusUniformField(s) },
+      { span: 4, content: opacityInput(s.opacity || '1') },
+      { span: 4, content: cornerRadiusUniformField(s) },
+      { span: 2, content: cornerShapeCell },
       { span: 2, content: cornerExpandRowBtn },
     ]) + sp() +
     (cornerRadiusExpanded ? cornerRadius2x2(s) + sp() : '') +
     advancedDisclosure('appearance', appearanceAdvOpen,
-      // corner-shape pairs with border-radius above (it only shows with a
-      // non-zero radius) but is occasional-use, so it lives in Advanced.
-      sub('Corner shape') +
-      '<div title="CSS corner-shape (Borders Level 4) — reshapes the rounded corners. Needs a non-zero border-radius to show; newest Chromium only.">' +
-      grid12([{ span: 12, content: sel('Corner shape', 'cornerShape', cornerShapeVal, CORNER_SHAPES) }]) +
-      '</div>' + sp() +
       // Blend mode + isolation live up here in Advanced. They drive
       // stacking-context behaviour rather than visual style, so they
       // belong with the other context-y controls (visibility, pointer
@@ -10551,6 +10576,12 @@ function setupDelegation() {
       render();
     }
 
+    // Click outside the corner-shape popover closes it
+    if (cornerShapePickerOpen && !target.closest('[data-dm-corner-shape-popover]') && !target.closest('[data-dm-corner-shape-trigger]')) {
+      cornerShapePickerOpen = false;
+      render();
+    }
+
     // Click outside the token badge menu / swap picker closes them
     if ((tokenBadgeMenuProp || tokenPickerProp) &&
       !target.closest('[data-dm-token-menu]') && !target.closest('[data-dm-token-picker]') && !target.closest('[data-dm-token-badge]')) {
@@ -10636,6 +10667,11 @@ function setupDelegation() {
     }
     const cornerExpandBtn = target.closest<HTMLElement>('[data-dm-corner-expand]');
     if (cornerExpandBtn) { e.stopPropagation(); cornerRadiusExpanded = !cornerRadiusExpanded; render(); return; }
+
+    const cornerShapeTrigger = target.closest<HTMLElement>('[data-dm-corner-shape-trigger]');
+    if (cornerShapeTrigger) { e.stopPropagation(); cornerShapePickerOpen = !cornerShapePickerOpen; render(); return; }
+    const cornerShapeOpt = target.closest<HTMLElement>('[data-dm-corner-shape]');
+    if (cornerShapeOpt) { e.stopPropagation(); applyStyle('cornerShape', cornerShapeOpt.dataset.dmCornerShape!); cornerShapePickerOpen = false; render(); return; }
 
     const cornerLinkBtn = target.closest<HTMLElement>('[data-dm-corner-link]');
     if (cornerLinkBtn) { e.stopPropagation(); cornerRadiusLinked = !cornerRadiusLinked; render(); return; }
