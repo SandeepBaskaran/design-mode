@@ -638,7 +638,10 @@ function truncateFilename(filename: string): string {
 }
 
 function parseNumeric(val: string): { num: number; unit: string } | null {
-  const m = val.match(/^(-?[\d.]+)\s*(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|deg|s|ms)?$/);
+  // Accept scientific notation (e.g. `1.67772e-14px`) — a computed radius
+  // resolved from a percentage / transform can come back in exponent form,
+  // which used to fail the match and pass through raw as `1.67772e-`.
+  const m = val.match(/^(-?[\d.]+(?:[eE][-+]?\d+)?)\s*(px|rem|em|%|vw|vh|vmin|vmax|ch|ex|deg|s|ms)?$/);
   if (m) return { num: parseFloat(m[1]), unit: m[2] || '' };
   return null;
 }
@@ -3462,13 +3465,14 @@ function cornerShapeGlyph(shape: string, px: number): string {
 // The corner-shape options as a single inline row of icon-only buttons (name on
 // hover via title). Expands below the Appearance row — an overlay popover got
 // clipped by the next section. Picking one closes the row (handled in the
-// click switch). Current shape is highlighted; colours follow the icon palette.
+// click switch). The selected shape is marked by a background fill only (no
+// outline); colours follow the icon palette.
 function cornerShapeRow(current: string, shapes: string[]): string {
-  return '<div data-dm-corner-shape-popover style="display:flex;gap:6px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:6px;">' +
+  return '<div data-dm-corner-shape-popover style="display:flex;gap:4px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:6px;">' +
     shapes.map(sh => {
       const active = sh === current;
-      return '<button data-dm-corner-shape="' + sh + '" title="' + sh + '" style="flex:1;display:flex;align-items:center;justify-content:center;padding:7px;background:' + (active ? 'var(--dm-bg-active)' : 'transparent') + ';border:1px solid ' + (active ? 'var(--dm-text-dim)' : 'var(--dm-separator)') + ';border-radius:5px;cursor:pointer;color:' + (active ? 'var(--dm-text)' : 'var(--dm-text-secondary)') + ';">' +
-        cornerShapeGlyph(sh, 18) +
+      return '<button data-dm-corner-shape="' + sh + '" title="' + sh + '" style="flex:1;display:flex;align-items:center;justify-content:center;padding:7px;background:' + (active ? 'var(--dm-bg-active)' : 'transparent') + ';border:none;border-radius:5px;cursor:pointer;color:' + (active ? 'var(--dm-text)' : 'var(--dm-text-secondary)') + ';">' +
+        cornerShapeGlyph(sh, 16) +
       '</button>';
     }).join('') +
     '</div>';
@@ -7450,7 +7454,7 @@ function renderDesignTab(): string {
   })();
   const cornerShapeCell = '<div class="dm-field">' +
     '<button class="dm-icon-row-button" data-dm-corner-shape-trigger title="Corner shape: ' + cornerShapeVal + ' (needs a non-zero radius)" data-active="' + (cornerShapePickerOpen ? 'true' : 'false') + '" style="width:100%;">' +
-    cornerShapeGlyph(cornerShapeVal, 15) + '</button></div>';
+    cornerShapeGlyph(cornerShapeVal, 14) + '</button></div>';
   const appearanceContent =
     grid12([
       { span: 4, content: opacityInput(s.opacity || '1') },
