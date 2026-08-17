@@ -8227,11 +8227,15 @@ function renderDesignTab(): string {
     (!vis.layout ? '' : sec('Layout', 'layoutGrid', layoutContent, true, layoutActionsHtml)) +
     (!vis.appearance ? '' : sec('Appearance', 'droplet', appearanceContent, true, appearanceActionsHtml)) +
     typographySection +
-    (!vis.fill ? '' : sec('Fill', 'palette', fillContent, true, fillActionsHtml)) +
-    (!vis.stroke ? '' : sec('Stroke', 'squareDashed', strokeContent, true)) +
-    (!vis.effects ? '' : sec('Effects', 'sparkles', effectsContent, true, effectsActionsHtml)) +
+    // Content-aware default: sections whose element currently has nothing to
+    // show (no fill / stroke / effects / guides) open collapsed. `defaultOpen`
+    // only applies until the user manually toggles the section (sectionStates
+    // then wins), and it re-evaluates on each selection while untoggled.
+    (!vis.fill ? '' : sec('Fill', 'palette', fillContent, fillLayers.length > 0, fillActionsHtml)) +
+    (!vis.stroke ? '' : sec('Stroke', 'squareDashed', strokeContent, strokeLayers.length > 0)) +
+    (!vis.effects ? '' : sec('Effects', 'sparkles', effectsContent, effectEntries.length > 0, effectsActionsHtml)) +
     (!vis.motion ? '' : sec('Motion', 'play', motionContent, false, motionActionsHtml)) +
-    (!vis.layoutGuide ? '' : sec('Layout guide', 'layoutGrid', layoutGuideContent, true, layoutGuideSectionActions)) +
+    (!vis.layoutGuide ? '' : sec('Layout guide', 'layoutGrid', layoutGuideContent, guideLayers.length > 0, layoutGuideSectionActions)) +
     '</div>';
 }
 

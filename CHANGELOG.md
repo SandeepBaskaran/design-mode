@@ -37,6 +37,11 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Design-tab sections auto-collapse when empty.** A section with nothing to
+  show for the selected element — no stroke, no effects, no fill, no layout
+  guides — now opens collapsed instead of taking up space with an empty body.
+  It re-evaluates per selection, and manually toggling a section pins it
+  (your choice wins over the content default until the next selection).
 - **Color picker opens as a compact solid picker.** Clicking a colour swatch
   now shows just the essentials — a live swatch, a Hex field, the eyedropper,
   and the HEX/RGB/HSL format cycle — with the Site Colors list below. The

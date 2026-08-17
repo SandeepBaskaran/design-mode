@@ -214,6 +214,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
+| 3.0  | Empty sections default collapsed | Select a plain `<div>` with a background but no border/shadow/filter | **Stroke**, **Effects**, and **Layout guide** open collapsed (nothing to show); **Fill** opens expanded (it has a background). Select an element that *does* have a border/shadow and those sections open expanded. Manually toggling a section pins it (overrides the content default) until the next selection of an untoggled section |
 | 3.1  | Computed box layout | Select an element with margin and padding → expand Layout → Advanced | Chrome-DevTools box shown: outer dashed (margin) → inner solid (padding) → centre dimension pill (`W × H`) |
 | 3.2  | Edit padding via computed box | In Layout → Advanced, click padding-top in the box, type `24`, blur | Element padding-top becomes `24px`; change recorded |
 | 3.2a | Figma margin/padding expand | In Layout, type a uniform Margin value; click the expand (scan) button on the Margin row | Uniform writes the `margin` shorthand; expand reveals 4 side inputs (↑→↓←) writing `margin-top/right/bottom/left`; per-side edits land in Changes. Same for Padding |
