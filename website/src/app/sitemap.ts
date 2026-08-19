@@ -69,6 +69,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE}/use-cases`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
     { url: `${BASE}/compare`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
     { url: `${BASE}/docs`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${BASE}/changelog`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${BASE}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
   ];
 

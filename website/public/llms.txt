@@ -22,6 +22,7 @@ Key facts:
 - [Features](https://designmode.app/features): Every control inside the side panel, broken down by row.
 - [MCP setup](https://designmode.app/mcp): Connect Claude Desktop, Cursor, Claude Code, Windsurf, or any MCP-aware agent.
 - [FAQ](https://designmode.app/faq): Installation, browser support, MCP modes, agents, privacy, licensing.
+- [Changelog](https://designmode.app/changelog): Every feature in plain language with the date it shipped — the "since when is this available" record.
 
 ## Use cases
 

@@ -19,6 +19,7 @@ export function Footer() {
     { name: "Use cases", href: "/use-cases" },
     { name: "Compare", href: "/compare" },
     { name: "Docs", href: "/docs" },
+    { name: "Changelog", href: "/changelog" },
     { name: "Blog", href: "/blog" },
     { name: "FAQ", href: "/faq" },
     { name: "About", href: "/about" },
