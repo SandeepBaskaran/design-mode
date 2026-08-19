@@ -86,6 +86,10 @@ Design Mode brings a coding agent inside the page through a small bridge called 
   handles (corners + edge midpoints) — resizing is live and lands in
   the Changes tab / export as `width`/`height`. Shift-click adds
   elements and shows the pixel spacing between them.
+- **Corner shape** — CSS `corner-shape` (Borders L4) from an icon dropdown in
+  the Appearance row: round / squircle / square / bevel / scoop / notch — the
+  CSS equivalent of Figma's corner smoothing (newest-Chromium-only, harmlessly
+  inert elsewhere).
 - **Transition editor** — Per-property breakdown (property / duration / timing / delay) plus
   ▶ Preview that flashes a contrast value for the configured duration so you can see the curve.
 - **Changes log** — Every edit grouped by element. View Original / View Changes toggle,

@@ -19,6 +19,12 @@ outline). The side panel mirrors whatever you have selected.
   can eyeball alignment against everything else.
 - **Use**: just move the mouse. The Design tab updates with the hovered
   element's styles when nothing is selected.
+- **Responsive / touch mode**: when the browser's device toolbar (Chrome) or
+  Responsive Design Mode (Firefox) emulates touch, the page reports
+  `(hover: none)` and stops firing hover events — so inspect goes dead. The
+  panel detects this and shows a browser-aware full-panel guide (turn off the
+  device *type*, not the width) with a **Continue anyway** button for
+  tap-to-select. It auto-dismisses the moment hover returns.
 
 ### 1.2 Click to select
 
@@ -191,12 +197,19 @@ hovered) element. Every field updates the page live.
 
 ### 2.10 Appearance
 
-- **Icon-first row** — a 12-col grid: Opacity (5) | Corner radius (5) |
-  edit-each-corner toggle (2). Opacity and corner radius are led by an icon
-  (blend / maximize) with the field label moved into the tooltip. Corner
-  radius uses a uniform numeric field by default; typing a value over
-  "Mixed" forces all four corners to match, and the toggle expands to
-  per-corner editing.
+- **Icon-first row** — a 12-col grid: Opacity (4) | Corner radius (4) |
+  Corner shape (2) | edit-each-corner toggle (2). Opacity and corner radius
+  are led by an icon (blend / maximize) with the field label moved into the
+  tooltip. Corner radius uses a uniform numeric field by default; typing a
+  value over "Mixed" forces all four corners to match, and the toggle expands
+  to per-corner editing.
+- **Corner shape** (icon dropdown between the radius field and the expand
+  toggle) — writes CSS `corner-shape` (Borders L4): `round` / `squircle` /
+  `square` / `bevel` / `scoop` / `notch`. The trigger previews the current
+  shape; clicking opens an inline row of shape icons (name on hover), and
+  picking one applies it and closes the row. Needs a non-zero border-radius;
+  newest-Chromium-only (the property is written but harmlessly ignored where
+  unsupported).
 - Rotation (degrees), Visibility, Cursor.
 - **Advanced** (disclosure) — Mix-blend-mode and Isolation.
 - **Transform** (raw text) — for skew, perspective, custom matrix, etc.
@@ -424,6 +437,14 @@ A Figma-style DOM tree of the page.
 ## 4. Side panel — Changes tab
 
 Every edit you've made grouped by element.
+
+- **Breakpoint pill**: every change captures the page's viewport width at edit
+  time and derives a responsive breakpoint (mobile < 768px, tablet 768–1023px,
+  desktop ≥ 1024px). Mobile/tablet rows show a small `MOBILE` / `TABLET` pill
+  (hover → `Edited at {bp} · {width}px`); desktop edits show none. The pill
+  persists across reload, and the width + breakpoint ride along in
+  `get_changes` and the Copy-as-Prompt output (see §7) so an agent knows to
+  scope the edit to a media query.
 
 ### 4.1 Style change row
 

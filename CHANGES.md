@@ -67,6 +67,10 @@ A connected coding agent can mark changes as it implements them, via the `set_ch
 - **Row badge** — a small `WIP` (amber) or `DONE` (green) pill on each style / text / DOM row once the agent moves it off the default *to-do*. Resolved rows also dim and strike through, matching resolved comments. To-do rows show no badge, so solo editing (no agent) looks exactly as before.
 - **Status sub-filter** — a **To-do / In progress / Resolved / All** chip row that appears once any change is in-progress or resolved, narrowing the list by status. Comments keep their own open/resolved filter; the agent can resolve a comment through the same tool.
 
+### Breakpoint pill (responsive edits)
+
+Each change records the page's viewport width at the moment you made it and derives a responsive breakpoint — **mobile** (< 768px), **tablet** (768–1023px), or **desktop** (≥ 1024px, the untagged default). A style / text / DOM row edited below 1024px shows a small **`MOBILE`** / **`TABLET`** pill next to the status badge; hovering it reads `Edited at {breakpoint} · {width}px`. The pill persists across a page reload, and the width + breakpoint travel with the change into `get_changes` and the Copy-as-Prompt output so a coding agent knows to scope the edit to a media query. Desktop-width edits show no pill.
+
 ### Clear All — confirmation dialog
 
 Clicking **Clear All** opens a centred overlay:

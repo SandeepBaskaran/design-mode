@@ -6,32 +6,7 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- **Hover-unavailable guide for responsive/touch mode.** When the browser's
-  device toolbar (Chrome) or Responsive Design Mode (Firefox) emulates touch,
-  the browser reports `(hover: none)` and stops firing the hover events the
-  inspector relies on — so element preview goes dead while tap-to-select still
-  works. The content script now detects this and the side panel shows a
-  browser-aware full-panel guide with the one real fix (turn touch emulation
-  off — the device *type*, not the width) and a **Continue anyway** button to
-  keep working via tap-select. It re-appears if touch is switched back on and
-  auto-dismisses the moment hover returns — no reload.
-
-- **Breakpoint tags on changes.** Every recorded change now captures the
-  page's viewport width at edit time and derives a responsive breakpoint
-  (mobile < 768px, tablet 768–1023px, desktop ≥ 1024px, Tailwind-aligned).
-  The Markdown / Copy-as-Prompt / Send-to-Agent output tags each
-  mobile/tablet change inline — e.g. `color #000 → #fff _(mobile · 375px)_`
-  — so coding agents know to scope the edit to a media query (desktop stays
-  the untagged default). The width is the page's real render width, so it
-  works with the side panel open. `viewportWidth` + `breakpoint` also ride
-  along on each change in `get_changes`. Each mobile/tablet row in the
-  Changes tab also shows a small breakpoint pill.
-
-## [2.0.0] — 2026-07-30
+## [2.1.0] — 2026-08-18
 
 ### Added
 
@@ -44,6 +19,66 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   the standard `corner-shape` property, needs a non-zero radius to show, and is
   harmlessly ignored on browsers that don't support it yet. The picker is an
   inline row of shape icons (name on hover) in the panel's icon colour.
+- **Breakpoint tags on changes.** Every recorded change now captures the
+  page's viewport width at edit time and derives a responsive breakpoint
+  (mobile < 768px, tablet 768–1023px, desktop ≥ 1024px, Tailwind-aligned).
+  The Markdown / Copy-as-Prompt / Send-to-Agent output tags each
+  mobile/tablet change inline — e.g. `color #000 → #fff _(mobile · 375px)_`
+  — so coding agents know to scope the edit to a media query (desktop stays
+  the untagged default). The width is the page's real render width, so it
+  works with the side panel open. `viewportWidth` + `breakpoint` also ride
+  along on each change in `get_changes`. Each mobile/tablet row in the
+  Changes tab also shows a small breakpoint pill.
+- **Hover-unavailable guide for responsive/touch mode.** When the browser's
+  device toolbar (Chrome) or Responsive Design Mode (Firefox) emulates touch,
+  the browser reports `(hover: none)` and stops firing the hover events the
+  inspector relies on — so element preview goes dead while tap-to-select still
+  works. The content script now detects this and the side panel shows a
+  browser-aware full-panel guide with the one real fix (turn touch emulation
+  off — the device *type*, not the width) and a **Continue anyway** button to
+  keep working via tap-select. It re-appears if touch is switched back on and
+  auto-dismisses the moment hover returns — no reload.
+
+### Changed
+
+- **Design-tab sections auto-collapse when empty.** A section with nothing to
+  show for the selected element — no stroke, no effects, no fill, no layout
+  guides — now opens collapsed instead of taking up space with an empty body.
+  It re-evaluates per selection, and manually toggling a section pins it
+  (your choice wins over the content default until the next selection).
+- **Copy as Prompt exports text edits as a compact word-diff.** Text-content
+  changes were clipped to 60 characters, so a rewritten heading or paragraph
+  reached the agent half-finished. They now export as a word-level diff in git
+  `--word-diff` notation — `[-removed-] {+added+}` with unchanged runs elided to
+  `…` — instead of the whole before+after paragraph. The agent gets exactly the
+  corrections (the element pointer already localises them), which conveys the
+  full change *and* cuts the input tokens fed to the coding agent. A one-line
+  legend in the `## Changes` header explains the markers (and that they must not
+  be written into the text). A total rewrite or oversized edit falls back to the
+  new text alone.
+
+### Fixed
+
+- **Corner-radius field no longer shows scientific notation.** A radius that
+  resolved to float noise (e.g. `1.67772e-14px` from a percentage / transform)
+  rendered as a broken `1.67772e-` in the field; values that round to zero now
+  display as `0`, real values keep up to two decimals, and no value is ever
+  shown in exponent form.
+- **Copy / Download SVG buttons confirm the action.** Copying an SVG's markup or
+  downloading media now briefly flips the button to a check with "Copied" /
+  "Downloaded" for ~1.2s (matching the screenshot button), so there's clear
+  feedback that the click landed.
+
+### Internal
+
+- **Dependency bumps.** `actions/setup-node` 6→7 and `actions/stale` 10→11 in
+  the CI workflows, plus a 25-package npm patch/minor group across the root and
+  every workspace. `npm run verify` is green after the bumps.
+
+## [2.0.0] — 2026-07-30
+
+### Added
+
 - **Alignment guides while dragging (Slides / Keynote style).** Dragging the
   body of a selected element now snaps its edges and centres to its siblings
   and the parent box, drawing a solid magenta guide through each match.
@@ -62,11 +97,6 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **Design-tab sections auto-collapse when empty.** A section with nothing to
-  show for the selected element — no stroke, no effects, no fill, no layout
-  guides — now opens collapsed instead of taking up space with an empty body.
-  It re-evaluates per selection, and manually toggling a section pins it
-  (your choice wins over the content default until the next selection).
 - **Color picker opens as a compact solid picker.** Clicking a colour swatch
   now shows just the essentials — a live swatch, a Hex field, the eyedropper,
   and the HEX/RGB/HSL format cycle — with the Site Colors list below. The
@@ -135,24 +165,6 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   barely showed. The default radius is lower and the editor gains an
   **Opacity %** field (threaded into the grain's alpha) so the texture reads
   and is tunable.
-- **Copy as Prompt sends text edits as a compact inline diff.** Text-content
-  changes were clipped to 60 characters, so a rewritten heading or paragraph
-  reached the agent half-finished. They now export as a word-level diff in git
-  `--word-diff` notation — `[-removed-] {+added+}` with unchanged runs elided to
-  `…` — instead of the whole before+after paragraph. The agent gets exactly the
-  corrections (the element pointer already localises them), which conveys the
-  full change *and* cuts the input tokens fed to the coding agent. A one-line
-  legend in the `## Changes` header explains the markers (and that they must not
-  be written into the text). A total rewrite or oversized edit falls back to the
-  new text alone.
-- **Corner-radius field no longer shows scientific notation.** A radius that
-  resolved to float noise (e.g. `1.67772e-14px` from a percentage / transform)
-  rendered as a broken `1.67772e-` in the field; values that round to zero at
-  four decimals now display as `0`, and no value is ever shown in exponent form.
-- **Copy / Download SVG buttons confirm the action.** Copying an SVG's markup or
-  downloading media now briefly flips the button to a check with "Copied" /
-  "Downloaded" for ~1.2s (matching the screenshot button), so there's clear
-  feedback that the click landed.
 
 ### Internal
 

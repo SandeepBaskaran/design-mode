@@ -45,6 +45,12 @@ Optional cloud mode (you turn it on explicitly in Settings):
   messages flow through and are dropped when the connection closes.
   Disable cloud mode in Settings to revert to localhost-only.
 
+When you're connected to a coding agent (via any of the modes above), the edit
+set it reads (`get_changes`) carries, per change, the page's **viewport width**
+at edit time and the derived breakpoint (mobile / tablet / desktop) so the agent
+can scope edits to a media query. This is window-size metadata, not personal
+data, and it only travels over the connection you've already opted into.
+
 There are **no analytics, no telemetry, and no error reporting** in the
 extension or the MCP server. There is no remote update channel beyond the
 standard store mechanism — the Chrome Web Store for Chromium browsers and

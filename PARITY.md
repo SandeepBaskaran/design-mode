@@ -220,6 +220,7 @@ Advanced disclosure (chevron):
 | Backdrop adjust | `backdrop-filter` color-adjust functions | Same icon row as `filter` but writes to `backdrop-filter`. Composes — re-clicking a function removes just it. |
 | Backdrop adjust | `backdrop-filter` (raw) | Free-text input. |
 | Clip path | `clip-path` | Visual shape editor: pick a shape (`none` / `inset` / `circle` / `ellipse` / `polygon` / `path` / `url` / `custom`), then edit the relevant fields (insets per edge, radius + centre, vertex list, SVG path string, fragment id). Raw input alongside for power users. |
+| Corner shape | `corner-shape` | Reshapes the corners `border-radius` rounds — the CSS equivalent of Figma's corner smoothing. Icon dropdown of six keywords: `round` / `squircle` / `square` / `bevel` / `scoop` / `notch`. Needs a non-zero radius; newest-Chromium-only, harmlessly inert elsewhere. |
 | Scrollbars | `scrollbar-width` | `auto` / `thin` / `none`. |
 | Scrollbars | `scrollbar-color` | Two-colour pair (thumb track) or `auto`. |
 | Scrollbars | `scrollbar-gutter` | `auto` / `stable` / `stable both-edges`. |
@@ -235,7 +236,6 @@ _Nothing planned for Appearance._ The clip-path polygon now uses per-vertex X / 
 
 | Feature | Reason |
 |---|---|
-| **Corner smoothing** (Figma squircle) | Figma proprietary `SuperEllipse` math; CSS has no equivalent. Permanently skipped. |
 | **`-webkit-line-clamp`** + companions | Multi-line ellipsis. Lives in Typography → Advanced. |
 | **`overscroll-behavior`** | Behavioural (scroll chaining), not visual. |
 | **`touch-action`** | Behavioural (gestures), not visual. |
