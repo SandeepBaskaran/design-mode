@@ -51,6 +51,7 @@ export const STEPS: Step[] = [
     body: [
       "The crosshair icon at the top of the side panel toggles inspector mode. Hover any element on the page and you'll see a blue outline; click to select it and the Design tab fills with that element's properties.",
       "Hovering shows the layer in the panel's indicator chip as 'Hovering'. Clicking flips it to 'Selected' and locks the focus on that layer.",
+      "If you turn on the browser's device toolbar with touch emulation, the page stops firing hover events — so the panel shows a short guide on switching the emulated device type off (with a Continue anyway option for tap-to-select), and clears itself the moment hover comes back.",
     ],
     tryIt:
       "Click the crosshair in the side panel header, then hover over the card below. Click the card to select it.",
@@ -107,7 +108,7 @@ export const STEPS: Step[] = [
     title: "Design panel",
     body: [
       "The Design tab is where you edit a selected layer's properties. It mirrors Figma's section order — Position → Layout → Appearance → Typography → Fill → Stroke → Effects → Motion → Layout guide — so the mental model carries over.",
-      "Sections only render for relevant layer kinds: Typography appears on text layers, Layout hides for media, etc. The sub-sections below walk through each, starting with the indicator chip and the Icon / Media sections that surface above Position.",
+      "Sections only render for relevant layer kinds: Typography appears on text layers, Layout hides for media, etc. — and a section with nothing to show for the selected element (no stroke, no effects, no fill) opens collapsed, so the panel stays compact. The sub-sections below walk through each, starting with the indicator chip and the Icon / Media sections that surface above Position.",
     ],
   },
   {
@@ -152,12 +153,12 @@ export const STEPS: Step[] = [
     id: "design-appearance",
     title: "Appearance",
     body: [
-      "Appearance covers opacity and corner radius as compact, icon-led fields (the label lives in the tooltip), plus the color-adjust filters (brightness, contrast, saturate, hue-rotate, grayscale, invert, sepia). Blend mode and isolation moved into Advanced.",
-      "The corner radius has a primary input + a scan toggle that expands a 2×2 grid for individual corners. Click the scan icon and try unequal corners.",
+      "Appearance covers opacity and corner radius as compact, icon-led fields (the label lives in the tooltip), a Corner shape dropdown alongside them, and the color-adjust filters (brightness, contrast, saturate, hue-rotate, grayscale, invert, sepia). Blend mode and isolation moved into Advanced.",
+      "The corner radius has a primary input plus a scan toggle that expands a 2×2 grid for individual corners. Between the radius field and that toggle sits Corner shape — an icon dropdown that writes the CSS corner-shape property (round, squircle, square, bevel, scoop, notch), the CSS take on Figma's corner smoothing. It needs a non-zero radius and renders on the newest Chromium. Click the scan icon and try unequal corners.",
       "Advanced goes further: blend mode, isolation, a structured clip-path editor with live preview, backdrop blur, scrollbar styling, containment / content-visibility, color-scheme, and pointer / selection interaction controls.",
     ],
     tryIt:
-      "Select the card below. In Appearance, click the scan icon next to Corner radius, set the top-left corner to 24px and the bottom-right to 0.",
+      "Select the card below. In Appearance, click the scan icon next to Corner radius, set the top-left corner to 24px and the bottom-right to 0. Then open the Corner shape dropdown and pick squircle or scoop.",
     targetId: "design-appearance",
     parentId: "design",
   },
@@ -264,7 +265,7 @@ export const STEPS: Step[] = [
     id: "changes",
     title: "Changes panel",
     body: [
-      "Every edit is tracked in the Changes tab — grouped by element with friendly group labels (preset / multi-select / visibility) when one action touched many properties at once. The 'View Original' / 'View Changes' toggle previews the page with or without your edits.",
+      "Every edit is tracked in the Changes tab — grouped by element with friendly group labels (preset / multi-select / visibility) when one action touched many properties at once. The 'View Original' / 'View Changes' toggle previews the page with or without your edits. Edits made at a mobile or tablet viewport carry a small breakpoint pill so you (and your agent) can tell which changes are responsive.",
       "Per-change actions: Revert (trash icon, actually reverses the change on the page), Batch apply (zap icon, applies the change to all matching elements with a count badge ×N). Clear All wipes everything in one click.",
       "Export / Import move the whole diff to and from a JSON file, so a session can be saved, shared, or replayed on another page. Export CSS (Alt+X) copies the generated stylesheet for the session straight to your clipboard.",
     ],
@@ -317,7 +318,7 @@ export const STEPS: Step[] = [
     id: "copy-prompt",
     title: "Copy as Prompt",
     body: [
-      "At the bottom of the side panel, Copy as Prompt builds a markdown summary of every tracked change — element selectors, before/after CSS, text edits, DOM operations, and any comments — and copies it to the clipboard. Paste into your agent or chat of choice.",
+      "At the bottom of the side panel, Copy as Prompt builds a markdown summary of every tracked change — element selectors, before/after CSS, text edits as a compact word-diff (only the changed words, not the whole paragraph), DOM operations, and any comments — and copies it to the clipboard. Edits made at a mobile or tablet viewport are tagged with their breakpoint so the agent scopes them to a media query. Paste into your agent or chat of choice.",
       "When source detection finds a React component, the prompt also includes a file:line hint so the agent can land on the right source.",
     ],
     tryIt:
