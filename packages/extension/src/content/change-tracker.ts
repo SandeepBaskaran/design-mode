@@ -4,6 +4,7 @@
 // ============================================================
 
 import { getElementById, generateSelector, describeElement, getComputedStyleSubset, reserveIdsAtLeast } from './helpers';
+import { authoredTokenValueFor, bumpStyleGen } from './token-engine';
 import { DEFAULT_WS_PORT, DATA_ATTR, classifyBreakpoint, type Breakpoint } from '../shared';
 import { BUILTIN_KEYFRAMES } from './keyframes-library';
 import { captureElementScreenshot, captureViewportScreenshotClean, captureRegionScreenshot } from './screenshots';
@@ -320,6 +321,9 @@ function ensureStyleEl(): HTMLStyleElement {
 }
 
 function rebuildStyleSheet() {
+  // The override sheet drives attribution, so any rebuild invalidates the
+  // authored-vars memo in token-engine.
+  bumpStyleGen();
   const el = ensureStyleEl();
   const blocks: string[] = [];
   for (const name of injectedKeyframes) {
@@ -863,7 +867,9 @@ export function applyStyleChange(
     return merged;
   }
 
-  const oldValue = window.getComputedStyle(el).getPropertyValue(k);
+  // Prefer the authored token (`var(--x)`) over its resolved value so undo
+  // and the Changes tab step back to the token, keeping the badge intact.
+  const oldValue = authoredTokenValueFor(el, k) ?? window.getComputedStyle(el).getPropertyValue(k);
   upsertRule(elementId, property, value, state);
   // We used to drop rules whose computed value didn't change (invalid CSS,
   // var() that resolves to the same color, etc.) but that swallowed valid

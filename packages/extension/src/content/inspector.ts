@@ -3,7 +3,7 @@
 // ============================================================
 
 import { getOrAssignId, getElementById, getElementRect, generateSelector, getBreadcrumbs, getComputedStyleSubset } from './helpers';
-import { getAuthoredVarsForElement, type PropToken } from './token-engine';
+import { getAuthoredVarsForElement, getAuthoredShadowVars, type PropToken, type ShadowVarInfo } from './token-engine';
 import { showHover, hideHover, showSelect, updateSelectPosition, isOverlayElement } from './overlays';
 import { isMultiSelectActive, enableMultiSelect, disableMultiSelect, toggleSelection, getSelectedIds } from './multi-select';
 import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag } from './measure-guides';
@@ -17,6 +17,9 @@ export type ElementInfo = {
   // camelCase prop → the token it's authored from (var name + the scope
   // this element resolves it through). Drives the token badges.
   styleTokens: Record<string, PropToken>;
+  // camelCase compound-shadow prop → the vars it's composed from. Drives the
+  // multi-token shadow chip (a single `styleTokens` entry can't hold a stack).
+  shadowVars: Record<string, ShadowVarInfo>;
   rect: { top: number; left: number; width: number; height: number; bottom: number; right: number };
   textContent: string | null; innerHTML: string;
   attributes: Record<string, string>; selector: string;
@@ -129,6 +132,7 @@ export function buildElementInfo(el: HTMLElement, skipTokens = false): ElementIn
     elementId: el.id || '', breadcrumbs: getBreadcrumbs(el),
     computedStyles: getComputedStyleSubset(el),
     styleTokens: skipTokens ? {} : getAuthoredVarsForElement(el),
+    shadowVars: skipTokens ? {} : getAuthoredShadowVars(el),
     rect: getElementRect(el),
     textContent: el.textContent?.slice(0, 500) || null,
     innerHTML,

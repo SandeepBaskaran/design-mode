@@ -20,7 +20,7 @@ import {
   getCustomPresets, saveCustomPreset, deleteCustomPreset,
   type PresetKind,
 } from './presets';
-import { getTokenIndex, invalidateTokenIndex } from './token-engine';
+import { getTokenIndex, invalidateTokenIndex, authoredTokenValueFor } from './token-engine';
 import { setTokenEdit, resetTokenEdit, clearAllTokenEdits, getTokenEdits } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
 import { buildDomTree, isPageContentSealed } from './dom-tree';
@@ -1336,7 +1336,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         for (const id of targetIds) {
           const el = getElementById(id);
           if (!el) continue;
-          const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
+          const beforeValue = authoredTokenValueFor(el, kebab) ?? window.getComputedStyle(el).getPropertyValue(kebab);
           // Route through applyWithCompanions so well-known traps
           // (border-width without border-style, transition-property
           // with 0s duration, etc.) auto-emit the missing companion
@@ -1432,7 +1432,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const el = getElementById(sid);
         if (!el) continue;
         const kebab = c.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
-        const beforeValue = window.getComputedStyle(el).getPropertyValue(kebab);
+        const beforeValue = authoredTokenValueFor(el, kebab) ?? window.getComputedStyle(el).getPropertyValue(kebab);
         const change = applyWithCompanions(sid, c.property, c.value, undefined, groupMeta);
         const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
         if (afterValue !== beforeValue) {

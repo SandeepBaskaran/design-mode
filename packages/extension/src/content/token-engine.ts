@@ -280,13 +280,35 @@ function countUsages(tokens: PageToken[]): void {
 let cache: TokenIndex | null = null;
 let styleRulesCache: StyleRule[] = [];
 
+// Generation counter for the authored-vars memo. It bumps whenever anything
+// that changes attribution changes: the page-rule scan refreshes, or the
+// extension's override sheet is rebuilt (change-tracker's rebuildStyleSheet
+// calls bumpStyleGen). getAuthoredVarsForElement caches its per-element
+// result under the current generation, so the duplicate before/after captures
+// within a single edit share one cascade walk without ever going stale.
+let styleGen = 0;
+export function bumpStyleGen(): void { styleGen++; }
+// `shadowVars` records the var(s) a compound shadow property is composed from
+// (`box-shadow: var(--a), var(--b), …`) — the multi-token case a single
+// PropToken can't represent (Tailwind's shadow/ring stacking is the common
+// example). Keyed camelCase, last var is used for scope.
+export type ShadowVarInfo = { vars: string[]; scope: string };
+const authoredVarsCache = new WeakMap<Element, { gen: number; vars: Record<string, PropToken>; shadowVars: Record<string, ShadowVarInfo> }>();
+
+export function getAuthoredShadowVars(el: HTMLElement): Record<string, ShadowVarInfo> {
+  getAuthoredVarsForElement(el);
+  return authoredVarsCache.get(el)?.shadowVars ?? {};
+}
+
 export function invalidateTokenIndex(): void {
   cache = null;
+  styleGen++;
 }
 
 export function getTokenIndex(maxAgeMs = 15_000): TokenIndex {
   if (cache && Date.now() - cache.scannedAt < maxAgeMs) return cache;
   cache = scanTokenIndex();
+  styleGen++;
   return cache;
 }
 
@@ -431,6 +453,11 @@ export function owningScopeFor(el: Element, cssVar: string): string {
 export type PropToken = { cssVar: string; scope: string };
 
 export function getAuthoredVarsForElement(el: HTMLElement): Record<string, PropToken> {
+  // getStyleRules() may refresh the index (bumping styleGen); call it before
+  // reading the memo so a stale generation never satisfies the cache check.
+  const styleRules = getStyleRules();
+  const memo = authoredVarsCache.get(el);
+  if (memo && memo.gen === styleGen) return memo.vars;
   // Winner per property, following the cascade: !important beats normal,
   // inline beats page rules, then specificity, then source order. Every
   // declaration competes — including literal ones, because a more
@@ -438,9 +465,16 @@ export function getAuthoredVarsForElement(el: HTMLElement): Record<string, PropT
   // property is NOT token-driven even though a var() rule also matched.
   type Candidate = { raw: string; prio: number; spec: number; order: number };
   const winners = new Map<string, Candidate>();
+  // Properties that have at least one literal (non-var) declaration matching
+  // this element. When a compound property (box-shadow) has NONE, a winning
+  // pure `var(--x)` can be trusted without the value-match gate — which the
+  // browser's box-shadow normalisation (reordered colour, added `0px` spread)
+  // otherwise defeats for multi-shadow tokens.
+  const litProps = new Set<string>();
 
   const consider = (kebabProp: string, rawValue: string, prio: number, spec: number, order: number) => {
     if (!DESIGN_PROPS.has(kebabProp) || !rawValue) return;
+    if (!rawValue.includes('var(')) litProps.add(kebabProp);
     const prev = winners.get(kebabProp);
     if (prev && (prev.prio > prio ||
       (prev.prio === prio && (prev.spec > spec || (prev.spec === spec && prev.order > order))))) return;
@@ -467,7 +501,7 @@ export function getAuthoredVarsForElement(el: HTMLElement): Record<string, PropT
     }
   };
 
-  for (const rule of getStyleRules()) {
+  for (const rule of styleRules) {
     const parts = rule.selectorText.split(',').map(s => s.trim()).filter(Boolean);
     for (const part of parts) {
       // Pseudo-element parts style a different box than the one the
@@ -499,13 +533,25 @@ export function getAuthoredVarsForElement(el: HTMLElement): Record<string, PropT
     } catch {}
   }
 
+  // Compound shadow props: capture every var the winning value composes from
+  // (independent of the single-token verification below), so the panel can
+  // badge a multi-var stack. Only when no literal declaration competes.
+  const shadowVars: Record<string, ShadowVarInfo> = {};
+  for (const kebab of ['box-shadow', 'text-shadow']) {
+    const w = winners.get(kebab);
+    if (w && !litProps.has(kebab) && w.raw.includes('var(')) {
+      const vs = [...w.raw.matchAll(/var\(\s*(--[\w-]+)/g)].map(m => m[1]);
+      if (vs.length) shadowVars[camelize(kebab)] = { vars: vs, scope: owningScopeFor(el, vs[vs.length - 1]) };
+    }
+  }
+
   // Only the properties whose winning declaration is a var() are tokens.
   const candidates = new Map<string, { cssVar: string; raw: string }>();
   for (const [prop, cand] of winners) {
     const m = cand.raw.match(/var\(\s*(--[\w-]+)/);
     if (m) candidates.set(prop, { cssVar: m[1], raw: cand.raw });
   }
-  if (candidates.size === 0) return {};
+  if (candidates.size === 0) { authoredVarsCache.set(el, { gen: styleGen, vars: {}, shadowVars }); return {}; }
 
   // Verification gate — fail closed: only report an attribution when the
   // var's resolved value actually shows up in the property's computed
@@ -517,11 +563,38 @@ export function getAuthoredVarsForElement(el: HTMLElement): Record<string, PropT
     if (!varValue) continue;
     const propValue = cs.getPropertyValue(kebabProp).trim();
     if (!propValue) continue;
-    if (valuesMatch(propValue, varValue, el)) {
+    // Compound shadow props: a pure whole-value var with no literal rival is
+    // the value, so trust it directly (the value-match gate can't survive the
+    // browser's box-shadow reformatting). Every other prop keeps the gate.
+    const isShadow = kebabProp === 'box-shadow' || kebabProp === 'text-shadow';
+    const pureVar = /^var\(\s*--[\w-]+\s*(?:,[\s\S]*)?\)$/.test(cand.raw.trim());
+    const trustPureVar = isShadow && pureVar && !litProps.has(kebabProp) && propValue !== 'none';
+    if (trustPureVar || valuesMatch(propValue, varValue, el)) {
       out[camelize(kebabProp)] = { cssVar: cand.cssVar, scope: owningScopeFor(el, cand.cssVar) };
     }
   }
+  authoredVarsCache.set(el, { gen: styleGen, vars: out, shadowVars });
   return out;
+}
+
+// The authored token value for a property when it currently resolves through
+// a design token — `var(--x)` — or null when the value is hardcoded. Change
+// tracking captures this as the "before" value so undo and the Changes tab
+// record the *token*, not its resolved px / rgb; without it, undoing a token
+// swap or detach restores a raw value and silently drops the badge.
+export function authoredTokenValueFor(el: HTMLElement, kebabProp: string): string | null {
+  const authored = getAuthoredVarsForElement(el);
+  const direct = authored[camelize(kebabProp)];
+  if (direct) return `var(${direct.cssVar})`;
+  // A shorthand (padding / margin / border-radius) is token-authored only
+  // when every constituent longhand resolves through the same var.
+  const longhands = SHORTHAND_FANOUT[kebabProp];
+  if (longhands) {
+    const vars = longhands.map(lh => authored[camelize(lh)]?.cssVar);
+    const first = vars[0];
+    if (first && vars.every(v => v === first)) return `var(${first})`;
+  }
+  return null;
 }
 
 export function scanTokenIndex(): TokenIndex {

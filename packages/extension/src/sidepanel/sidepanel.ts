@@ -118,6 +118,10 @@ interface ElementInfo {
   // camelCase prop → the token it's authored from (var name + the scope
   // this element resolves it through).
   styleTokens?: Record<string, { cssVar: string; scope: string }>;
+  // camelCase compound-shadow prop → the vars it's composed from (multi-token
+  // stacks like Tailwind's box-shadow, which a single styleTokens entry can't
+  // hold). Drives the multi-token shadow chip.
+  shadowVars?: Record<string, { vars: string[]; scope: string }>;
   boundingRect: { x: number; y: number; width: number; height: number };
   breadcrumbs: string[]; element?: any; imgSrc?: string;
   textContent?: string; hasChildElements?: boolean;
@@ -395,6 +399,8 @@ let tokenSearch = '';
 let tokenBadgeMenuProp: string | null = null;
 let tokenPickerProp: string | null = null;
 let tokensFocusVar: string | null = null;
+// Multi-var shadow chip (Effects): which compound-shadow prop's var list is open.
+let shadowMenuProp: string | null = null;
 // Tokens panel — scope / design-system filters and the component-token
 // disclosure. Component-scoped tokens live in their own section so they
 // don't drown the page-wide sets.
@@ -1762,7 +1768,16 @@ function startRegionComment() {
   render();
 }
 function editComment(comment: CommentEntry) { commentMode = true; commentText = comment.text; editingCommentId = comment.id; viewingCommentId = null; commentDirty = false; render(); }
-async function deleteCommentEntry(commentId: string) { await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + commentId }); comments = comments.filter(c => c.id !== commentId); render(); }
+async function deleteCommentEntry(commentId: string) {
+  // Optimistic removal for instant feedback, then reconcile against the
+  // content script's stored comments so the row can't silently reappear
+  // (mirrors removeChange / submitComment — the other mutating ops).
+  comments = comments.filter(c => c.id !== commentId);
+  viewingCommentId = viewingCommentId === commentId ? null : viewingCommentId;
+  render();
+  await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + commentId });
+  await refreshChanges();
+}
 async function removeChange(changeId: string) { styleChanges = styleChanges.filter(c => (c.id || 'style-' + styleChanges.indexOf(c)) !== changeId); textChanges = textChanges.filter(c => c.id !== changeId); domChanges = domChanges.filter(c => (c.id || 'dom-' + c.action) !== changeId); batchAppliedChanges.delete(changeId); render(); await send({ type: 'SP_REMOVE_CHANGE', changeId }); await refreshChanges(); await refreshDomTree(); await refreshState(); }
 async function clearAllChanges() { await send({ type: 'SP_CLEAR_CHANGES' }); styleChanges = []; textChanges = []; domChanges = []; comments = []; tokenChanges = []; editedTokens.clear(); batchAppliedChanges.clear(); render(); }
 
@@ -1938,6 +1953,7 @@ browser.runtime.onMessage.addListener((msg) => {
     contrastSettingsOpen = false;
     tokenBadgeMenuProp = null;
     tokenPickerProp = null;
+    shadowMenuProp = null;
     effectiveBgCache.clear();
     maybeFetchEffectiveBg();
     // Covers pages that hydrated after INIT_STATE fired (SPA nav): without
@@ -2298,8 +2314,9 @@ function opacityInput(value: string): string {
     '<div class="dm-input-shell" title="Opacity">' +
     '<span class="dm-input-icon">' + icon('blend', 12) + '</span>' +
     '<input type="text" class="dm-input dm-input-bare" data-dm-prop="__opacity_pct" data-dm-numeric="1" data-dm-unit="" inputmode="decimal" value="' + pct + '"/>' +
+    renderTokenBadge('opacity') +
     '<span class="dm-input-unit">%</span>' +
-    '</div></div>';
+    '</div>' + renderTokenOverlays('opacity') + '</div>';
 }
 
 // Translate a resolved CSS value to (display, displayUnit, writeUnit)
@@ -2346,9 +2363,10 @@ function formatPxValueForDisplay(value: string): { display: string; unit: string
   return { display: fmtNum(rem), unit: 'rem', writeUnit: 'rem' };
 }
 
-function inp(label: string, prop: string, value: string, unit = 'px'): string {
-  const badge = renderTokenBadge(prop);
-  const overlays = renderTokenOverlays(prop);
+function inp(label: string, prop: string, value: string, unit = 'px', badgeProp?: string): string {
+  const bp = badgeProp ?? prop;
+  const badge = renderTokenBadge(bp);
+  const overlays = renderTokenOverlays(bp);
   const parsed = parseNumeric(value);
   if (!parsed) {
     // Non-numeric (e.g. `auto`, `inherit`) — render raw, no unit chip.
@@ -2425,10 +2443,11 @@ function tokenForProp(prop: string): { cssVar: string; scope: string; source: 'e
     return { cssVar: m[1], scope, source: 'edit' };
   }
   if (!tokens) return null;
-  // Shorthand fields (uniform padding / margin) only badge when every
-  // side is authored from the same var.
-  if (prop === 'padding' || prop === 'margin') {
-    const sides = ['Top', 'Right', 'Bottom', 'Left'].map(s => tokens[prop + s]);
+  // Shorthand fields (uniform padding / margin / border-radius) only badge
+  // when every constituent longhand is authored from the same var.
+  const uniform = UNIFORM_SHORTHANDS[prop];
+  if (uniform) {
+    const sides = uniform.map(k => tokens[k]);
     const first = sides[0];
     return first && sides.every(v => v?.cssVar === first.cssVar)
       ? { cssVar: first.cssVar, scope: first.scope, source: 'page' }
@@ -2438,10 +2457,20 @@ function tokenForProp(prop: string): { cssVar: string; scope: string; source: 'e
   return t ? { cssVar: t.cssVar, scope: t.scope, source: 'page' } : null;
 }
 
+// Uniform shorthand fields that badge only when every constituent longhand
+// resolves through the same token. The longhand keys are camelCase to match
+// the attribution map (`info.styleTokens`).
+const UNIFORM_SHORTHANDS: Record<string, string[]> = {
+  padding: ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'],
+  margin: ['marginTop', 'marginRight', 'marginBottom', 'marginLeft'],
+  borderRadius: ['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius'],
+};
+
 const PROP_TOKEN_GROUPS: Array<{ re: RegExp; group: TokenGroup }> = [
   { re: /color|fill$|^stroke/i, group: 'colour' },
-  { re: /^(padding|margin|gap|rowGap|columnGap|width|height)/, group: 'spacing' },
   { re: /Radius/, group: 'radius' },
+  { re: /^(padding|margin|gap|rowGap|columnGap|width|height)/, group: 'spacing' },
+  { re: /Width$/, group: 'spacing' },
   { re: /^(fontSize|fontWeight|fontFamily|lineHeight|letterSpacing)$/, group: 'typography' },
   { re: /Shadow$/i, group: 'shadow' },
 ];
@@ -2474,13 +2503,15 @@ function renderTokenPicker(prop: string): string {
     ? tokens.map(t => {
         const display = (t.resolvedValue || t.value).trim();
         const isCurrent = t.cssVar === current;
-        return '<button data-dm-pick-token="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
-          '<span style="flex:1;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
-          '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;">' + escapeAttr(display) + '</span>' +
+        // Name over value, each on its own line so a long token name and a
+        // long value (e.g. calc(…)) both stay readable; full text on hover.
+        return '<button data-dm-pick-token="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" title="' + escapeAttr(t.cssVar + ' = ' + display) + '" style="width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:6px 10px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
+          '<span style="max-width:100%;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
+          '<span style="max-width:100%;font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(display) + '</span>' +
           '</button>';
       }).join('')
     : '<div style="padding:12px;font-size:10px;color:var(--dm-text-dim);text-align:center;">No ' + group + ' tokens on this page.</div>';
-  return '<div data-dm-token-picker="' + escapeAttr(prop) + '" style="position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:40;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;max-height:240px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;">' +
+  return '<div data-dm-token-picker="' + escapeAttr(prop) + '" data-dm-token-popover="stretch" style="position:fixed;z-index:60;visibility:hidden;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;max-height:240px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;">' +
     '<div style="padding:6px 8px 4px;font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Site tokens (' + tokens.length + ')</div>' + rows +
     '</div>';
 }
@@ -2499,7 +2530,7 @@ function renderTokenOverlays(prop: string): string {
   const scopeLine = tok.scope !== ':root'
     ? '<div style="padding:0 10px 6px;font-size:9px;color:var(--dm-text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">via <span style="font-family:SF Mono,Monaco,monospace;">' + escapeAttr(tok.scope) + '</span></div>'
     : '';
-  return '<div data-dm-token-menu="' + escapeAttr(prop) + '" style="position:absolute;right:0;top:100%;margin-top:4px;z-index:40;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;min-width:180px;">' +
+  return '<div data-dm-token-menu="' + escapeAttr(prop) + '" data-dm-token-popover="right" style="position:fixed;z-index:60;visibility:hidden;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;min-width:180px;">' +
     '<div style="padding:5px 10px 3px;font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">var(' + escapeAttr(tok.cssVar) + ')</div>' +
     scopeLine +
     '<div style="border-bottom:1px solid var(--dm-separator);margin-bottom:3px;"></div>' +
@@ -2507,6 +2538,30 @@ function renderTokenOverlays(prop: string): string {
     item('edit', 'Edit token globally') +
     item('detach', 'Detach from token') +
     '</div>';
+}
+
+// Multi-var shadow chip (Effects section). A compound shadow composed from
+// several vars (`box-shadow: var(--a), var(--b), …` — Tailwind's stacking)
+// can't be one PropToken, so the ◆ lists every composed var. No Swap (there's
+// no single token to swap); Edit opens each var in the Tokens panel, Detach
+// writes the resolved literal. The menu is portal-positioned like the others.
+function renderShadowVarChip(prop: string, menuKey: string, label: string, data: { vars: string[]; scope: string }): string {
+  const open = shadowMenuProp === menuKey;
+  const n = data.vars.length;
+  const badge = '<button type="button" class="dm-token-badge' + (open ? ' dm-token-badge-open' : '') + '" data-dm-shadow-token="' + escapeAttr(menuKey) + '" title="Composed from ' + n + ' token' + (n > 1 ? 's' : '') + '">◆<span class="dm-token-badge-name">' + n + '</span></button>';
+  const menu = open
+    ? '<div data-dm-token-popover="right" style="position:fixed;z-index:60;visibility:hidden;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;min-width:200px;max-width:260px;">' +
+      '<div style="padding:5px 10px 3px;font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Composed from</div>' +
+      data.vars.map(v => '<button data-dm-shadow-edit-var="' + escapeAttr(v) + '" data-dm-shadow-scope="' + escapeAttr(data.scope) + '" title="Edit ' + escapeAttr(v) + ' globally" style="width:100%;display:block;padding:5px 10px;background:transparent;border:none;cursor:pointer;text-align:left;font-family:SF Mono,Monaco,monospace;font-size:10px;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(v) + '</button>').join('') +
+      '<div style="border-top:1px solid var(--dm-separator);margin:3px 0;"></div>' +
+      '<button data-dm-shadow-detach="' + escapeAttr(prop) + '" style="width:100%;display:block;padding:6px 10px;background:transparent;border:none;cursor:pointer;text-align:left;font-family:inherit;font-size:11px;color:var(--dm-text);">Detach from tokens</button>' +
+      '</div>'
+    : '';
+  return '<div class="dm-field" style="margin-bottom:8px;">' +
+    '<div style="display:flex;align-items:center;gap:6px;">' +
+    '<span style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</span>' +
+    '<span style="position:relative;display:inline-flex;">' + badge + menu + '</span>' +
+    '</div></div>';
 }
 
 function sizeInput(label: string, prop: 'width' | 'height', resolvedValue: string, elementId: string): string {
@@ -2624,10 +2679,17 @@ function sel(label: string, prop: string, value: string, options: string[]): str
     '<select class="dm-select" data-dm-prop="' + prop + '">' + opts + '</select></div>';
 }
 
-function selKV(label: string, prop: string, value: string, options: Array<{ value: string; label: string }>): string {
+function selKV(label: string, prop: string, value: string, options: Array<{ value: string; label: string }>, badgeProp?: string): string {
   const opts = options.map(o => '<option value="' + escapeAttr(o.value) + '"' + (o.value === value ? ' selected' : '') + '>' + escapeAttr(o.label) + '</option>').join('');
-  return '<div class="dm-field"><label class="dm-field-label">' + label + '</label>' +
-    '<select class="dm-select" data-dm-prop="' + prop + '">' + opts + '</select></div>';
+  // A `<select>` has no input shell to host the badge, so the ◆ pill sits
+  // in the label row and its menu anchors to the `.dm-field` (position:relative).
+  const badge = badgeProp ? renderTokenBadge(badgeProp, false) : '';
+  const labelRow = badge
+    ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;"><label class="dm-field-label">' + label + '</label>' + badge + '</div>'
+    : '<label class="dm-field-label">' + label + '</label>';
+  return '<div class="dm-field">' + labelRow +
+    '<select class="dm-select" data-dm-prop="' + prop + '">' + opts + '</select>' +
+    (badgeProp ? renderTokenOverlays(badgeProp) : '') + '</div>';
 }
 
 const FONT_WEIGHTS: Array<{ value: string; label: string }> = [
@@ -3052,7 +3114,7 @@ function renderFontFamilyPicker(currentValue: string): string {
     options = [{ value: v, label: primary(v) || v.slice(0, 32) }, ...options];
     matchedValue = v;
   }
-  return selKV('Font', 'fontFamily', matchedValue, options);
+  return selKV('Font', 'fontFamily', matchedValue, options, 'fontFamily');
 }
 
 // Render the color picker panel (HSV / hex / RGB / token list) for a prop.
@@ -3097,41 +3159,49 @@ function renderTokensDropdown(prop: string, value: string): string {
   const hex = rgbToHex(value);
   const colorTokens = designTokens.filter(t => t.group === 'colour');
   if (colorTokens.length === 0) return '';
-  return '<div data-dm-tokens-dropdown="' + prop + '" style="position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;max-height:240px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;">' +
+  return '<div data-dm-tokens-dropdown="' + prop + '" data-dm-token-popover="stretch" style="position:fixed;z-index:60;visibility:hidden;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;max-height:240px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;">' +
     '<div style="padding:6px 8px 4px;font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Site colours (' + colorTokens.length + ')</div>' +
     colorTokens.map(t => {
       const tokenVal = (t.resolvedValue || t.value).trim();
       const tokenHex = rgbToHex(tokenVal);
       const isCurrent = tokenVal === value || tokenHex === hex || ('var(' + t.cssVar + ')') === value;
       const tokenDisplay = formatTokenForDisplay(tokenVal);
-      return '<button data-dm-pick-color="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
+      return '<button data-dm-pick-color="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" title="' + escapeAttr(t.cssVar + ' = ' + tokenDisplay) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
         '<span style="width:14px;height:14px;border-radius:3px;background:' + escapeAttr(tokenVal) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>' +
-        '<span style="flex:1;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
-        '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;">' + escapeAttr(tokenDisplay) + '</span>' +
+        '<span style="flex:1;min-width:0;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
+        '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(tokenDisplay) + '</span>' +
         '</button>';
     }).join('') +
     '</div>';
 }
 
-function colorInp(label: string, prop: string, value: string, omitPanel = false): string {
+function colorInp(label: string, prop: string, value: string, omitPanel = false, badgeProp?: string): string {
   const hex = rgbToHex(value);
   const displayColor = formatColorForDisplay(value);
   const isOpen = activeColorPickerProp === prop;
   const tokensOpen = tokensDropdownProp === prop;
+  // The badge may attribute a *different* real prop than the input writes
+  // (e.g. the Stroke section's `__stroke_color` input badges `outlineColor`).
+  const bp = badgeProp ?? prop;
+  const badgeTokensOpen = bp !== prop && tokensDropdownProp === bp;
   // Render the inline panel below the field unless caller asked us to
   // omit it (Stroke renders the panel detached, beneath the whole row).
   const panel = (isOpen && !omitPanel) ? renderColorPanel(prop, value) : '';
   // Tokens-only dropdown — opens when the hex input is focused. Doesn't
   // render when the full color panel is already open (avoid stacking).
   const tokensPanel = (tokensOpen && !isOpen && !omitPanel) ? renderTokensDropdown(prop, value) : '';
+  // Badge "Swap token…" dropdown — keyed to the real prop, so it survives
+  // even when the input itself writes through a virtual prop.
+  const badgeTokensPanel = badgeTokensOpen ? renderTokensDropdown(bp, value) : '';
   return '<div style="display:flex;flex-direction:column;gap:3px;min-width:0;position:relative;">' +
     (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
     '<div style="display:flex;align-items:center;gap:4px;min-width:0;position:relative;">' +
     '<button type="button" data-dm-color-trigger="' + escapeAttr(prop) + '" title="Pick a color" style="width:28px;height:28px;border:1px solid var(--dm-input-border);border-radius:5px;cursor:pointer;background:' + escapeAttr(value || hex || '#000') + ';padding:0;flex-shrink:0;outline:' + (isOpen ? '2px solid var(--dm-accent)' : 'none') + ';"></button>' +
     '<input type="text" class="dm-input" data-dm-prop="' + prop + '" data-dm-tokens-trigger="' + escapeAttr(prop) + '" value="' + escapeAttr(displayColor) + '" style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);flex:1;min-width:0;"/>' +
-    renderTokenBadge(prop, false) +
+    renderTokenBadge(bp, false) +
     tokensPanel +
-    renderTokenOverlays(prop) +
+    badgeTokensPanel +
+    renderTokenOverlays(bp) +
     '</div>' +
     panel +
     '</div>';
@@ -3491,8 +3561,9 @@ function cornerRadiusUniformField(s: Record<string, string>): string {
     '<div class="dm-input-shell" title="Corner radius">' +
     '<span class="dm-input-icon">' + icon('maximize', 12) + '</span>' +
     '<input type="text" class="dm-input dm-input-bare" data-dm-prop="borderRadius" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" placeholder="' + (isMixed ? 'Mixed' : '0') + '" value="' + escapeAttr(isMixed ? '' : formatted.display) + '"/>' +
+    renderTokenBadge('borderRadius') +
     '<span class="dm-input-unit">' + formatted.unit + '</span>' +
-    '</div></div>';
+    '</div>' + renderTokenOverlays('borderRadius') + '</div>';
 }
 
 // corner-shape (CSS Borders L4) glyph — an outlined box styled with the actual
@@ -3542,10 +3613,12 @@ function cornerRadius2x2(s: Record<string, string>): string {
     // Advanced. parseRadiusXY normalises elliptical → [x, y].
     const [xRaw] = parseRadiusXY(c.val);
     const formatted = formatPxValueForDisplay(xRaw);
-    return '<div style="display:flex;align-items:center;gap:4px;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:4px 6px;">' +
+    return '<div style="position:relative;display:flex;align-items:center;gap:4px;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:4px 6px;">' +
       '<span style="font-family:SF Mono,Monaco,monospace;font-size:11px;color:var(--dm-text-muted);width:14px;flex-shrink:0;text-align:center;">' + c.glyph + '</span>' +
       '<input class="dm-input" data-dm-prop="' + c.prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" value="' + escapeAttr(formatted.display) + '" placeholder="0" title="' + c.label + '" aria-label="' + c.label + '" style="background:none;border:none;padding:2px;flex:1;min-width:0;font-size:11px;"/>' +
+      renderTokenBadge(c.prop) +
       '<span style="font-size:9px;color:var(--dm-text-dim);flex-shrink:0;">' + formatted.unit + '</span>' +
+      renderTokenOverlays(c.prop) +
     '</div>';
   };
   return '<div class="dm-corner-grid">' + cells.map(cornerCell).join('') + '</div>';
@@ -4161,7 +4234,7 @@ function renderFillRow(layer: FillLayer, idx: number, swatch: string, label: str
 // appear on hover so the resting state stays calm. The split into
 // color + alpha is local to the panel: at the CSS layer we still write
 // the resulting `background-color` (with rgba() when opacity < 1).
-function renderFillSolidRow(layer: FillLayer, idx: number): string {
+function renderFillSolidRow(layer: FillLayer, idx: number, badgeProp?: string): string {
   const { color, opacity } = splitColorOpacity(layer.raw);
   const colorDisplay = formatColorForDisplay(color);
   const pctOpacity = Math.max(0, Math.min(100, Math.round(opacity * 100)));
@@ -4198,15 +4271,22 @@ function renderFillSolidRow(layer: FillLayer, idx: number): string {
   // <button>) so Chromium reliably initiates a drag from it instead of
   // capturing focus on the way down.
   const grip = '<span class="dm-section-action" data-dm-fill-drag="' + idx + '" title="Drag to reorder" style="cursor:grab;flex-shrink:0;">' + icon('gripVertical', 12) + '</span>';
+  // ◆ badge — this row paints `background-color`, so when that value comes
+  // from a token the diamond surfaces the token name / swap menu. The badge
+  // writes through the real `backgroundColor` prop (not the row's virtual
+  // `__fill_color__N`), so swap / edit / detach behave like every other field.
+  const badge = badgeProp ? renderTokenBadge(badgeProp) : '';
+  const badgeTokensPanel = (badgeProp && tokensDropdownProp === badgeProp) ? renderTokensDropdown(badgeProp, color) : '';
+  const badgeOverlay = badgeProp ? renderTokenOverlays(badgeProp) : '';
   const row =
     '<div class="dm-fill-row-solid">' +
-      grip + swatchBtn + codeInput + opacityCell + eyeBtn + trashBtn +
+      grip + swatchBtn + codeInput + badge + opacityCell + eyeBtn + trashBtn +
     '</div>';
   // Colour panel renders BELOW the row when the swatch is active.
   // Same picker as the rest of the panel uses elsewhere — keeps the
   // token list / eyedropper consistent.
   const colorPanel = swatchOpen ? renderColorPanel(swatchProp, color) : '';
-  return '<div data-dm-fill-row="' + idx + '" draggable="true" style="margin-bottom:6px;">' + row + colorPanel + '</div>';
+  return '<div data-dm-fill-row="' + idx + '" draggable="true" style="position:relative;margin-bottom:6px;">' + row + badgeTokensPanel + badgeOverlay + colorPanel + '</div>';
 }
 
 // Per-layer expanded body. Gradients get a visual stop list. Solids get a
@@ -6349,7 +6429,7 @@ function renderActionRow(): string {
     '<button data-dm-action="duplicate" title="Duplicate" style="' + bs() + '">' + icon('copy', 14) + '</button>' +
     '<button data-dm-action="delete" title="Remove" style="' + bs('var(--dm-danger)') + '">' + icon('trash', 14) + '</button>' +
     '<button data-dm-action="comment" title="Comment" style="' + bs() + '">' + icon('messageSquare', 14) + '</button>' +
-    '<button data-dm-action="region-comment" title="Comment on a region — drag a box anywhere on the page" style="' + bs(undefined, true) + ';' + (awaitingRegionDraw ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('squareDashed', 14) + '</button>' +
+    '<button data-dm-action="region-comment" title="Annotate" style="' + bs(undefined, true) + ';' + (awaitingRegionDraw ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('squareDashed', 14) + '</button>' +
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
     '<button data-dm-action="open-tokens" title="Design system" style="' + bs(undefined, true) + ';' + (tokensOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('swatchBook', 14) + '</button>' +
@@ -7032,7 +7112,7 @@ function renderDesignTab(): string {
 
   const typographySection = !vis.typography ? '' : sec('Typography', 'type', textField +
     renderFontFamilyPicker(s.fontFamily || '') + sp() +
-    grid(2, selKV('Weight', 'fontWeight', fontWeightCur, FONT_WEIGHTS), inp('Size', 'fontSize', s.fontSize || '16px')) + sp() +
+    grid(2, selKV('Weight', 'fontWeight', fontWeightCur, FONT_WEIGHTS, 'fontWeight'), inp('Size', 'fontSize', s.fontSize || '16px')) + sp() +
     grid(2,
       inputWithIcon('moveVertical', 'lineHeight', s.lineHeight || 'normal', 'normal', 'px', 'Line height'),
       inputWithIcon('moveHorizontal', 'letterSpacing', s.letterSpacing || 'normal', 'normal', 'px', 'Letter spacing')
@@ -7310,7 +7390,7 @@ function renderDesignTab(): string {
   const aspectRatioCur = ((s as any).aspectRatio || 'auto').trim();
   const aspectActive = !!aspectRatioCur && aspectRatioCur !== 'auto';
   const aspectBtn = '<button data-dm-action="toggle-aspect-ratio" title="' +
-    (aspectActive ? 'Unlock aspect ratio' : 'Lock aspect ratio to current W:H') +
+    (aspectActive ? 'Unlock aspect ratio' : 'Lock aspect ratio') +
     '" data-active="' + (aspectActive ? 'true' : 'false') + '" style="width:100%;height:30px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:5px;cursor:pointer;background:' +
     (aspectActive ? 'var(--dm-accent-bg)' : 'var(--dm-btn-bg)') + ';border:1px solid ' +
     (aspectActive ? 'var(--dm-accent-border)' : 'var(--dm-btn-border)') + ';color:' +
@@ -7494,7 +7574,7 @@ function renderDesignTab(): string {
   // of a px-line difference). Letting padding drive the height keeps the
   // button visually flush with the Opacity / Corner-radius fields.
   const cornerExpandRowBtn = '<div class="dm-field">' +
-    '<button class="dm-icon-row-button" data-dm-corner-expand title="' + (cornerRadiusExpanded ? 'Collapse corners' : 'Edit each corner separately') + '" data-active="' + (cornerRadiusExpanded ? 'true' : 'false') + '" style="width:100%;">' +
+    '<button class="dm-icon-row-button" data-dm-corner-expand title="Corners" data-active="' + (cornerRadiusExpanded ? 'true' : 'false') + '" style="width:100%;">' +
     icon('scan', 14) + '</button></div>';
   // corner-shape (CSS Borders L4) reshapes the corners border-radius rounds.
   // getComputedStyle can report it as four repeated tokens, so read the first
@@ -7507,7 +7587,7 @@ function renderDesignTab(): string {
     return CORNER_SHAPES.includes(first) ? first : 'round';
   })();
   const cornerShapeCell = '<div class="dm-field">' +
-    '<button class="dm-icon-row-button" data-dm-corner-shape-trigger title="Corner shape: ' + cornerShapeVal + ' (needs a non-zero radius)" data-active="' + (cornerShapePickerOpen ? 'true' : 'false') + '" style="width:100%;">' +
+    '<button class="dm-icon-row-button" data-dm-corner-shape-trigger title="Shape" data-active="' + (cornerShapePickerOpen ? 'true' : 'false') + '" style="width:100%;">' +
     cornerShapeGlyph(cornerShapeVal, 14) + '</button></div>';
   const appearanceContent =
     grid12([
@@ -7715,13 +7795,19 @@ function renderDesignTab(): string {
     return l.kind + ' \u2014 ' + l.raw.replace(/^[^(]+\(/, '').replace(/\)\s*$/, '').slice(0, 40);
   };
 
+  // The bottom-most solid layer is the one serializeFillLayers maps to the
+  // real `background-color` slot — only that row can carry the token badge.
+  let bgColorFillIdx = -1;
+  for (let i = fillLayers.length - 1; i >= 0; i--) {
+    if (fillLayers[i].kind === 'solid') { bgColorFillIdx = i; break; }
+  }
   const fillRows = fillLayers.map((layer, idx) => {
     // Solid fills use the inline Figma-style row (swatch / code /
     // opacity / eye / trash) with the colour panel rendered directly
     // below when the swatch is clicked. Non-solid layers keep the
     // settings-icon flow so users can edit gradient stops / image URLs
     // / position / blend without crowding the resting row.
-    if (layer.kind === 'solid') return renderFillSolidRow(layer, idx);
+    if (layer.kind === 'solid') return renderFillSolidRow(layer, idx, idx === bgColorFillIdx ? 'backgroundColor' : undefined);
     const expanded = expandedFillIdx === idx;
     const body = expanded ? renderFillLayerBody(layer, idx) : '';
     return renderFillRow(layer, idx, fillSwatch(layer), fillLabel(layer), expanded, body);
@@ -7864,8 +7950,8 @@ function renderDesignTab(): string {
   // Center is single-stroke (CSS outline can't stack). Keep the original
   // Color + Weight + Style row + outline-offset.
   const centerStrokeRow = grid12([
-    { span: 4, content: colorInp('Color', '__stroke_color', strokeColor, true) },
-    { span: 2, content: inp('Weight', '__stroke_weight', strokeWeight + 'px') },
+    { span: 4, content: colorInp('Color', '__stroke_color', strokeColor, true, 'outlineColor') },
+    { span: 2, content: inp('Weight', '__stroke_weight', strokeWeight + 'px', 'px', 'outlineWidth') },
     { span: 6, content: sel('Style', '__stroke_style', strokeStyleCur, styleOptions) },
   ]);
   const centerColorPanel = strokeColorPanelOpen ? sp() + renderColorPanel('__stroke_color', strokeColor) : '';
@@ -7918,12 +8004,18 @@ function renderDesignTab(): string {
         icon('plus', 12) + '<span>Add stroke</span></button>'
     : '';
 
+  // Outside/Inside strokes are box-shadow entries, so a token-composed
+  // box-shadow (Tailwind's ring vars) surfaces the same chip here — keyed
+  // distinctly so its menu doesn't co-open with the Effects one.
+  const strokeShadowChip = (strokePos !== 'center' && info?.shadowVars?.boxShadow)
+    ? renderShadowVarChip('boxShadow', 'strokeBoxShadow', 'Stroke', info.shadowVars.boxShadow)
+    : '';
   const strokeContent = strokePos === 'center'
     ? strokePositionRow(s, strokePos) + sp() +
       centerStrokeRow +
       offsetRow +
       centerColorPanel
-    : strokePositionRow(s, strokePos) + sp() +
+    : strokeShadowChip + strokePositionRow(s, strokePos) + sp() +
       strokeRowsHtml +
       addStrokeBtn;
 
@@ -8136,9 +8228,29 @@ function renderDesignTab(): string {
     : '';
   const motionContent = motionPieces.join('') + motionAdvancedHtml;
 
-  const effectsContent = effectEntries.length > 0
-    ? effectRows
-    : '<div style="font-size:11px;color:var(--dm-text-dim);text-align:center;padding:14px 0;">Click + to add an effect.</div>';
+  // A whole-value shadow token (`box-shadow: var(--elevation-2)`) can't live
+  // on any single decomposed effect row, so it surfaces as a section-level
+  // chip: the ◆ reveals the token / swap / edit / detach. Editing an effect
+  // row recomposes a literal shadow and the chip drops away. Only shows when
+  // the shadow is PURELY a token (a mix of token + hand-tuned shadows is a
+  // literal value, so no badge — matching every other field).
+  const shadowTokenChip = (prop: 'boxShadow' | 'textShadow', label: string): string => {
+    // A single whole-value token gets the standard badge (swap/edit/detach).
+    if (tokenForProp(prop)) {
+      return '<div class="dm-field" style="margin-bottom:8px;">' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+        '<span style="font-size:10px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">' + label + '</span>' +
+        renderTokenBadge(prop, false) +
+        '</div>' + renderTokenOverlays(prop) + '</div>';
+    }
+    // A multi-var composition (Tailwind's stack) gets the list chip.
+    const multi = info?.shadowVars?.[prop];
+    return (multi && multi.vars.length) ? renderShadowVarChip(prop, prop, label, multi) : '';
+  };
+  const effectsContent = shadowTokenChip('boxShadow', 'Shadow') + shadowTokenChip('textShadow', 'Text shadow') +
+    (effectEntries.length > 0
+      ? effectRows
+      : '<div style="font-size:11px;color:var(--dm-text-dim);text-align:center;padding:14px 0;">Click + to add an effect.</div>');
 
   // ── Layout guide ────────────────────────────────────────────────
   // Figma-style overlay of column / row / grid bars on the selected
@@ -8787,13 +8899,13 @@ function renderChangesTab(): string {
             '<span style="color:var(--dm-yellow);display:flex;flex-shrink:0;">' + icon(kindIcon, 10) + '</span>' +
             '<span style="font-size:10px;font-weight:600;color:var(--dm-text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (isRegion ? 'region' : escapeAttr(c.selector || '')) + '</span>' +
             tsInfo +
+            '<button class="dm-change-revert" data-dm-delete-comment="' + c.id + '" title="Delete comment" aria-label="Delete comment" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('trash', 10) + '</button>' +
             '<button data-dm-action="close-viewing-comment" aria-label="Close" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('x', 10) + '</button>' +
             '</div>' +
             '<div style="padding:0 12px 6px 28px;' + bodyStyle + '">' + renderCommentMarkdown(c.text) + '</div>' +
             '<div style="display:flex;gap:6px;padding:0 12px 8px 28px;flex-wrap:wrap;">' +
             resolveBtn +
             '<button data-dm-edit-comment="' + c.id + '" aria-label="Edit comment" style="padding:3px 10px;background:rgba(139,92,246,0.12);border:1px solid var(--dm-purple-border);border-radius:3px;color:var(--dm-purple);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Edit</button>' +
-            '<button data-dm-delete-comment="' + c.id + '" aria-label="Delete comment" style="padding:3px 10px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:3px;color:var(--dm-danger);cursor:pointer;font-size:10px;font-family:inherit;">Delete</button>' +
             '</div></div>';
         }
         return '<div class="dm-change-item" data-dm-comment-item="' + c.id + '" style="display:flex;align-items:start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);background:' + (isResolved ? 'var(--dm-bg-secondary)' : 'var(--dm-purple-bg)') + ';cursor:pointer;opacity:' + (isResolved ? '0.85' : '1') + ';">' +
@@ -8805,9 +8917,10 @@ function renderChangesTab(): string {
           '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">' +
           resolveBtnCompact +
           '<button data-dm-edit-comment="' + c.id + '" aria-label="Edit comment" style="padding:2px 8px;background:rgba(139,92,246,0.12);border:1px solid var(--dm-purple-border);border-radius:3px;color:var(--dm-purple);cursor:pointer;font-size:9px;font-family:inherit;">Edit</button>' +
-          '<button data-dm-delete-comment="' + c.id + '" aria-label="Delete comment" style="padding:2px 8px;background:var(--dm-bg-secondary);border:1px solid var(--dm-input-border);border-radius:3px;color:var(--dm-text-muted);cursor:pointer;font-size:9px;font-family:inherit;">Delete</button>' +
           '<span style="margin-left:auto;font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;">' + escapeAttr(tsLabel + editedLabel) + '</span>' +
-          '</div></div></div>';
+          '</div></div>' +
+          '<button class="dm-change-revert" data-dm-delete-comment="' + c.id + '" title="Delete comment" aria-label="Delete comment" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;margin-top:2px;">' + icon('trash', 10) + '</button>' +
+          '</div>';
       }
       return '';
     };
@@ -9371,6 +9484,8 @@ function ensureTabScrollListener(): void {
   if (!el || (el as any).__dmScrollBound) return;
   (el as any).__dmScrollBound = true;
   el.addEventListener('scroll', () => {
+    // Keep any open token popover glued to its field as the panel scrolls.
+    positionTokenPopovers();
     // Don't record while a programmatic restore is in flight; the
     // browser fires `scroll` synchronously when we set scrollTop and we
     // shouldn't overwrite the value we just told it to use.
@@ -9382,6 +9497,48 @@ function ensureTabScrollListener(): void {
 function captureTabScroll(): void {
   const el = document.getElementById('dm-tab-body');
   if (el) tabScrollPositions[tab] = { top: el.scrollTop, left: el.scrollLeft };
+}
+
+// Token popovers (badge menu / swap picker / colour dropdown) render
+// position:fixed so they escape every section's `overflow:hidden` clip and
+// the panel's own scroll edge. Their screen coords are derived here from the
+// anchoring field's rect — after each render and on scroll — flipping above
+// the field when they'd spill past the tab body's bottom. `stretch` popovers
+// match the field width; `right` menus pin to the field's right edge and
+// clamp into the viewport.
+function positionTokenPopovers(): void {
+  const pops = root.querySelectorAll<HTMLElement>('[data-dm-token-popover]');
+  if (pops.length === 0) return;
+  const body = document.getElementById('dm-tab-body');
+  const bodyRect = body?.getBoundingClientRect();
+  const topBound = bodyRect ? bodyRect.top : 0;
+  const bottomBound = bodyRect ? bodyRect.bottom : window.innerHeight;
+  const margin = 8;
+  pops.forEach((el) => {
+    const parent = el.parentElement;
+    if (!parent) return;
+    const a = parent.getBoundingClientRect();
+    el.style.margin = '0';
+    if (el.dataset.dmTokenPopover === 'stretch') {
+      // Match the field width, but never so narrow that token names / values
+      // are unreadable — widen to a comfortable minimum and keep on-screen.
+      el.style.right = 'auto';
+      const w = Math.min(Math.max(a.width, 240), window.innerWidth - 2 * margin);
+      const left = Math.max(margin, Math.min(a.left, window.innerWidth - margin - w));
+      el.style.width = w + 'px';
+      el.style.left = left + 'px';
+    } else {
+      el.style.right = 'auto';
+      const w = el.offsetWidth;
+      const left = Math.max(margin, Math.min(a.right - w, window.innerWidth - margin - w));
+      el.style.left = left + 'px';
+    }
+    const h = el.offsetHeight;
+    const below = a.bottom + 4;
+    const above = a.top - 4 - h;
+    el.style.top = ((below + h > bottomBound && above >= topBound) ? above : below) + 'px';
+    el.style.visibility = 'visible';
+  });
 }
 
 // Keep inspect suspended while a comment composer is open (add / edit /
@@ -9509,6 +9666,10 @@ function render() {
     }
   }
   pendingTabScrollRestore = null;
+
+  // Position any open token popover after layout settles (offsetHeight needs
+  // the freshly-morphed DOM). Fixed-positioned so it never clips.
+  requestAnimationFrame(positionTokenPopovers);
 }
 
 /* ── Phase 1: Event Delegation (bound once, never re-bound) ── */
@@ -9530,6 +9691,92 @@ function setupDelegation() {
       t.style.background = 'transparent';
     }
   });
+
+  // ── Instant hover labels for action icons ──
+  // Native `title` tooltips lag ~1s and are easy to miss, so users end up
+  // guessing what an icon does. A single fixed-position label mirrors the
+  // hovered control's `title` (or an explicit `data-dm-tip`) immediately and
+  // never clips against a section's `overflow:hidden`. The native title is
+  // stashed on enter so it doesn't double up, and restored on leave. Form
+  // fields keep their native hints (they already have visible labels).
+  const hoverTip = document.createElement('div');
+  hoverTip.setAttribute('role', 'tooltip');
+  hoverTip.style.cssText = 'position:fixed;z-index:100000;pointer-events:none;background:var(--dm-bg-active);color:var(--dm-text);border:1px solid var(--dm-separator-strong);font-size:10px;font-weight:500;font-family:inherit;line-height:1.3;padding:3px 7px;border-radius:5px;box-shadow:0 2px 10px rgba(0,0,0,0.3);white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;visibility:hidden;opacity:0;transition:opacity 0.08s;';
+  document.body.appendChild(hoverTip);
+  let hoverTipTarget: HTMLElement | null = null;
+
+  // A control earns a hover label only when it's an ICON with no word of its
+  // own AND isn't one of the universally-understood or deliberately-bare
+  // icons below. Everything here is skipped: the ◆ token badge (its var name
+  // shows on click), trash / remove / close, hide (eye) toggles, drag grips,
+  // and every motion-trigger button (matched by attribute prefix in the
+  // handler). New icons opt out with `data-dm-no-tip`.
+  const TIP_SKIP = [
+    '[data-dm-no-tip]',
+    '.dm-token-badge',
+    '.dm-change-revert',
+    '[data-dm-fill-remove]', '[data-dm-stroke-remove]', '[data-dm-delete-layer]',
+    '[data-dm-action="clear-shadow"]', '[data-dm-action="clear-text-shadow"]', '[data-dm-action="close-viewing-comment"]',
+    '[data-dm-fill-toggle]', '[data-dm-stroke-toggle]', '[data-dm-toggle-vis]',
+    '[data-dm-fill-drag]', '[data-dm-stroke-drag]', '[data-dm-layer-drag]', '[data-dm-guide-drag]',
+  ].join(',');
+
+  const hideHoverTip = () => {
+    // Restore the native title we stashed so the element keeps its a11y name.
+    if (hoverTipTarget && hoverTipTarget.dataset.dmTitleStash != null) {
+      hoverTipTarget.setAttribute('title', hoverTipTarget.dataset.dmTitleStash);
+      delete hoverTipTarget.dataset.dmTitleStash;
+    }
+    hoverTip.style.opacity = '0';
+    hoverTip.style.visibility = 'hidden';
+    hoverTipTarget = null;
+  };
+
+  root.addEventListener('mouseover', (e) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-tip], [title]');
+    if (!el || el === hoverTipTarget || !root.contains(el)) return;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    // Text buttons ("+ Add fill", "CSS", "Truncate") explain themselves; only
+    // icon-only controls get a label. An explicit data-dm-tip always wins.
+    if (!el.dataset.dmTip && /[a-z0-9]/i.test(el.textContent || '')) return;
+    if (el.matches(TIP_SKIP) || el.getAttributeNames().some(n => n.startsWith('data-dm-motion'))) return;
+    const label = (el.dataset.dmTip || el.getAttribute('title') || '').trim();
+    if (!label) return;
+    if (hoverTipTarget) hideHoverTip(); // leaving a previous control
+    hoverTipTarget = el;
+    // Suppress the slow native tooltip while ours is showing.
+    const native = el.getAttribute('title');
+    if (native != null) { el.dataset.dmTitleStash = native; el.removeAttribute('title'); }
+    hoverTip.textContent = label;
+    // Measure first (visibility:hidden still lays out), then place + reveal.
+    const r = el.getBoundingClientRect();
+    hoverTip.style.left = '0px';
+    hoverTip.style.top = '0px';
+    hoverTip.style.visibility = 'hidden';
+    hoverTip.style.opacity = '0';
+    const tw = hoverTip.offsetWidth;
+    const th = hoverTip.offsetHeight;
+    let left = Math.max(4, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 4));
+    let top = r.top - th - 6;
+    if (top < 4) top = r.bottom + 6; // flip below when there's no room above
+    hoverTip.style.left = left + 'px';
+    hoverTip.style.top = top + 'px';
+    hoverTip.style.visibility = 'visible';
+    hoverTip.style.opacity = '1';
+  });
+  root.addEventListener('mouseout', (e) => {
+    if (!hoverTipTarget) return;
+    // Ignore moves that stay within the same control (e.g. onto its <svg>).
+    const related = e.relatedTarget as HTMLElement | null;
+    if (related && hoverTipTarget.contains(related)) return;
+    hideHoverTip();
+  });
+  // A click acts on the icon (often re-rendering or removing it), and a
+  // scroll shifts it out from under the label — hide in both cases so the
+  // tooltip never lingers detached from its target.
+  root.addEventListener('mousedown', hideHoverTip, true);
+  window.addEventListener('scroll', hideHoverTip, true);
 
   // Click handler — async because the eyedropper awaits Chrome's
   // EyeDropper.open() promise.
@@ -10606,11 +10853,13 @@ function setupDelegation() {
         designSystem = null;
         refreshDesignSystem().then(() => scrollFocusedTokenIntoView());
       } else if (action === 'detach') {
-        // computedStyles only carries longhands, so the uniform
-        // padding / margin fields rebuild their shorthand from the sides.
+        // computedStyles only carries longhands, so the uniform shorthand
+        // fields (padding / margin / border-radius) rebuild their value from
+        // the constituent longhands.
         const cs = info?.computedStyles;
-        const resolved = (prop === 'padding' || prop === 'margin')
-          ? ['Top', 'Right', 'Bottom', 'Left'].map(s => cs?.[prop + s] || '').filter(Boolean).join(' ')
+        const uni = UNIFORM_SHORTHANDS[prop];
+        const resolved = uni
+          ? uni.map(k => cs?.[k] || '').filter(Boolean).join(' ')
           : (cs?.[prop] || '');
         if (resolved) applyStyle(prop, resolved);
       }
@@ -10625,6 +10874,47 @@ function setupDelegation() {
       const wasOpen = tokenBadgeMenuProp === prop || tokenPickerProp === prop;
       tokenBadgeMenuProp = wasOpen ? null : prop;
       tokenPickerProp = null;
+      render();
+      return;
+    }
+
+    // Multi-var shadow chip (Effects) — toggle its var list.
+    const shadowTokenBtn = target.closest<HTMLElement>('[data-dm-shadow-token]');
+    if (shadowTokenBtn) {
+      const prop = shadowTokenBtn.dataset.dmShadowToken!;
+      shadowMenuProp = shadowMenuProp === prop ? null : prop;
+      render();
+      return;
+    }
+    // Detach a whole compound shadow → write its resolved literal value.
+    const shadowDetachBtn = target.closest<HTMLElement>('[data-dm-shadow-detach]');
+    if (shadowDetachBtn) {
+      const prop = shadowDetachBtn.dataset.dmShadowDetach!;
+      const resolved = info?.computedStyles?.[prop] || '';
+      shadowMenuProp = null;
+      if (resolved && resolved !== 'none') applyStyle(prop, resolved);
+      else render();
+      return;
+    }
+    // Edit one composed shadow var globally in the Tokens panel.
+    const shadowEditVarBtn = target.closest<HTMLElement>('[data-dm-shadow-edit-var]');
+    if (shadowEditVarBtn) {
+      const cssVar = shadowEditVarBtn.dataset.dmShadowEditVar!;
+      shadowMenuProp = null;
+      tokensOpen = true;
+      settingsOpen = false;
+      helpOpen = false;
+      mcpOpen = false;
+      tokensTab = 'declared';
+      tokensFocusVar = cssVar;
+      tokenScopeFilter = shadowEditVarBtn.dataset.dmShadowScope || ':root';
+      tokenSearch = cssVar;
+      tokenFilter = 'all';
+      tokenSystemFilter = null;
+      tokenUsedOnlyFilter = false;
+      componentTokensOpen = true;
+      designSystem = null;
+      refreshDesignSystem().then(() => scrollFocusedTokenIntoView());
       render();
       return;
     }
@@ -10700,6 +10990,12 @@ function setupDelegation() {
       !target.closest('[data-dm-token-menu]') && !target.closest('[data-dm-token-picker]') && !target.closest('[data-dm-token-badge]')) {
       tokenBadgeMenuProp = null;
       tokenPickerProp = null;
+      render();
+    }
+    // Click outside the multi-var shadow chip menu closes it.
+    if (shadowMenuProp && !target.closest('[data-dm-shadow-token]') &&
+      !target.closest('[data-dm-shadow-edit-var]') && !target.closest('[data-dm-shadow-detach]')) {
+      shadowMenuProp = null;
       render();
     }
 
@@ -12986,10 +13282,22 @@ function setupDelegation() {
       return;
     }
 
-    // Comment textarea: Ctrl+Enter to submit, Escape to cancel
+    // Comment textarea: Enter submits, Shift+Enter inserts a newline,
+    // Escape cancels. (Ctrl/Cmd+Enter still submits — it has no Shift.)
     if (target.matches('[data-dm-comment-input]')) {
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submitComment(); }
-      if (e.key === 'Escape') cancelComment();
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment(); }
+      else if (e.key === 'Escape') cancelComment();
+      return;
+    }
+
+    // Typography text-content editor (contenteditable): Enter commits the
+    // edited text to the element; Shift+Enter falls through to the browser's
+    // default line break. Focus is kept — morphdom preserves the focused
+    // contenteditable across the commit re-render.
+    const richEditor = target.closest<HTMLElement>('[data-dm-richtext]');
+    if (richEditor && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      applyHtml(richEditor.innerHTML);
       return;
     }
 
@@ -13043,6 +13351,16 @@ function setupDelegation() {
       }
       syncFilterSiblings(fcompKb);
       applyFilterComponentsFromFields(fcompKb.dataset.dmFcompGroup as 'filter' | 'bfilter');
+      return;
+    }
+
+    // Value textarea (e.g. grid-template-areas): Enter commits the value,
+    // Shift+Enter inserts a newline. Commit routes through the existing
+    // change-event handler so the multi-line value is applied verbatim.
+    const propTextarea = target.closest<HTMLTextAreaElement>('textarea[data-dm-prop]');
+    if (propTextarea && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      propTextarea.dispatchEvent(new Event('change', { bubbles: true }));
       return;
     }
 
@@ -13158,9 +13476,9 @@ function setupDelegation() {
       }
     }
 
-    // Text area: Ctrl+Enter to submit
+    // Text area: Enter submits, Shift+Enter inserts a newline.
     const textArea = target.closest<HTMLTextAreaElement>('[data-dm-text]');
-    if (textArea && e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    if (textArea && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       applyText(textArea.value);
       return;
