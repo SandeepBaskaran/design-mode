@@ -331,7 +331,7 @@ const DESIGN_PROPS = new Set([
   'color', 'background-color',
   'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
   'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
-  'outline-color', 'outline-width', 'fill', 'stroke',
+  'outline-color', 'outline-width', 'fill', 'stroke', 'stroke-width',
   'font-size', 'font-weight', 'font-family', 'line-height', 'letter-spacing',
   'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
   'margin-top', 'margin-right', 'margin-bottom', 'margin-left',

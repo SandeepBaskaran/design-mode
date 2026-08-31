@@ -467,7 +467,6 @@ function isNonNegativeNumericProp(prop: string): boolean {
 }
 const advancedOpen: Record<string, boolean> = {};   // keyed by section key
 let sidesPopoverOpen = false;
-let strokeStylePopoverOpen = false;
 let effectsMenuOpen = false;
 let motionMenuOpen = false;
 // Which interaction is being force-previewed (the .dm-force-* class is on
@@ -3316,22 +3315,6 @@ function detectParentContext(displayInfo: any, s: Record<string, string>): {
   };
 }
 
-function positionAlignGrid(_s: Record<string, string>, _ctx: ReturnType<typeof detectParentContext>): string {
-  // Object-alignment buttons (canonical Figma icons). No inline help text —
-  // dispatch logic lives in applyPositionAlign() based on parent context.
-  const horizontal = iconButtonRow([
-    { icon: 'alignStartVertical', attr: 'data-dm-pos-align="h-left"', title: 'Align left' },
-    { icon: 'alignCenterVertical', attr: 'data-dm-pos-align="h-center"', title: 'Align horizontal center' },
-    { icon: 'alignEndVertical', attr: 'data-dm-pos-align="h-right"', title: 'Align right' },
-  ]);
-  const vertical = iconButtonRow([
-    { icon: 'alignStartHorizontal', attr: 'data-dm-pos-align="v-top"', title: 'Align top' },
-    { icon: 'alignCenterHorizontal', attr: 'data-dm-pos-align="v-middle"', title: 'Align vertical center' },
-    { icon: 'alignEndHorizontal', attr: 'data-dm-pos-align="v-bottom"', title: 'Align bottom' },
-  ]);
-  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' + horizontal + vertical + '</div>';
-}
-
 // Distribute buttons — render only when 2+ siblings are selected.
 function positionDistributeRow(): string {
   const enabled = multiSelectActive && multiSelectIds.length >= 2;
@@ -3339,17 +3322,6 @@ function positionDistributeRow(): string {
   return iconButtonRow([
     { icon: 'alignHorizontalSpaceAround', attr: 'data-dm-pos-distribute="horizontal"', title: 'Distribute horizontally' },
     { icon: 'alignVerticalSpaceAround', attr: 'data-dm-pos-distribute="vertical"', title: 'Distribute vertically' },
-  ]);
-}
-
-function flipButtons(s: Record<string, string>): string {
-  const scale = (s.scale || '').trim();
-  const parts = (scale === 'none' || !scale) ? ['1','1'] : scale.split(/\s+/);
-  const sx = parseFloat(parts[0] || '1') || 1;
-  const sy = parseFloat(parts[1] || parts[0] || '1') || sx;
-  return iconButtonRow([
-    { icon: 'flipHorizontal2', attr: 'data-dm-flip="h"', active: sx < 0, title: 'Flip horizontally' },
-    { icon: 'flipVertical2', attr: 'data-dm-flip="v"', active: sy < 0, title: 'Flip vertically' },
   ]);
 }
 
@@ -3717,27 +3689,6 @@ function strokePositionRow(_s: Record<string, string>, current: 'inside' | 'outs
   ]);
 }
 
-function sidesPopoverTrigger(s: Record<string, string>, isOpen: boolean): string {
-  const trigger = '<button class="dm-section-action" data-dm-sides-popover title="Side selection" data-active="' + (isOpen ? 'true' : 'false') + '">' +
-    icon('sliders', 11) + '</button>';
-  if (!isOpen) return '<div style="position:relative;display:inline-flex;">' + trigger + '</div>';
-  const bt = parseFloat(s.borderTopWidth || '0') || 0;
-  const br = parseFloat(s.borderRightWidth || '0') || 0;
-  const bb = parseFloat(s.borderBottomWidth || '0') || 0;
-  const bl = parseFloat(s.borderLeftWidth || '0') || 0;
-  const allEqual = bt === br && br === bb && bb === bl && bt > 0;
-  const items: PopoverItem[] = [
-    { icon: 'squareDashed', label: 'All', attr: 'data-dm-side="all"', active: allEqual },
-    { icon: 'arrowUp', label: 'Top', attr: 'data-dm-side="top"', active: bt > 0 && !allEqual },
-    { icon: 'arrowDown', label: 'Bottom', attr: 'data-dm-side="bottom"', active: bb > 0 && !allEqual },
-    { icon: 'chevronLeft', label: 'Left', attr: 'data-dm-side="left"', active: bl > 0 && !allEqual },
-    { icon: 'chevronRight', label: 'Right', attr: 'data-dm-side="right"', active: br > 0 && !allEqual },
-    { divider: true, label: '', attr: '' },
-    { icon: 'sliders', label: 'Custom', attr: 'data-dm-side="custom"', active: !allEqual && (bt > 0 || br > 0 || bb > 0 || bl > 0) },
-  ];
-  return '<div style="position:relative;display:inline-flex;">' + trigger + popover(items) + '</div>';
-}
-
 function effectsAddMenuTrigger(isOpen: boolean): string {
   const trigger = '<button class="dm-section-action" data-dm-effects-menu title="Add effect" data-active="' + (isOpen ? 'true' : 'false') + '">' +
     icon('plus', 12) + '</button>';
@@ -3785,19 +3736,6 @@ function advancedToggleBtn(key: string, isOpen: boolean): string {
     (isOpen ? 'Hide advanced' : 'Show advanced') + '">' + icon('sliders', 11) + '</button>';
 }
 
-function eyeToggleBtn(attr: string, isOff: boolean, title: string): string {
-  return '<button class="dm-section-action" ' + attr + ' data-active="' + (isOff ? 'false' : 'true') + '" title="' + escapeAttr(title) + '">' +
-    icon(isOff ? 'eyeOff' : 'eye', 12) + '</button>';
-}
-
-function plusActionBtn(attr: string, title: string): string {
-  return '<button class="dm-section-action" ' + attr + ' title="' + escapeAttr(title) + '">' + icon('plus', 12) + '</button>';
-}
-
-void strokeStylePopoverOpen; void plusActionBtn; void eyeToggleBtn; void advancedDisclosure;
-void advancedToggleBtn; void cornerRadius2x2; void cornerRadiusPrimary; void strokePositionRow; void sidesPopoverTrigger;
-void effectsAddMenuTrigger; void inferStrokePosition; void layoutModeRow; void positionAlignGrid;
-void flipButtons; void detectParentContext;
 
 /* ── Layered-list helpers (Fill / Stroke / Effects) ──
    CSS comma-separated lists with paren-balanced respect. Used by every
@@ -4620,110 +4558,6 @@ function layeredRow(opts: {
     ? '<div style="margin:6px 0 10px 24px;padding:8px;background:var(--dm-bg);border:1px solid var(--dm-separator);border-radius:5px;">' + opts.body + '</div>'
     : '';
   return '<div style="margin-bottom:6px;">' + headRow + bodyRow + '</div>';
-}
-
-/* ── v1.2: Box Shadow parser/builder ── */
-function parseBoxShadowComputed(val: string): { inset: boolean; x: number; y: number; blur: number; spread: number; color: string; opacity: number } {
-  const d = { inset: false, x: 0, y: 4, blur: 12, spread: 0, color: '#000000', opacity: 12 };
-  if (!val || val === 'none') return d;
-  try {
-    const inset = val.includes('inset');
-    let color = '#000000'; let opacity = 12;
-    const rgbaM = val.match(/rgba?\([\d\s,./]+\)/);
-    if (rgbaM) {
-      const nums = rgbaM[0].match(/[\d.]+/g) || [];
-      const r = parseInt(nums[0])||0, g = parseInt(nums[1])||0, b = parseInt(nums[2])||0;
-      const a = parseFloat(nums[3] ?? '1');
-      color = '#' + [r,g,b].map(n => n.toString(16).padStart(2,'0')).join('');
-      opacity = Math.round(a * 100);
-    } else {
-      const hexM = val.match(/#[0-9a-fA-F]{3,8}/);
-      if (hexM) color = hexM[0];
-    }
-    const rest = val.replace(/rgba?\([^)]+\)/g,'').replace('inset','').trim();
-    const nums = rest.match(/-?[\d.]+/g) || [];
-    return { inset, x: parseFloat(nums[0])||0, y: parseFloat(nums[1])||0, blur: parseFloat(nums[2])||0, spread: parseFloat(nums[3])||0, color, opacity };
-  } catch { return d; }
-}
-
-/* ── v1.2: Shadow structured editor ── */
-function renderShadowEditor(s: Record<string, string>): string {
-  const hasShadow = s.boxShadow && s.boxShadow !== 'none';
-  if (!hasShadow) {
-    return '<button data-dm-action="add-shadow" style="width:100%;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('plus', 10) + ' Add Shadow</button>';
-  }
-  const p = parseBoxShadowComputed(s.boxShadow || 'none');
-  const numInp = (lbl: string, field: string, val: number) =>
-    '<div class="dm-field">' +
-    '<label class="dm-field-label">' + lbl + '</label>' +
-    '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
-    '<input type="number" data-dm-shadow-field="' + field + '" value="' + val + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
-    '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;opacity:0.6;flex-shrink:0;">px</span>' +
-    '</div></div>';
-  return '<div style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:8px;">' +
-    // Type + delete
-    '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">' +
-    '<select data-dm-shadow-field="type" class="dm-select" style="flex:1;">' +
-    '<option value="outer"' + (!p.inset?' selected':'') + '>Outer Shadow</option>' +
-    '<option value="inset"' + (p.inset?' selected':'') + '>Inner Shadow</option>' +
-    '</select>' +
-    '<button data-dm-action="clear-shadow" title="Remove shadow" style="padding:4px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-muted);cursor:pointer;display:flex;">' + icon('trash', 10) + '</button>' +
-    '</div>' +
-    // Color + opacity. The colour swatch uses the same unified picker
-    // (HSV + design tokens + eyedropper) the rest of the Design tab
-    // uses; the `__shadow_color` virtual prop routes its output back
-    // through `applyShadowFromFields` via the dispatcher in applyStyle.
-    // Hidden mirror inputs keep the composer's existing field-reading
-    // logic intact without a second code path.
-    sub('Color') +
-    '<input type="hidden" data-dm-shadow-field="color" value="' + p.color + '"/>' +
-    '<input type="hidden" data-dm-shadow-field="colorhex" value="' + p.color.replace('#','') + '"/>' +
-    colorInp('', '__shadow_color', p.color) +
-    '<div style="display:flex;align-items:center;gap:6px;margin:8px 0;">' +
-    '<label class="dm-field-label" style="flex-shrink:0;">Opacity</label>' +
-    '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;flex:1;">' +
-    '<input type="number" data-dm-shadow-field="opacity" min="0" max="100" value="' + p.opacity + '" style="background:none;border:none;padding:6px;flex:1;min-width:0;font-size:10px;color:var(--dm-text);text-align:right;"/>' +
-    '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;flex-shrink:0;">%</span>' +
-    '</div></div>' +
-    grid(2, numInp('Offset X','x',p.x), numInp('Offset Y','y',p.y)) + sp() +
-    grid(2, numInp('Blur','blur',p.blur), numInp('Spread','spread',p.spread)) +
-    '</div>';
-}
-
-/* ── Text shadow editor (structured: x/y/blur/color) ── */
-function parseTextShadow(val: string): { x: number; y: number; blur: number; color: string } {
-  const d = { x: 0, y: 1, blur: 2, color: 'rgba(0,0,0,0.4)' };
-  if (!val || val === 'none') return d;
-  try {
-    const colorM = val.match(/(rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}|hsla?\([^)]+\))/);
-    const color = colorM ? colorM[0] : '#000000';
-    const rest = val.replace(/(rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}|hsla?\([^)]+\))/g, '').trim();
-    const nums = rest.split(/\s+/).filter(Boolean).map(s => parseFloat(s) || 0);
-    return { x: nums[0] ?? 0, y: nums[1] ?? 1, blur: nums[2] ?? 2, color };
-  } catch { return d; }
-}
-
-function renderTextShadowEditor(s: Record<string, string>): string {
-  const p = parseTextShadow(s.textShadow || 'none');
-  const numField = (label: string, prop: string, val: number) =>
-    '<div class="dm-field">' +
-    '<label class="dm-field-label">' + label + '</label>' +
-    '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;overflow:hidden;">' +
-    '<input type="number" data-dm-textshadow-field="' + prop + '" value="' + val + '" style="background:none;border:none;padding:6px;width:100%;min-width:0;font-family:inherit;font-size:10px;color:var(--dm-text);"/>' +
-    '<span style="font-size:9px;color:var(--dm-text-dim);padding-right:6px;opacity:0.6;flex-shrink:0;">px</span>' +
-    '</div></div>';
-  // Hidden mirror inputs feed the existing applyTextShadowFromFields
-  // composer so the unified colour picker (HSV + tokens + eyedropper)
-  // can replace the OS native colour dialog without a parallel apply
-  // path. Same pattern as the box-shadow editor above.
-  const colorHex = rgbToHex(p.color);
-  return '<div style="background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:8px;">' +
-    '<input type="hidden" data-dm-textshadow-field="color" value="' + colorHex + '"/>' +
-    '<input type="hidden" data-dm-textshadow-field="colorhex" value="' + colorHex.replace('#', '') + '"/>' +
-    grid(2, numField('Offset X', 'x', p.x), numField('Offset Y', 'y', p.y)) + sp() +
-    grid(2, numField('Blur', 'blur', p.blur), colorInp('Color', '__textshadow_color', colorHex)) +
-    '<div style="margin-top:6px;display:flex;justify-content:flex-end;"><button data-dm-action="clear-text-shadow" style="padding:3px 8px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-dim);cursor:pointer;font-size:9px;font-family:inherit;">Remove</button></div>' +
-    '</div>';
 }
 
 // ─── Effects layered model ───────────────────────────────────────────────

@@ -30,7 +30,7 @@ const regionBoxes = new Map<string, HTMLDivElement>();
 export async function loadComments(): Promise<CommentData[]> {
   try {
     const data = await browser.storage.local.get(STORAGE_KEY);
-    return data[STORAGE_KEY] || [];
+    return (data[STORAGE_KEY] as CommentData[] | undefined) || [];
   } catch { return []; }
 }
 

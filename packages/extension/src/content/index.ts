@@ -1738,6 +1738,16 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const blob = new Blob([svgMarkup], { type: 'image/svg+xml' });
         const url = URL.createObjectURL(blob);
         media = { kind: 'svg', src: url, markup: svgMarkup, filename: 'icon.svg', isObjectUrl: true, bytes: blob.size };
+      } else if (tag === 'canvas') {
+        // Canvas has no source file, so snapshot the rendered frame as a PNG
+        // data URL (this covers gifs/animations painted to a canvas). A
+        // cross-origin-tainted canvas throws on read — leave media null so
+        // the panel honestly shows no download rather than a broken one.
+        const c = el as HTMLCanvasElement;
+        try {
+          const dataUrl = c.toDataURL('image/png');
+          media = { kind: 'image', src: dataUrl, naturalWidth: c.width, naturalHeight: c.height, filename: 'canvas.png' };
+        } catch { media = null; }
       } else if (tag === 'source' || tag === 'picture') {
         const inner = el.querySelector('img, video, source');
         if (inner) {

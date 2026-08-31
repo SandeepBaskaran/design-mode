@@ -95,7 +95,7 @@ export async function loadShortcuts() {
   try {
     const data = await browser.storage.local.get('dm-shortcuts');
     if (data['dm-shortcuts']) {
-      shortcuts = data['dm-shortcuts'];
+      shortcuts = data['dm-shortcuts'] as KeyboardShortcut[];
     }
   } catch {}
 }
