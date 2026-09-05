@@ -64,6 +64,9 @@
       --dm-rating-good: #84cc16;
       --dm-rating-poor: #f59e0b;
       --dm-rating-very-poor: #ef4444;
+
+      /* Native <select> popups (Linux Chrome especially) follow color-scheme. */
+      color-scheme: dark;
     }
     :root[data-theme="light"] {
       /* shadcn tokens — light */
@@ -122,6 +125,8 @@
       --dm-rating-good: #65a30d;
       --dm-rating-poor: #d97706;
       --dm-rating-very-poor: #dc2626;
+
+      color-scheme: light;
     }
 
     html, body {
@@ -141,6 +146,14 @@
     ::-webkit-scrollbar-thumb { background: var(--dm-scrollbar-thumb); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--dm-scrollbar-thumb-hover); }
     input, select, button { font-family: inherit; }
+    /* Closed <select> is styled; the OS popup still needs explicit option
+       colours so Linux Chrome dark mode is not black-on-black. Keep native
+       <select> (no custom listbox) so keyboard / AT behaviour stays intact. */
+    select option,
+    select optgroup {
+      background-color: var(--dm-bg);
+      color: var(--dm-text);
+    }
     input[type="color"] { -webkit-appearance: none; border: none; }
     input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
     input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }

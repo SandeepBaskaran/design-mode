@@ -805,6 +805,7 @@ dedicated **MCP page** instead — see §5.1b.
 | **Screenshot capture** | What the camera button does. `Clipboard` copies the PNG; `Download` saves it; `Both` does both. | `Clipboard` |
 | **Nudge amount** | Shift+Arrow step for numeric fields in the Design panel (Figma-style big-nudge). Plain Arrow keys still nudge by 1. Persisted to `chrome.storage.local`. | `10` |
 | **Page cursor** | Show the Design Mode app icon as the mouse cursor on the inspected page while the panel is open. Turning it off falls back to the plain crosshair. Persisted to `chrome.storage.local`; the content script picks up changes live via `storage.onChanged`. | on |
+| **Launch** (Chrome only) | Where the toolbar icon and `Alt+D` open Design Mode. `Side panel` (default) uses Chrome's native side panel (`openPanelOnActionClick`). `Floating` turns that off and opens the existing pop-out window. `Pin on top` opens that floating window with a focused Pin-on-top button — Document PiP cannot auto-open (needs a click in the opener). Firefox always uses the sidebar and omits this setting. Persisted as `dm-launch-surface`. Reset restores side panel. | `side-panel` |
 | **Theme** | `System` / `Dark` / `Light`. | `System` |
 | **Keyboard shortcuts** (button) | Opens a popover card listing every shortcut grouped by category (driven by `DEFAULT_SHORTCUTS`), keys shown as `<kbd>` chips. Backdrop click / ✕ / `Esc` closes it. | — |
 | **Reset settings** (button) | Wipes every setting above back to its default. Toasts on success. | — |
@@ -830,7 +831,7 @@ dedicated **MCP page** instead — see §5.1b.
 
 | Shortcut | Action |
 |---|---|
-| `Alt+D` | Toggle the side panel (open / close) |
+| `Alt+D` | Open Design Mode on the preferred Chrome launch surface (side panel / floating / pin-on-top opener). Firefox always opens the sidebar. |
 | `Ctrl+Z` / `Cmd+Z` | Undo last change (style / text / DOM / visibility) |
 | `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |
 | `↑` / `↓` on a numeric input | Increment / decrement by 1 (or by 0.1 / 0.05 for filter components) |

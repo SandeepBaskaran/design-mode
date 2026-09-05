@@ -10,6 +10,12 @@
 import '../platform/polyfill';
 import { IS_FIREFOX } from '../platform/target';
 import { openPanel } from '../platform/panel';
+import {
+  DEFAULT_LAUNCH_SURFACE,
+  LAUNCH_SURFACE_KEY,
+  parseLaunchSurface,
+  type LaunchSurface,
+} from '../platform/launch-surface';
 import morphdom from 'morphdom';
 import { icon, icons } from '../content/icons';
 import { escapeAttr, rgbToHex } from '../content/helpers';
@@ -587,6 +593,7 @@ let nudgeAmount = 10;
 // App-icon cursor on the inspected page while the panel is open. The
 // content script reads the same key via browser.storage.onChanged.
 let customCursor = true;
+let launchSurface: LaunchSurface = DEFAULT_LAUNCH_SURFACE;
 
 browser.storage?.local?.get?.([
   'dm-theme', 'dm-color-format', 'dm-capture-mode', 'dm-hide-comment-pins',
@@ -599,6 +606,7 @@ browser.storage?.local?.get?.([
   'dm-custom-cursor',
   'dm-a11y-category', 'dm-a11y-level',
   'dm-pip-size', 'dm-pip-unsupported',
+  LAUNCH_SURFACE_KEY,
 ], (result: any) => {
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
   if (result?.['dm-color-format']) { colorFormat = result['dm-color-format']; }
@@ -626,6 +634,11 @@ browser.storage?.local?.get?.([
   const ps = result?.['dm-pip-size'];
   if (ps && typeof ps.width === 'number' && typeof ps.height === 'number') pipSavedSize = ps;
   if (result?.['dm-pip-unsupported'] === true) pipUnsupported = true;
+  if (!IS_FIREFOX) launchSurface = parseLaunchSurface(result?.[LAUNCH_SURFACE_KEY]);
+  if (pipLaunchRequested && !IS_FIREFOX && (!pipAvailable || pipUnsupported)) {
+    pipLaunchPending = false;
+    showCaptureToast('error', 'Pin on top isn’t available in this Chrome. Staying in a floating window.');
+  }
   // Resolve the host page's rem root once so px → rem conversions are
   // accurate even when the page customises the root font-size.
   try {
@@ -687,6 +700,7 @@ let myTabId: number | null = popoutTabParam;
 // migrating the live DOM — a PiP window dies the moment its opener document
 // unloads, so this page stays alive as the opener while pinned.
 const isPip = new URLSearchParams(location.search).get('pip') === '1';
+const pipLaunchRequested = new URLSearchParams(location.search).get('launch') === 'pip';
 const pipAvailable = 'documentPictureInPicture' in window;
 // Floor matches the panel's own min-width (index.html); Chrome has no API to
 // stop the user shrinking a PiP window below this afterwards — content then
@@ -702,6 +716,7 @@ let pipDockingBack = false;
 let pipChannel: BroadcastChannel | null = null;
 let pipUnsupported = false;
 let pipSavedSize: { width: number; height: number } | null = null;
+let pipLaunchPending = pipLaunchRequested && !IS_FIREFOX && pipAvailable;
 
 async function send(msg: any): Promise<any> {
   const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
@@ -818,6 +833,7 @@ function openPipWindow() {
       pipChannel.onmessage = (e) => { if (e.data === 'dock-back') pipDockingBack = true; };
     } catch {}
     pipPinned = true;
+    pipLaunchPending = false;
     render();
     try {
       const win = await browser.windows.getCurrent();
@@ -828,6 +844,7 @@ function openPipWindow() {
     } catch {}
   }).catch(() => {
     pipUnsupported = true;
+    pipLaunchPending = false;
     browser.storage?.local?.set?.({ 'dm-pip-unsupported': true });
     showCaptureToast('error', 'Pin on top isn’t available in this Chrome.');
     render();
@@ -9032,6 +9049,14 @@ function renderSettingsView(): string {
     '<button data-dm-custom-cursor="on" style="' + (customCursor ? activeBtn : inactiveBtn) + '">On</button>' +
     '<button data-dm-custom-cursor="off" style="' + (!customCursor ? activeBtn : inactiveBtn) + '">Off</button>' +
     '</div></div>' +
+    (IS_FIREFOX ? '' :
+    '<div style="' + sS + '"><div style="' + sT + '">Launch</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Where the toolbar icon and Alt+D open Design Mode. Pin on top starts a floating opener — Chrome needs a click in that window to pin.</div>' +
+    '<div style="display:flex;gap:4px;">' +
+    '<button data-dm-launch-surface="side-panel" style="' + (launchSurface === 'side-panel' ? activeBtn : inactiveBtn) + '">Side panel</button>' +
+    '<button data-dm-launch-surface="floating" style="' + (launchSurface === 'floating' ? activeBtn : inactiveBtn) + '">Floating</button>' +
+    '<button data-dm-launch-surface="picture-in-picture" style="' + (launchSurface === 'picture-in-picture' ? activeBtn : inactiveBtn) + '">Pin on top</button>' +
+    '</div></div>') +
     '<div style="' + sS + '"><div style="' + sT + '">Screenshot Capture</div>' +
     '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button and Alt+S do — viewport when nothing real is selected, otherwise the selected element.</div>' +
     '<div style="display:flex;gap:4px;">' +
@@ -9051,6 +9076,16 @@ function renderSettingsView(): string {
     '<button data-dm-action="reset-settings" style="flex:1;padding:6px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:6px;color:var(--dm-danger);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('rotateCcw', 11) + ' Reset settings</button>' +
     '</div>' +
     '</div><div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v' + extensionVersion() + '</div></div></div>';
+}
+
+function renderPipLaunchInterstitial(): string {
+  return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px;padding:24px;text-align:center;color:var(--dm-text-secondary);">' +
+    '<span style="display:flex;color:var(--dm-accent);">' + icon('pictureInPicture2', 28) + '</span>' +
+    '<div style="font-size:14px;font-weight:600;color:var(--dm-text);">Pin on top</div>' +
+    '<div style="font-size:12px;line-height:1.45;max-width:280px;">Chrome can only pin this panel above other windows from a click here. Pin it now — this window stays open in the background while you edit.</div>' +
+    '<button data-dm-action="pip-pin" autofocus style="padding:8px 16px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;">Pin on top</button>' +
+    '<button data-dm-action="dismiss-pip-launch" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;font-family:inherit;font-size:11px;text-decoration:underline;">Continue in floating window</button>' +
+    '</div>';
 }
 
 // Read the live manifest version so the Settings footer stays in lockstep
@@ -9420,6 +9455,8 @@ function render() {
       '<div style="font-size:12px;">Panel is pinned on top</div>' +
       '<button data-dm-action="pip-dock-back-from-launcher" style="background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);padding:5px 12px;cursor:pointer;font-family:inherit;font-size:11px;">Back to side panel</button>' +
       '</div>';
+  } else if (pipLaunchPending && !isPip) {
+    html = renderPipLaunchInterstitial() + renderCaptureToast();
   } else if (settingsOpen) {
     html = renderHeader() + renderSettingsView() + renderCaptureToast();
   } else if (mcpOpen) {
@@ -9486,6 +9523,10 @@ function render() {
   if (commentMode) {
     const ta = root.querySelector('[data-dm-comment-input]') as HTMLTextAreaElement;
     if (ta && document.activeElement !== ta) ta.focus();
+  }
+  if (pipLaunchPending && !pipPinned && !isPip) {
+    const pinBtn = root.querySelector('[data-dm-action="pip-pin"]') as HTMLButtonElement | null;
+    if (pinBtn && document.activeElement !== pinBtn) pinBtn.focus();
   }
 
   // Bind the per-tab scroll listener once the tab body exists, then
@@ -9875,6 +9916,10 @@ function setupDelegation() {
           openPipWindow();
           break;
         }
+        case 'dismiss-pip-launch':
+          pipLaunchPending = false;
+          render();
+          break;
         case 'pip-unpin': {
           // Runs inside the PiP iframe. Closing the PiP (same-extension
           // parent) fires the opener's pagehide handler, which restores the
@@ -9984,6 +10029,7 @@ function setupDelegation() {
           mcpPort = 9960; mcpAutoConnect = true;
           inspectorHoverColor = '#4F9EFF'; inspectorSelectColor = '#FF6B35';
           customCursor = true;
+          launchSurface = DEFAULT_LAUNCH_SURFACE;
           pipSavedSize = null; pipUnsupported = false;
           browser.storage?.local?.remove?.([
             'dm-theme', 'dm-color-format', 'dm-capture-mode',
@@ -9991,6 +10037,7 @@ function setupDelegation() {
             'dm-inspector-hover-color', 'dm-inspector-select-color',
             'dm-custom-cursor',
             'dm-pip-size', 'dm-pip-unsupported',
+            LAUNCH_SURFACE_KEY,
           ]);
           showCaptureToast('success', 'Settings reset to defaults');
           render();
@@ -10515,6 +10562,14 @@ function setupDelegation() {
       theme = themeBtn.dataset.dmTheme as Theme;
       resolveTheme();
       browser.storage?.local?.set?.({ 'dm-theme': theme });
+      render();
+      return;
+    }
+
+    const launchBtn = target.closest<HTMLElement>('[data-dm-launch-surface]');
+    if (launchBtn && !IS_FIREFOX) {
+      launchSurface = parseLaunchSurface(launchBtn.dataset.dmLaunchSurface);
+      browser.storage?.local?.set?.({ [LAUNCH_SURFACE_KEY]: launchSurface });
       render();
       return;
     }

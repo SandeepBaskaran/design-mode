@@ -24,9 +24,11 @@ export async function openPanel(target: { tabId?: number; windowId?: number }): 
   else if (target.windowId != null) await chrome.sidePanel.open({ windowId: target.windowId });
 }
 
-// Make the toolbar button open the panel on click. Chrome needs an explicit
-// call; Firefox's `sidebar_action` manifest key wires the button natively.
-export function enableActionOpensPanel(): void {
+// Make the toolbar button open the docked panel on click. Chrome needs an
+// explicit call; Firefox's `sidebar_action` manifest key wires the button
+// natively. Floating / PiP launch surfaces turn this off so `action.onClicked`
+// can run `windows.create` instead.
+export function setActionOpensPanel(open: boolean): void {
   if (IS_FIREFOX || !chrome.sidePanel) return;
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: open }).catch(() => {});
 }

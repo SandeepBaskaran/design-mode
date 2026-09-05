@@ -6,7 +6,13 @@
 // ============================================================
 import '../platform/polyfill';
 import { IS_FIREFOX } from '../platform/target';
-import { openPanel, enableActionOpensPanel } from '../platform/panel';
+import { openPanel, setActionOpensPanel } from '../platform/panel';
+import {
+  DEFAULT_LAUNCH_SURFACE,
+  LAUNCH_SURFACE_KEY,
+  parseLaunchSurface,
+  type LaunchSurface,
+} from '../platform/launch-surface';
 
 const tabStates = new Map<number, { enabled: boolean; connected: boolean }>();
 let pinnedTabId: number | null = null;
@@ -38,20 +44,22 @@ const popoutWindows = new Map<number, number>();
 // can't corrupt each other's routing.
 let currentTargetTab: number | null = null;
 
-// Toolbar icon opens the panel. Chrome: sidePanel.setPanelBehavior (the
-// adapter swallows the transient "No SW" rejection during worker teardown).
-// Firefox: the sidebar_action manifest key wires the button natively, so
-// this is a no-op there.
-enableActionOpensPanel();
+// Toolbar icon. Chrome side-panel: setPanelBehavior openPanelOnActionClick
+// (the adapter swallows the transient "No SW" rejection during teardown).
+// Chrome floating / PiP: that flag is false so action.onClicked can run
+// windows.create. Firefox: sidebar_action wires the button natively; we
+// still listen on `action` because Firefox's action button has no native
+// open behaviour.
+setActionOpensPanel(true);
+void readLaunchSurface().then(applyLaunchSurface);
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes[LAUNCH_SURFACE_KEY]) return;
+  applyLaunchSurface(parseLaunchSurface(changes[LAUNCH_SURFACE_KEY].newValue));
+});
 
-// Firefox's `action` button has no native open behaviour (only the separate
-// `sidebar_action` button does), so wire its click to open the sidebar —
-// synchronously, inside the user-gesture stack, like the Alt+D command.
-if (IS_FIREFOX) {
-  browser.action.onClicked.addListener(() => {
-    openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
-  });
-}
+browser.action.onClicked.addListener((tab) => {
+  handleActionOrCommand(tab);
+});
 
 // storage.session defaults to trusted (extension-page) contexts only; the
 // change-tracker's session persistence runs in content scripts, which count
@@ -183,9 +191,7 @@ browser.commands.onCommand.addListener((command) => {
     return;
   }
   browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-    if (tab?.id && tab.windowId) {
-      openPanel({ windowId: tab.windowId }).catch((err) => console.error('[DM] Failed to open side panel:', err));
-    }
+    handleActionOrCommand(tab);
   });
 });
 
@@ -261,31 +267,7 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'SP_POP_OUT') {
     const tabId = currentTargetTab;
     if (tabId == null) { sendResponse({ ok: false }); return true; }
-    (async () => {
-      transitioningTabs.add(tabId);
-      setTimeout(() => transitioningTabs.delete(tabId), 6000); // safety net
-      let b: any = {};
-      try {
-        const saved: any = (await browser.storage.local.get('dm-popout-bounds'))['dm-popout-bounds'];
-        if (saved && typeof saved.width === 'number') b = saved;
-      } catch {}
-      try {
-        const win = await browser.windows.create({
-          url: browser.runtime.getURL('sidepanel/index.html') + '?tab=' + tabId,
-          type: 'popup',
-          focused: true,
-          width: b.width || 420,
-          height: b.height || 760,
-          ...(typeof b.left === 'number' ? { left: b.left } : {}),
-          ...(typeof b.top === 'number' ? { top: b.top } : {}),
-        });
-        if (win?.id != null) popoutWindows.set(win.id, tabId);
-        sendResponse({ ok: true, windowId: win?.id });
-      } catch (e) {
-        transitioningTabs.delete(tabId);
-        sendResponse({ ok: false, error: String(e) });
-      }
-    })();
+    openFloatingForTab(tabId).then(sendResponse);
     return true;
   }
 
@@ -558,6 +540,86 @@ browser.tabs.onRemoved.addListener((tabId) => {
     if (boundTab === tabId) { try { void browser.windows.remove(winId).catch(() => {}); } catch {} }
   }
 });
+
+let cachedLaunchSurface: LaunchSurface = DEFAULT_LAUNCH_SURFACE;
+
+async function readLaunchSurface(): Promise<LaunchSurface> {
+  if (IS_FIREFOX) return DEFAULT_LAUNCH_SURFACE;
+  try {
+    const raw = (await browser.storage.local.get(LAUNCH_SURFACE_KEY))[LAUNCH_SURFACE_KEY];
+    return parseLaunchSurface(raw);
+  } catch {
+    return DEFAULT_LAUNCH_SURFACE;
+  }
+}
+
+function applyLaunchSurface(surface: LaunchSurface): void {
+  cachedLaunchSurface = surface;
+  setActionOpensPanel(surface === 'side-panel');
+}
+
+function handleActionOrCommand(tab?: chrome.tabs.Tab): void {
+  if (IS_FIREFOX) {
+    openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
+    return;
+  }
+  const surface = cachedLaunchSurface;
+  if (surface === 'side-panel') {
+    if (tab?.windowId != null) openPanel({ windowId: tab.windowId }).catch((err) => console.error('[DM] Failed to open side panel:', err));
+    else if (tab?.id != null) openPanel({ tabId: tab.id }).catch((err) => console.error('[DM] Failed to open side panel:', err));
+    return;
+  }
+  const openFloating = (tabId: number) => {
+    void openFloatingForTab(tabId, { pipLaunch: surface === 'picture-in-picture' });
+  };
+  if (tab?.id != null) {
+    openFloating(tab.id);
+    return;
+  }
+  browser.tabs.query({ active: true, currentWindow: true }).then(([t]) => {
+    if (t?.id != null) openFloating(t.id);
+  });
+}
+
+async function openFloatingForTab(
+  tabId: number,
+  opts?: { pipLaunch?: boolean },
+): Promise<{ ok: boolean; windowId?: number; error?: string }> {
+  for (const [winId, bound] of popoutWindows) {
+    if (bound === tabId) {
+      try {
+        await browser.windows.update(winId, { focused: true });
+        return { ok: true, windowId: winId };
+      } catch {}
+    }
+  }
+  transitioningTabs.add(tabId);
+  setTimeout(() => transitioningTabs.delete(tabId), 6000);
+  let b: { width?: number; height?: number; left?: number; top?: number } = {};
+  try {
+    const saved = (await browser.storage.local.get('dm-popout-bounds'))['dm-popout-bounds'] as typeof b | undefined;
+    if (saved && typeof saved.width === 'number') b = saved;
+  } catch {}
+  const url = browser.runtime.getURL('sidepanel/index.html')
+    + '?tab=' + tabId
+    + (opts?.pipLaunch ? '&launch=pip' : '');
+  try {
+    const win = await browser.windows.create({
+      url,
+      type: 'popup',
+      focused: true,
+      width: b.width || 420,
+      height: b.height || 760,
+      ...(typeof b.left === 'number' ? { left: b.left } : {}),
+      ...(typeof b.top === 'number' ? { top: b.top } : {}),
+    });
+    if (win?.id != null) popoutWindows.set(win.id, tabId);
+    return { ok: true, windowId: win?.id };
+  } catch (e) {
+    transitioningTabs.delete(tabId);
+    return { ok: false, error: String(e) };
+  }
+}
 
 function updateBadge(tabId: number, enabled: boolean) {
   browser.action.setBadgeText({ text: enabled ? 'ON' : '', tabId });

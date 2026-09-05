@@ -34,7 +34,7 @@ before ticking.
 | 0.8  | URL navigation isolates | Navigate to a different URL in the same tab | Changes from URL A do **not** apply to URL B; Changes tab resets |
 | 0.9  | Browser-session boundary | Close & reopen browser | Session storage is cleared (per `chrome.storage.session` semantics) — fresh state |
 | 0.10 | Theme toggle | Click sun/moon in header | Side panel + page overlays switch theme; persists across reloads |
-| 0.11 | Side-panel toggle shortcut | Press `Alt+D` (Chrome command, registered in `manifest.json`) | Side panel toggles open / close |
+| 0.11 | Side-panel toggle shortcut | Press `Alt+D` (Chrome command, registered in `manifest.json`) | Opens Design Mode on the current launch surface (default: side panel). Firefox: sidebar |
 | 0.12 | Unscriptable page | Open the panel on a `chrome://` page, the Chrome Web Store, or a devtools page (on Firefox: an `about:` page such as `about:addons`) | No "cannot be scripted" / "could not establish connection" error spam in the background console; the panel shows a disabled / empty state, not a crash |
 
 ---
@@ -54,11 +54,13 @@ it lives on its own MCP page (Phase 0.7), opened from the header MCP chip.**
 | 0.5.5 | Inspector hover colour | Pick a custom colour (e.g. green) | Hover overlay repaints **live** (no reload) in the new colour; the swatch shows its hex |
 | 0.5.6 | Inspector selection colour | Pick a custom colour | Selection overlay repaints **live** in the new colour; swatch shows its hex |
 | 0.5.7 | No MCP section in Settings | Open Settings | The MCP Server card and "Set up your agent" card are **absent** — only editor preferences remain |
-| 0.5.8 | Reset to defaults | Click Reset | Theme back to system, colour format to HEX, all four overlay colours (hover / selection / margin / padding) to defaults, MCP port to default, page cursor back to On |
+| 0.5.8 | Reset to defaults | Click Reset | Theme back to system, colour format to HEX, all four overlay colours (hover / selection / margin / padding) to defaults, MCP port to default, page cursor back to On, launch surface back to Side panel (Chrome) |
 | 0.5.9 | Inspector margin overlay colour | Pick a custom colour | Margin bands on the hover/selection overlay render in it and repaint live (default `#FF6363`) |
 | 0.5.10| Inspector padding overlay colour | Pick a custom colour | Padding bands render in it and repaint live (default `#7CC886`); the ↺ Reset link beside the overlay colours restores all four |
 | 0.5.11| Nudge amount | Change to e.g. `25` | Persists (`dm-nudge-amount`); Shift+Arrow on a px field now steps by 25 (default `10`); invalid / ≤0 reverts to the last valid value |
 | 0.5.12| Page cursor | Toggle Off with the panel open, then On again | Page cursor swaps **live** (no reload): app-icon cursor (default, On) ↔ plain crosshair; `move` over a selected element stays either way; closing the panel restores the normal cursor |
+| 0.5.13| Launch surface (Chrome) | Settings → Launch → Side panel / Floating / Pin on top | Preference persists as `dm-launch-surface`. Side panel: toolbar click opens the docked panel. Floating: toolbar / Alt+D opens a pop-out window. Pin on top: toolbar / Alt+D opens a floating opener with a focused **Pin on top** button (PiP cannot auto-open). Reset restores Side panel |
+| 0.5.14| Native select menus stay readable | Dark theme (or OS dark) → open any Design-tab / Tokens `<select>` (including size-mode and detected-replace) | Closed control and the native dropdown list are readable — light text on a dark popup, not black-on-black. Keyboard / AT still use the native `<select>` |
 
 ---
 
@@ -535,6 +537,10 @@ bleeding to duplicates and back.
 | 15.16 | Opener killed while pinned | Close the minimized floating window from the Dock/taskbar while pinned | The PiP window dies with it (its opener unloaded); design mode deactivates on the bound tab only |
 | 15.17 | Minimize doesn't clobber bounds | Pin (floating window minimizes), unpin, dock back, pop out again | The floating window restores its pre-pin size/position — the minimize never overwrote `dm-popout-bounds` |
 | 15.18 | Unsupported Chrome | On a Chrome build without Document PiP | The Pin on top button is absent from the floating header; if `requestWindow` throws, a toast explains and the button disappears permanently (`dm-pip-unsupported`) |
+| 15.19 | Launch = Floating | Settings → Launch → Floating, close the panel, click the toolbar icon (or Alt+D) | A floating pop-out opens via `windows.create`; the docked side panel does **not** open from the toolbar |
+| 15.20 | Launch = Pin on top | Settings → Launch → Pin on top, close surfaces, click the toolbar icon | A floating opener appears with a focused **Pin on top** CTA (not an auto-opened PiP). One click calls `requestWindow` and pins. Dismissing continues as a normal floating window |
+| 15.21 | Launch PiP unsupported | Same as 15.20 on a Chrome without Document PiP (or after `dm-pip-unsupported`) | Stays in the floating window; a toast explains Pin on top isn’t available |
+| 15.22 | Launch reset | Set Launch to Floating, then Reset settings | Launch returns to Side panel; next toolbar click opens the docked panel |
 
 ---
 
@@ -614,6 +620,7 @@ everything not listed here must behave exactly as on Chrome.
 | F.11 | Share text is Firefox-flavoured | Contribute panel → share action | Share copy references Firefox / AMO, not Chrome |
 | F.12 | Unscriptable `about:` page | Open the sidebar on `about:addons` | Disabled / empty state, no "could not establish connection" console spam (mirrors Phase 0.12) |
 | F.13 | `web-ext lint` clean | `npm run lint:extension` | 0 errors (the ~30 documented warnings are expected) |
+| F.14 | Launch setting omitted | Open Settings | There is **no** Launch / Side panel / Floating / Pin on top control. Toolbar and Alt+D always open the sidebar |
 
 ---
 
