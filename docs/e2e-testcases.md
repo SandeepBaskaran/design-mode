@@ -544,6 +544,7 @@ bleeding to duplicates and back.
 | 15.20 | Launch = Pin on top | Settings → Launch → Pin on top, close surfaces, click the toolbar icon | A floating opener appears with a focused **Pin on top** CTA (not an auto-opened PiP). One click calls `requestWindow` and pins. Dismissing continues as a normal floating window |
 | 15.21 | Launch PiP unsupported | Same as 15.20 on a Chrome without Document PiP (or after `dm-pip-unsupported`) | Stays in the floating window; a toast explains Pin on top isn’t available |
 | 15.22 | Launch reset | Set Launch to Floating, then Reset settings | Launch returns to Side panel; next toolbar click opens the docked panel |
+| 15.23 | Launch survives a sleeping service worker | Set Launch to Floating or Pin on top, wait for Chrome to suspend the extension service worker (or stop it from `chrome://serviceworker-internals`), then click the toolbar icon and repeat with `Alt+D` | Chrome restores `dm-launch-surface` before routing either action; it opens the selected floating / pin-on-top opener rather than briefly opening the default side panel |
 
 ---
 
