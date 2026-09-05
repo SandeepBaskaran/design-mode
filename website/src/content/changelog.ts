@@ -19,6 +19,15 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "2.2.1",
+    date: "2026-09-05",
+    headline: "Launch where you left off, even after Chrome sleeps.",
+    highlights: [
+      "Alt+D preserves the side-panel launch gesture after a service-worker cold start.",
+      "Floating and Pin on top restore without briefly opening the docked panel first.",
+    ],
+  },
+  {
     version: "2.2.0",
     date: "2026-09-05",
     headline: "Inspect real states and keep every agent connected.",

@@ -8,7 +8,7 @@ export const OWNER_HEALTH_PATH = '/.design-mode/health';
 export const OWNER_TOOLS_PATH = '/.design-mode/tools';
 export const OWNER_HEADER = 'x-design-mode-owner';
 export const LOOPBACK_HOST = '127.0.0.1';
-const VERSION = '2.2.0';
+const VERSION = '2.2.1';
 const BODY_LIMIT = 1_000_000;
 
 export type BridgeRole = 'owner' | 'attacher';

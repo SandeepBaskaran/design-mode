@@ -47,7 +47,7 @@ const popoutWindows = new Map<number, number>();
 let currentTargetTab: number | null = null;
 
 let launchSurfaceReady = false;
-const launchSurfaceInitialised = readLaunchSurface().then((surface) => {
+void readLaunchSurface().then((surface) => {
   applyLaunchSurface(surface);
   launchSurfaceReady = true;
 });
@@ -61,13 +61,23 @@ browser.runtime.onInstalled.addListener((details) => {
   if (!IS_FIREFOX && details.reason === 'install') setActionOpensPanel(true);
 });
 
+function restoreLaunchSurfaceFromGesture(tab?: chrome.tabs.Tab): void {
+  // A Chrome API callback preserves the command/action gesture; awaiting
+  // storage and then querying the active tab can make sidePanel.open reject.
+  chrome.storage.local.get(LAUNCH_SURFACE_KEY, (stored) => {
+    applyLaunchSurface(parseLaunchSurface(stored[LAUNCH_SURFACE_KEY]));
+    launchSurfaceReady = true;
+    handleActionOrCommand(tab);
+  });
+}
+
 browser.action.onClicked.addListener((tab) => {
   if (IS_FIREFOX) {
     openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
     return;
   }
   if (!launchSurfaceReady) {
-    void launchSurfaceInitialised.then(() => handleActionOrCommand(tab));
+    restoreLaunchSurfaceFromGesture(tab);
     return;
   }
   handleActionOrCommand(tab);
@@ -216,16 +226,11 @@ browser.commands.onCommand.addListener((command, tab) => {
     openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
     return;
   }
-  const openConfiguredSurface = () => {
-    browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      handleActionOrCommand(tab);
-    });
-  };
   if (!launchSurfaceReady) {
-    void launchSurfaceInitialised.then(openConfiguredSurface);
+    restoreLaunchSurfaceFromGesture(tab);
     return;
   }
-  openConfiguredSurface();
+  handleActionOrCommand(tab);
 });
 
 // Helper: forward message to the tab the sending panel is bound to. Captures

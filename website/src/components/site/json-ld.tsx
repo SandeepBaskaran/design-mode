@@ -58,7 +58,7 @@ export const softwareApplicationSchema = {
   operatingSystem: "Chrome, Edge, Brave, Arc, Firefox",
   url: SITE_URL,
   downloadUrl: SITE_URL,
-  softwareVersion: "2.2.0",
+  softwareVersion: "2.2.1",
   license: "https://opensource.org/licenses/MIT",
   offers: {
     "@type": "Offer",

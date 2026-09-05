@@ -24,7 +24,7 @@ export function attachWebSocketServer(server: HttpServer, token: string): WebSoc
   wss.on('connection', (ws) => {
     console.error('[Design Mode] Extension connected');
     activeConnection = ws;
-    ws.send(JSON.stringify({ type: 'HELLO', payload: { version: '2.2.0', agentConnected: true } }));
+    ws.send(JSON.stringify({ type: 'HELLO', payload: { version: '2.2.1', agentConnected: true } }));
 
     ws.on('message', (data) => {
       try {

@@ -14,7 +14,7 @@ import { isExtensionConnected } from '../websocket-server.js';
 import { claimOrAttach, createResilientToolDispatch, probeOwnerHealth, type LocalBridge } from '../owner-bridge.js';
 
 const DEFAULT_WS_PORT = 9960;
-const VERSION = '2.2.0';
+const VERSION = '2.2.1';
 
 const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
