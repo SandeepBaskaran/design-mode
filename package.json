@@ -40,7 +40,7 @@
   "overrides": {
     "zod": "$zod",
     "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
+    "@types/react-dom": "19.2.5",
     "postcss": "^8.5.10"
   }
 }

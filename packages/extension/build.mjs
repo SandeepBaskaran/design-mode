@@ -6,7 +6,7 @@
 // sidebar_action/scripts) and ignores the other's, and the JS detects the
 // browser at runtime (src/platform/target.ts).
 
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import { cpSync, mkdirSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -20,7 +20,11 @@ const entries = ['content', 'background', 'sidepanel'];
 // (Worktrees provisioned without a git checkout never ran the post-checkout
 // hook that normally creates this symlink.)
 try {
-  execSync(`node ${resolve(__dirname, '../../scripts/link-shared-dist.mjs')}`, { stdio: 'inherit' });
+  execFileSync(process.execPath, [resolve(__dirname, '../../scripts/link-shared-dist.mjs')], {
+    cwd: resolve(__dirname, '../..'),
+    stdio: 'inherit',
+    shell: false,
+  });
 } catch {}
 
 console.log('\n◆ Building Design Mode extension...\n');
