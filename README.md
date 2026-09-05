@@ -196,6 +196,10 @@ npm run start
 ```
 
 Starts a WebSocket bridge on `ws://localhost:9960` and an MCP server on stdio.
+The first process owns the extension socket and session state. A second Design Mode
+MCP client on the same port attaches and proxies tools to that owner instead of
+failing with `EADDRINUSE`. A non-Design Mode process on the port still fails
+clearly; Design Mode never kills it.
 
 Add to Claude Code:
 

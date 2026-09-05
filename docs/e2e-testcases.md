@@ -444,7 +444,9 @@ at `https://mcp.designmode.app`). Both expose the **same eight MCP tools**.
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
 | 11.1  | Server starts | `cd packages/mcp-local && npm start` | ASCII banner; eight tools listed: `get_changes`, `apply_changes`, `set_change_status`, `mark_comment_resolved`, `clear_changes`, `get_session_summary`, `export_changes`, `get_screenshot`; WebSocket bridge on `ws://localhost:9960` (or the configured port) |
-| 11.2  | Port conflict | Another process on 9960 | Clean error suggesting a different port or to kill the conflict |
+| 11.2  | Port conflict — foreign occupant | Another (non-Design Mode) process on 9960 | Clean error that the occupant is not Design Mode; process is left running; suggests stopping it yourself or `DM_PORT=9961`. Never auto-killed |
+| 11.2a | Second MCP client attaches | Start a second `npm start` while the first is still running | Second process attaches to the owner (does not exit on EADDRINUSE); MCP tools proxy to the owner; WebSocket stays on the first process |
+| 11.2b | Owner survival + shared state | Stop the second process; call `get_changes` from a third client | Owner still listens on 9960; extension stays connected; session state is the owner's |
 | 11.3  | Extension connects | Side panel open + auto-connect on (default) | Green dot in MCP indicator |
 | 11.4  | `get_changes` | Invoke from agent | Returns `{ pageUrl, pageTitle, styleChanges[], textChanges[], domChanges[], cssBlock, comments[] }` |
 | 11.5  | `apply_changes` | Push styles from agent: `{ changes: [{ elementId, styles: { color: 'red' } }] }` | Styles apply live on the page; row appears in Changes tab |

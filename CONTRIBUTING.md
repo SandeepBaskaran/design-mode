@@ -43,6 +43,7 @@ To run the optional MCP companion server:
 
 ```bash
 npm start          # from repo root — boots ws://localhost:9960 + MCP stdio
+                   # (a second start attaches to the first; it does not kill it)
 ```
 
 ## What kinds of PRs are welcome

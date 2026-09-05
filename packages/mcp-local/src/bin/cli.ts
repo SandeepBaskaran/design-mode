@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
- * ============================================================================
+ * ===========================================================================
  * DESIGN MODE MCP SERVER — MASTER ORCHESTRATOR
- * ============================================================================
+ * ===========================================================================
  * Pure Node.js bootstrapper that:
- * 1. Boots the WebSocket server for browser extension bridge
+ * 1. Claims the localhost WebSocket/owner bridge, or attaches to one
  * 2. Starts the MCP Server on stdio for coding agent communication
  * 3. Prints beautiful terminal output with connection instructions
  */
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createMcpServer } from '../mcp-server.js';
-import { startWebSocketServer, isExtensionConnected } from '../websocket-server.js';
+import { isExtensionConnected } from '../websocket-server.js';
+import { claimOrAttach, probeOwnerHealth, proxyToolCall } from '../owner-bridge.js';
 
 const DEFAULT_WS_PORT = 9960;
 const VERSION = '2.1.0';
 
-// ANSI color helpers (using stderr since stdout is for MCP stdio)
 const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
 const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
@@ -32,29 +32,37 @@ async function boot() {
   log(`\ud83d\ude80 Starting ${bold('Design Mode MCP')} v${VERSION}...`);
   log('');
 
-  // 1. Start WebSocket server for browser extension communication
+  let claim;
   try {
-    await startWebSocketServer(port);
-    log(`  ${green('\u2713')} WebSocket server listening on ${cyan(`ws://localhost:${port}`)}`);
+    claim = await claimOrAttach(port);
+    if (claim.role === 'owner') {
+      log(`  ${green('\u2713')} WebSocket server listening on ${cyan(`ws://localhost:${port}`)}`);
+    } else {
+      log(`  ${green('\u2713')} Attached to existing Design Mode owner on ${cyan(`localhost:${port}`)} (pid ${claim.pid})`);
+      log(`  ${dim('MCP tools proxy to the owner. The owner keeps the extension WebSocket.')}`);
+    }
   } catch (error: any) {
     log(`  ${red('\u2717')} WebSocket server failed: ${error.message}`);
-    if (error.message?.includes('already in use')) {
-      log(`  ${yellow('\u21b3')} Fix: run ${cyan(`lsof -ti:${port} | xargs kill -9`)} then try again`);
-      log(`  ${yellow('\u21b3')} Or use a different port: ${cyan(`DM_PORT=9961 npm start`)}`);
+    if (error.message?.includes('not Design Mode')) {
+      log(`  ${yellow('\u21b3')} Design Mode will not kill the process on that port`);
+      log(`  ${yellow('\u21b3')} Stop that process yourself, or use a different port: ${cyan(`DM_PORT=9961 npm start`)}`);
     }
     process.exit(1);
   }
 
-  // 2. Start MCP server on stdio for coding agent communication
   try {
-    const mcpServer = createMcpServer();
+    const mcpServer = createMcpServer(
+      claim.role === 'attacher'
+        ? (name, args) => proxyToolCall(port, name, args)
+        : undefined
+    );
     const transport = new StdioServerTransport();
 
     log(`  ${green('\u2713')} MCP server initializing on ${cyan('stdio')} transport`);
     log('');
 
     log(`==================================================`);
-    log(`${green('\u2705')} ${bold('DESIGN MODE MCP READY')}`);
+    log(`${green('\u2705')} ${bold('DESIGN MODE MCP READY')}${claim.role === 'attacher' ? dim(' (attached)') : ''}`);
     log(`==================================================`);
     log('');
     log(`${bold('\ud83d\udd0c MCP CLIENT CONFIG')} ${dim('(for Cursor, Claude Desktop, etc.)')}`);
@@ -69,7 +77,11 @@ async function boot() {
     log('');
     log(`${bold('\ud83d\udce1 EXTENSION BRIDGE')}`);
     log(`  WebSocket: ${cyan(`ws://localhost:${port}`)}`);
-    log(`  Status:    ${yellow('Waiting for browser extension...')}`);
+    if (claim.role === 'owner') {
+      log(`  Status:    ${yellow('Waiting for browser extension...')}`);
+    } else {
+      log(`  Role:      ${cyan('attacher')} ${dim('(shared owner state)')}`);
+    }
     log('');
     log(`${bold('\ud83d\udee0  AVAILABLE MCP TOOLS')}`);
     log(`  ${dim('\u2022')} get_changes         ${dim('\u2014 All edits + comments + ready-to-paste CSS block')}`);
@@ -86,14 +98,19 @@ async function boot() {
     log(`==================================================`);
     log('');
 
-    // Monitor extension connection
     let notified = false;
     const connectionCheck = setInterval(() => {
-      if (!notified && isExtensionConnected()) {
-        log(`  ${green('\u2713')} Browser extension connected!`);
-        notified = true;
-        clearInterval(connectionCheck);
-      }
+      void (async () => {
+        if (notified) return;
+        const connected = claim.role === 'owner'
+          ? isExtensionConnected()
+          : Boolean((await probeOwnerHealth(port))?.extensionConnected);
+        if (connected) {
+          log(`  ${green('\u2713')} Browser extension connected!`);
+          notified = true;
+          clearInterval(connectionCheck);
+        }
+      })().catch(() => {});
     }, 2000);
     connectionCheck.unref();
 
@@ -104,7 +121,6 @@ async function boot() {
   }
 }
 
-// Cleanup handlers
 process.on('SIGINT', () => {
   log('\n\ud83d\uded1 Shutting down Design Mode MCP...');
   process.exit(0);

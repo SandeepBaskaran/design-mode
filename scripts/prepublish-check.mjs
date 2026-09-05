@@ -153,6 +153,12 @@ step('Local MCP bundle integrity', () => {
   assertFile('packages/mcp-local/dist/bin/cli.js');
   assertFile('packages/mcp-local/dist/index.js');
   assertFile('packages/mcp-local/dist/mcp-server.js');
+  assertFile('packages/mcp-local/dist/owner-bridge.js');
+  assertFile('packages/mcp-local/dist/tools.js');
+});
+
+step('Local MCP owner/attach tests', () => {
+  run('npm --workspace @design-mode/mcp-local test', { stdio: 'pipe' });
 });
 
 // ── 6. Build the website ──────────────────────────────────────────────────

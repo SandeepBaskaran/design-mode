@@ -11,6 +11,7 @@
     "dev": "tsx watch src/bin/cli.ts",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' tsc",
     "start": "npx tsx src/bin/cli.ts",
+    "test": "tsx --test --test-concurrency=1 test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
