@@ -6,6 +6,7 @@
 // ============================================================
 
 import '../platform/polyfill';
+import { DEFAULT_WS_PORT } from '@shared/constants';
 import { getElementById, getOrAssignId, generateSelector, reserveIdsAtLeast } from './helpers';
 import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLayoutGuidesFor } from './layout-guides';
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
@@ -699,9 +700,13 @@ setUnhandledMessageHandler(dispatchCloudMessage);
 // then opens the appropriate transport. Falls back to local on any error.
 async function openConfiguredTransport() {
   try {
-    const conf = await browser.storage.local.get(['dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url']);
+    const conf = await browser.storage.local.get(['dm-mcp-mode', 'dm-mcp-port', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url']);
     const mode = (conf['dm-mcp-mode'] as 'local' | 'cloud' | 'self-hosted' | undefined) || 'cloud';
-    if (mode === 'local') { connectToServer({ mode: 'local' }); return; }
+    if (mode === 'local') {
+      const port = typeof conf['dm-mcp-port'] === 'number' ? conf['dm-mcp-port'] : DEFAULT_WS_PORT;
+      connectToServer({ mode: 'local', port });
+      return;
+    }
     const cloudToken = conf['dm-mcp-cloud-token'];
     const cloudUrl = conf['dm-mcp-cloud-url'] || (mode === 'cloud' ? 'https://mcp.designmode.app' : '');
     // No token yet (user picked Cloud mode but hasn't registered) — leave

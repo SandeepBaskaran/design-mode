@@ -261,6 +261,25 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'GET_LOCAL_MCP_TOKEN') {
+    const port = Number(msg.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      sendResponse({ token: null });
+      return true;
+    }
+    fetch(`http://127.0.0.1:${port}/.design-mode/health`, {
+      headers: { accept: 'application/json' },
+    }).then(async (response) => {
+      if (!response.ok) return null;
+      const health = await response.json();
+      return health?.identity === 'design-mode-mcp' && typeof health.webSocketToken === 'string'
+        ? health.webSocketToken
+        : null;
+    }).then((token) => sendResponse({ token }))
+      .catch(() => sendResponse({ token: null }));
+    return true;
+  }
+
   // Pop the panel out into a floating window bound to the sender's tab.
   // windows.create needs no user gesture (unlike sidePanel.open), so it runs
   // here in the background. The side panel closes itself after we ack.

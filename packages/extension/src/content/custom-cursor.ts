@@ -49,7 +49,7 @@ export function clearBaseCursor() {
 }
 
 try {
-  browser.storage?.local?.get?.([SETTING_KEY], (r: any) => {
+  browser.storage?.local?.get?.([SETTING_KEY])?.then((r: any) => {
     if (typeof r?.[SETTING_KEY] === 'boolean') enabled = r[SETTING_KEY];
     if (active) repaint();
   });

@@ -1312,8 +1312,23 @@ export function connectToServer(opts: ConnectOpts | number = {}) {
 
   if (transportMode === 'local') {
     const port = o.port ?? DEFAULT_WS_PORT;
-    try {
-      ws = new WebSocket(`ws://localhost:${port}`);
+    void connectLocal(port);
+    return;
+  }
+
+  // Cloud / self-hosted — open the SSE stream and run a forever loop that
+  // reconnects with backoff on disconnect.
+  cloudToken = o.cloudToken || null;
+  cloudBaseUrl = (o.cloudUrl || '').replace(/\/$/, '') || null;
+  if (!cloudToken || !cloudBaseUrl) return;
+  void runCloudStream();
+}
+
+async function connectLocal(port: number) {
+  try {
+    const response = await browser.runtime.sendMessage({ type: 'GET_LOCAL_MCP_TOKEN', port });
+    if (transportMode !== 'local' || typeof response?.token !== 'string') return;
+    ws = new WebSocket(`ws://127.0.0.1:${port}/?token=${encodeURIComponent(response.token)}`);
       ws.onopen = () => {
         console.log('[Design Mode] Connected to companion server');
         // Back-fill everything recorded before the server came up (it is
@@ -1326,16 +1341,7 @@ export function connectToServer(opts: ConnectOpts | number = {}) {
       ws.onmessage = (event) => {
         try { dispatchIncoming(JSON.parse(event.data)); } catch {}
       };
-    } catch { ws = null; }
-    return;
-  }
-
-  // Cloud / self-hosted — open the SSE stream and run a forever loop that
-  // reconnects with backoff on disconnect.
-  cloudToken = o.cloudToken || null;
-  cloudBaseUrl = (o.cloudUrl || '').replace(/\/$/, '') || null;
-  if (!cloudToken || !cloudBaseUrl) return;
-  void runCloudStream();
+  } catch { ws = null; }
 }
 
 async function runCloudStream() {

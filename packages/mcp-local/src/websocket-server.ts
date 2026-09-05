@@ -1,5 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { Server as HttpServer } from 'node:http';
+import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { state } from './state.js';
 
 let wss: WebSocketServer | null = null;
@@ -12,8 +12,14 @@ interface PendingRequest {
 }
 const pending = new Map<string, PendingRequest>();
 
-export function attachWebSocketServer(server: HttpServer): WebSocketServer {
-  wss = new WebSocketServer({ server });
+export function attachWebSocketServer(server: HttpServer, token: string): WebSocketServer {
+  wss = new WebSocketServer({
+    server,
+    verifyClient: ({ req }: { req: IncomingMessage }) => {
+      const url = new URL(req.url || '/', 'http://127.0.0.1');
+      return url.searchParams.get('token') === token;
+    },
+  });
 
   wss.on('connection', (ws) => {
     console.error('[Design Mode] Extension connected');

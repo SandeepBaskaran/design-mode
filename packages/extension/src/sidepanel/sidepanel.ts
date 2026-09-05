@@ -607,7 +607,7 @@ browser.storage?.local?.get?.([
   'dm-a11y-category', 'dm-a11y-level',
   'dm-pip-size', 'dm-pip-unsupported',
   LAUNCH_SURFACE_KEY,
-], (result: any) => {
+])?.then((result: any) => {
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
   if (result?.['dm-color-format']) { colorFormat = result['dm-color-format']; }
   if (result?.['dm-capture-mode']) { captureMode = result['dm-capture-mode']; }
@@ -649,7 +649,7 @@ browser.storage?.local?.get?.([
 });
 // Section expand/collapse state — restore the user's per-section
 // preference so the panel opens at the same shape they last left it.
-browser.storage?.session?.get?.(['dm-section-states'], (result: any) => {
+browser.storage?.session?.get?.(['dm-section-states'])?.then((result: any) => {
   if (result?.['dm-section-states'] && typeof result['dm-section-states'] === 'object') {
     Object.assign(sectionStates, result['dm-section-states']);
   }
@@ -6287,7 +6287,7 @@ function renderActionRow(): string {
     '<button data-dm-action="delete" title="Remove" style="' + bs('var(--dm-danger)') + '">' + icon('trash', 14) + '</button>' +
     '<button data-dm-action="comment" title="Comment" style="' + bs() + '">' + icon('messageSquare', 14) + '</button>' +
     '<button data-dm-action="region-comment" title="Annotate" style="' + bs(undefined, true) + ';' + (awaitingRegionDraw ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('squareDashed', 14) + '</button>' +
-    '<button data-dm-action="toggle-comment-pins" title="' + (commentPinsHidden ? 'Show comment pins' : 'Hide comment pins') + '" style="' + bs(undefined, true) + ';' + (commentPinsHidden ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon(commentPinsHidden ? 'eyeOff' : 'eye', 14) + '</button>' +
+    '<button data-dm-action="toggle-comment-pins" aria-label="' + (commentPinsHidden ? 'Show comment pins' : 'Hide comment pins') + '" aria-pressed="' + commentPinsHidden + '" title="' + (commentPinsHidden ? 'Show comment pins' : 'Hide comment pins') + '" style="' + bs(undefined, true) + ';' + (commentPinsHidden ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon(commentPinsHidden ? 'eyeOff' : 'eye', 14) + '</button>' +
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
     '<button data-dm-action="open-tokens" title="Design system" style="' + bs(undefined, true) + ';' + (tokensOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('swatchBook', 14) + '</button>' +
@@ -9052,10 +9052,10 @@ function renderSettingsView(): string {
     (IS_FIREFOX ? '' :
     '<div style="' + sS + '"><div style="' + sT + '">Launch</div>' +
     '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Where the toolbar icon and Alt+D open Design Mode. Pin on top starts a floating opener — Chrome needs a click in that window to pin.</div>' +
-    '<div style="display:flex;gap:4px;">' +
-    '<button data-dm-launch-surface="side-panel" style="' + (launchSurface === 'side-panel' ? activeBtn : inactiveBtn) + '">Side panel</button>' +
-    '<button data-dm-launch-surface="floating" style="' + (launchSurface === 'floating' ? activeBtn : inactiveBtn) + '">Floating</button>' +
-    '<button data-dm-launch-surface="picture-in-picture" style="' + (launchSurface === 'picture-in-picture' ? activeBtn : inactiveBtn) + '">Pin on top</button>' +
+    '<div role="group" aria-label="Launch surface" style="display:flex;gap:4px;">' +
+    '<button data-dm-launch-surface="side-panel" aria-pressed="' + (launchSurface === 'side-panel') + '" style="' + (launchSurface === 'side-panel' ? activeBtn : inactiveBtn) + '">Side panel</button>' +
+    '<button data-dm-launch-surface="floating" aria-pressed="' + (launchSurface === 'floating') + '" style="' + (launchSurface === 'floating' ? activeBtn : inactiveBtn) + '">Floating</button>' +
+    '<button data-dm-launch-surface="picture-in-picture" aria-pressed="' + (launchSurface === 'picture-in-picture') + '" style="' + (launchSurface === 'picture-in-picture' ? activeBtn : inactiveBtn) + '">Pin on top</button>' +
     '</div></div>') +
     '<div style="' + sS + '"><div style="' + sT + '">Screenshot Capture</div>' +
     '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button and Alt+S do — viewport when nothing real is selected, otherwise the selected element.</div>' +
@@ -10048,7 +10048,7 @@ function setupDelegation() {
           tokensOpen = true;
           tokensFocusVar = null;
           // Restore the user's last-active tab within the session.
-          browser.storage?.session?.get?.(['dm-tokens-tab'], (r: any) => {
+          browser.storage?.session?.get?.(['dm-tokens-tab'])?.then((r: any) => {
             const t = r?.['dm-tokens-tab'];
             if (t === 'declared' || t === 'detected' || t === 'defined') tokensTab = t;
             render();

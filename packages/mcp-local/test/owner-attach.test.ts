@@ -111,7 +111,9 @@ function spawnHoldClaim(port: number): ChildProcess {
 }
 
 async function helloFromExtension(port: number): Promise<any> {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
+  const health = await probeOwnerHealth(port);
+  assert.ok(health?.webSocketToken);
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/?token=${encodeURIComponent(health.webSocketToken)}`);
   const msg = await new Promise<any>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('ws hello timeout')), 3000);
     ws.once('error', (err) => { clearTimeout(timer); reject(err); });
@@ -193,6 +195,31 @@ describe('mcp-local owner/attacher', { concurrency: false, timeout: 15_000 }, ()
       const hello = await helloFromExtension(port);
       assert.equal(hello.type, 'HELLO');
       assert.equal(hello.payload.agentConnected, true);
+    });
+
+    test('rejects unauthenticated browser-facing bridge requests', async () => {
+      const toolResponse = await fetch(`http://127.0.0.1:${port}/.design-mode/tools`, {
+        method: 'POST',
+        headers: { 'content-type': 'text/plain' },
+        body: JSON.stringify({ name: 'get_changes', arguments: {} }),
+      });
+      assert.equal(toolResponse.status, 403);
+
+      const healthResponse = await fetch(`http://127.0.0.1:${port}/.design-mode/health`, {
+        headers: { origin: 'https://example.com' },
+      });
+      assert.equal(healthResponse.headers.get('access-control-allow-origin'), null);
+
+      await assert.rejects(
+        () => new Promise<void>((resolve, reject) => {
+          const socket = new WebSocket(`ws://127.0.0.1:${port}`);
+          socket.once('open', () => {
+            socket.close();
+            resolve();
+          });
+          socket.once('error', reject);
+        }),
+      );
     });
 
     test('attacher tool proxy shares owner state', async () => {

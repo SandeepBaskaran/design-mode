@@ -1,10 +1,12 @@
 import http from 'node:http';
+import { randomBytes } from 'node:crypto';
 import { attachWebSocketServer, isExtensionConnected, stopWebSocketServer } from './websocket-server.js';
 import { executeLocalTool, type ToolResult } from './tools.js';
 
 export const OWNER_IDENTITY = 'design-mode-mcp';
 export const OWNER_HEALTH_PATH = '/.design-mode/health';
 export const OWNER_TOOLS_PATH = '/.design-mode/tools';
+export const OWNER_HEADER = 'x-design-mode-owner';
 export const LOOPBACK_HOST = '127.0.0.1';
 const VERSION = '2.1.0';
 const BODY_LIMIT = 1_000_000;
@@ -17,6 +19,7 @@ export interface OwnerHealth {
   pid: number;
   role: 'owner';
   extensionConnected: boolean;
+  webSocketToken: string;
 }
 
 export interface LocalBridge {
@@ -68,7 +71,7 @@ async function readJson(req: http.IncomingMessage): Promise<any> {
   return JSON.parse(raw);
 }
 
-async function handleOwnerHttp(req: http.IncomingMessage, res: http.ServerResponse) {
+async function handleOwnerHttp(req: http.IncomingMessage, res: http.ServerResponse, webSocketToken: string) {
   if (!isLoopbackAddress(req.socket.remoteAddress) || !isLoopbackHost(req.headers.host)) {
     sendText(res, 403, 'localhost only');
     return;
@@ -83,12 +86,17 @@ async function handleOwnerHttp(req: http.IncomingMessage, res: http.ServerRespon
       pid: process.pid,
       role: 'owner',
       extensionConnected: isExtensionConnected(),
+      webSocketToken,
     };
     sendJson(res, 200, health);
     return;
   }
 
   if (url.pathname === OWNER_TOOLS_PATH && req.method === 'POST') {
+    if (req.headers[OWNER_HEADER] !== OWNER_IDENTITY) {
+      sendText(res, 403, 'owner client required');
+      return;
+    }
     let body: any;
     try {
       body = await readJson(req);
@@ -157,7 +165,8 @@ export async function probeOwnerHealth(port: number, timeoutMs = 800): Promise<O
     });
     if (!res.ok) return null;
     const body = await res.json() as Partial<OwnerHealth>;
-    if (body?.identity === OWNER_IDENTITY && body.role === 'owner' && typeof body.pid === 'number') {
+    if (body?.identity === OWNER_IDENTITY && body.role === 'owner' &&
+        typeof body.pid === 'number' && typeof body.webSocketToken === 'string' && body.webSocketToken) {
       return body as OwnerHealth;
     }
     return null;
@@ -176,7 +185,10 @@ export async function proxyToolCall(
   try {
     const res = await fetch(`http://${LOOPBACK_HOST}:${port}${OWNER_TOOLS_PATH}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        [OWNER_HEADER]: OWNER_IDENTITY,
+      },
       body: JSON.stringify({ name, arguments: args }),
     });
     if (!res.ok) {
@@ -199,8 +211,9 @@ export async function proxyToolCall(
 }
 
 async function startOwner(port: number): Promise<LocalBridge> {
+  const webSocketToken = randomBytes(32).toString('base64url');
   const httpServer = http.createServer((req, res) => {
-    void handleOwnerHttp(req, res).catch(() => {
+    void handleOwnerHttp(req, res, webSocketToken).catch(() => {
       if (!res.headersSent) sendText(res, 500, 'internal error');
     });
   });
@@ -210,7 +223,7 @@ async function startOwner(port: number): Promise<LocalBridge> {
     await closeServer(httpServer);
     throw err;
   }
-  attachWebSocketServer(httpServer);
+  attachWebSocketServer(httpServer, webSocketToken);
   return {
     role: 'owner',
     port,
