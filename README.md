@@ -37,7 +37,7 @@ Design Mode is a visual editor that lives in your browser. Instead of describing
 Design Mode brings a coding agent inside the page through a small bridge called MCP. There are three connection modes — pick whichever fits how you work:
 
 - **Cloud (default)** — Use the hosted relay at `mcp.designmode.app`. Paste a bearer token into your agent's config and you're done — no install, no terminal. Free with a per-tenant daily quota.
-- **Local** — Run a tiny companion server on your laptop with one `npm` command. Fastest path, nothing leaves your machine — power-user mode with a terminal.
+- **Local** — Run a tiny companion server on your laptop with one `npm` command. Fastest path, nothing leaves your machine — power-user mode with a terminal. Concurrent agent sessions automatically attach to one shared local owner, so they reuse port 9960 and the same browser connection.
 - **Self-hosted** — Same code as Cloud (open source in `packages/mcp-cloud`). Deploy on any Node.js host with Redis — Vercel, Railway, Fly, your own VM. You own the relay and the privacy posture.
 
 **[Full setup guide for all three modes — Claude Desktop, Cursor, Claude Code →](https://designmode.app/mcp)**

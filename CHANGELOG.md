@@ -23,6 +23,9 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   selected container's computed tracks and children. Separate from authored
   layout guides and the Changes tab; tears down on toggle-off, deselect, or
   disable.
+- **Chrome launch preference.** Toolbar clicks and `Alt+D` can open the native
+  side panel, a floating window, or a floating Pin-on-top launcher. Chrome
+  still requires one user click before creating a real Document PiP window.
 
 ### Fixed
 
@@ -39,6 +42,13 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - **Cloud MCP** `get_changes` now includes `items[]`; `get_session_summary`
   matches local fields (`extensionConnected`, `activeSessions`, `sessions`,
   `totalComments`).
+- **Concurrent Local MCP clients** now share one loopback owner instead of
+  crashing the second stdio process on port 9960. Foreign occupants still fail
+  clearly and are never killed.
+- Native `<select>` menus use the active colour scheme and explicit option
+  colours, keeping Design System filters readable in dark Chrome themes.
+- Extension builds invoke Node and Vite with argument arrays rather than a
+  shell-composed command, closing CodeQL alert #2's injection path.
 - Docs no longer claim the extension is local-only or that Send to Agent is
   localhost-only.
 
