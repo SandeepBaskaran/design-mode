@@ -23,6 +23,7 @@
     "package:extension:firefox": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-addon.zip && zip -rq ../design-mode-addon.zip . -x '*.DS_Store' -x '*.map'",
     "package:extension:all": "npm run package:extension && cd packages/extension/dist && rm -f ../design-mode-addon.zip && zip -rq ../design-mode-addon.zip . -x '*.DS_Store' -x '*.map'",
     "lint:extension": "npm run build:extension && web-ext lint -s packages/extension/dist",
+    "test:extension": "tsx --test packages/extension/src/content/*.test.ts packages/extension/src/platform/*.test.ts packages/extension/src/sidepanel/*.test.ts",
     "dev:firefox": "npm run build:extension && web-ext run -s packages/extension/dist",
     "test:e2e": "echo '➜  Walk through docs/e2e-testcases.md against the freshly-built dist/. Every phase has to pass before publish.'",
     "verify": "node scripts/prepublish-check.mjs",

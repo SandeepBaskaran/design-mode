@@ -116,6 +116,10 @@ step('web-ext lint (0 errors)', () => {
   run(`npx web-ext lint -s "${distReal}" --output text`, { stdio: 'pipe' });
 });
 
+step('Focused extension logic tests', () => {
+  run('npm run test:extension', { stdio: 'pipe' });
+});
+
 // ── 4. MCP tool count check (catch accidental tool deletions) ─────────────
 step('Local MCP server has all 8 tools', () => {
   const mcp = readFileSync(resolve(root, 'packages/mcp-local/src/mcp-server.ts'), 'utf8');
