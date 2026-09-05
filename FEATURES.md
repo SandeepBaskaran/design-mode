@@ -179,6 +179,10 @@ hovered) element. Every field updates the page live.
 - Col/Row gap fields have a **Fixed / Auto** mode (like Width/Height): Fixed
   takes a typed px value; Auto spreads the children evenly via
   `space-between` and shows the measured effective gap read-only.
+- **Computed layout overlay** *(flex/grid containers)*: optional session-only
+  overlay of the selected container's computed tracks and children, derived
+  from `getComputedStyle`. Separate from authored Layout guides and never
+  written to Changes. Toggle in Layout; deselect or disable tears it down.
 - **Margin** and **Padding** rows (Figma-style): a uniform value with an
   expand button that drops a 4-side editor (top / right / bottom / left),
   mirroring the corner-radius pattern. The Chrome-DevTools computed box
@@ -333,6 +337,17 @@ side panel is open.
   hidden (parent/child AND-gate) so a hidden section can't be
   mistaken for a visible guide.
 
+### 2.13a Page CSS states
+
+Inspects the selected element's existing `:hover` / `:focus` /
+`:focus-visible` / `:active` rules by walking accessible stylesheets
+(including nested `@media` / `@supports` / `@layer` where readable).
+Never mutates the page `classList` to discover rules, never exposes
+`:visited`, and skips cross-origin sheets. Force-state chips under the
+Design indicator reuse the existing `.dm-force-*` / `FORCE_STATE` preview
+path so page rules and Motion variants can be previewed without hovering.
+Forced state clears on deselect and when Design Mode disables.
+
 ### 2.14 Custom curves
 
 - The transition / animation timing dropdown also opens a **cubic-bezier
@@ -368,7 +383,10 @@ side panel is open.
   contrast ratio against the effective background, an absolute rating
   (Excellent / Good / Poor / Very Poor), AA and AAA pass/fail tabs, and a
   Category override (Auto / Large / Normal / Graphics). Category and level
-  persist across sessions.
+  persist across sessions. When the pair fails the active threshold, a
+  **Use …** control suggests an accessible foreground via perceptual
+  lightness adjustment (or a same-family colour token when the field is
+  token-backed). Applying it is a normal tracked colour change.
 
 ### 2.17 Token badges — which token paints this field
 

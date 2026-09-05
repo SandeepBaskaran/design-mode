@@ -401,6 +401,7 @@
       position: relative;
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 8px;
       padding: 4px 0 10px 0;
       font-size: 11px;
@@ -497,6 +498,73 @@
       letter-spacing: 0.4px;
       text-transform: uppercase;
       color: var(--dm-text-dim);
+    }
+    .dm-contrast-suggest {
+      flex: 1 0 100%;
+      margin-top: 2px;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: 5px;
+      border: 1px solid var(--dm-accent-border);
+      background: var(--dm-accent-bg);
+      color: var(--dm-accent);
+      font-size: 10px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .dm-contrast-suggest:hover { filter: brightness(1.08); }
+    .dm-page-states {
+      display: flex;
+      gap: 4px;
+      padding: 6px 12px 8px 12px;
+      border-bottom: 1px solid var(--dm-separator);
+    }
+    .dm-page-state-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 22px;
+      padding: 0 7px;
+      border-radius: 999px;
+      border: 1px solid var(--dm-btn-border);
+      background: var(--dm-btn-bg);
+      color: var(--dm-text-secondary);
+      font-size: 10px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .dm-page-state-btn:hover { color: var(--dm-text); }
+    .dm-page-state-btn[data-active="true"] {
+      background: var(--dm-accent-bg);
+      border-color: var(--dm-accent-border);
+      color: var(--dm-accent);
+    }
+    .dm-page-state-count {
+      font-size: 9px;
+      opacity: 0.75;
+    }
+    .dm-computed-layout-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 5px;
+      border: 1px solid var(--dm-btn-border);
+      background: var(--dm-btn-bg);
+      color: var(--dm-text-secondary);
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .dm-computed-layout-toggle[data-active="true"] {
+      background: var(--dm-accent-bg);
+      border-color: var(--dm-accent-border);
+      color: var(--dm-accent);
     }
 
     /* ── Tokens / Design-system panel ── */

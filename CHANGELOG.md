@@ -8,6 +8,22 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Page CSS states.** The Design tab inspects existing `:hover` / `:focus` /
+  `:focus-visible` / `:active` rules for the selected element (CSSOM only;
+  never `:visited`; nested `@media` / `@supports` / `@layer` where readable;
+  cross-origin sheets skipped) and offers force-state chips on the existing
+  `.dm-force-*` preview path. Forced state clears on deselect and disable.
+- **Accessible foreground suggestion** in the contrast row when the pair
+  fails the active WCAG threshold. Prefers a same-family colour token when
+  the field is token-backed; otherwise a perceptual lightness adjustment.
+  Applying it is a normal tracked change.
+- **Computed flex/grid overlay.** Optional session-only overlay of the
+  selected container's computed tracks and children. Separate from authored
+  layout guides and the Changes tab; tears down on toggle-off, deselect, or
+  disable.
+
 ### Fixed
 
 - **Hide all comment pins** is a real action-row control. The overlay hides;

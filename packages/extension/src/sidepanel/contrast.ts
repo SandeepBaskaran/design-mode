@@ -315,3 +315,117 @@ export function isTransparent(value: string): boolean {
   const parsed = parseRgba(t);
   return parsed ? parsed[3] === 0 : false;
 }
+
+export function rgbToHex([r, g, b]: Rgb): string {
+  return '#' + [r, g, b].map((n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')).join('');
+}
+
+function srgbToOklab([r, g, b]: Rgb): { L: number; a: number; b: number } {
+  const toLinear = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const lr = toLinear(r);
+  const lg = toLinear(g);
+  const lb = toLinear(b);
+  const l = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb;
+  const m = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb;
+  const s = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb;
+  const l_ = Math.cbrt(l);
+  const m_ = Math.cbrt(m);
+  const s_ = Math.cbrt(s);
+  return {
+    L: 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+    a: 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+    b: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+  };
+}
+
+export type ForegroundSuggestion = { rgb: Rgb; hex: string; ratio: number };
+
+function suggestionFromLab(
+  L: number,
+  a: number,
+  b: number,
+  bg: Rgb,
+  alpha: number,
+): ForegroundSuggestion {
+  const [r, g, bl] = oklabToSrgb(L, a, b);
+  const blended = blendOver([r, g, bl, alpha], bg);
+  return { rgb: blended, hex: rgbToHex(blended), ratio: contrastRatio(blended, bg) };
+}
+
+function searchLightness(
+  lab: { L: number; a: number; b: number },
+  bg: Rgb,
+  threshold: number,
+  toward: 0 | 1,
+  alpha: number,
+): ForegroundSuggestion | null {
+  let lo = toward === 0 ? 0 : lab.L;
+  let hi = toward === 0 ? lab.L : 1;
+  let best: ForegroundSuggestion | null = null;
+  for (let i = 0; i < 18; i++) {
+    const mid = (lo + hi) / 2;
+    const cand = suggestionFromLab(mid, lab.a, lab.b, bg, alpha);
+    if (cand.ratio >= threshold) {
+      best = cand;
+      if (toward === 0) lo = mid;
+      else hi = mid;
+    } else if (toward === 0) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  return best && best.ratio >= threshold ? best : null;
+}
+
+export function suggestAccessibleForeground(
+  fg: Rgba,
+  bg: Rgb,
+  threshold: number,
+): ForegroundSuggestion | null {
+  const blended = blendOver(fg, bg);
+  if (contrastRatio(blended, bg) >= threshold) return null;
+  const lab = srgbToOklab(blended);
+  const bgLum = relativeLuminance(bg);
+  const order: Array<0 | 1> = bgLum > 0.5 ? [0, 1] : [1, 0];
+  for (const toward of order) {
+    const found = searchLightness(lab, bg, threshold, toward, fg[3]);
+    if (found) return found;
+  }
+  const black = contrastRatio([0, 0, 0], bg);
+  const white = contrastRatio([255, 255, 255], bg);
+  const rgb: Rgb = white >= black ? [255, 255, 255] : [0, 0, 0];
+  return { rgb, hex: rgbToHex(rgb), ratio: Math.max(black, white) };
+}
+
+export type ColourTokenCandidate = { cssVar: string; resolvedValue: string };
+
+function tokenFamily(cssVar: string): string {
+  const parts = cssVar.replace(/^--/, '').split('-');
+  return parts.slice(0, 2).join('-');
+}
+
+export function pickAccessibleColourToken(
+  tokens: ColourTokenCandidate[],
+  bg: Rgb,
+  threshold: number,
+  currentVar?: string,
+): { cssVar: string; hex: string; ratio: number } | null {
+  const family = currentVar ? tokenFamily(currentVar) : '';
+  let best: { cssVar: string; hex: string; ratio: number; rank: number } | null = null;
+  for (const t of tokens) {
+    const parsed = parseRgba(t.resolvedValue) || parseOklab(t.resolvedValue) || parseOklch(t.resolvedValue);
+    if (!parsed || parsed[3] === 0) continue;
+    const blended = blendOver(parsed, bg);
+    const ratio = contrastRatio(blended, bg);
+    if (ratio < threshold) continue;
+    const rank = family && tokenFamily(t.cssVar) === family ? 0 : 1;
+    if (!best || rank < best.rank || (rank === best.rank && ratio > best.ratio)) {
+      best = { cssVar: t.cssVar, hex: rgbToHex(blended), ratio, rank };
+    }
+  }
+  return best ? { cssVar: best.cssVar, hex: best.hex, ratio: best.ratio } : null;
+}

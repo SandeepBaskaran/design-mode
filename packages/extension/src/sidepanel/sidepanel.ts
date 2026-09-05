@@ -23,6 +23,7 @@ import { AGENT_COMMAND_MARKDOWN, AGENT_TOOLS } from './agent-workflow';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
   isTransparent, resolveCategory, thresholdFor,
+  suggestAccessibleForeground, pickAccessibleColourToken,
   type Category as A11yCategory, type Level as A11yLevel,
   type ResolvedCategory as A11yResolvedCategory,
   type Rating as A11yRating, type Rgb, type Rgba,
@@ -145,6 +146,7 @@ interface ElementInfo {
   parentJustifyContent?: string;
   parentAlignItems?: string;
   parentGap?: string;
+  pageStates?: { ':hover': number; ':focus-visible': number; ':focus': number; ':active': number };
 }
 type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
 // Responsive breakpoint a change was recorded at (page viewport width at
@@ -479,6 +481,8 @@ let motionMenuOpen = false;
 // Which interaction is being force-previewed (the .dm-force-* class is on
 // the page element). Null when nothing is previewing. Panel-only state.
 let motionForcedTrigger: string | null = null;
+let pageForcedState: string | null = null;
+let computedLayoutOverlayOn = false;
 // Motion interaction triggers → the CSS state-variant selector the target
 // props are written into. Hover/press/focus are pseudo-classes; 'appear'
 // uses the @starting-style sentinel handled in the override engine.
@@ -1966,6 +1970,10 @@ browser.runtime.onMessage.addListener((msg) => {
       send({ type: 'SP_FORCE_STATE', elementId: info.id, state: MOTION_TRIGGER_STATE[motionForcedTrigger] || '', on: false });
       motionForcedTrigger = null;
     }
+    if (pageForcedState && info?.id) {
+      send({ type: 'SP_FORCE_STATE', elementId: info.id, state: pageForcedState, on: false });
+      pageForcedState = null;
+    }
     info = msg.payload; hoverInfo = null; commentMode = false;
     hydrateLayoutGuidesFromPayload(info);
     contrastSettingsOpen = false;
@@ -1974,6 +1982,7 @@ browser.runtime.onMessage.addListener((msg) => {
     shadowMenuProp = null;
     effectiveBgCache.clear();
     maybeFetchEffectiveBg();
+    send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: computedLayoutOverlayOn, elementId: info?.id });
     // Covers pages that hydrated after INIT_STATE fired (SPA nav): without
     // the token cache the badges and swap pickers have nothing to offer.
     if (designTokens.length === 0) refreshDesignTokens();
@@ -2082,6 +2091,10 @@ browser.runtime.onMessage.addListener((msg) => {
   // Page cleared its selection (Escape on the page) — drop the Design tab back
   // to the hovering / page state so the panel matches the page.
   if (msg.type === 'ELEMENT_DESELECTED') {
+    if (info?.id) send({ type: 'SP_FORCE_STATE', elementId: info.id, state: '', on: false });
+    send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: false });
+    motionForcedTrigger = null;
+    pageForcedState = null;
     info = null; hoverInfo = null; render();
   }
   if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; render(); }
@@ -2975,6 +2988,27 @@ function renderContrastRow(prop: string, value: string): string {
 
   const popoverHtml = contrastSettingsOpen ? renderContrastSettingsPopover(res.resolvedCategory) : '';
 
+  let suggestionHtml = '';
+  if (ctx.role === 'fg' && !res.pass) {
+    const tok = tokenForProp(prop);
+    const colourTokens = designTokens.filter((t) => t.group === 'colour').map((t) => ({
+      cssVar: t.cssVar,
+      resolvedValue: t.resolvedValue || t.value,
+    }));
+    const tokenPick = pickAccessibleColourToken(colourTokens, ctx.bg, res.threshold, tok?.cssVar);
+    if (tokenPick) {
+      const value = 'var(' + tokenPick.cssVar + ')';
+      suggestionHtml = '<button type="button" class="dm-contrast-suggest" data-dm-action="apply-contrast-suggestion" data-dm-prop="' + escapeAttr(prop) + '" data-dm-value="' + escapeAttr(value) + '" title="Apply token ' + escapeAttr(tokenPick.cssVar) + ' (' + tokenPick.ratio.toFixed(2) + ':1)">' +
+        'Use ' + escapeAttr(tokenPick.cssVar) + '</button>';
+    } else {
+      const sug = suggestAccessibleForeground(ctx.fg, ctx.bg, res.threshold);
+      if (sug) {
+        suggestionHtml = '<button type="button" class="dm-contrast-suggest" data-dm-action="apply-contrast-suggestion" data-dm-prop="' + escapeAttr(prop) + '" data-dm-value="' + escapeAttr(sug.hex) + '" title="Apply ' + escapeAttr(sug.hex) + ' (' + sug.ratio.toFixed(2) + ':1)">' +
+          'Use ' + escapeAttr(sug.hex) + '</button>';
+      }
+    }
+  }
+
   return '<div class="dm-contrast-row" data-dm-contrast-row>' +
     '<span class="dm-contrast-chip" title="' + escapeAttr(ctx.pairLabel + ' • ' + bgCss) + '" style="background:linear-gradient(135deg, ' + safeFg + ' 50%, ' + safeBg + ' 50%);"></span>' +
     '<span class="dm-contrast-ratio">' + res.ratio.toFixed(2) + ' : 1</span>' +
@@ -2985,6 +3019,7 @@ function renderContrastRow(prop: string, value: string): string {
       icon('slidersHorizontal', 12) +
     '</button>' +
     popoverHtml +
+    suggestionHtml +
   '</div>';
 }
 
@@ -6750,6 +6785,29 @@ function renderDesignTab(): string {
     indicatorLeft +
     '<span style="font-size:10px;color:var(--dm-text-dim);font-family:SF Mono,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">&lt;' + escapeAttr(tag) + '&gt;</span>' +
     multiBadge + matchingCtl + cssBtn + '</div>';
+  const pageStateItems: Array<{ state: ':hover' | ':focus' | ':focus-visible' | ':active'; label: string }> = [
+    { state: ':hover', label: 'Hover' },
+    { state: ':focus', label: 'Focus' },
+    { state: ':focus-visible', label: 'Focus vis.' },
+    { state: ':active', label: 'Active' },
+  ];
+  const selectedForStates = info;
+  const pageStatesRow = (!isHovering && selectedForStates)
+    ? '<div class="dm-page-states" role="group" aria-label="Force CSS state">' +
+      pageStateItems.map((item) => {
+        const count = selectedForStates.pageStates?.[item.state] || 0;
+        const motionOn =
+          (item.state === ':hover' && motionForcedTrigger === 'hover') ||
+          (item.state === ':active' && motionForcedTrigger === 'press') ||
+          (item.state === ':focus-visible' && motionForcedTrigger === 'focus');
+        const active = pageForcedState === item.state || motionOn;
+        const title = (count ? count + ' page rule' + (count === 1 ? '' : 's') : 'No page rules') + ' — force ' + item.label.toLowerCase();
+        return '<button type="button" class="dm-page-state-btn" data-dm-action="force-page-state" data-dm-state="' + item.state + '" data-active="' + (active ? 'true' : 'false') + '" title="' + escapeAttr(title) + '">' +
+          escapeAttr(item.label) + (count ? '<span class="dm-page-state-count">' + count + '</span>' : '') +
+        '</button>';
+      }).join('') +
+    '</div>'
+    : '';
 
   // Text content editing — show for ANY text-tagged layer (the same set whose
   // Layers icon is the "T"/type glyph). Editing a text element with children
@@ -7305,7 +7363,10 @@ function renderDesignTab(): string {
     ((isFlex || isGrid) ? '<div style="display:grid;grid-template-columns:repeat(12, 1fr);gap:6px;align-items:start;">' +
       '<div style="grid-column:span 6;min-width:0;display:flex;flex-direction:column;gap:3px;"><label class="dm-field-label">Children align</label>' + childrenAlignPad(s) + '</div>' +
       '<div style="grid-column:span 6;min-width:0;">' + gapsBlock + '</div>' +
-    '</div>' + sp() : '') +
+    '</div>' + sp() +
+    '<button type="button" class="dm-computed-layout-toggle" data-dm-action="toggle-computed-layout-overlay" data-active="' + (computedLayoutOverlayOn ? 'true' : 'false') + '" title="Session-only overlay of computed flex/grid tracks. Separate from layout guides and not recorded in Changes.">' +
+      icon('layoutGrid', 12) + '<span>' + (computedLayoutOverlayOn ? 'Hide computed layout' : 'Show computed layout') + '</span></button>' + sp()
+    : '') +
     // Advanced disclosure: clip / overflow / box-sizing live here now —
     // they're rarely-toggled box-model fine-tuning that crowds the top
     // of the panel when always visible. Flex / grid container + item
@@ -8223,7 +8284,7 @@ function renderDesignTab(): string {
   // Suppress unused (smart-defaults from old layout)
   void positionDefault; void hasEffects;
 
-  return '<div style="overflow-x:hidden;">' + indicator +
+  return '<div style="overflow-x:hidden;">' + indicator + pageStatesRow +
     iconSection +
     // Media is only meaningful for actual media tags (img / video / audio /
     // svg / picture / etc.). On a `<body>` or generic container the
@@ -9758,6 +9819,37 @@ function setupDelegation() {
         }
         case 'toggle-contrast-settings': {
           contrastSettingsOpen = !contrastSettingsOpen;
+          render();
+          break;
+        }
+        case 'apply-contrast-suggestion': {
+          const prop = actionBtn.dataset.dmProp;
+          const value = actionBtn.dataset.dmValue;
+          if (prop && value) applyStyle(prop, value);
+          break;
+        }
+        case 'force-page-state': {
+          const state = actionBtn.dataset.dmState || '';
+          const elId = info?.id || '';
+          if (!elId || !state) break;
+          if (pageForcedState === state) {
+            pageForcedState = null;
+            send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: false });
+          } else {
+            if (motionForcedTrigger) {
+              send({ type: 'SP_FORCE_STATE', elementId: elId, state: MOTION_TRIGGER_STATE[motionForcedTrigger] || '', on: false });
+              motionForcedTrigger = null;
+            }
+            if (pageForcedState) send({ type: 'SP_FORCE_STATE', elementId: elId, state: pageForcedState, on: false });
+            pageForcedState = state;
+            send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: true });
+          }
+          render();
+          break;
+        }
+        case 'toggle-computed-layout-overlay': {
+          computedLayoutOverlayOn = !computedLayoutOverlayOn;
+          send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: computedLayoutOverlayOn, elementId: info?.id });
           render();
           break;
         }
@@ -11926,6 +12018,7 @@ function setupDelegation() {
         motionForcedTrigger = null;
         send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: false });
       } else {
+        if (pageForcedState) { send({ type: 'SP_FORCE_STATE', elementId: elId, state: pageForcedState, on: false }); pageForcedState = null; }
         if (motionForcedTrigger) send({ type: 'SP_FORCE_STATE', elementId: elId, state: MOTION_TRIGGER_STATE[motionForcedTrigger], on: false });
         motionForcedTrigger = trig;
         send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: true });

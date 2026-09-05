@@ -342,6 +342,10 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }, sendResponse);
     return true;
   }
+  if (msg.type === 'SP_SET_COMPUTED_LAYOUT_OVERLAY') {
+    forwardToPinnedTab({ type: 'SET_COMPUTED_LAYOUT_OVERLAY', elementId: msg.elementId, on: msg.on }, sendResponse);
+    return true;
+  }
   if (msg.type === 'SP_SCROLL_TO_ELEMENT') {
     forwardToPinnedTab({ type: 'SCROLL_TO_ELEMENT', elementId: msg.elementId }, sendResponse);
     return true;

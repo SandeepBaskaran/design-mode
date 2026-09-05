@@ -9,6 +9,11 @@ import '../platform/polyfill';
 import { DEFAULT_WS_PORT } from '@shared/constants';
 import { getElementById, getOrAssignId, generateSelector, reserveIdsAtLeast } from './helpers';
 import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLayoutGuidesFor } from './layout-guides';
+import {
+  inspectElementStates, buildForceStateCss, setPageStateForceCss,
+  clearPageStateForceCss, clearForceStateClasses, pageStatesSummary, emptyInspectedStates,
+} from './inspect-states';
+import { setComputedLayoutOverlay, clearComputedLayoutOverlay } from './computed-layout-overlay';
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
@@ -493,6 +498,15 @@ function onElementSelected(info: ElementInfo) {
       extra.componentHierarchy = getComponentHierarchy(el).map(c => c.name);
     }
   }
+  clearForceStateClasses();
+  let pageStates = pageStatesSummary(emptyInspectedStates());
+  if (el) {
+    const inspected = inspectElementStates(el);
+    pageStates = pageStatesSummary(inspected);
+    setPageStateForceCss(buildForceStateCss(info.id, inspected));
+  } else {
+    clearPageStateForceCss();
+  }
   notifyPanel('ELEMENT_SELECTED', {
     payload: {
       ...info,
@@ -502,6 +516,7 @@ function onElementSelected(info: ElementInfo) {
       textContent: el?.textContent?.trim()?.slice(0, 500) || undefined,
       hasChildElements: el ? el.children.length > 0 : false,
       layoutGuides: getLayoutGuidesFor(info.id),
+      pageStates,
     },
   });
 }
@@ -774,7 +789,10 @@ function disable() {
   // Final sweep — if any other module attached an overlay-like element, this
   // catches the strays so the page goes back to a pristine state the moment
   // the panel closes.
-  document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-axis-guides, #dm-distance, #dm-resize-dots, #dm-toolbar, .dm-multi-overlay, .dm-comment-pin, .dm-comment-region').forEach(el => el.remove());
+  document.querySelectorAll('#dm-hover, #dm-select, #dm-dim-label, #dm-axis-guides, #dm-distance, #dm-resize-dots, #dm-toolbar, #dm-computed-layout, .dm-multi-overlay, .dm-comment-pin, .dm-comment-region').forEach(el => el.remove());
+  clearForceStateClasses();
+  clearPageStateForceCss();
+  clearComputedLayoutOverlay();
   clearBaseCursor();
 }
 
@@ -787,6 +805,9 @@ function clearSelectionToHover() {
   if (!getSelectedElementId()) return;
   hideSelect();
   hideResizeDots();
+  clearForceStateClasses();
+  clearPageStateForceCss();
+  clearComputedLayoutOverlay();
   setSelectedElementId(null);
   notifyPanel('ELEMENT_DESELECTED', {});
 }
@@ -1473,6 +1494,18 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           } catch {}
         }
         setLayoutGuidesOverlay(elementId, msg.layers, msg.sectionVisible);
+      }
+      sendResponse({ ok: true });
+      return true;
+    }
+
+    case 'SET_COMPUTED_LAYOUT_OVERLAY': {
+      if (msg.on) {
+        const id = (msg.elementId as string) || getSelectedElementId() || '';
+        const el = id ? getElementById(id) : null;
+        setComputedLayoutOverlay(el);
+      } else {
+        clearComputedLayoutOverlay();
       }
       sendResponse({ ok: true });
       return true;

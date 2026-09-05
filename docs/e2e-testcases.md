@@ -212,6 +212,8 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 2.23 | Contrast checker — ratio | Open the colour picker on a text colour over a known background | A contrast row at the top of the picker (above the essentials row) shows the ratio vs the effective background (e.g. `4.5:1`) with a diagonal-split chip |
 | 2.24 | Contrast checker — rating + AA/AAA | Read the contrast row | Absolute rating pill (Excellent / Good / Poor / Very Poor) plus AA and AAA tabs showing both pass/fail verdicts at once |
 | 2.25 | Contrast checker — category override | Open the Category popover, switch Auto → Large → Normal → Graphics | The pass/fail verdict updates to the chosen threshold; the choice + AA/AAA level persist across reloads |
+| 2.26 | Contrast checker — foreground suggestion | Open the colour picker on text whose contrast fails AA | A **Use …** button appears. If the field is token-backed and a same-family colour token passes, it offers `var(--token)`; otherwise a lightness-adjusted hex. Clicking it applies the colour, records a style change, and is undoable |
+| 2.27 | Page CSS states — inspect + force | Select an element with a real `:hover` rule in a same-origin stylesheet | Hover chip shows a rule count. Clicking Hover applies `.dm-force-hover` (existing FORCE_STATE) and the inspected page hover declarations without adding application hover classes during inspect. `:visited` never appears. Deselect or disable clears the forced class |
 
 ---
 
@@ -251,6 +253,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 3.25 | Layout guide: section eye visibility gating | Add one layout guide to an element, then add a second | With one guide, no section-level eye appears next to the Layout guide header — only the row's own eye. Once 2+ guides exist, a section eye appears top-right of the section header |
 | 3.26 | Layout guide: parent/child hide | With 2+ guides on an element, click the section eye to hide all guides, then click one dimmed row's own eye | Every guide disappears from the page; each row's own eye dims (~40% opacity) but still reflects and can toggle its individual on/off state; re-enabling the section eye reveals only the rows currently marked visible |
 | 3.27 | Layout guide: compact color panel | On a layout guide's expanded row, click the Colour swatch | The color panel opens with the essentials row (swatch + hex + eyedropper + format) and the HSV picker inline (compact mode keeps Custom expanded — no disclosure toggle) — no WCAG contrast row and no Site Colors token list |
+| 3.28 | Computed flex/grid overlay | Select a flex or grid container → click **Show computed layout** | A session-only overlay paints computed tracks / children on the element. It is not a layout guide and does not appear in Changes. Toggle off, deselect, or disable Design Mode removes it |
 
 ---
 

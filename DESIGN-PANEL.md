@@ -849,6 +849,7 @@ above the HSV gradient:
 | **Ratio + chip** | Contrast ratio against the effective background (ancestor-walked when the element's own background is transparent), with a diagonal-split preview chip. |
 | **Absolute rating** | Excellent / Good / Poor / Very Poor against the 7 / 4.5 / 3 thresholds. |
 | **AA / AAA tabs** | Both pass/fail verdicts shown at once. |
+| **Fix contrast** | When the pair fails the active threshold and the edited colour is a foreground, a **Use …** button suggests an accessible colour (same-family token when the field is token-backed, otherwise a lightness-adjusted hex). Clicking it writes through `applyStyle` (Changes + undo). |
 | **Category override** (popover) | Auto (inferred from the property + computed font size) / Large / Normal / Graphics; persists with the AA/AAA level via `chrome.storage.local`. |
 
 Fill-layer and gradient-stop colours pair against the element's text colour
@@ -1298,6 +1299,11 @@ section-level eye and its own row eye are on.
 **Figma equivalent**: Layout grid overlay (Figma has no columns-vs-rows
 split — this panel's `Columns` / `Rows` / `Grid` kinds map to Figma's
 single grid-with-type picker).
+
+The Layout section also has an optional **Show computed layout** toggle on
+flex/grid containers. That overlay is derived from `getComputedStyle` for
+the current selection, is session-only, and is **not** a layout guide (it
+never uses `__layout_guides` or the Changes tab).
 
 ---
 
