@@ -605,7 +605,7 @@ Tree mechanics:
 | **Click → select** | Updates `info.id`. |
 | **Hover → page outline** | Yellow dashed outline over the corresponding element. |
 | **Drag-to-reorder** | HTML5 DnD on each row. Drop above / below midpoint = previous / next sibling. Recorded as a `MOVE` change in the Changes tab. |
-| **Empty state** | When the tree hasn't been populated yet — "Click the inspector icon to start selecting elements." |
+| **Empty state** | When the tree hasn't been populated yet — "No layers yet. The page tree appears here once the page is ready." Independent of inspect mode. |
 
 Search + filter:
 

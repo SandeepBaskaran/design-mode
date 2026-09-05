@@ -30,7 +30,7 @@ Use it to:
 - **Search** by tag, class, id, or smart name.
 - **Navigate** large pages by collapsing branches.
 
-When the inspector hasn't been activated yet, the tab shows an empty state — "Click the inspector icon to start selecting elements." Activate inspector mode and the tree populates.
+When the page tree hasn't arrived yet, the tab shows an empty state — "No layers yet. The page tree appears here once the page is ready." The tree is built from the live DOM independently of inspect mode.
 
 ---
 
@@ -47,7 +47,7 @@ Above all three tabs sits a row of action buttons — visible regardless of whic
 | `message-square` | **Comment** | Attaches a yellow sticky-note comment to the selected layer. Opens the comment-edit card just above the tabs. | Nothing selected. |
 | `eye` / `eye-off` | **Hide all pins** | Toggles every comment pin overlay on the page. The Changes-tab list still works — only the page overlay is muted. State persists across sessions via `chrome.storage.local`. | Always available. |
 | `circle-pause` / `circle-play` | **Pause animations** | Pauses every CSS animation, transition, and `<video>` on the page. Click again to resume. Useful for catching motion mid-frame to inspect / screenshot. | Always available. |
-| `camera` | **Screenshot** | Captures the current viewport as PNG. Honors the Settings → Capture mode (clipboard / download / both). | Always available. |
+| `camera` | **Screenshot** | Captures the viewport, or the selected element when a real layer is selected. Honors Settings → Capture mode (clipboard / download / both). `Alt+S` uses the same target and destination. | Always available. |
 | `bookmark` | **Presets** | Opens the Presets panel — save / load named CSS bundles applicable to any layer. | Always available. |
 | `undo` (left arrow) | **Undo** | Ctrl/Cmd-Z. Reverts the last edit. | Nothing to undo. |
 | `undo` (mirrored) | **Redo** | Ctrl/Cmd-Shift-Z. Re-applies the last undone edit. | Nothing to redo. |
@@ -269,11 +269,11 @@ We don't override the browser context menu. Right-click in the Layers list shows
 If `domTree.length === 0`, the tab shows the empty state instead of the search + tree:
 
 ```
-[ crosshair icon ]
-Click the inspector icon to start selecting elements
+[ layers icon ]
+No layers yet. The page tree appears here once the page is ready.
 ```
 
-The inspector icon lives in the panel header (above the action row). Activate it to start selecting elements; the tree populates from there.
+The inspector icon lives in the panel header (above the action row). Use it to pick elements on the page; the Layers tree itself fills from the live DOM as soon as the page is ready.
 
 ---
 
@@ -302,7 +302,7 @@ Pinned at the bottom of the side panel — visible from any tab when there are t
 | Button | What | Disabled when |
 |---|---|---|
 | **Copy Prompt** (`clipboard` icon) | Generates an LLM-optimised markdown prompt of all changes (CSS / text / DOM / comments) plus a description of the framework / file:line if source detection found one. Copies to clipboard. | "Preview original" is on, or no changes. |
-| **Send to Agent** (`send` icon) | Sends the same payload directly to a connected coding agent via the MCP server (`ws://localhost:9960`). | Preview-original is on, or no changes, or MCP isn't running, or MCP is running but no agent is connected. The tooltip names the specific blocker. |
+| **Send to Agent** (`send` icon) | Stages a handoff marker over the MCP transport (Cloud, Local, or Self-hosted). The agent's next `get_changes` sees a `handoff` field. When MCP is offline or no agent is connected, the click opens setup instructions instead of sending. | Preview-original is on, or no changes. |
 
 The Send to Agent button has a more accent-colored style when enabled to distinguish it from the lower-stakes Copy.
 

@@ -115,7 +115,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 0.10.2 | Alt+C — Comment on selected element | Select an element → press | Side panel switches to comment-add mode with the textarea focused; if nothing is selected, no-op |
 | 0.10.2b | Alt+R — Comment on a region | Press | Crosshair draw mode activates; drag a rectangle → side panel opens the comment composer in "region" mode; Esc mid-draw cancels |
 | 0.10.3 | Alt+P — Pause motion | Press | Toggles a global freeze: CSS animations + transitions + Web-Animations API instances + `<video>` elements pause; press again to resume |
-| 0.10.4 | Alt+S — Element screenshot | Select element → press | PNG of the cropped element downloads with timestamp filename |
+| 0.10.4 | Alt+S — Screenshot | Select element or leave on Page → press | Same as the camera button: viewport vs element from selection, destination from Settings → Capture mode (clipboard / download / both) |
 | 0.10.5 | Alt+X — Export CSS | Make any change → press | Generated CSS block copied to clipboard |
 | 0.10.6 | Esc — Deselect back to hover | Select an element, press Esc | Selection + resize handles clear and the page returns to **hover mode** (hovering still highlights; inspection stays ON — Esc does NOT turn inspect off). Panel Design tab drops to the page/hover view. With a multi-selection active, the first Esc clears the whole set. |
 | 0.10.7 | Delete — Remove selected element | Select element → press | Element removed; "delete" entry in Changes tab |
@@ -262,7 +262,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 4.4 | Copy SVG markup | Click "Copy SVG markup" | SVG `outerHTML` ends up in the clipboard (paste into a text file to verify); the button briefly shows a check + "Copied" (~1.2s) then restores |
 | 4.5 | Video element | Select a `<video>` | Embedded `<video>` controls + Download button |
 | 4.6 | Background image | Select a div with `background-image: url(...)` | Media section detects the URL, offers download |
-| 4.7 | Icon library detection | Select a Lucide / Heroicons / Remix icon | Icon section appears showing library + name; if multiple matches in the library, a replace-icon dropdown |
+| 4.7 | Icon library detection | Select a Lucide / Heroicons / Remix icon | Icon section appears showing library + name; Lucide with 2+ on-page icons shows a replace dropdown that actually swaps SVG paths (tracked + undoable); FontAwesome stays a read-only name |
 | 4.8 | Media file size — cross-origin | Select a cross-origin image whose response is opaque | Meta line shows resolution + kind but omits the size (no error) |
 
 ---
@@ -387,6 +387,7 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 | 8.31 | Token change → MCP | Edit a token → call `get_changes` (local and cloud) | Response contains `tokenChanges` with `cssVar`, `scopeSelector`, `oldValue`, `newValue`, `system`, `cssRule`, plus a `tokenGuidance` string |
 | 8.32 | Token change → prompt | Edit a theme-scoped token → Copy as Prompt | `## Tokens changed` names the token, its design system, and its scope, followed by the "edit the definition at its source" guidance |
 | 8.33 | Refresh picks up a theme switch | Toggle the site's theme → click the panel's refresh (⟳) | Token values re-scan to the now-active theme |
+| 8.34 | Token edit on undo stack | Edit a token value → Ctrl/⌘+Z → Ctrl/⌘+⇧+Z | The token reverts to its previous value (Changes row drops if back to original), then re-applies |
 
 ---
 
@@ -405,6 +406,8 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 | 9.8  | Multi-select Esc | Press Esc with multi-select active | Multi-select tears down first; second Esc deselects |
 | 9.9  | Freeze animations | Select an element → Design tab → **Motion** section header → click the circle-pause toggle (or `Alt+P` from anywhere) | The Motion-section toggle shows active state; CSS animations + transitions + WAAPI instances + `<video>` pause across the page; toggle again to resume |
 | 9.10 | Undo / Redo | Make change → `Ctrl/⌘+Z` → `Ctrl/⌘+⇧+Z` | Reverts then re-applies (style, DOM, text, visibility all reversible) |
+| 9.11 | Hide all comment pins | Add a comment → click the action-row eye | Page pins disappear; Changes-tab comment rows stay. Reload the panel: pins stay hidden (`dm-hide-comment-pins`). Click again to restore. |
+| 9.12 | Layers empty copy | Open Layers before the tree arrives (or on an empty body) | Copy reads "No layers yet. The page tree appears here once the page is ready." — not "Click the inspector icon…" |
 
 ---
 
@@ -472,6 +475,8 @@ at `https://mcp.designmode.app`). Both expose the **same eight MCP tools**.
 | 11.21 | Register token | Open the cloud landing page → register → copy token + tenant ID | Token + tenant ID stored locally; indicator turns green when both present |
 | 11.22 | Send to Agent | With agent connected to the cloud relay → click Send to Agent | Agent receives changes via the cloud bridge |
 | 11.23 | Self-hosted | Mode "Self-hosted" → enter your Vercel URL | Same protocol as Cloud; works against any deployment of the `mcp-cloud` package |
+| 11.24 | Cloud `get_changes` items[] | Make a style + comment, then cloud `get_changes` | Response includes `items[]` with stable `id` + `kind` + `status`, matching local |
+| 11.25 | Cloud `get_session_summary` | Invoke with the side panel open | Returns `{ extensionConnected, activeSessions, sessions[], totalStyleChanges, totalTextChanges, totalDomChanges, totalComments, pendingHandoff }` |
 
 ---
 

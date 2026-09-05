@@ -273,6 +273,7 @@ let resolvedTheme: 'dark' | 'light' = 'dark';
 let colorFormat: ColorFormat = 'hex';
 type CaptureMode = 'clipboard' | 'download' | 'both';
 let captureMode: CaptureMode = 'clipboard';
+let commentPinsHidden = false;
 let multiSelectActive = false;
 let multiSelectIds: string[] = [];
 // The token whose consumers are currently highlighted via the "×N uses"
@@ -588,7 +589,7 @@ let nudgeAmount = 10;
 let customCursor = true;
 
 browser.storage?.local?.get?.([
-  'dm-theme', 'dm-color-format', 'dm-capture-mode',
+  'dm-theme', 'dm-color-format', 'dm-capture-mode', 'dm-hide-comment-pins',
   'dm-mcp-port', 'dm-mcp-auto-connect',
   'dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url', 'dm-mcp-cloud-tenant',
   'dm-inspector-hover-color', 'dm-inspector-select-color',
@@ -602,6 +603,7 @@ browser.storage?.local?.get?.([
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
   if (result?.['dm-color-format']) { colorFormat = result['dm-color-format']; }
   if (result?.['dm-capture-mode']) { captureMode = result['dm-capture-mode']; }
+  if (typeof result?.['dm-hide-comment-pins'] === 'boolean') commentPinsHidden = result['dm-hide-comment-pins'];
   if (typeof result?.['dm-mcp-port'] === 'number') mcpPort = result['dm-mcp-port'];
   if (typeof result?.['dm-mcp-auto-connect'] === 'boolean') mcpAutoConnect = result['dm-mcp-auto-connect'];
   if (typeof result?.['dm-mcp-mode'] === 'string') mcpMode = result['dm-mcp-mode'];
@@ -2001,6 +2003,9 @@ browser.runtime.onMessage.addListener((msg) => {
   // Alt+A on the page: open the comment add field for the focused layer.
   // Mirrors the side-panel comment button (action row) so the keyboard
   // shortcut and the click both land in the same flow.
+  if (msg.type === 'REQUEST_SCREENSHOT') {
+    void takeScreenshot();
+  }
   if (msg.type === 'OPEN_COMMENT_FOR_SELECTED') {
     if (!info) return;
     startComment();
@@ -2030,6 +2035,7 @@ browser.runtime.onMessage.addListener((msg) => {
     if (typeof msg.hoverAvailable === 'boolean') applyHoverAvailable(msg.hoverAvailable);
     undoCount = msg.undoCount ?? undoCount;
     redoCount = msg.redoCount ?? redoCount;
+    if (typeof msg.commentPinsHidden === 'boolean') commentPinsHidden = msg.commentPinsHidden;
     if (msg.multiSelect !== undefined) multiSelectActive = !!msg.multiSelect;
     if (msg.multiSelectIds) multiSelectIds = msg.multiSelectIds;
     if (msg.frozen !== undefined) animationsFrozen = !!msg.frozen;
@@ -6264,6 +6270,7 @@ function renderActionRow(): string {
     '<button data-dm-action="delete" title="Remove" style="' + bs('var(--dm-danger)') + '">' + icon('trash', 14) + '</button>' +
     '<button data-dm-action="comment" title="Comment" style="' + bs() + '">' + icon('messageSquare', 14) + '</button>' +
     '<button data-dm-action="region-comment" title="Annotate" style="' + bs(undefined, true) + ';' + (awaitingRegionDraw ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('squareDashed', 14) + '</button>' +
+    '<button data-dm-action="toggle-comment-pins" title="' + (commentPinsHidden ? 'Show comment pins' : 'Hide comment pins') + '" style="' + bs(undefined, true) + ';' + (commentPinsHidden ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon(commentPinsHidden ? 'eyeOff' : 'eye', 14) + '</button>' +
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
     '<button data-dm-action="open-tokens" title="Design system" style="' + bs(undefined, true) + ';' + (tokensOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('swatchBook', 14) + '</button>' +
@@ -6412,7 +6419,7 @@ function renderSealedFrameNotice(): string {
 
 function renderLayersTab(): string {
   if (pageSealed && !inspectWrapperOptedIn) return renderSealedFrameNotice();
-  if (domTree.length === 0) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;"><div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('crosshair', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">Click the inspector icon to start selecting elements</div></div>';
+  if (domTree.length === 0) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;"><div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('layers', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">No layers yet. The page tree appears here once the page is ready.</div></div>';
 
   const selectedId = info?.id || '';
   const visible = getVisibleLayers();
@@ -6798,7 +6805,7 @@ function renderDesignTab(): string {
     '</div>' +
     '<div style="display:flex;align-items:center;gap:8px;">' +
     '<span style="font-size:10px;color:var(--dm-text-secondary);">Icon:</span>' +
-    (iconInfo.availableIcons && iconInfo.availableIcons.length > 1
+    (iconInfo.library === 'lucide' && iconInfo.availableIcons && iconInfo.availableIcons.length > 1
       ? '<select class="dm-select" data-dm-icon-replace style="flex:1;min-width:0;">' +
         iconInfo.availableIcons.map((ic: string) => '<option value="' + escapeAttr(ic) + '"' + (ic === 'lucide-' + iconInfo.name || ic === iconInfo.name ? ' selected' : '') + '>' + ic.replace('lucide-', '') + '</option>').join('') + '</select>'
       : '<span style="font-size:11px;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);">' + escapeAttr(iconInfo.name) + '</span>') +
@@ -9026,7 +9033,7 @@ function renderSettingsView(): string {
     '<button data-dm-custom-cursor="off" style="' + (!customCursor ? activeBtn : inactiveBtn) + '">Off</button>' +
     '</div></div>' +
     '<div style="' + sS + '"><div style="' + sT + '">Screenshot Capture</div>' +
-    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button does</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button and Alt+S do — viewport when nothing real is selected, otherwise the selected element.</div>' +
     '<div style="display:flex;gap:4px;">' +
     '<button data-dm-capture-mode="clipboard" style="' + (captureMode === 'clipboard' ? activeBtn : inactiveBtn) + '">Clipboard</button>' +
     '<button data-dm-capture-mode="download" style="' + (captureMode === 'download' ? activeBtn : inactiveBtn) + '">Download</button>' +
@@ -9655,6 +9662,17 @@ function setupDelegation() {
         case 'delete': domAction('delete'); break;
         case 'comment': startComment(); break;
         case 'region-comment': startRegionComment(); break;
+        case 'toggle-comment-pins': {
+          const next = !commentPinsHidden;
+          commentPinsHidden = next;
+          browser.storage?.local?.set?.({ 'dm-hide-comment-pins': next });
+          send({ type: 'SP_SET_COMMENT_PINS_HIDDEN', hidden: next }).then((r: any) => {
+            if (typeof r?.commentPinsHidden === 'boolean') commentPinsHidden = r.commentPinsHidden;
+            render();
+          });
+          render();
+          break;
+        }
         case 'screenshot': takeScreenshot(); break;
         case 'download-media': downloadMedia(); break;
         case 'copy-svg-markup': copySvgMarkup(); break;
@@ -11931,6 +11949,18 @@ function setupDelegation() {
   root.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
 
+    const iconReplaceSel = target.closest<HTMLSelectElement>('[data-dm-icon-replace]');
+    if (iconReplaceSel && iconReplaceSel.value) {
+      send({ type: 'SP_REPLACE_ICON', iconClass: iconReplaceSel.value }).then((r: any) => {
+        if (r?.info) info = r.info;
+        if (r?.textChanges) textChanges = r.textChanges;
+        if (r?.undoCount != null) undoCount = r.undoCount;
+        if (r?.redoCount != null) redoCount = r.redoCount;
+        render();
+      });
+      return;
+    }
+
     // Declared tab — scope filter dropdown.
     const scopeFilterSel = target.closest<HTMLSelectElement>('[data-dm-token-scope-filter]');
     if (scopeFilterSel) {
@@ -12902,7 +12932,11 @@ function setupDelegation() {
       const scopeSelector = tokenEditInput.dataset.dmTokenScope || ':root';
       const newValue = tokenEditInput.value;
       editedTokens.set(tokenEditKey(scopeSelector, cssVar), newValue);
-      send({ type: 'SP_SET_ROOT_VAR', cssVar, value: newValue, scopeSelector }).then((r: any) => { if (r?.tokenChanges) tokenChanges = r.tokenChanges; });
+      send({ type: 'SP_SET_ROOT_VAR', cssVar, value: newValue, scopeSelector }).then((r: any) => {
+        if (r?.tokenChanges) tokenChanges = r.tokenChanges;
+        if (r?.undoCount != null) undoCount = r.undoCount;
+        if (r?.redoCount != null) redoCount = r.redoCount;
+      });
       return;
     }
 

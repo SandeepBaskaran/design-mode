@@ -14,17 +14,19 @@ import type { ElementInfo } from './inspector';
 import { initCustomCursor, applyBaseCursor, clearBaseCursor } from './custom-cursor';
 import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
-import { captureElementScreenshot, captureViewportScreenshotClean, downloadDataUrl } from './screenshots';
+import { captureElementScreenshot, captureViewportScreenshotClean } from './screenshots';
 import {
   detectScales, annotateDrift, findTokenUsages,
   getCustomPresets, saveCustomPreset, deleteCustomPreset,
   type PresetKind,
 } from './presets';
 import { getTokenIndex, invalidateTokenIndex, authoredTokenValueFor } from './token-engine';
-import { setTokenEdit, resetTokenEdit, clearAllTokenEdits, getTokenEdits } from './root-var-store';
+import { setTokenEdit, resetTokenEdit, clearAllTokenEdits, getTokenEdits, peekTokenEdit } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
 import { buildDomTree, isPageContentSealed } from './dom-tree';
-import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments } from './comments';
+import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments, restoreCommentPins, setCommentPinsHidden, areCommentPinsHidden } from './comments';
+import { findLucideGlyph, lucideIconClass, swapLucideClasses } from './icon-swap';
+import { buildCloudSessionSummary, buildMcpItems } from './mcp-items';
 import { startRegionDraw, cancelRegionDraw, clearPendingRegionBox, type Region } from './region-annotate';
 // Source detection — kept; surfaced in the prompt + Design tab
 import { getSourceLocation, getComponentHierarchy, openInVSCode } from './source-detection';
@@ -126,9 +128,43 @@ interface DomUndoEntry { kind: "dom"; action: string; elementId: string; html: s
 // without it, old innerHTML was written into textContent and the tags showed.
 interface TextUndoEntry { kind: "text"; elementId: string; oldText: string; newText: string; isHtml?: boolean; }
 interface VisibilityUndoEntry { kind: "visibility"; elementId: string; wasHidden: boolean; oldDisplay: string; }
-type UndoEntry = StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoEntry;
+interface TokenUndoEntry { kind: "token"; cssVar: string; scopeSelector: string; oldValue: string; newValue: string; original: string; }
+interface IconUndoEntry {
+  kind: "icon"; elementId: string;
+  oldClass: string; newClass: string;
+  oldHtml: string; newHtml: string;
+  oldViewBox: string | null; newViewBox: string | null;
+}
+type UndoEntry = StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoEntry | TokenUndoEntry | IconUndoEntry;
+const pageSessionStartedAt = Date.now();
 const undoStack: UndoEntry[] = [];
 const redoStack: UndoEntry[] = [];
+
+function applyTokenUndoValue(cssVar: string, scopeSelector: string, value: string, original: string) {
+  if (value === original) resetTokenEdit(cssVar, scopeSelector);
+  else setTokenEdit(cssVar, value, scopeSelector);
+}
+
+function pushTokenUndo(entry: TokenUndoEntry) {
+  const last = undoStack[undoStack.length - 1];
+  if (last && last.kind === 'token' && last.cssVar === entry.cssVar && last.scopeSelector === entry.scopeSelector) {
+    last.newValue = entry.newValue;
+    if (last.oldValue === last.newValue) undoStack.pop();
+    return;
+  }
+  if (entry.oldValue === entry.newValue) return;
+  undoStack.push(entry);
+  redoStack.length = 0;
+}
+
+function applyIconSnapshot(elementId: string, className: string, html: string, viewBox: string | null) {
+  const el = getElementById(elementId);
+  if (!el) return;
+  el.setAttribute('class', className);
+  if (viewBox) el.setAttribute('viewBox', viewBox);
+  else el.removeAttribute('viewBox');
+  applyHtmlChange(elementId, html);
+}
 
 // Corner-dot resize commits its final width/height through the change-tracker
 // (so it lands in the Changes tab and exports), pushes an undo entry per
@@ -222,6 +258,7 @@ function getFullState() {
     multiSelectIds: getMultiSelectIds(),
     undoCount: undoStack.length,
     redoCount: redoStack.length,
+    commentPinsHidden: areCommentPinsHidden(),
   };
 }
 
@@ -535,7 +572,21 @@ function dispatchCloudMessage(msg: any) {
             pageUrl: (c as any).pageUrl, resolved: !!(c as any).resolved,
             screenshot: `get_screenshot({ commentId: "${c.id}" })`,
           }));
-        } catch { report.comments = []; }
+          report.items = buildMcpItems({
+            styleChanges: getStyleChanges(),
+            textChanges: getTextChanges(),
+            domChanges: getDomChanges(),
+            comments: pageComments,
+          });
+        } catch {
+          report.comments = [];
+          report.items = buildMcpItems({
+            styleChanges: getStyleChanges(),
+            textChanges: getTextChanges(),
+            domChanges: getDomChanges(),
+            comments: [],
+          });
+        }
         sendRelayResponse(msg.requestId, report);
       })();
       return;
@@ -569,14 +620,21 @@ function dispatchCloudMessage(msg: any) {
       })();
       return;
     case 'CLOUD_GET_SESSION_SUMMARY':
-      sendRelayResponse(msg.requestId, {
-        pageUrl: location.href,
-        pageTitle: document.title,
-        totalStyleChanges: getStyleChanges().length,
-        totalTextChanges: getTextChanges().length,
-        totalDomChanges: getDomChanges().length,
-        pendingHandoff: (getChangeReport() as { handoff?: object }).handoff ?? null,
-      });
+      (async () => {
+        let totalComments = 0;
+        try { totalComments = (await getPageComments()).length; } catch { totalComments = 0; }
+        sendRelayResponse(msg.requestId, buildCloudSessionSummary({
+          pageUrl: location.href,
+          pageTitle: document.title,
+          startedAt: pageSessionStartedAt,
+          lastActivity: Date.now(),
+          totalStyleChanges: getStyleChanges().length,
+          totalTextChanges: getTextChanges().length,
+          totalDomChanges: getDomChanges().length,
+          totalComments,
+          pendingHandoff: (getChangeReport() as { handoff?: object }).handoff ?? null,
+        }));
+      })();
       return;
     case 'CLOUD_EXPORT_CHANGES':
       sendRelayResponse(msg.requestId, { text: renderExportText(msg.payload?.format || 'css') });
@@ -591,7 +649,7 @@ function dispatchCloudMessage(msg: any) {
       const resolved = msg.payload?.resolved !== false;
       if (!commentId) { sendRelayResponse(msg.requestId, { ok: false }); return; }
       setCommentResolved(commentId, resolved).then(c => {
-        if (c) { void showCommentPins(); syncCommentChange(c); notifyPanel('CHANGES_UPDATE', {}); }
+        if (c) { if (!areCommentPinsHidden()) void showCommentPins(); syncCommentChange(c); notifyPanel('CHANGES_UPDATE', {}); }
         sendRelayResponse(msg.requestId, { ok: !!c });
       });
       return;
@@ -664,7 +722,7 @@ function enable() {
   resetOverlayTeardown();
   resetMeasureTeardown();
   applyBaseCursor();
-  showCommentPins();         // surface saved comment pins on the page
+  void restoreCommentPins().then(() => notifyPanel('STATE_UPDATE', getFullState()));
   startPanelHeartbeat();     // detect a panel-close that the message chain missed
   void openConfiguredTransport();
   enableInspect((i: ElementInfo) => onElementSelected(i));
@@ -749,8 +807,7 @@ function registerAllShortcuts() {
     if (sid) { deleteElement(sid); setSelectedElementId(null); hideSelect(); }
   });
   registerShortcut('screenshot', () => {
-    const sid = getSelectedElementId();
-    if (sid) captureElementScreenshot(sid).then(url => { if (url) downloadDataUrl(url, `element-${Date.now()}.png`); });
+    notifyPanel('REQUEST_SCREENSHOT', {});
   });
   registerShortcut('export-css', () => {
     const ch = getStyleChanges();
@@ -1023,6 +1080,10 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
             if (entry.wasHidden) { el.style.display = 'none'; }
             else { el.style.display = entry.oldDisplay; }
           }
+        } else if (entry.kind === 'token') {
+          applyTokenUndoValue(entry.cssVar, entry.scopeSelector, entry.oldValue, entry.original);
+        } else if (entry.kind === 'icon') {
+          applyIconSnapshot(entry.elementId, entry.oldClass, entry.oldHtml, entry.oldViewBox);
         }
         redoStack.push(entry);
       }
@@ -1069,6 +1130,10 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
             if (!entry.wasHidden) { el.style.display = 'none'; }
             else { el.style.display = entry.oldDisplay; }
           }
+        } else if (entry.kind === 'token') {
+          applyTokenUndoValue(entry.cssVar, entry.scopeSelector, entry.newValue, entry.original);
+        } else if (entry.kind === 'icon') {
+          applyIconSnapshot(entry.elementId, entry.newClass, entry.newHtml, entry.newViewBox);
         }
         undoStack.push(entry);
       }
@@ -1129,7 +1194,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         addRegionComment(region, selector, msg.text).then(comment => {
           syncCommentChange(comment);
           clearPendingRegionBox(); // committed box (showCommentPins) replaces the pending one
-          void showCommentPins();
+          if (!areCommentPinsHidden()) void showCommentPins();
           sendResponse({ comment });
         });
         return true;
@@ -1146,7 +1211,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         setCommentResolved(cid, resolved).then((c) => {
           // After mutation, ensure pins re-render with the new ordinal /
           // colour. showCommentPins is idempotent.
-          void showCommentPins();
+          if (!areCommentPinsHidden()) void showCommentPins();
           if (c) syncCommentChange(c);
           sendResponse({ ok: true });
         });
@@ -1162,7 +1227,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       const offset = (msg as any).offset;
       if (cid) {
         setCommentPinOffset(cid, offset || null).then(() => {
-          void showCommentPins();
+          if (!areCommentPinsHidden()) void showCommentPins();
           sendResponse({ ok: true });
         });
         return true;
@@ -1542,23 +1607,42 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
     case 'SET_ROOT_VAR': {
-      // Edit a CSS variable globally, scoped to the selector it's
-      // declared on (default :root). The original value is captured in
-      // root-var-store on the first edit so RESET_ROOT_VAR and the
-      // markdown exporter can read it later. Changes-tab ledger
-      // integration is deferred (applyStyleChange requires data-dm-id'd
-      // elements; scope selectors don't carry one).
       if (msg.cssVar && msg.value != null) {
-        setTokenEdit(msg.cssVar, msg.value, msg.scopeSelector || ':root');
-        getChangesPayload().then(p => sendResponse({ ok: true, ...p }));
+        const scope = msg.scopeSelector || ':root';
+        const existing = peekTokenEdit(msg.cssVar, scope);
+        const priorCurrent = existing?.current;
+        setTokenEdit(msg.cssVar, msg.value, scope);
+        const after = peekTokenEdit(msg.cssVar, scope);
+        const original = after?.original ?? existing?.original ?? '';
+        pushTokenUndo({
+          kind: 'token',
+          cssVar: msg.cssVar,
+          scopeSelector: scope,
+          oldValue: priorCurrent ?? original,
+          newValue: msg.value,
+          original,
+        });
+        getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
         return true;
       }
       sendResponse({ ok: false }); break;
     }
     case 'RESET_ROOT_VAR': {
       if (msg.cssVar) {
-        resetTokenEdit(msg.cssVar, msg.scopeSelector || ':root');
-        getChangesPayload().then(p => sendResponse({ ok: true, ...p }));
+        const scope = msg.scopeSelector || ':root';
+        const existing = peekTokenEdit(msg.cssVar, scope);
+        if (existing) {
+          pushTokenUndo({
+            kind: 'token',
+            cssVar: msg.cssVar,
+            scopeSelector: scope,
+            oldValue: existing.current,
+            newValue: existing.original,
+            original: existing.original,
+          });
+        }
+        resetTokenEdit(msg.cssVar, scope);
+        getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
         return true;
       }
       sendResponse({ ok: false }); break;
@@ -1570,6 +1654,51 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         sendResponse({ ids: [] });
       }
       break;
+    }
+    case 'SET_COMMENT_PINS_HIDDEN': {
+      setCommentPinsHidden(!!msg.hidden).then((hidden) => {
+        sendResponse({ ok: true, commentPinsHidden: hidden });
+      });
+      return true;
+    }
+    case 'REPLACE_ICON': {
+      const sid = getSelectedElementId();
+      const el = sid ? getElementById(sid) : null;
+      const nextClass = lucideIconClass(msg.iconClass || '');
+      if (!sid || !el || el.tagName.toLowerCase() !== 'svg' || !nextClass) {
+        sendResponse({ ok: false });
+        break;
+      }
+      const glyphs = Array.from(document.querySelectorAll('svg.lucide')).map(s => ({
+        classNames: Array.from(s.classList),
+        innerHTML: s.innerHTML,
+        viewBox: s.getAttribute('viewBox'),
+      }));
+      const glyph = findLucideGlyph(glyphs, nextClass);
+      if (!glyph) { sendResponse({ ok: false }); break; }
+      const oldClass = el.getAttribute('class') || '';
+      const oldHtml = el.innerHTML || '';
+      const oldViewBox = el.getAttribute('viewBox');
+      const newClass = swapLucideClasses(oldClass, nextClass);
+      const newHtml = glyph.innerHTML;
+      const newViewBox = glyph.viewBox;
+      if (oldClass === newClass && oldHtml === newHtml) {
+        sendResponse({ ok: true, unchanged: true });
+        break;
+      }
+      applyIconSnapshot(sid, newClass, newHtml, newViewBox);
+      undoStack.push({
+        kind: 'icon', elementId: sid,
+        oldClass, newClass, oldHtml, newHtml, oldViewBox, newViewBox,
+      });
+      redoStack.length = 0;
+      const info = buildElementInfo(el);
+      onElementSelected(info);
+      getChangesPayload().then(p => sendResponse({
+        ok: true, ...p, info: { ...info, element: undefined },
+        undoCount: undoStack.length, redoCount: redoStack.length,
+      }));
+      return true;
     }
     case 'CONSOLIDATE_DETECTED': {
       // Replace every on-page occurrence of msg.rawValue (in the relevant
@@ -2085,7 +2214,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         el.removeAttribute('data-dm-preview-hidden');
       });
       document.querySelectorAll('[data-dm-preview-restored="1"]').forEach(el => el.remove());
-      try { showCommentPins(); } catch {}
+      try { if (!areCommentPinsHidden()) showCommentPins(); } catch {}
       sendResponse({ ok: true }); break;
     }
 

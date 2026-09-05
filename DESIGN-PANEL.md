@@ -66,11 +66,11 @@ When detected, the section shows:
 | Element | What | Behavior |
 |---|---|---|
 | **Library** | The detected library name in accent color: `lucide`, `fontawesome`, etc. | Read-only label. |
-| **Icon** | Either:<br/>• A select dropdown with **all icons of the same library on the page** (when 2+ are present — lets you swap to a different one in one click).<br/>• A read-only label with the icon's name (when only one is detected). | Selecting from the dropdown rewrites the element's class to switch icons. |
+| **Icon** | Either:<br/>• A select dropdown of **Lucide icons already on the page** (when 2+ Lucide SVGs are present). Choosing one copies that icon's SVG paths onto the selection, records it in Changes, and is undoable.<br/>• A read-only label with the icon's name (FontAwesome, or a lone Lucide icon). FontAwesome is display-only — swapping a class without the matching glyph would be dishonest. | Lucide dropdown rewrites class + inner SVG from another on-page icon. |
 
 **Examples**:
 - Lucide button uses `<svg class="lucide lucide-search">` → detected. The page also has a `lucide-x` icon. The dropdown lists `search` and `x`. You can swap.
-- FontAwesome `<i class="fa fa-heart">` → detected. The page only has the heart. Read-only label shows `heart`.
+- FontAwesome `<i class="fa fa-heart">` → detected. The page only has the heart. Read-only label shows `heart`. FontAwesome never gets a swap dropdown.
 
 **When to use**: replacing a single icon in the design without leaving the panel. Especially useful for Lucide where the icon set is large and consistent — the dropdown gives a flat list of every Lucide icon already loaded on the page.
 

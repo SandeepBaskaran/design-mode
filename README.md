@@ -262,7 +262,7 @@ Run `npm start` for the full ASCII banner.
 | `Alt+C` | Comment on the selected element |
 | `Alt+R` | Region comment (drag a box anywhere) |
 | `Alt+P` | Pause / resume all motion on the page |
-| `Alt+S` | Screenshot the selected element |
+| `Alt+S` | Screenshot using the same target and destination as the camera button (Settings → Capture mode) |
 | `Alt+X` | Copy generated CSS to clipboard |
 | `Delete` | Remove the selected element |
 | `Ctrl+Z` / `Cmd+Z` | Undo last change |
@@ -356,9 +356,9 @@ reminder. The manual checklist covers:
 
 ## Privacy & security
 
-- The extension is local-only — no telemetry, no analytics, no remote logging.
-  Edits live in `chrome.storage` on your machine; the optional MCP server runs
-  on `localhost`. Full details: [PRIVACY.md](./PRIVACY.md).
+- No telemetry, analytics, or remote logging. Edits live in `chrome.storage`
+  on your machine. Optional Cloud / Self-hosted MCP is an explicit opt-in
+  relay; the local companion runs on `localhost`. Full details: [PRIVACY.md](./PRIVACY.md).
 - The marketing site at `designmode.app` loads Google Fonts and (when configured
   via `NEXT_PUBLIC_GA_ID`) Google Analytics. CTA clicks and outbound links on the
   site emit anonymous GA events; forks ship without analytics by default

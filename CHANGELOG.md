@@ -6,6 +6,26 @@ is on the browser extension and its companion MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Hide all comment pins** is a real action-row control. The overlay hides;
+  Changes-tab rows stay. Preference persists in `chrome.storage.local`.
+- **Lucide icon swap** actually rewrites the selected SVG from another Lucide
+  icon already on the page, records it in Changes, and is undoable. FontAwesome
+  stays a read-only label.
+- **Layers empty state** no longer tells you to click the inspector icon. The
+  tree is independent of inspect mode.
+- **Alt+S** uses the same capture target and destination as the camera button.
+- **Token edits** join the undo/redo stack (consecutive edits of the same
+  token coalesce).
+- **Cloud MCP** `get_changes` now includes `items[]`; `get_session_summary`
+  matches local fields (`extensionConnected`, `activeSessions`, `sessions`,
+  `totalComments`).
+- Docs no longer claim the extension is local-only or that Send to Agent is
+  localhost-only.
+
 ## [2.1.0] — 2026-08-18
 
 ### Added

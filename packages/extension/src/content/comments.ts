@@ -24,6 +24,7 @@ export interface CommentData {
 }
 
 const STORAGE_KEY = 'dm-comments';
+export const PINS_HIDDEN_KEY = 'dm-hide-comment-pins';
 const pinElements = new Map<string, HTMLDivElement>();
 const regionBoxes = new Map<string, HTMLDivElement>();
 
@@ -127,6 +128,7 @@ function commentAnchorRect(comment: CommentData): DOMRect | null {
 }
 
 export function showCommentPin(comment: CommentData, ordinal?: number) {
+  if (!pinsActive) return;
   const rect0 = commentAnchorRect(comment);
   if (!rect0) return;
   const PIN_SIZE = 28;
@@ -248,6 +250,7 @@ export function showCommentPin(comment: CommentData, ordinal?: number) {
 // pins would repaint themselves on every scroll AFTER hideAllPins() ran,
 // which leaks them through any panel-close cleanup.
 let pinsActive = false;
+let userPinsHidden = false;
 
 export async function showAllPins() {
   pinsActive = true;
@@ -264,6 +267,28 @@ export function hideAllPins() {
   pinElements.clear();
   regionBoxes.forEach(box => box.remove());
   regionBoxes.clear();
+}
+
+export function areCommentPinsHidden(): boolean {
+  return userPinsHidden;
+}
+
+export async function restoreCommentPins(): Promise<boolean> {
+  try {
+    const data = await browser.storage.local.get(PINS_HIDDEN_KEY);
+    userPinsHidden = !!data[PINS_HIDDEN_KEY];
+  } catch { userPinsHidden = false; }
+  if (userPinsHidden) hideAllPins();
+  else await showAllPins();
+  return userPinsHidden;
+}
+
+export async function setCommentPinsHidden(hidden: boolean): Promise<boolean> {
+  userPinsHidden = hidden;
+  try { await browser.storage.local.set({ [PINS_HIDDEN_KEY]: hidden }); } catch {}
+  if (hidden) hideAllPins();
+  else await showAllPins();
+  return hidden;
 }
 
 export async function getPageComments(): Promise<CommentData[]> {

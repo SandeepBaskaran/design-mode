@@ -102,7 +102,7 @@ export const docs: DocPage[] = [
     sections: [
       {
         heading: "In-page shortcuts",
-        body: "These fire on the page itself while the side panel is open: Alt+I toggles Inspect, Alt+C drops a comment pin, Alt+R starts a region comment (drag a rectangle), Alt+P pauses/resumes all motion on the page, Alt+S screenshots the selected element, and Alt+X copies the exported CSS to your clipboard.",
+        body: "These fire on the page itself while the side panel is open: Alt+I toggles Inspect, Alt+C drops a comment pin, Alt+R starts a region comment (drag a rectangle), Alt+P pauses/resumes all motion on the page, Alt+S takes a screenshot using the same capture target and destination as the camera button, and Alt+X copies the exported CSS to your clipboard.",
       },
       {
         heading: "Tabs & selection",

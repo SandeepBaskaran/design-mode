@@ -92,8 +92,9 @@ outline). The side panel mirrors whatever you have selected.
 ### 1.5 Screenshot (camera button)
 
 - **What it does**: captures a PNG of the page or the selected element.
-- **Use**: click the **camera** icon. The behavior follows your **Capture
-  Mode** setting (`clipboard` / `download` / `both`). A toast confirms.
+- **Use**: click the **camera** icon or press `Alt+S`. Both follow **Capture
+  Mode** (`clipboard` / `download` / `both`) and the same target (viewport
+  when nothing real is selected, otherwise the selected element). A toast confirms.
 
 ### 1.6 Comment pins (yellow tear-drop overlay)
 
@@ -143,8 +144,8 @@ hovered) element. Every field updates the page live.
 ### 2.3 Icon section *(only when an SVG / icon library is detected)*
 
 - Detects Lucide, FontAwesome and similar libraries.
-- Lets you swap the icon name from a dropdown of every other icon already
-  used on the page.
+- Lucide: when 2+ Lucide icons are already on the page, a dropdown swaps the selected SVG to another by copying its paths. The swap is tracked in Changes and is undoable.
+- FontAwesome is display-only (library + name). We do not rewrite `fa-*` classes or `data-icon` without the matching glyph.
 
 ### 2.4 Typography
 
@@ -588,7 +589,7 @@ old Settings-panel MCP fields:
 - **Hide all pins** (`eye` / `eye-off`) → toggles every comment pin on the page in one click. The Changes-tab list still works — only the page overlay is muted. Persisted across sessions via `chrome.storage.local`.
 - **Screenshot** → see §1.5.
 - **Presets** → opens the Presets view (see §6).
-- **Undo** / **Redo** → step through every style/text/DOM/visibility action.
+- **Undo** / **Redo** → step through every style/text/DOM/visibility/token/icon action.
 
 ### 5.3 Sticky bottom
 
@@ -889,9 +890,11 @@ the install path differs.
 
 ## 12. Privacy
 
-- The extension is **local-only**. No telemetry, no analytics, no remote
-  logging. All data lives in `chrome.storage` on your machine.
-- The optional MCP server runs on `localhost:9960`. Nothing is uploaded.
+- The extension does **not** send telemetry, analytics, or remote logs.
+  Edits live in `chrome.storage` on your machine. Optional **Cloud / Self-hosted
+  MCP** is an explicit opt-in relay (see [PRIVACY.md](./PRIVACY.md)).
+- The optional local MCP server runs on `localhost:9960`. Nothing is uploaded
+  unless you connect Cloud / Self-hosted.
 - The marketing site at `designmode.app` ships Google Analytics if the
   deployment sets `NEXT_PUBLIC_GA_ID`. Forks ship without analytics by
   default.

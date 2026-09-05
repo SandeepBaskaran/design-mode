@@ -74,6 +74,11 @@ export function setTokenEdit(cssVar: string, value: string, scopeSelector = ':ro
   rebuildOverrides();
 }
 
+export function peekTokenEdit(cssVar: string, scopeSelector = ':root'): TokenEdit | undefined {
+  const edit = edits.get(editKey(scopeSelector, cssVar));
+  return edit ? { ...edit } : undefined;
+}
+
 export function resetTokenEdit(cssVar: string, scopeSelector = ':root'): void {
   edits.delete(editKey(scopeSelector, cssVar));
   rebuildOverrides();
