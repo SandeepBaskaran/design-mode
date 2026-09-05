@@ -850,10 +850,10 @@ dedicated **MCP page** instead — see §5.1b.
 | Shortcut | Action |
 |---|---|
 | `Alt+D` | Open Design Mode on the preferred Chrome launch surface (side panel / floating / pin-on-top opener). Firefox always opens the sidebar. |
-| `Ctrl+Z` / `Cmd+Z` | Undo last change (style / text / DOM / visibility) |
+| `Ctrl+Z` / `Cmd+Z` | Undo last change (style / text / DOM / visibility / token / Lucide icon) |
 | `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |
 | `↑` / `↓` on a numeric input | Increment / decrement by 1 (or by 0.1 / 0.05 for filter components) |
-| `Shift+↑` / `Shift+↓` | Step by 10 |
+| `Shift+↑` / `Shift+↓` | Step by the configured Nudge amount (default `10`) |
 | `Tab` in Design tab | Cycle inputs |
 | `Ctrl+Enter` in comment textarea | Submit |
 | `Escape` | Exit multi-select / cancel comment / deselect |
@@ -863,7 +863,9 @@ dedicated **MCP page** instead — see §5.1b.
 ## 11. MCP server — agent-facing tools
 
 Run the server with `npm start` from the repo root. It boots a WebSocket
-bridge on `ws://localhost:9960` and exposes 8 MCP tools over stdio.
+bridge on `ws://localhost:9960` and exposes 8 MCP tools over stdio. Additional
+local agent sessions attach to the existing owner and proxy through its shared
+browser connection rather than competing for the port.
 
 | Tool | Inputs | What it returns |
 |---|---|---|
