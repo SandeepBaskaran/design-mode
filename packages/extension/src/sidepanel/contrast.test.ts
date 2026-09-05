@@ -23,6 +23,10 @@ describe('suggestAccessibleForeground', () => {
     assert.ok(sug.ratio >= 4.5);
     assert.ok(sug.rgb[0] > 40);
   });
+
+  it('returns null when no foreground can meet the threshold', () => {
+    assert.equal(suggestAccessibleForeground([120, 120, 120, 1], [119, 119, 119], 7), null);
+  });
 });
 
 describe('pickAccessibleColourToken', () => {

@@ -398,7 +398,8 @@ export function suggestAccessibleForeground(
   const black = contrastRatio([0, 0, 0], bg);
   const white = contrastRatio([255, 255, 255], bg);
   const rgb: Rgb = white >= black ? [255, 255, 255] : [0, 0, 0];
-  return { rgb, hex: rgbToHex(rgb), ratio: Math.max(black, white) };
+  const ratio = Math.max(black, white);
+  return ratio >= threshold ? { rgb, hex: rgbToHex(rgb), ratio } : null;
 }
 
 export type ColourTokenCandidate = { cssVar: string; resolvedValue: string };

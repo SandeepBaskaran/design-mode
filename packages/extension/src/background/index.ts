@@ -44,20 +44,22 @@ const popoutWindows = new Map<number, number>();
 // can't corrupt each other's routing.
 let currentTargetTab: number | null = null;
 
-// Toolbar icon. Chrome side-panel: setPanelBehavior openPanelOnActionClick
-// (the adapter swallows the transient "No SW" rejection during teardown).
-// Chrome floating / PiP: that flag is false so action.onClicked can run
-// windows.create. Firefox: sidebar_action wires the button natively; we
-// still listen on `action` because Firefox's action button has no native
-// open behaviour.
-setActionOpensPanel(true);
-void readLaunchSurface().then(applyLaunchSurface);
+let launchSurfaceReady = false;
+const launchSurfaceInitialised = readLaunchSurface().then((surface) => {
+  applyLaunchSurface(surface);
+  launchSurfaceReady = true;
+});
 browser.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes[LAUNCH_SURFACE_KEY]) return;
   applyLaunchSurface(parseLaunchSurface(changes[LAUNCH_SURFACE_KEY].newValue));
+  launchSurfaceReady = true;
 });
 
 browser.action.onClicked.addListener((tab) => {
+  if (!launchSurfaceReady) {
+    void launchSurfaceInitialised.then(() => handleActionOrCommand(tab));
+    return;
+  }
   handleActionOrCommand(tab);
 });
 
@@ -477,10 +479,6 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       forwardToPinnedTab({ type: 'SCREENSHOT_ELEMENT' }, sendResponse);
       return true;
     }
-  }
-  if (msg.type === 'SP_GITHUB_EXPORT') {
-    forwardToPinnedTab({ type: 'GITHUB_EXPORT', repoUrl: msg.repoUrl }, sendResponse);
-    return true;
   }
   if (msg.type === 'SP_UPLOAD_IMAGE') {
     forwardToPinnedTab({ type: 'UPLOAD_IMAGE', dataUrl: msg.dataUrl }, sendResponse);
