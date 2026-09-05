@@ -6,12 +6,15 @@
 // sidebar_action/scripts) and ignores the other's, and the JS detects the
 // browser at runtime (src/platform/target.ts).
 
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { cpSync, mkdirSync, existsSync } from 'fs';
+import { createRequire } from 'module';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+const viteCli = resolve(dirname(require.resolve('vite/package.json')), 'bin/vite.js');
 
 const entries = ['content', 'background', 'sidepanel'];
 
@@ -31,10 +34,11 @@ console.log('\n◆ Building Design Mode extension...\n');
 
 for (const entry of entries) {
   console.log(`  Building ${entry}...`);
-  execSync(`npx vite build`, {
+  execFileSync(process.execPath, [viteCli, 'build'], {
     cwd: __dirname,
     env: { ...process.env, ENTRY: entry },
     stdio: 'inherit',
+    shell: false,
   });
 }
 
