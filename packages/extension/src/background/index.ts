@@ -192,9 +192,16 @@ browser.commands.onCommand.addListener((command) => {
     openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
     return;
   }
-  browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-    handleActionOrCommand(tab);
-  });
+  const openConfiguredSurface = () => {
+    browser.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      handleActionOrCommand(tab);
+    });
+  };
+  if (!launchSurfaceReady) {
+    void launchSurfaceInitialised.then(openConfiguredSurface);
+    return;
+  }
+  openConfiguredSurface();
 });
 
 // Helper: forward message to the tab the sending panel is bound to. Captures
