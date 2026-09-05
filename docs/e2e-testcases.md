@@ -34,7 +34,7 @@ before ticking.
 | 0.8  | URL navigation isolates | Navigate to a different URL in the same tab | Changes from URL A do **not** apply to URL B; Changes tab resets |
 | 0.9  | Browser-session boundary | Close & reopen browser | Session storage is cleared (per `chrome.storage.session` semantics) — fresh state |
 | 0.10 | Theme toggle | Click sun/moon in header | Side panel + page overlays switch theme; persists across reloads |
-| 0.11 | Side-panel toggle shortcut | Press `Alt+D` (Chrome command, registered in `manifest.json`) | Opens Design Mode on the current launch surface (default: side panel). Firefox: sidebar |
+| 0.11 | Side-panel toggle shortcut | Check `chrome://extensions/shortcuts`, assigning `Alt+D` if Chrome left the manifest suggestion blank; press it | Opens Design Mode on the current launch surface (default: side panel). Firefox: sidebar |
 | 0.12 | Unscriptable page | Open the panel on a `chrome://` page, the Chrome Web Store, or a devtools page (on Firefox: an `about:` page such as `about:addons`) | No "cannot be scripted" / "could not establish connection" error spam in the background console; the panel shows a disabled / empty state, not a crash |
 
 ---
@@ -117,7 +117,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 0.10.2 | Alt+C — Comment on selected element | Select an element → press | Side panel switches to comment-add mode with the textarea focused; if nothing is selected, no-op |
 | 0.10.2b | Alt+R — Comment on a region | Press | Crosshair draw mode activates; drag a rectangle → side panel opens the comment composer in "region" mode; Esc mid-draw cancels |
 | 0.10.3 | Alt+P — Pause motion | Press | Toggles a global freeze: CSS animations + transitions + Web-Animations API instances + `<video>` elements pause; press again to resume |
-| 0.10.4 | Alt+S — Screenshot | Select element or leave on Page → press | Same as the camera button: viewport vs element from selection, destination from Settings → Capture mode (clipboard / download / both) |
+| 0.10.4 | Alt+S — Screenshot | Check `chrome://extensions/shortcuts`, assigning `Alt+S` if Chrome left the manifest suggestion blank; select an element or leave on Page → press | Same as the camera button: viewport vs element from selection, destination from Settings → Capture mode (clipboard / download / both) |
 | 0.10.5 | Alt+X — Export CSS | Make any change → press | Generated CSS block copied to clipboard |
 | 0.10.6 | Esc — Deselect back to hover | Select an element, press Esc | Selection + resize handles clear and the page returns to **hover mode** (hovering still highlights; inspection stays ON — Esc does NOT turn inspect off). Panel Design tab drops to the page/hover view. With a multi-selection active, the first Esc clears the whole set. |
 | 0.10.7 | Delete — Remove selected element | Select element → press | Element removed; "delete" entry in Changes tab |
@@ -194,6 +194,8 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 2.6  | Toolbar Strip formatting | Select text → click `⨯ fmt` | All inline formatting removed |
 | 2.7  | Save on blur | Edit text → click outside the editor | Element updates; **text-change row appears in Changes tab** with `isHtml: true` so the HTML round-trips on reload |
 | 2.8  | Native shortcuts | While editing, press `⌘B` / `⌘I` / `⌘U` | Browser's contenteditable shortcuts work (B/I/U toggle selection) |
+| 2.8a | Enter commits and leaves the field | Edit a single-line value or Text Content, then press Enter/Return | The value is applied and keyboard focus leaves the field; Shift+Enter still inserts a newline in multiline fields |
+| 2.8b | Mixed text and media preservation | Select a text-bearing button or link that also contains an `<img>` or inline `<svg>`; edit only its text and press Enter, then Undo and Redo | Text and hyperlink update normally; the image/SVG remains in the component without duplication through edit/Undo/Redo, and no media markup is exposed in the privileged editor |
 | 2.9  | Font weight named dropdown | Click weight | Options shown as `Thin (100)`, `Light (300)`, `Regular (400)`, `Medium (500)`, `Semi Bold (600)`, `Bold (700)`, etc. |
 | 2.10 | Strict numeric inputs | Type `abc` in font size | Characters are blocked; only digits / single minus / one decimal up to 2 places allowed |
 | 2.11 | Arrow stepping | Click size, press ↑ | Increments by 1 (px appended automatically) |
@@ -212,7 +214,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 2.23 | Contrast checker — ratio | Open the colour picker on a text colour over a known background | A contrast row at the top of the picker (above the essentials row) shows the ratio vs the effective background (e.g. `4.5:1`) with a diagonal-split chip |
 | 2.24 | Contrast checker — rating + AA/AAA | Read the contrast row | Absolute rating pill (Excellent / Good / Poor / Very Poor) plus AA and AAA tabs showing both pass/fail verdicts at once |
 | 2.25 | Contrast checker — category override | Open the Category popover, switch Auto → Large → Normal → Graphics | The pass/fail verdict updates to the chosen threshold; the choice + AA/AAA level persist across reloads |
-| 2.26 | Contrast checker — foreground suggestion | Open the colour picker on text whose contrast fails AA | A **Use …** button appears. If the field is token-backed and a same-family colour token passes, it offers `var(--token)`; otherwise a lightness-adjusted hex. Clicking it applies the colour, records a style change, and is undoable |
+| 2.26 | Contrast checker — failing foreground | Open the colour picker on text whose contrast fails AA | Ratio, absolute rating, and AA/AAA verdicts remain visible; no automatic replacement-colour action is shown |
 | 2.27 | Page CSS states — inspect + force | Select an element with a real `:hover` rule in a same-origin stylesheet | Hover chip shows a rule count. Clicking Hover applies `.dm-force-hover` (existing FORCE_STATE) and the inspected page hover declarations without adding application hover classes during inspect. `:visited` never appears. Deselect or disable clears the forced class |
 
 ---
@@ -267,7 +269,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 4.4 | Copy SVG markup | Click "Copy SVG markup" | SVG `outerHTML` ends up in the clipboard (paste into a text file to verify); the button briefly shows a check + "Copied" (~1.2s) then restores |
 | 4.5 | Video element | Select a `<video>` | Embedded `<video>` controls + Download button |
 | 4.6 | Background image | Select a div with `background-image: url(...)` | Media section detects the URL, offers download |
-| 4.7 | Icon library detection | Select a Lucide / Heroicons / Remix icon | Icon section appears showing library + name; Lucide with 2+ on-page icons shows a replace dropdown that actually swaps SVG paths (tracked + undoable); FontAwesome stays a read-only name |
+| 4.7 | Icon library detection | Select a Lucide / Heroicons / Remix icon | Icon section appears showing library + name only; no package/CDN is loaded and no replacement control appears |
 | 4.8 | Media file size — cross-origin | Select a cross-origin image whose response is opaque | Meta line shows resolution + kind but omits the size (no error) |
 
 ---
@@ -324,6 +326,7 @@ Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contentedit
 | 7.6   | Bulk select | Tick the checkboxes on 3 rows → click "Delete selected" | All 3 changes reverted on the page; counts drop |
 | 7.7   | Style change recorded | Edit any CSS property | Row appears with `prop: old → new` and the element selector |
 | 7.8   | Text change recorded | Edit text content (rich-text) | Text-change row appears; storing as HTML so reload round-trips formatting |
+| 7.8a  | Word-level text diff | Change `Add to Mozilla` to `Add to Chrome` | `Mozilla` is fully red and struck, `Chrome` is fully green, and unchanged `Add to ` stays grey; no shared character inside a replaced word is treated as unchanged |
 | 7.9   | DOM change recorded | Duplicate / delete / move / hide | Row appears with the action label |
 | 7.10  | No double-record on duplicate | Click Duplicate **once** | Exactly **one** "duplicate" row appears (regression: previously logged twice) |
 | 7.11  | Comment recorded | Add a comment | Yellow note row appears with selector |
@@ -411,7 +414,7 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 | 9.8  | Multi-select Esc | Press Esc with multi-select active | Multi-select tears down first; second Esc deselects |
 | 9.9  | Freeze animations | Select an element → Design tab → **Motion** section header → click the circle-pause toggle (or `Alt+P` from anywhere) | The Motion-section toggle shows active state; CSS animations + transitions + WAAPI instances + `<video>` pause across the page; toggle again to resume |
 | 9.10 | Undo / Redo | Make change → `Ctrl/⌘+Z` → `Ctrl/⌘+⇧+Z` | Reverts then re-applies (style, DOM, text, visibility all reversible) |
-| 9.11 | Hide all comment pins | Add a comment → click the action-row eye | Page pins disappear; Changes-tab comment rows stay. Reload the panel: pins stay hidden (`dm-hide-comment-pins`). Click again to restore. |
+| 9.11 | Comment-only group delete | Add one comment to an otherwise unchanged element → Changes → click the group's red trash button | Confirmation appears; Cancel keeps the comment and pin. Repeat and confirm: both the row and pin disappear and stay gone after refresh |
 | 9.12 | Layers empty copy | Open Layers before the tree arrives (or on an empty body) | Copy reads "No layers yet. The page tree appears here once the page is ready." — not "Click the inspector icon…" |
 
 ---
@@ -455,6 +458,7 @@ at `https://mcp.designmode.app`). Both expose the **same eight MCP tools**.
 | 11.2  | Port conflict — foreign occupant | Another (non-Design Mode) process on 9960 | Clean error that the occupant is not Design Mode; process is left running; suggests stopping it yourself or `DM_PORT=9961`. Never auto-killed |
 | 11.2a | Second MCP client attaches | Start a second `npm start` while the first is still running | Second process attaches to the owner (does not exit on EADDRINUSE); MCP tools proxy to the owner; WebSocket stays on the first process |
 | 11.2b | Owner survival + shared state | Stop the second process; call `get_changes` from a third client | Owner still listens on 9960; extension stays connected; session state is the owner's |
+| 11.2c | Owner failover | Start two MCP clients, stop the first process (the owner), then call `get_changes` from the surviving client | The surviving attacher claims the same port, logs that it is now the owner, and serves the tool without requiring an app restart; the extension reconnects to that port |
 | 11.3  | Extension connects | Side panel open + auto-connect on (default) | Green dot in MCP indicator |
 | 11.4  | `get_changes` | Invoke from agent | Returns `{ pageUrl, pageTitle, styleChanges[], textChanges[], domChanges[], cssBlock, comments[] }` |
 | 11.5  | `apply_changes` | Push styles from agent: `{ changes: [{ elementId, styles: { color: 'red' } }] }` | Styles apply live on the page; row appears in Changes tab |
@@ -544,7 +548,7 @@ bleeding to duplicates and back.
 | 15.20 | Launch = Pin on top | Settings → Launch → Pin on top, close surfaces, click the toolbar icon | A floating opener appears with a focused **Pin on top** CTA (not an auto-opened PiP). One click calls `requestWindow` and pins. Dismissing continues as a normal floating window |
 | 15.21 | Launch PiP unsupported | Same as 15.20 on a Chrome without Document PiP (or after `dm-pip-unsupported`) | Stays in the floating window; a toast explains Pin on top isn’t available |
 | 15.22 | Launch reset | Set Launch to Floating, then Reset settings | Launch returns to Side panel; next toolbar click opens the docked panel |
-| 15.23 | Launch survives a sleeping service worker | Set Launch to Floating or Pin on top, wait for Chrome to suspend the extension service worker (or stop it from `chrome://serviceworker-internals`), then click the toolbar icon and repeat with `Alt+D` | Chrome restores `dm-launch-surface` before routing either action; it opens the selected floating / pin-on-top opener rather than briefly opening the default side panel |
+| 15.23 | Launch survives a sleeping service worker | For Side panel, Floating, and Pin on top, stop the extension service worker from `chrome://serviceworker-internals`, then click the toolbar icon and repeat with `Alt+D`; repeat the toolbar action in Firefox | Chrome opens the configured surface without losing the launch gesture or briefly opening another surface; Firefox opens its sidebar synchronously |
 
 ---
 
@@ -633,11 +637,11 @@ everything not listed here must behave exactly as on Chrome.
 After every full pass, tag the run in the project notes:
 
 ```
-v2.0.0 — 2026-MM-DD
+vX.Y.Z — YYYY-MM-DD
 ✓ All phases pass (Chrome)
 ✓ Phase F parity pass (Firefox)
 ✓ npm run build:extension clean
-✓ npm run prepublish:check ran without warnings
+✓ npm run verify passed all automated checks
 ```
 
 If a row fails, file a short bug note, fix it, and re-run only the affected phase before

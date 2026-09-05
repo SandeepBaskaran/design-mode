@@ -20,7 +20,7 @@ export const STEPS: Step[] = [
     title: "Get started",
     body: [
       "Design Mode is a browser extension (Chrome + Firefox) that turns any website into a live design surface. Edit layout, type, colour, and structure with visual controls — then ship the result to your AI coding agent.",
-      "First time? Pin the extension to your toolbar so it's always one click away, then click the Design Mode icon to open the side panel on this page. Once it's open, every in-page shortcut (Alt+I to inspect, Alt+C to comment, Alt+X to export CSS, …) is listed in Settings — the one shortcut you can rebind is Alt+D, which opens the panel itself, through your browser's extension-shortcuts settings (chrome://extensions/shortcuts on Chrome, about:addons on Firefox).",
+      "First time? Pin the extension to your toolbar, then click the Design Mode icon. Chrome opens the launch surface selected in Settings; Firefox opens its sidebar. Once it's open, every shortcut is listed in Settings. Alt+D and Alt+S are browser commands you can rebind through chrome://extensions/shortcuts on Chrome or about:addons on Firefox.",
     ],
     tryIt:
       "Pin Design Mode in your browser toolbar, then click its icon to open the side panel (the sidebar on Firefox).",
@@ -116,7 +116,7 @@ export const STEPS: Step[] = [
     title: "Indicator + Icon + Media",
     body: [
       "At the top of the Design tab, the indicator chip shows what's currently focused: 'Selected' (blue), 'Hovering' (yellow), or 'Page' (when no specific layer is picked). The CSS button next to it opens a computed-CSS overlay for the selection.",
-      "When you select an SVG icon from a known library (Lucide, FontAwesome), an Icon section appears so you can swap to a different icon in the same library. When you select an image / video / SVG element, a Media section appears with a preview, src, fit, alt, and a one-click Download button.",
+      "When you select an SVG icon from a known library (Lucide, FontAwesome), an Icon section identifies the library and icon without loading packages or rewriting the SVG. When you select an image / video / SVG element, a Media section appears with a preview, src, fit, alt, and a one-click Download button.",
     ],
     tryIt:
       "Pick the heart icon and the photo below. Notice the Icon and Media sections appear above Position. Click the Download button on the photo.",
@@ -287,7 +287,7 @@ export const STEPS: Step[] = [
     id: "settings",
     title: "Settings",
     body: [
-      "Click the gear icon in the panel header to open Settings. Pick your color format (HEX / RGB), capture mode for screenshots (clipboard / download / both), and toggle MCP auto-connect. The page cursor defaults to the Design Mode app icon — turn off Page cursor for a plain crosshair. Every preference is stored locally in your browser and persists until you uninstall.",
+      "Click the gear icon in the panel header to open Settings. Pick your color format (HEX / RGB), screenshot capture mode (clipboard / download / both), and, on Chrome, the launch surface (Side panel / Floating / Pin on top). MCP connection settings live on the dedicated MCP page. The page cursor defaults to the Design Mode app icon — turn off Page cursor for a plain crosshair.",
     ],
     tryIt:
       "Open Settings. Switch the color format from HEX to RGBA. Notice how color values in the Design tab re-render in the chosen format.",

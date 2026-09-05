@@ -3,7 +3,7 @@
 // ============================================================
 
 export const APP_NAME = 'Design Mode';
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '2.2.0';
 
 // Default WebSocket port for companion server
 export const DEFAULT_WS_PORT = 9960;
@@ -86,13 +86,13 @@ export const OUTPUT_DETAIL_LEVELS = [
 ] as const;
 
 // Phase 9: Default keyboard shortcuts
-// Hardcoded defaults. `toggle-design-mode` is the one Chrome-configurable
-// command (declared in manifest `commands`, rebindable at
-// chrome://extensions/shortcuts); the rest are page/panel shortcuts handled
-// in-extension. Keys lean on Figma conventions (C = comment, R = region/rect)
+// Hardcoded defaults. Alt+D and Alt+S are Chrome-configurable commands
+// (declared in manifest `commands`, rebindable at chrome://extensions/shortcuts);
+// the rest are page/panel shortcuts handled in-extension. Keys lean on Figma
+// conventions (C = comment, R = region/rect)
 // and a single Alt modifier, deliberately avoiding combos the browser/OS
-// claim — notably Alt+F / Alt+E (Chrome menu) and Alt+D address-bar (the last
-// is safe only because it's a real chrome.command that overrides the default).
+// claim — notably Alt+F / Alt+E (Chrome menu). Alt+D and Alt+S are browser
+// commands, but Chrome may leave either unassigned when another command wins.
 export const DEFAULT_SHORTCUTS = [
   { key: 'i', modifiers: ['alt'], action: 'toggle-inspect', label: 'Toggle Inspect', category: 'General' },
   { key: 'c', modifiers: ['alt'], action: 'add-annotation', label: 'Comment', category: 'Annotations' },

@@ -124,7 +124,7 @@ const modes: Mode[] = [
     bestFor:
       "Best for: power users with a terminal who want zero network egress and the lowest possible latency.",
     config: localConfig,
-    note: "No npm package to install — clone the repo, run npm install, and point cwd at the absolute path of the repo root. npm start launches the local companion server. Concurrent agent sessions attach to one shared owner on port 9960 instead of starting competing bridges.",
+    note: "No npm package to install — clone the repo, run npm install, and point cwd at the absolute path of the repo root. npm start launches the local companion server. Concurrent agent sessions attach to one shared owner on port 9960; if that owner closes, a surviving session takes ownership on its next tool call. Design Mode never kills a foreign process. If another app needs 9960, set DM_PORT to another port and select the same Local port in the extension.",
   },
   {
     id: "self-hosted",

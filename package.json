@@ -1,6 +1,6 @@
 {
   "name": "design-mode",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "description": "Open-source visual design surface in the browser with MCP integration for coding agents",
   "author": "Sandeep Baskaran",
@@ -21,7 +21,7 @@
     "build:website": "cd website && npm run build",
     "package:extension": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-extension.zip && zip -rq ../design-mode-extension.zip . -x '*.DS_Store' -x '*.map'",
     "package:extension:firefox": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-addon.zip && zip -rq ../design-mode-addon.zip . -x '*.DS_Store' -x '*.map'",
-    "package:extension:all": "npm run package:extension && cd packages/extension/dist && rm -f ../design-mode-addon.zip && zip -rq ../design-mode-addon.zip . -x '*.DS_Store' -x '*.map'",
+    "package:extension:all": "npm run package:extension && cp \"$(dirname \"$(realpath packages/extension/dist)\")/design-mode-extension.zip\" \"$(dirname \"$(realpath packages/extension/dist)\")/design-mode-addon.zip\"",
     "lint:extension": "npm run build:extension && web-ext lint -s packages/extension/dist",
     "test:extension": "tsx --test packages/extension/src/content/*.test.ts packages/extension/src/platform/*.test.ts packages/extension/src/sidepanel/*.test.ts",
     "dev:firefox": "npm run build:extension && web-ext run -s packages/extension/dist",

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { executeLocalTool, type ToolDispatch } from './tools.js';
 
 export function createMcpServer(dispatch: ToolDispatch = executeLocalTool): McpServer {
-  const server = new McpServer({ name: 'design-mode', version: '2.1.0' });
+  const server = new McpServer({ name: 'design-mode', version: '2.2.0' });
 
   server.tool(
     'get_changes',

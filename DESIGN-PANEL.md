@@ -4,7 +4,7 @@ User-facing reference for every property surfaced in Design Mode's Design tab. F
 
 For implementation status (At parity / Planned / Skipped) and CSS-spec coverage tracking, see **PARITY.md**. This document is for **understanding what each control does**.
 
-Last updated: 2026-07-30 (release 2.0.0).
+Last updated: 2026-09-05 (release 2.2.0).
 
 ---
 
@@ -66,13 +66,13 @@ When detected, the section shows:
 | Element | What | Behavior |
 |---|---|---|
 | **Library** | The detected library name in accent color: `lucide`, `fontawesome`, etc. | Read-only label. |
-| **Icon** | Either:<br/>• A select dropdown of **Lucide icons already on the page** (when 2+ Lucide SVGs are present). Choosing one copies that icon's SVG paths onto the selection, records it in Changes, and is undoable.<br/>• A read-only label with the icon's name (FontAwesome, or a lone Lucide icon). FontAwesome is display-only — swapping a class without the matching glyph would be dishonest. | Lucide dropdown rewrites class + inner SVG from another on-page icon. |
+| **Icon** | The detected icon name when available. | Read-only label; Design Mode never loads icon packages or rewrites SVG markup. |
 
 **Examples**:
-- Lucide button uses `<svg class="lucide lucide-search">` → detected. The page also has a `lucide-x` icon. The dropdown lists `search` and `x`. You can swap.
+- Lucide button uses `<svg class="lucide lucide-search">` → detected; the label shows `search`.
 - FontAwesome `<i class="fa fa-heart">` → detected. The page only has the heart. Read-only label shows `heart`. FontAwesome never gets a swap dropdown.
 
-**When to use**: replacing a single icon in the design without leaving the panel. Especially useful for Lucide where the icon set is large and consistent — the dropdown gives a flat list of every Lucide icon already loaded on the page.
+**When to use**: identifying the icon library and glyph before making a source-level replacement.
 
 **Figma equivalent**: Figma's components panel + variant swap. Conceptually similar to "swap the selected component with another from the same library."
 
@@ -849,7 +849,6 @@ above the HSV gradient:
 | **Ratio + chip** | Contrast ratio against the effective background (ancestor-walked when the element's own background is transparent), with a diagonal-split preview chip. |
 | **Absolute rating** | Excellent / Good / Poor / Very Poor against the 7 / 4.5 / 3 thresholds. |
 | **AA / AAA tabs** | Both pass/fail verdicts shown at once. |
-| **Fix contrast** | When the pair fails the active threshold and the edited colour is a foreground, a **Use …** button suggests an accessible colour (same-family token when the field is token-backed, otherwise a lightness-adjusted hex). Clicking it writes through `applyStyle` (Changes + undo). |
 | **Category override** (popover) | Auto (inferred from the property + computed font size) / Large / Normal / Graphics; persists with the AA/AAA level via `chrome.storage.local`. |
 
 Fill-layer and gradient-stop colours pair against the element's text colour

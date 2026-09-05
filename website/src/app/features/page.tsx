@@ -7,7 +7,6 @@ import {
   Copy,
   CornerUpLeft,
   Eye,
-  EyeOff,
   Folder,
   HeartHandshake,
   HelpCircle,
@@ -86,7 +85,7 @@ const headerIcons = [
     icon: SettingsIcon,
     title: "Settings",
     description:
-      "Theme, colour format, capture mode, and inspector colours. MCP configuration (Cloud / Local / Self-hosted) now lives on its own dedicated page, opened from the MCP chip.",
+      "Theme, colour format, capture mode, inspector colours, and Chrome launch surface. MCP configuration lives on its own page, opened from the MCP chip.",
   },
 ];
 
@@ -94,7 +93,6 @@ const actionItems = [
   { icon: ArrowUp, title: "Parent / Child", description: "Walk selection up and down the DOM tree." },
   { icon: ArrowDown, title: "Duplicate / Delete", description: "DOM mutations recorded as undoable changes." },
   { icon: MessageCircle, title: "Comment", description: "Drop a numbered sticky-pin on the selected element." },
-  { icon: EyeOff, title: "Hide all pins", description: "Mute every comment pin overlay in one click." },
   { icon: Pause, title: "Freeze animations", description: "Pause every CSS/JS animation on the page so you can edit mid-state." },
   { icon: Camera, title: "Screenshot", description: "Capture the visible tab to clipboard, download, or both." },
   { icon: Bookmark, title: "Presets", description: "Save and reapply styles across all nine Design-tab sections." },
@@ -262,8 +260,9 @@ export default function FeaturesPage() {
                   control — sliders, colour pickers, segmented buttons —
                   not a textarea of CSS. Motion leads with trigger-first
                   interaction cards (Hover / Press / Focus / Appear / Loop
-                  / Scroll); any field bound to a design-system token
-                  shows a ◆ badge for swapping or editing it.
+                  / Scroll). Inspect authored hover, focus, and active states;
+                  force-preview them, or overlay computed flex/grid tracks.
+                  Any field bound to a design-system token shows a ◆ badge.
                 </p>
                 <ul className="mt-2 grid grid-cols-1 gap-1.5 text-sm">
                   {designSections.map((s) => {

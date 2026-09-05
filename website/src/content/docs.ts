@@ -39,7 +39,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "3. Open any page and click the icon",
-        body: "Navigate to any URL — your dev server, a staging deploy, a production site — and click the Design Mode toolbar icon. The side panel opens with the design surface (on Firefox this is the native sidebar; Alt+D toggles it on any browser).",
+        body: "Navigate to any URL — your dev server, a staging deploy, a production site — and click the Design Mode toolbar icon. Chrome opens the selected Launch surface (Side panel by default, Floating, or a Pin-on-top opener); Firefox opens the native sidebar. Alt+D follows the same choice.",
       },
       {
         heading: "4. (Optional) Set up MCP for AI agents",
@@ -71,7 +71,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Identical on every browser",
-        body: "The whole editing surface is the same: inspect any element; edit Position, Layout, Typography, Fill, Stroke, Effects, Motion, and Layout Guides; the Layers tree; the Changes tab with export/import; comments; element and viewport screenshots; DOM edits (duplicate, delete, reorder); the design-token engine; and the full MCP / send-to-agent handoff. Alt+D toggles the panel (sidebar on Firefox) everywhere.",
+        body: "The whole editing surface is the same: inspect any element; edit Position, Layout, Typography, Fill, Stroke, Effects, Motion, and Layout Guides; the Layers tree; the Changes tab with export/import; comments; element and viewport screenshots; DOM edits (duplicate, delete, reorder); the design-token engine; and the full MCP / send-to-agent handoff. Firefox always opens its sidebar; Chrome can launch into its side panel or Chrome-only floating surfaces.",
       },
       {
         heading: "Chrome-only features",
@@ -90,7 +90,7 @@ export const docs: DocPage[] = [
     metaTitle:
       "Keyboard shortcuts — Design Mode side panel shortcuts reference",
     metaDescription:
-      "Every keyboard shortcut in Design Mode — inspector, comments, tabs, undo/redo, screenshot, export CSS — plus the one browser-level shortcut you can rebind. Designed for fast iteration without leaving the keyboard.",
+      "Every keyboard shortcut in Design Mode — inspector, comments, tabs, undo/redo, screenshot, export CSS — including the two browser-level commands you can rebind. Designed for fast iteration without leaving the keyboard.",
     keywords: [
       "Design Mode keyboard shortcuts",
       "design tool shortcuts",
@@ -98,11 +98,11 @@ export const docs: DocPage[] = [
       "keyboard reference",
     ],
     intro:
-      "Design Mode has 13 shortcuts that work directly on the page while the side panel is open, plus one browser-level shortcut that opens the panel itself — 14 in total.",
+      "Design Mode has 12 shortcuts that work directly on the page while the side panel is open, plus two browser-level commands for opening the panel and taking a screenshot — 14 in total.",
     sections: [
       {
         heading: "In-page shortcuts",
-        body: "These fire on the page itself while the side panel is open: Alt+I toggles Inspect, Alt+C drops a comment pin, Alt+R starts a region comment (drag a rectangle), Alt+P pauses/resumes all motion on the page, Alt+S takes a screenshot using the same capture target and destination as the camera button, and Alt+X copies the exported CSS to your clipboard.",
+        body: "These fire on the page itself while the side panel is open: Alt+I toggles Inspect, Alt+C drops a comment pin, Alt+R starts a region comment (drag a rectangle), Alt+P pauses/resumes all motion on the page, and Alt+X copies the exported CSS to your clipboard.",
       },
       {
         heading: "Tabs & selection",
@@ -113,8 +113,8 @@ export const docs: DocPage[] = [
         body: "Cmd/Ctrl + Z undoes the last style, text, or DOM change. Cmd/Ctrl + Shift + Z redoes it. Every change in the Changes tab is reversible individually too.",
       },
       {
-        heading: "Opening the side panel",
-        body: "Alt+D is a separate, browser-level shortcut — it opens the panel on both Chrome and Firefox (the side panel on Chrome, the sidebar on Firefox), it's not handled by the page, and it's the only one of the 14 you can rebind. Change it at chrome://extensions/shortcuts on Chrome, or about:addons › Manage Extension Shortcuts on Firefox. None of the 13 in-page shortcuts above can be remapped from Settings — that list is read-only.",
+        heading: "Browser-level commands",
+        body: "Alt+D opens Design Mode on both Chrome and Firefox; Alt+S takes a screenshot using the same target and destination as the camera button. They are browser commands rather than page handlers, so both can be rebound at chrome://extensions/shortcuts on Chrome or about:addons › Manage Extension Shortcuts on Firefox. Browsers treat the supplied keys as suggestions and may leave either command unassigned after an update or conflict. The 12 in-page shortcuts above cannot be remapped from Settings — that list is read-only.",
       },
     ],
     related: ["install", "changes-tab", "mcp-setup"],
@@ -147,7 +147,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Restart and verify",
-        body: "Restart your agent. The eight Design Mode MCP tools (get_changes, apply_changes, set_change_status, clear_changes, get_session_summary, export_changes, get_screenshot, mark_comment_resolved) will appear. The side panel's MCP status chip will turn green once an agent attaches.",
+        body: "Restart your agent. The eight Design Mode MCP tools (get_changes, apply_changes, set_change_status, clear_changes, get_session_summary, export_changes, get_screenshot, mark_comment_resolved) will appear. The side panel's MCP status chip will turn green once an agent attaches. In Local mode, concurrent clients on the same port share one owner; if it closes, a surviving client takes ownership on its next tool call.",
       },
     ],
     related: ["install", "troubleshooting", "changes-tab"],
@@ -206,11 +206,11 @@ export const docs: DocPage[] = [
     sections: [
       {
         heading: "The side panel doesn't open",
-        body: "Make sure your browser supports MV3 side panels (Chrome 114+, Edge 114+, Arc, Brave). Some enterprise policies block the side panel API. Try a clean Chrome profile to rule out a conflicting extension.",
+        body: "Make sure your browser supports MV3 side panels (Chrome 114+, Edge 114+, Arc, Brave). In Chrome, check Settings → Launch: Floating and Pin on top open a separate window rather than the docked panel. Some enterprise policies block the side panel API. Try a clean Chrome profile to rule out a conflicting extension.",
       },
       {
         heading: "MCP status chip stays offline",
-        body: "Cloud mode: confirm your bearer token is pasted on the extension's dedicated MCP page (opened from the header MCP chip) and the same token is in your agent's config. Local mode: confirm the companion server is running (clone the repo, npm install, npm start) and your config's cwd points at the repo root. Self-hosted: confirm the relay URL is correct and Redis is healthy.",
+        body: "Cloud mode: confirm your bearer token is pasted on the extension's dedicated MCP page (opened from the header MCP chip) and the same token is in your agent's config. Local mode: confirm the companion server is running (clone the repo, npm install, npm start) and your config's cwd points at the repo root. Multiple Design Mode clients can share port 9960; never add a kill -9 startup command. If another application owns 9960, choose a different DM_PORT such as 9961 and set the extension's Local port to match. Self-hosted: confirm the relay URL is correct and Redis is healthy.",
       },
       {
         heading: "Send to Agent button is greyed out",

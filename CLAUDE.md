@@ -55,9 +55,9 @@ tool), these rules are read automatically at session start.
   (Firefox has neither `sidePanel` nor Document PiP) — those controls
   are gated behind `!IS_FIREFOX` at runtime (present in the shared
   bundle but dormant on Firefox; the docked sidebar is Firefox's sole
-  surface). Alt+D opens the panel on both: Chrome via the side panel,
-  Firefox via `sidebarAction.open()` called synchronously in the
-  command handler.
+  surface). Alt+D follows `dm-launch-surface` on Chrome (side panel,
+  floating, or a Pin-on-top opener; true PiP still needs a click) and opens
+  Firefox via `sidebarAction.open()` synchronously in the command handler.
 - **`IS_FIREFOX` (`src/platform/target.ts`) is the single flag for any
   Chrome/Firefox-divergent behaviour** — UI copy, links, or feature
   gating. Always branch on it; never add ad-hoc `navigator.userAgent`
@@ -130,8 +130,10 @@ tool), these rules are read automatically at session start.
   any dynamic-code execution path. MV3's default CSP forbids most
   of this anyway; the explicit `content_security_policy` block in
   `manifest.json` is defense in depth.
-- **No new outbound network calls without an opt-in setting AND a
-  note in PRIVACY.md.** Default behaviour is localhost-only.
+- **No new outbound network calls without an explicit setting AND a
+  note in PRIVACY.md.** Fresh installs select Cloud MCP, while Local mode is
+  localhost-only; any new service still requires a deliberate user-controlled
+  configuration path.
 - **No new manifest permissions without a justification.** The
   current set (activeTab, storage, scripting, tabs, sidePanel,
   host_permissions: <all_urls>) is what's reviewed by the Chrome

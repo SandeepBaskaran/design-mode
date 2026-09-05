@@ -9,7 +9,7 @@ import { isMultiSelectActive, enableMultiSelect, disableMultiSelect, toggleSelec
 import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag } from './measure-guides';
 import { baseCursor, restoreBaseCursor } from './custom-cursor';
 
-export type IconInfo = { library: string; name: string; availableIcons?: string[] };
+export type IconInfo = { library: string; name: string };
 
 export type ElementInfo = {
   id: string; tagName: string; className: string; elementId: string;
@@ -53,9 +53,7 @@ function detectIconInfo(el: HTMLElement): IconInfo | undefined {
     const lucideClass = classes.find(c => c.startsWith('lucide-') && c !== 'lucide');
     if (lucideClass) {
       const name = lucideClass.replace('lucide-', '');
-      const allLucide = Array.from(document.querySelectorAll('svg[class*="lucide-"]'))
-        .flatMap(s => Array.from(s.classList).filter(c => c.startsWith('lucide-') && c !== 'lucide'));
-      return { library: 'lucide', name, availableIcons: [...new Set(allLucide)] };
+      return { library: 'lucide', name };
     }
     // FontAwesome SVG: data-icon attribute
     const faIcon = el.getAttribute('data-icon');

@@ -45,7 +45,6 @@ Above all three tabs sits a row of action buttons — visible regardless of whic
 | `copy` | **Duplicate** | Clones the selected layer. Adds a "duplicate" entry in the Changes tab. | Nothing selected. |
 | `trash` | **Remove** | Deletes the selected layer. Adds a "delete" entry in the Changes tab (revertable). | Nothing selected. |
 | `message-square` | **Comment** | Attaches a yellow sticky-note comment to the selected layer. Opens the comment-edit card just above the tabs. | Nothing selected. |
-| `eye` / `eye-off` | **Hide all pins** | Toggles every comment pin overlay on the page. The Changes-tab list still works — only the page overlay is muted. State persists across sessions via `chrome.storage.local`. | Always available. |
 | `circle-pause` / `circle-play` | **Pause animations** | Pauses every CSS animation, transition, and `<video>` on the page. Click again to resume. Useful for catching motion mid-frame to inspect / screenshot. | Always available. |
 | `camera` | **Screenshot** | Captures the viewport, or the selected element when a real layer is selected. Honors Settings → Capture mode (clipboard / download / both). `Alt+S` uses the same target and destination. | Always available. |
 | `bookmark` | **Presets** | Opens the Presets panel — save / load named CSS bundles applicable to any layer. | Always available. |
@@ -312,7 +311,7 @@ The Send to Agent button has a more accent-colored style when enabled to disting
 
 | Shortcut | Effect |
 |---|---|
-| `Alt+D` | Toggle the entire side panel open/closed. |
+| `Alt+D` | Open the configured Chrome launch surface or the Firefox sidebar. |
 | `Ctrl/Cmd+Z` | Undo. |
 | `Ctrl/Cmd+Shift+Z` | Redo. |
 | `Esc` | Cancel comment / deselect / exit multi-select. |

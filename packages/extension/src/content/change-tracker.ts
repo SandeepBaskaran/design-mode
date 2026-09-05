@@ -979,23 +979,49 @@ export function applyTextChange(
 export function applyHtmlChange(
   elementId: string, html: string,
   refreshPanel?: () => void,
+  preserveMedia = false,
 ): TextChange | null {
   const el = getElementById(elementId);
   if (!el) return null;
   const priorHtml = el.innerHTML || '';
-  el.innerHTML = html;
+  let nextHtml = html;
+  if (preserveMedia) {
+    const preservedSelector = 'img,svg,picture,video,audio,canvas,iframe,object,embed';
+    const preservedNodes = Array.from(el.querySelectorAll<HTMLElement>(preservedSelector)).filter(
+      node => !node.parentElement?.closest(preservedSelector),
+    );
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    const restoredIndexes = new Set<number>();
+    for (const placeholder of template.content.querySelectorAll<HTMLElement>('[data-dm-preserve-node]')) {
+      const index = Number(placeholder.dataset.dmPreserveNode);
+      const preserved = Number.isInteger(index) ? preservedNodes[index] : undefined;
+      if (!preserved || restoredIndexes.has(index)) {
+        placeholder.remove();
+        continue;
+      }
+      restoredIndexes.add(index);
+      placeholder.replaceWith(preserved.cloneNode(true));
+    }
+    for (let i = 0; i < preservedNodes.length; i++) {
+      if (!restoredIndexes.has(i)) template.content.appendChild(preservedNodes[i].cloneNode(true));
+    }
+    nextHtml = template.innerHTML;
+  }
+  if (priorHtml === nextHtml) return null;
+  el.innerHTML = nextHtml;
   // Dedup per element, same as applyTextChange — one row, original oldText
   // preserved, dropped when the HTML returns to its original.
   const existingIdx = textChanges.findIndex(c => c.elementId === elementId);
   if (existingIdx !== -1) {
     const existing = textChanges[existingIdx];
-    if (html === existing.oldText) {
+    if (nextHtml === existing.oldText) {
       textChanges.splice(existingIdx, 1);
       persistSession();
       if (refreshPanel) refreshPanel();
       return null;
     }
-    const merged: TextChange = { ...existing, newText: html, timestamp: Date.now(), isHtml: true, ...bpMeta() };
+    const merged: TextChange = { ...existing, newText: nextHtml, timestamp: Date.now(), isHtml: true, ...bpMeta() };
     textChanges[existingIdx] = merged;
     syncTextChange(merged);
     persistSession();
@@ -1005,7 +1031,7 @@ export function applyHtmlChange(
   const change: TextChange = {
     id: crypto.randomUUID(), elementId, selector: generateSelector(el),
     label: describeElement(el),
-    oldText: priorHtml, newText: html, timestamp: Date.now(), isHtml: true,
+    oldText: priorHtml, newText: nextHtml, timestamp: Date.now(), isHtml: true,
     ...bpMeta(),
   };
   textChanges.push(change);

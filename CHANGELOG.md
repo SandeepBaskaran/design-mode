@@ -8,6 +8,8 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-09-05
+
 ### Added
 
 - **Page CSS states.** The Design tab inspects existing `:hover` / `:focus` /
@@ -15,10 +17,6 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   never `:visited`; nested `@media` / `@supports` / `@layer` where readable;
   cross-origin sheets skipped) and offers force-state chips on the existing
   `.dm-force-*` preview path. Forced state clears on deselect and disable.
-- **Accessible foreground suggestion** in the contrast row when the pair
-  fails the active WCAG threshold. Prefers a same-family colour token when
-  the field is token-backed; otherwise a perceptual lightness adjustment.
-  Applying it is a normal tracked change.
 - **Computed flex/grid overlay.** Optional session-only overlay of the
   selected container's computed tracks and children. Separate from authored
   layout guides and the Changes tab; tears down on toggle-off, deselect, or
@@ -27,13 +25,20 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   side panel, a floating window, or a floating Pin-on-top launcher. Chrome
   still requires one user click before creating a real Document PiP window.
 
+### Changed
+
+- **Changes-tab text diffs** now compare whole words, so replacements render as
+  complete removed and added words instead of character fragments.
+- Pressing Enter after editing a single-line Design field commits the value and
+  removes focus. Shift+Enter still inserts a newline where multiline input is
+  supported.
+
 ### Fixed
 
-- **Hide all comment pins** is a real action-row control. The overlay hides;
-  Changes-tab rows stay. Preference persists in `chrome.storage.local`.
-- **Lucide icon swap** actually rewrites the selected SVG from another Lucide
-  icon already on the page, records it in Changes, and is undoable. FontAwesome
-  stays a read-only label.
+- **Comment-only change groups** now show confirmation and delete the persisted
+  comment and its pin when their group trash action is confirmed.
+- **Screenshot shortcut** is a browser command with an `Alt+S` suggested key,
+  so it appears alongside `Alt+D` in the browser's extension-shortcuts page.
 - **Layers empty state** no longer tells you to click the inspector icon. The
   tree is independent of inspect mode.
 - **Alt+S** uses the same capture target and destination as the camera button.
@@ -44,13 +49,28 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   `totalComments`).
 - **Concurrent Local MCP clients** now share one loopback owner instead of
   crashing the second stdio process on port 9960. Foreign occupants still fail
-  clearly and are never killed.
+  clearly and are never killed. If the owner client closes, a surviving
+  attacher claims the same port on its next tool call.
+- Rich-text edits preserve embedded images, SVGs, picture, video, audio, and
+  canvas content; undo and redo restore the exact media snapshot without
+  duplication.
 - Native `<select>` menus use the active colour scheme and explicit option
   colours, keeping Design System filters readable in dark Chrome themes.
+
+### Security
+
+- Local MCP binds its owner bridge to `127.0.0.1` and requires an ephemeral
+  owner token for WebSocket and HTTP proxy traffic. Foreign port occupants are
+  never terminated.
 - Extension builds invoke Node and Vite with argument arrays rather than a
   shell-composed command, closing CodeQL alert #2's injection path.
-- Docs no longer claim the extension is local-only or that Send to Agent is
-  localhost-only.
+- Updated Next.js and `@next/mdx` to 16.3.3, including upstream security fixes.
+
+### Internal
+
+- Applied the remaining patch/minor dependency updates from Dependabot PR #58.
+- Updated product and test documentation for cloud connectivity, launch
+  surfaces, browser commands, Local MCP ownership, and the new inspection tools.
 
 ## [2.1.0] — 2026-08-18
 

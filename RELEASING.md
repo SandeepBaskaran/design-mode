@@ -41,8 +41,10 @@ recommending the bump:
 - `packages/extension/public/manifest.json` → `version` field (the
   single merged manifest that serves both Chrome and Firefox).
 - `packages/shared/src/constants.ts` → `APP_VERSION`.
-- `packages/mcp-local/src/bin/cli.ts`, `mcp-server.ts`,
+- `packages/mcp-local/src/bin/cli.ts`, `mcp-server.ts`, `owner-bridge.ts`,
   `websocket-server.ts` → any embedded version constants.
+- `packages/mcp-cloud/api/mcp.ts`, `api/extension/stream.ts`, and
+  `website/src/components/site/json-ld.tsx` → embedded public versions.
 - `CHANGELOG.md` → new `## [x.y.z] — YYYY-MM-DD` section at the top
   with Added / Changed / Fixed / Security / Internal subsections.
 - `README.md` — only if install instructions or feature list

@@ -14,7 +14,7 @@ A free, open-source browser extension (Chrome + Firefox) that turns any website 
 
 **3. Connect your AI agent (optional):** [pick one of the three modes at designmode.app/mcp](https://designmode.app/mcp)
 
-That's it. Pin the extension to your toolbar, open any website, click the toolbar icon to open the side panel. Hover any element to highlight it; click to edit. Everything you change is tracked in the Changes tab and can be sent to your AI coding agent with one click.
+That's it. Pin the extension to your toolbar, open any website, and click the toolbar icon. Chrome opens your chosen surface (side panel by default, floating, or Pin on top); Firefox opens its sidebar. Hover any element to highlight it; click to edit. Everything you change is tracked in the Changes tab and can be sent to your AI coding agent with one click.
 
 > **Editing a local HTML file?** Chrome blocks extensions from `file://` pages by default — enable **"Allow access to file URLs"** for Design Mode in `chrome://extensions` (on Firefox, manage file access from `about:addons`). The side panel walks you through it when needed.
 
@@ -185,7 +185,7 @@ Output: `packages/extension/dist/`.
 1. `chrome://extensions`
 2. Enable **Developer mode**
 3. **Load unpacked** → select `packages/extension/dist`
-4. Pin **Design Mode** in the toolbar; click it on any page to open the side panel
+4. Pin **Design Mode** in the toolbar; click it on any page to open your configured Chrome surface or the Firefox sidebar
 
 Firefox: `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** → select `packages/extension/dist/manifest.json`. The same `dist/` serves both browsers; on Firefox the panel opens as the native sidebar (`Alt+D`).
 
@@ -199,7 +199,10 @@ Starts a WebSocket bridge on `ws://localhost:9960` and an MCP server on stdio.
 The first process owns the extension socket and session state. A second Design Mode
 MCP client on the same port attaches and proxies tools to that owner instead of
 failing with `EADDRINUSE`. A non-Design Mode process on the port still fails
-clearly; Design Mode never kills it.
+clearly; Design Mode never kills it. If the owner closes, a surviving client
+claims the port on its next tool call. Use `DM_PORT=9961` only when a foreign
+process legitimately needs 9960, then set the extension's Local port to match;
+the extension connects to one local port at a time.
 
 Add to Claude Code:
 
@@ -256,7 +259,7 @@ Run `npm start` for the full ASCII banner.
 
 | Shortcut | Action |
 |---|---|
-| `Alt+D` | Toggle the panel (rebindable at `chrome://extensions/shortcuts` on Chrome, `about:addons` → Manage Extension Shortcuts on Firefox) |
+| `Alt+D` | Open the configured Chrome launch surface or Firefox sidebar (rebindable in the browser's extension-shortcuts page) |
 | `Alt+I` | Toggle inspect mode |
 | `Alt+1` / `Alt+2` / `Alt+3` | Jump to Layers / Design / Changes tab |
 | `Alt+C` | Comment on the selected element |
@@ -275,6 +278,9 @@ Run `npm start` for the full ASCII banner.
 | `Ctrl+Enter` in comment | Submit |
 | `Enter` on a Layers row | Toggle collapse / expand |
 | `Escape` | Cancel comment → tear down multi-select → exit inspect → deselect |
+
+Chrome treats manifest shortcuts as suggestions: if `Alt+D` or `Alt+S` conflicts
+or was added after installation, assign it at `chrome://extensions/shortcuts`.
 
 Shortcuts are suppressed while a page-side `<input>` / `<textarea>` /
 `contenteditable` is focused, so typing in a form field never
@@ -356,9 +362,10 @@ reminder. The manual checklist covers:
 
 ## Privacy & security
 
-- No telemetry, analytics, or remote logging. Edits live in `chrome.storage`
-  on your machine. Optional Cloud / Self-hosted MCP is an explicit opt-in
-  relay; the local companion runs on `localhost`. Full details: [PRIVACY.md](./PRIVACY.md).
+- No extension telemetry or analytics. Edits live in `chrome.storage` on your
+  machine and travel only through the MCP mode you configure. Cloud is selected
+  on fresh installs; Local keeps MCP traffic on `127.0.0.1`. Full details:
+  [PRIVACY.md](./PRIVACY.md).
 - The marketing site at `designmode.app` loads Google Fonts and (when configured
   via `NEXT_PUBLIC_GA_ID`) Google Analytics. CTA clicks and outbound links on the
   site emit anonymous GA events; forks ship without analytics by default
@@ -368,7 +375,7 @@ reminder. The manual checklist covers:
 ## Contributing
 
 PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the build/run flow,
-hard rules (no outbound network, no inline-style writes for tracked changes),
+hard rules (no unconfigured outbound service, no inline-style writes for tracked changes),
 and where to file issues vs. security reports.
 
 By participating you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md).

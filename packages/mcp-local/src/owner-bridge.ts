@@ -1,14 +1,14 @@
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { attachWebSocketServer, isExtensionConnected, stopWebSocketServer } from './websocket-server.js';
-import { executeLocalTool, type ToolResult } from './tools.js';
+import { executeLocalTool, type ToolDispatch, type ToolResult } from './tools.js';
 
 export const OWNER_IDENTITY = 'design-mode-mcp';
 export const OWNER_HEALTH_PATH = '/.design-mode/health';
 export const OWNER_TOOLS_PATH = '/.design-mode/tools';
 export const OWNER_HEADER = 'x-design-mode-owner';
 export const LOOPBACK_HOST = '127.0.0.1';
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 const BODY_LIMIT = 1_000_000;
 
 export type BridgeRole = 'owner' | 'attacher';
@@ -252,4 +252,28 @@ export async function claimOrAttach(port: number): Promise<LocalBridge> {
     }
     throw foreignOccupantError(port);
   }
+}
+
+export function createResilientToolDispatch(
+  port: number,
+  initialBridge: LocalBridge,
+  onBridgeChange?: (bridge: LocalBridge) => void,
+): ToolDispatch {
+  let bridge = initialBridge;
+  return async (name, args = {}) => {
+    if (bridge.role === 'attacher' && !(await probeOwnerHealth(port))) {
+      try {
+        bridge = await claimOrAttach(port);
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: String((err as Error).message || err) }],
+          isError: true,
+        };
+      }
+      onBridgeChange?.(bridge);
+    }
+    return bridge.role === 'owner'
+      ? executeLocalTool(name, args)
+      : proxyToolCall(port, name, args);
+  };
 }

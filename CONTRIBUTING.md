@@ -62,11 +62,11 @@ npm start          # from repo root — boots ws://localhost:9960 + MCP stdio
 
 ## Hard rules
 
-- **Do not introduce outbound network calls.** The extension talks to
-  `ws://localhost:<port>` and nothing else. Anything else needs an explicit
-  setting + a note in `PRIVACY.md`. See the privacy doc for the list of
-  user-initiated requests that are already there (media downloads, screenshot
-  capture).
+- **Do not introduce outbound network calls without opt-in.** Local mode talks
+  only to `ws://localhost:<port>`; Cloud and Self-hosted modes use the relay the
+  user explicitly selects. Any new endpoint or service needs an explicit
+  setting + a note in `PRIVACY.md`. See the privacy doc for the existing
+  user-initiated requests and MCP modes.
 - **Do not write inline `el.style[prop] = value`** for tracked changes. Go
   through `applyStyleChange()` in `packages/extension/src/content/change-tracker.ts`
   so the override stylesheet stays the single source of truth and the change

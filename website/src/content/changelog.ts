@@ -19,6 +19,18 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "2.2.0",
+    date: "2026-09-05",
+    headline: "Inspect real states and keep every agent connected.",
+    highlights: [
+      "Inspect hover, focus, focus-visible, and active styles already authored on the page, then force a state to preview it while you edit.",
+      "See how flex and grid containers are really laid out with an optional computed overlay of tracks and children.",
+      "Choose where Design Mode opens in Chrome: the docked side panel, a floating window, or a Pin-on-top launcher.",
+      "Use Cursor, Claude Desktop, and other local MCP clients together: they share one owner on port 9960 and a surviving client takes over if the owner closes.",
+      "Polish and reliability: readable dark-theme dropdowns, whole-word text diffs, media-safe rich-text edits, Enter-to-commit fields, and dependable browser screenshot shortcuts.",
+    ],
+  },
+  {
     version: "2.1.0",
     date: "2026-08-18",
     headline: "Corner shapes and responsive-aware edits.",

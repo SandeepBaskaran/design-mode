@@ -10,7 +10,7 @@ Each entry is bucketed:
 
 When CSS and Figma diverge, the section calls it out.
 
-Last updated: 2026-07-30 (release 2.0.0).
+Last updated: 2026-09-05 (release 2.2.0).
 
 Release 1.1.0 highlights: **In-panel Help view** added (Report an
 issue + Copy diagnostics), **Alt+1/2/3 tab shortcuts** wired,

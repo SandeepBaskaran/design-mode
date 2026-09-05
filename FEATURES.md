@@ -105,7 +105,6 @@ Comments anchor a sticky note to a specific element. Each comment renders as a d
 - **Pin number**: pins are numbered in creation order (`1`, `2`, `3` …). The number renders inside the pin (replacing the `💬` emoji) and on the matching panel row's `#N` badge so the user can match overlay ↔ panel at a glance.
 - **Drag-to-reposition**: click and drag the pin to move it relative to the element. The offset is persisted; subsequent renders honour it. Click without dragging still opens the panel card.
 - **Resolve**: click the green **Resolve** button on the comment row. The pin fades to grey + 60% opacity; the body strikes through. Resolving keeps the comment (it's not a delete) — click **Reopen** to restore.
-- **Hide all**: the new `eye` / `eye-off` toolbar action toggles every pin on the page. The Changes tab still shows them; only the page overlay is muted. State persists across sessions via `chrome.storage.local`.
 - **Click**: opens the comment row in the panel and scrolls the page to the layer.
 
 ### 1.7 Distance measurement (spacing)
@@ -144,8 +143,7 @@ hovered) element. Every field updates the page live.
 ### 2.3 Icon section *(only when an SVG / icon library is detected)*
 
 - Detects Lucide, FontAwesome and similar libraries.
-- Lucide: when 2+ Lucide icons are already on the page, a dropdown swaps the selected SVG to another by copying its paths. The swap is tracked in Changes and is undoable.
-- FontAwesome is display-only (library + name). We do not rewrite `fa-*` classes or `data-icon` without the matching glyph.
+- Displays the detected library and icon name. It does not load icon packages or rewrite SVG markup.
 
 ### 2.4 Typography
 
@@ -383,10 +381,8 @@ Forced state clears on deselect and when Design Mode disables.
   contrast ratio against the effective background, an absolute rating
   (Excellent / Good / Poor / Very Poor), AA and AAA pass/fail tabs, and a
   Category override (Auto / Large / Normal / Graphics). Category and level
-  persist across sessions. When the pair fails the active threshold, a
-  **Use …** control suggests an accessible foreground via perceptual
-  lightness adjustment (or a same-family colour token when the field is
-  token-backed). Applying it is a normal tracked colour change.
+  persist across sessions. The checker reports the measured result without
+  proposing or applying a replacement colour.
 
 ### 2.17 Token badges — which token paints this field
 
@@ -604,10 +600,9 @@ old Settings-panel MCP fields:
 - **Parent / Child** → walk selection up/down the DOM.
 - **Duplicate** / **Delete** → DOM mutation, recorded as a change.
 - **Comment** → drop a yellow pin sticky note on the selected element. Pins are numbered in creation order; resolving a comment fades its pin to grey.
-- **Hide all pins** (`eye` / `eye-off`) → toggles every comment pin on the page in one click. The Changes-tab list still works — only the page overlay is muted. Persisted across sessions via `chrome.storage.local`.
 - **Screenshot** → see §1.5.
 - **Presets** → opens the Presets view (see §6).
-- **Undo** / **Redo** → step through every style/text/DOM/visibility/token/icon action.
+- **Undo** / **Redo** → step through every style/text/DOM/visibility/token action.
 
 ### 5.3 Sticky bottom
 
@@ -825,7 +820,7 @@ dedicated **MCP page** instead — see §5.1b.
 | **Page cursor** | Show the Design Mode app icon as the mouse cursor on the inspected page while the panel is open. Turning it off falls back to the plain crosshair. Persisted to `chrome.storage.local`; the content script picks up changes live via `storage.onChanged`. | on |
 | **Launch** (Chrome only) | Where the toolbar icon and `Alt+D` open Design Mode. `Side panel` (default) uses Chrome's native side panel (`openPanelOnActionClick`). `Floating` turns that off and opens the existing pop-out window. `Pin on top` opens that floating window with a focused Pin-on-top button — Document PiP cannot auto-open (needs a click in the opener). Firefox always uses the sidebar and omits this setting. Persisted as `dm-launch-surface`. Reset restores side panel. | `side-panel` |
 | **Theme** | `System` / `Dark` / `Light`. | `System` |
-| **Keyboard shortcuts** (button) | Opens a popover card listing every shortcut grouped by category (driven by `DEFAULT_SHORTCUTS`), keys shown as `<kbd>` chips. Backdrop click / ✕ / `Esc` closes it. | — |
+| **Keyboard shortcuts** (button) | Opens a popover card listing every shortcut grouped by category (driven by `DEFAULT_SHORTCUTS`), keys shown as `<kbd>` chips. Chrome may leave the browser commands `Alt+D` / `Alt+S` unassigned after an update or conflict; assign them at `chrome://extensions/shortcuts`. Backdrop click / ✕ / `Esc` closes it. | — |
 | **Reset settings** (button) | Wipes every setting above back to its default. Toasts on success. | — |
 
 ---
@@ -850,7 +845,8 @@ dedicated **MCP page** instead — see §5.1b.
 | Shortcut | Action |
 |---|---|
 | `Alt+D` | Open Design Mode on the preferred Chrome launch surface (side panel / floating / pin-on-top opener). Firefox always opens the sidebar. |
-| `Ctrl+Z` / `Cmd+Z` | Undo last change (style / text / DOM / visibility / token / Lucide icon) |
+| `Alt+S` | Capture the selected element or viewport using Settings → Screenshot capture. This is a browser command and may need assigning in the browser's extension-shortcuts page. |
+| `Ctrl+Z` / `Cmd+Z` | Undo last change (style / text / DOM / visibility / token) |
 | `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |
 | `↑` / `↓` on a numeric input | Increment / decrement by 1 (or by 0.1 / 0.05 for filter components) |
 | `Shift+↑` / `Shift+↓` | Step by the configured Nudge amount (default `10`) |
@@ -865,7 +861,9 @@ dedicated **MCP page** instead — see §5.1b.
 Run the server with `npm start` from the repo root. It boots a WebSocket
 bridge on `ws://localhost:9960` and exposes 8 MCP tools over stdio. Additional
 local agent sessions attach to the existing owner and proxy through its shared
-browser connection rather than competing for the port.
+browser connection rather than competing for the port. If that owner exits, a
+surviving client takes ownership on its next tool call, and the extension
+reconnects to the same port.
 
 | Tool | Inputs | What it returns |
 |---|---|---|

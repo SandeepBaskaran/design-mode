@@ -30,8 +30,7 @@ import { getTokenIndex, invalidateTokenIndex, authoredTokenValueFor } from './to
 import { setTokenEdit, resetTokenEdit, clearAllTokenEdits, getTokenEdits, peekTokenEdit } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
 import { buildDomTree, isPageContentSealed } from './dom-tree';
-import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments, restoreCommentPins, setCommentPinsHidden, areCommentPinsHidden } from './comments';
-import { findLucideGlyph, lucideIconClass, swapLucideClasses } from './icon-swap';
+import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments, restoreCommentPins } from './comments';
 import { buildCloudSessionSummary, buildMcpItems } from './mcp-items';
 import { startRegionDraw, cancelRegionDraw, clearPendingRegionBox, type Region } from './region-annotate';
 // Source detection — kept; surfaced in the prompt + Design tab
@@ -135,13 +134,7 @@ interface DomUndoEntry { kind: "dom"; action: string; elementId: string; html: s
 interface TextUndoEntry { kind: "text"; elementId: string; oldText: string; newText: string; isHtml?: boolean; }
 interface VisibilityUndoEntry { kind: "visibility"; elementId: string; wasHidden: boolean; oldDisplay: string; }
 interface TokenUndoEntry { kind: "token"; cssVar: string; scopeSelector: string; oldValue: string; newValue: string; original: string; }
-interface IconUndoEntry {
-  kind: "icon"; elementId: string;
-  oldClass: string; newClass: string;
-  oldHtml: string; newHtml: string;
-  oldViewBox: string | null; newViewBox: string | null;
-}
-type UndoEntry = StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoEntry | TokenUndoEntry | IconUndoEntry;
+type UndoEntry = StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoEntry | TokenUndoEntry;
 const pageSessionStartedAt = Date.now();
 const undoStack: UndoEntry[] = [];
 const redoStack: UndoEntry[] = [];
@@ -163,14 +156,6 @@ function pushTokenUndo(entry: TokenUndoEntry) {
   redoStack.length = 0;
 }
 
-function applyIconSnapshot(elementId: string, className: string, html: string, viewBox: string | null) {
-  const el = getElementById(elementId);
-  if (!el) return;
-  el.setAttribute('class', className);
-  if (viewBox) el.setAttribute('viewBox', viewBox);
-  else el.removeAttribute('viewBox');
-  applyHtmlChange(elementId, html);
-}
 
 // Corner-dot resize commits its final width/height through the change-tracker
 // (so it lands in the Changes tab and exports), pushes an undo entry per
@@ -264,7 +249,6 @@ function getFullState() {
     multiSelectIds: getMultiSelectIds(),
     undoCount: undoStack.length,
     redoCount: redoStack.length,
-    commentPinsHidden: areCommentPinsHidden(),
   };
 }
 
@@ -665,7 +649,7 @@ function dispatchCloudMessage(msg: any) {
       const resolved = msg.payload?.resolved !== false;
       if (!commentId) { sendRelayResponse(msg.requestId, { ok: false }); return; }
       setCommentResolved(commentId, resolved).then(c => {
-        if (c) { if (!areCommentPinsHidden()) void showCommentPins(); syncCommentChange(c); notifyPanel('CHANGES_UPDATE', {}); }
+        if (c) { void showCommentPins(); syncCommentChange(c); notifyPanel('CHANGES_UPDATE', {}); }
         sendRelayResponse(msg.requestId, { ok: !!c });
       });
       return;
@@ -831,9 +815,6 @@ function registerAllShortcuts() {
   registerShortcut('delete-element', () => {
     const sid = getSelectedElementId();
     if (sid) { deleteElement(sid); setSelectedElementId(null); hideSelect(); }
-  });
-  registerShortcut('screenshot', () => {
-    notifyPanel('REQUEST_SCREENSHOT', {});
   });
   registerShortcut('export-css', () => {
     const ch = getStyleChanges();
@@ -1108,8 +1089,6 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           }
         } else if (entry.kind === 'token') {
           applyTokenUndoValue(entry.cssVar, entry.scopeSelector, entry.oldValue, entry.original);
-        } else if (entry.kind === 'icon') {
-          applyIconSnapshot(entry.elementId, entry.oldClass, entry.oldHtml, entry.oldViewBox);
         }
         redoStack.push(entry);
       }
@@ -1158,8 +1137,6 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           }
         } else if (entry.kind === 'token') {
           applyTokenUndoValue(entry.cssVar, entry.scopeSelector, entry.newValue, entry.original);
-        } else if (entry.kind === 'icon') {
-          applyIconSnapshot(entry.elementId, entry.newClass, entry.newHtml, entry.newViewBox);
         }
         undoStack.push(entry);
       }
@@ -1220,7 +1197,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         addRegionComment(region, selector, msg.text).then(comment => {
           syncCommentChange(comment);
           clearPendingRegionBox(); // committed box (showCommentPins) replaces the pending one
-          if (!areCommentPinsHidden()) void showCommentPins();
+          void showCommentPins();
           sendResponse({ comment });
         });
         return true;
@@ -1237,7 +1214,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         setCommentResolved(cid, resolved).then((c) => {
           // After mutation, ensure pins re-render with the new ordinal /
           // colour. showCommentPins is idempotent.
-          if (!areCommentPinsHidden()) void showCommentPins();
+          void showCommentPins();
           if (c) syncCommentChange(c);
           sendResponse({ ok: true });
         });
@@ -1253,7 +1230,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       const offset = (msg as any).offset;
       if (cid) {
         setCommentPinOffset(cid, offset || null).then(() => {
-          if (!areCommentPinsHidden()) void showCommentPins();
+          void showCommentPins();
           sendResponse({ ok: true });
         });
         return true;
@@ -1386,9 +1363,10 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const el = getElementById(sid);
         if (el) {
           const oldHtml = el.innerHTML || '';
-          if (oldHtml !== msg.html) {
-            applyHtmlChange(sid, msg.html);
-            undoStack.push({ kind: 'text', elementId: sid, oldText: oldHtml, newText: msg.html, isHtml: true });
+          applyHtmlChange(sid, msg.html, undefined, true);
+          const newHtml = el.innerHTML || '';
+          if (oldHtml !== newHtml) {
+            undoStack.push({ kind: 'text', elementId: sid, oldText: oldHtml, newText: newHtml, isHtml: true });
             redoStack.length = 0;
           }
           const info = buildElementInfo(el);
@@ -1693,51 +1671,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       }
       break;
     }
-    case 'SET_COMMENT_PINS_HIDDEN': {
-      setCommentPinsHidden(!!msg.hidden).then((hidden) => {
-        sendResponse({ ok: true, commentPinsHidden: hidden });
-      });
-      return true;
-    }
-    case 'REPLACE_ICON': {
-      const sid = getSelectedElementId();
-      const el = sid ? getElementById(sid) : null;
-      const nextClass = lucideIconClass(msg.iconClass || '');
-      if (!sid || !el || el.tagName.toLowerCase() !== 'svg' || !nextClass) {
-        sendResponse({ ok: false });
-        break;
-      }
-      const glyphs = Array.from(document.querySelectorAll('svg.lucide')).map(s => ({
-        classNames: Array.from(s.classList),
-        innerHTML: s.innerHTML,
-        viewBox: s.getAttribute('viewBox'),
-      }));
-      const glyph = findLucideGlyph(glyphs, nextClass);
-      if (!glyph) { sendResponse({ ok: false }); break; }
-      const oldClass = el.getAttribute('class') || '';
-      const oldHtml = el.innerHTML || '';
-      const oldViewBox = el.getAttribute('viewBox');
-      const newClass = swapLucideClasses(oldClass, nextClass);
-      const newHtml = glyph.innerHTML;
-      const newViewBox = glyph.viewBox;
-      if (oldClass === newClass && oldHtml === newHtml) {
-        sendResponse({ ok: true, unchanged: true });
-        break;
-      }
-      applyIconSnapshot(sid, newClass, newHtml, newViewBox);
-      undoStack.push({
-        kind: 'icon', elementId: sid,
-        oldClass, newClass, oldHtml, newHtml, oldViewBox, newViewBox,
-      });
-      redoStack.length = 0;
-      const info = buildElementInfo(el);
-      onElementSelected(info);
-      getChangesPayload().then(p => sendResponse({
-        ok: true, ...p, info: { ...info, element: undefined },
-        undoCount: undoStack.length, redoCount: redoStack.length,
-      }));
-      return true;
-    }
+
     case 'CONSOLIDATE_DETECTED': {
       // Replace every on-page occurrence of msg.rawValue (in the relevant
       // computed-style properties for the given scale) with var(--name).
@@ -2252,7 +2186,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         el.removeAttribute('data-dm-preview-hidden');
       });
       document.querySelectorAll('[data-dm-preview-restored="1"]').forEach(el => el.remove());
-      try { if (!areCommentPinsHidden()) showCommentPins(); } catch {}
+      try { showCommentPins(); } catch {}
       sendResponse({ ok: true }); break;
     }
 

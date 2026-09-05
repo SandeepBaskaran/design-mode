@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs';
 import { WebSocket } from 'ws';
 import {
   claimOrAttach,
+  createResilientToolDispatch,
   OWNER_IDENTITY,
   probeOwnerHealth,
   proxyToolCall,
@@ -262,5 +263,47 @@ describe('mcp-local owner/attacher', { concurrency: false, timeout: 15_000 }, ()
       const helloAgain = await helloFromExtension(port);
       assert.equal(helloAgain.type, 'HELLO');
     });
+  });
+
+  test('attacher takes ownership after the previous owner exits', async () => {
+    const port = await getFreePort();
+    const child = spawnHoldClaim(port);
+    const reported = await waitForJsonLine(child);
+    assert.equal(reported.role, 'owner');
+
+    const attached = await claimOrAttach(port);
+    assert.equal(attached.role, 'attacher');
+    const promoted: LocalBridge[] = [];
+    const dispatch = createResilientToolDispatch(port, attached, (bridge) => { promoted.push(bridge); });
+
+    const childDead = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+    child.kill('SIGTERM');
+    await childDead;
+
+    const result = await dispatch('get_changes');
+    assert.equal(result.isError, undefined);
+    assert.equal(promoted[0]?.role, 'owner');
+    assert.equal((await probeOwnerHealth(port))?.pid, process.pid);
+    await promoted[0]?.close();
+    state.clear();
+  });
+
+  test('attacher reports a foreign replacement without breaking stdio', async () => {
+    const port = await getFreePort();
+    const owner = await claimOrAttach(port);
+    const attached = await claimOrAttach(port);
+    assert.equal(owner.role, 'owner');
+    assert.equal(attached.role, 'attacher');
+    const dispatch = createResilientToolDispatch(port, attached);
+
+    await owner.close();
+    const foreign = http.createServer((_req, res) => res.end('foreign'));
+    await listen(foreign, port);
+
+    const result = await dispatch('get_changes');
+    assert.equal(result.isError, true);
+    assert.match((result.content[0] as { text: string }).text, /not Design Mode/i);
+    assert.equal(foreign.listening, true);
+    await closeListening(foreign);
   });
 });

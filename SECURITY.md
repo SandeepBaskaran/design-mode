@@ -30,12 +30,13 @@ Out of scope:
 
 ## Hardening notes for contributors
 
-- The extension's default transport is `ws://localhost:<port>` (the
-  MCP-local server). When the user opts into cloud mode it talks to
-  `https://mcp.designmode.app` (or any user-configured self-hosted
-  deployment) over HTTPS with a bearer token stored in
-  `chrome.storage.local`. Don't introduce new outbound calls without
-  an explicit, opt-in setting and a note in [PRIVACY.md](./PRIVACY.md).
+- Local MCP binds its owner bridge to `127.0.0.1` and requires the ephemeral
+  owner token for both WebSocket and HTTP tool-proxy requests. Concurrent
+  Design Mode clients attach to that owner; a foreign port occupant is never
+  killed. Cloud mode talks to `https://mcp.designmode.app` (or a configured
+  self-hosted deployment) over HTTPS with a bearer token stored in
+  `chrome.storage.local`. Don't introduce a new outbound service without an
+  explicit setting and a note in [PRIVACY.md](./PRIVACY.md).
 - Treat the side panel context as privileged. The contenteditable
   rich-text editor sanitises the inspected page's `innerHTML` via a
   strict tag/attribute allow-list (see `sanitizeRichTextHtml` in

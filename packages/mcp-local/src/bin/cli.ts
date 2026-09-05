@@ -11,10 +11,10 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createMcpServer } from '../mcp-server.js';
 import { isExtensionConnected } from '../websocket-server.js';
-import { claimOrAttach, probeOwnerHealth, proxyToolCall } from '../owner-bridge.js';
+import { claimOrAttach, createResilientToolDispatch, probeOwnerHealth, type LocalBridge } from '../owner-bridge.js';
 
 const DEFAULT_WS_PORT = 9960;
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 
 const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
@@ -32,7 +32,7 @@ async function boot() {
   log(`\ud83d\ude80 Starting ${bold('Design Mode MCP')} v${VERSION}...`);
   log('');
 
-  let claim;
+  let claim: LocalBridge;
   try {
     claim = await claimOrAttach(port);
     if (claim.role === 'owner') {
@@ -51,11 +51,13 @@ async function boot() {
   }
 
   try {
-    const mcpServer = createMcpServer(
-      claim.role === 'attacher'
-        ? (name, args) => proxyToolCall(port, name, args)
-        : undefined
-    );
+    const dispatch = createResilientToolDispatch(port, claim, (nextClaim) => {
+      claim = nextClaim;
+      if (claim.role === 'owner') {
+        log(`  ${green('✓')} Previous owner closed; this client now owns ${cyan(`localhost:${port}`)}`);
+      }
+    });
+    const mcpServer = createMcpServer(dispatch);
     const transport = new StdioServerTransport();
 
     log(`  ${green('\u2713')} MCP server initializing on ${cyan('stdio')} transport`);

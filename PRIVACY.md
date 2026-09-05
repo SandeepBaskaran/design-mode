@@ -9,7 +9,7 @@ All extension data lives on **your machine**, in the browser's extension storage
 
 | Storage area              | What's there                                                                        | Lifetime                       |
 | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ |
-| `chrome.storage.local`    | UI preferences: `dm-theme`, `dm-color-format`, `dm-capture-mode`, hide-comment-pins (`dm-hide-comment-pins`), active Tokens-panel tab (`dm-tokens-tab`), inspector overlay colours (`dm-inspector-hover-color`, `dm-inspector-select-color`, `dm-overlay-margin-color`, `dm-overlay-padding-color`), contrast-checker settings (`dm-a11y-category`, `dm-a11y-level`), nudge-amount (`dm-nudge-amount`), page-cursor toggle (`dm-custom-cursor`), Chrome launch surface (`dm-launch-surface`: `side-panel` / `floating` / `picture-in-picture`), pop-out window bounds (`dm-popout-bounds`), pinned PiP window size + support flag (`dm-pip-size`, `dm-pip-unsupported`) | Until you uninstall the ext.   |
+| `chrome.storage.local`    | UI preferences: `dm-theme`, `dm-color-format`, `dm-capture-mode`, active Tokens-panel tab (`dm-tokens-tab`), inspector overlay colours (`dm-inspector-hover-color`, `dm-inspector-select-color`, `dm-overlay-margin-color`, `dm-overlay-padding-color`), contrast-checker settings (`dm-a11y-category`, `dm-a11y-level`), nudge-amount (`dm-nudge-amount`), page-cursor toggle (`dm-custom-cursor`), Chrome launch surface (`dm-launch-surface`: `side-panel` / `floating` / `picture-in-picture`), pop-out window bounds (`dm-popout-bounds`), pinned PiP window size + support flag (`dm-pip-size`, `dm-pip-unsupported`) | Until you uninstall the ext.   |
 | `chrome.storage.sync`     | User-saved presets you opt to sync across devices                                   | Synced via your browser's sync account (Chrome Sync / Firefox Sync) |
 | `chrome.storage.session`  | Per-page edit sessions (style/text/DOM changes), keyed by `origin + path + search`  | Until tab/browser closes       |
 
@@ -19,15 +19,16 @@ actively inspect.
 
 ## What leaves your machine
 
-By default the extension talks to **`localhost`** only. There is one
-optional cloud mode the user explicitly turns on; otherwise nothing
-leaves the machine.
+The extension sends data only through the MCP mode you configure. Fresh
+installs select Cloud; existing installs retain their saved mode. Cloud and
+Self-hosted need a configured relay and bearer token. Local mode talks only to
+your machine.
 
-Default (no opt-in needed):
+Local browser operations:
 
-- A WebSocket connection to `ws://localhost:9960` if you've opted in by
-  starting the companion MCP server (`npm start`). The server runs on your
-  machine; nothing is uploaded.
+- A token-authenticated WebSocket connection to `ws://127.0.0.1:9960` (or the
+  Local port you configure) if you've opted in by starting the companion MCP
+  server (`npm start`). The server runs on your machine; nothing is uploaded.
 - `chrome.tabs.captureVisibleTab` for screenshots — captured locally, never
   uploaded. The capture-mode setting (clipboard / download / both) controls
   what happens to the PNG.
@@ -35,7 +36,7 @@ Default (no opt-in needed):
   `<video>` / `<audio>` / SVG — this is a normal browser request to whatever
   URL the page already references; nothing is added by the extension.
 
-Optional cloud mode (you turn it on explicitly in Settings):
+Configured Cloud or Self-hosted mode:
 
 - An HTTPS connection to `https://mcp.designmode.app` (or any
   self-hosted deployment URL you configure) authenticated with a bearer
@@ -43,7 +44,7 @@ Optional cloud mode (you turn it on explicitly in Settings):
   source at `packages/mcp-cloud`) acts as a relay between the
   extension and a remote MCP agent — it doesn't store your edits;
   messages flow through and are dropped when the connection closes.
-  Disable cloud mode in Settings to revert to localhost-only.
+  Switch to Local mode on the MCP page to keep MCP traffic on your machine.
 
 When you're connected to a coding agent (via any of the modes above), the edit
 set it reads (`get_changes`) carries, per change, the page's **viewport width**

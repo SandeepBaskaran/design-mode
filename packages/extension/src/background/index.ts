@@ -23,6 +23,8 @@ let pinnedTabUrl: string | null = null;
 // TAB it controls, so multiple surfaces across tabs/windows route correctly.
 // "Is a panel open for tab X" = any port in this map bound to X.
 const panelPorts = new Map<chrome.runtime.Port, number>();
+type PanelSurface = 'panel' | 'popout' | 'pip';
+const panelSurfaces = new Map<chrome.runtime.Port, PanelSurface>();
 function panelsForTab(tabId: number): number {
   let n = 0;
   for (const t of panelPorts.values()) if (t === tabId) n++;
@@ -55,7 +57,15 @@ browser.storage.onChanged.addListener((changes, area) => {
   launchSurfaceReady = true;
 });
 
+browser.runtime.onInstalled.addListener((details) => {
+  if (!IS_FIREFOX && details.reason === 'install') setActionOpensPanel(true);
+});
+
 browser.action.onClicked.addListener((tab) => {
+  if (IS_FIREFOX) {
+    openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
+    return;
+  }
   if (!launchSurfaceReady) {
     void launchSurfaceInitialised.then(() => handleActionOrCommand(tab));
     return;
@@ -115,9 +125,11 @@ async function isFileAccessBlocked(url: string | undefined | null): Promise<bool
 browser.runtime.onConnect.addListener((port) => {
   if (port.name !== 'sidepanel' && !port.name.startsWith('sidepanel:')) return;
 
-  const explicitTab = port.name.startsWith('sidepanel:')
-    ? parseInt(port.name.slice('sidepanel:'.length), 10)
-    : NaN;
+  const [, explicitTabValue, explicitSurface] = port.name.split(':');
+  const explicitTab = explicitTabValue ? parseInt(explicitTabValue, 10) : NaN;
+  const panelSurface: PanelSurface = explicitSurface === 'pip'
+    ? 'pip'
+    : Number.isInteger(explicitTab) ? 'popout' : 'panel';
 
   (async () => {
     let tabId: number | null = Number.isInteger(explicitTab) ? explicitTab : null;
@@ -136,6 +148,7 @@ browser.runtime.onConnect.addListener((port) => {
     }
 
     panelPorts.set(port, tabId);
+    panelSurfaces.set(port, panelSurface);
     transitioningTabs.delete(tabId); // a surface re-bound — swap complete
     pinnedTabId = tabId; pinnedTabUrl = tabUrl; // legacy fallback for forward routing
 
@@ -170,6 +183,7 @@ browser.runtime.onConnect.addListener((port) => {
   port.onDisconnect.addListener(() => {
     const tabId = panelPorts.get(port);
     panelPorts.delete(port);
+    panelSurfaces.delete(port);
     // Only deactivate the tab when its LAST surface closes AND it isn't
     // mid-swap (pop-out / dock-back), so the transition never tears it down.
     if (tabId != null && panelsForTab(tabId) === 0 && !transitioningTabs.has(tabId)) {
@@ -186,7 +200,17 @@ browser.runtime.onConnect.addListener((port) => {
 // Toggle via keyboard command (Alt+D). Firefox's sidebarAction.open() must run
 // synchronously inside the user-gesture stack, so on Firefox we open FIRST
 // (it targets the active window, no tab lookup needed) before any await.
-browser.commands.onCommand.addListener((command) => {
+browser.commands.onCommand.addListener((command, tab) => {
+  if (command === 'capture-screenshot') {
+    const boundTabId = tab?.id != null && panelsForTab(tab.id) > 0 ? tab.id : pinnedTabId;
+    if (boundTabId == null) return;
+    const surfaces = [...panelPorts.entries()].filter(([, tabId]) => tabId === boundTabId);
+    const selected = surfaces.find(([port]) => panelSurfaces.get(port) === 'pip')
+      ?? surfaces.find(([port]) => panelSurfaces.get(port) === 'popout')
+      ?? surfaces[surfaces.length - 1];
+    try { selected?.[0].postMessage({ type: 'REQUEST_SCREENSHOT' }); } catch {}
+    return;
+  }
   if (command !== 'toggle-design-mode') return;
   if (IS_FIREFOX) {
     openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));

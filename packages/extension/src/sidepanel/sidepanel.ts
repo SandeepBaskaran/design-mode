@@ -20,10 +20,11 @@ import morphdom from 'morphdom';
 import { icon, icons } from '../content/icons';
 import { escapeAttr, rgbToHex } from '../content/helpers';
 import { AGENT_COMMAND_MARKDOWN, AGENT_TOOLS } from './agent-workflow';
+import { changeGroupKey, collectGroupRevertIds } from './change-group';
+import { diffWords } from './word-diff';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
   isTransparent, resolveCategory, thresholdFor,
-  suggestAccessibleForeground, pickAccessibleColourToken,
   type Category as A11yCategory, type Level as A11yLevel,
   type ResolvedCategory as A11yResolvedCategory,
   type Rating as A11yRating, type Rgb, type Rgba,
@@ -38,11 +39,13 @@ import {
    / browser.scripting / browser.storage. This sanitizer parses the input
    in a sandboxed DOMParser (which does NOT fire scripts or events on
    parse) and walks the tree keeping only structural formatting tags
-   and explicitly allow-listed attributes. Anything outside the
-   allow-list is replaced by its text content, so the visible copy
-   survives without the markup. */
+   and explicitly allow-listed attributes. Media is represented by inert
+   placeholders so editing surrounding copy cannot delete it from the page. */
 const RICH_TEXT_ALLOWED_TAGS = new Set([
   'B','I','U','STRONG','EM','A','BR','P','SPAN','UL','OL','LI','CODE','DIV','H1','H2','H3','H4','H5','H6','BLOCKQUOTE','PRE','SMALL','MARK','SUB','SUP',
+]);
+const RICH_TEXT_PRESERVED_TAGS = new Set([
+  'IMG','SVG','PICTURE','VIDEO','AUDIO','CANVAS','IFRAME','OBJECT','EMBED',
 ]);
 const RICH_TEXT_ALLOWED_ATTRS_PER_TAG: Record<string, Set<string>> = {
   A: new Set(['href', 'target', 'rel']),
@@ -79,12 +82,26 @@ function sanitizeRichTextHtml(raw: string): string {
   const doc = new DOMParser().parseFromString('<body><div id="r">' + raw + '</div></body>', 'text/html');
   const root = doc.getElementById('r');
   if (!root) return '';
+  const preservedNodes = Array.from(root.querySelectorAll('*')).filter((node) =>
+    RICH_TEXT_PRESERVED_TAGS.has(node.tagName)
+    && !node.parentElement?.closest([...RICH_TEXT_PRESERVED_TAGS].join(','))
+  );
   const walk = (node: Element) => {
     for (let i = node.children.length - 1; i >= 0; i--) {
       const child = node.children[i] as HTMLElement;
+      const preservedIndex = preservedNodes.indexOf(child);
+      if (preservedIndex !== -1) {
+        const placeholder = doc.createElement('span');
+        placeholder.dataset.dmPreserveNode = String(preservedIndex);
+        placeholder.contentEditable = 'false';
+        placeholder.textContent = `[${child.tagName.toLowerCase()}]`;
+        node.replaceChild(placeholder, child);
+        continue;
+      }
       if (!RICH_TEXT_ALLOWED_TAGS.has(child.tagName)) {
-        const text = doc.createTextNode(child.textContent || '');
-        node.replaceChild(text, child);
+        walk(child);
+        while (child.firstChild) node.insertBefore(child.firstChild, child);
+        child.remove();
         continue;
       }
       const allowed = RICH_TEXT_ALLOWED_ATTRS_PER_TAG[child.tagName] || new Set<string>();
@@ -98,7 +115,10 @@ function sanitizeRichTextHtml(raw: string): string {
           // Only http(s) / fragments / relative paths survive — never
           // javascript:, data:, vbscript:, blob:, filesystem:.
           const v = attr.value.trim();
-          const safe = /^https?:\/\//i.test(v) || v.startsWith('#') || v.startsWith('/') || v.startsWith('.');
+          const safe = /^https?:\/\//i.test(v)
+            || v.startsWith('#')
+            || (v.startsWith('/') && !v.startsWith('//'))
+            || v.startsWith('.');
           if (!safe) child.removeAttribute(attr.name);
         }
       }
@@ -281,7 +301,6 @@ let resolvedTheme: 'dark' | 'light' = 'dark';
 let colorFormat: ColorFormat = 'hex';
 type CaptureMode = 'clipboard' | 'download' | 'both';
 let captureMode: CaptureMode = 'clipboard';
-let commentPinsHidden = false;
 let multiSelectActive = false;
 let multiSelectIds: string[] = [];
 // The token whose consumers are currently highlighted via the "×N uses"
@@ -345,6 +364,7 @@ type ChangesStatusFilter = 'all' | 'todo' | 'in_progress' | 'resolved';
 let changesStatusFilter: ChangesStatusFilter = 'all';
 // Inline confirmation overlay state for the destructive Clear All button.
 let clearAllConfirming = false;
+let revertingGroupKey: string | null = null;
 // Anchored popover for the sort icon. Three options live inside it; clicking
 // one writes to changesSort and closes the popover.
 let changesSortMenuOpen = false;
@@ -600,7 +620,7 @@ let customCursor = true;
 let launchSurface: LaunchSurface = DEFAULT_LAUNCH_SURFACE;
 
 browser.storage?.local?.get?.([
-  'dm-theme', 'dm-color-format', 'dm-capture-mode', 'dm-hide-comment-pins',
+  'dm-theme', 'dm-color-format', 'dm-capture-mode',
   'dm-mcp-port', 'dm-mcp-auto-connect',
   'dm-mcp-mode', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url', 'dm-mcp-cloud-tenant',
   'dm-inspector-hover-color', 'dm-inspector-select-color',
@@ -615,7 +635,6 @@ browser.storage?.local?.get?.([
   if (result?.['dm-theme']) { theme = result['dm-theme']; resolveTheme(); }
   if (result?.['dm-color-format']) { colorFormat = result['dm-color-format']; }
   if (result?.['dm-capture-mode']) { captureMode = result['dm-capture-mode']; }
-  if (typeof result?.['dm-hide-comment-pins'] === 'boolean') commentPinsHidden = result['dm-hide-comment-pins'];
   if (typeof result?.['dm-mcp-port'] === 'number') mcpPort = result['dm-mcp-port'];
   if (typeof result?.['dm-mcp-auto-connect'] === 'boolean') mcpAutoConnect = result['dm-mcp-auto-connect'];
   if (typeof result?.['dm-mcp-mode'] === 'string') mcpMode = result['dm-mcp-mode'];
@@ -749,8 +768,15 @@ function domainLabel(url: string): string {
 /* ── Chrome Port ── */
 // Popped-out windows announce their bound tab in the port name so the
 // background binds correctly even before INIT_STATE.
-const port = browser.runtime.connect({ name: isPopout ? 'sidepanel:' + popoutTabParam : 'sidepanel' });
+const portName = isPopout
+  ? `sidepanel:${popoutTabParam}:${isPip ? 'pip' : 'popout'}`
+  : 'sidepanel';
+const port = browser.runtime.connect({ name: portName });
 port.onMessage.addListener((msg) => {
+  if (msg.type === 'REQUEST_SCREENSHOT') {
+    void takeScreenshot();
+    return;
+  }
   if (msg.type === 'INIT_STATE') {
     enabled = msg.enabled ?? false; inspecting = msg.inspecting ?? true;
     if (typeof msg.tabId === 'number') myTabId = msg.tabId;
@@ -1828,23 +1854,20 @@ function renderCommentMarkdown(s: string): string {
 // either the element id or, when the tracker couldn't capture one, the
 // selector — match against the same fallback the renderer uses.
 async function revertGroup(groupKey: string) {
-  const inGroup = (c: { elementId?: string; selector?: string }) =>
-    (c.elementId || c.selector || 'unknown') === groupKey;
-  const styleIds = styleChanges.filter(inGroup).map((c, i) => c.id || 'style-' + styleChanges.indexOf(c));
-  const textIds  = textChanges.filter(inGroup).map(c => c.id);
-  const domIds   = domChanges.filter(inGroup).map(c => c.id || 'dom-' + c.action);
-  // Drop comments locally — comments live in their own collection. We
-  // remove them along with the rest of the group for visual consistency.
-  comments = comments.filter(c => (c as any).elementId !== groupKey && (c as any).selector !== groupKey);
-  // Remove styles / text / dom via the existing per-change path so undo
-  // / redo / overlay cleanup all flow through the tracker.
-  for (const id of [...styleIds, ...textIds, ...domIds]) {
+  const inGroup = (c: { elementId?: string; selector?: string }) => changeGroupKey(c) === groupKey;
+  const ids = collectGroupRevertIds(groupKey, {
+    styles: styleChanges,
+    texts: textChanges,
+    dom: domChanges,
+    comments,
+  });
+  for (const id of ids) {
     await send({ type: 'SP_REMOVE_CHANGE', changeId: id });
   }
   styleChanges = styleChanges.filter(c => !inGroup(c));
   textChanges  = textChanges.filter(c => !inGroup(c));
   domChanges   = domChanges.filter(c => !inGroup(c));
-  for (const id of [...styleIds, ...textIds, ...domIds]) batchAppliedChanges.delete(id);
+  for (const id of ids) batchAppliedChanges.delete(id);
   // Token edits live under the synthetic ':root' group — reset each via the
   // root-var path so the page repaints and the prompt drops them too.
   if (groupKey === ':root') {
@@ -2026,10 +2049,10 @@ browser.runtime.onMessage.addListener((msg) => {
     const c = comments.find(cc => cc.id === msg.commentId);
     if (c) { tab = 'changes'; viewingCommentId = msg.commentId; editingCommentId = null; commentMode = false; render(); }
   }
-  // Alt+A on the page: open the comment add field for the focused layer.
-  // Mirrors the side-panel comment button (action row) so the keyboard
-  // shortcut and the click both land in the same flow.
+  // The floating opener shares the tab id with its PiP child; only the child
+  // handles the command so one shortcut produces one capture.
   if (msg.type === 'REQUEST_SCREENSHOT') {
+    if (pipPinned && !isPip) return;
     void takeScreenshot();
   }
   if (msg.type === 'OPEN_COMMENT_FOR_SELECTED') {
@@ -2061,7 +2084,6 @@ browser.runtime.onMessage.addListener((msg) => {
     if (typeof msg.hoverAvailable === 'boolean') applyHoverAvailable(msg.hoverAvailable);
     undoCount = msg.undoCount ?? undoCount;
     redoCount = msg.redoCount ?? redoCount;
-    if (typeof msg.commentPinsHidden === 'boolean') commentPinsHidden = msg.commentPinsHidden;
     if (msg.multiSelect !== undefined) multiSelectActive = !!msg.multiSelect;
     if (msg.multiSelectIds) multiSelectIds = msg.multiSelectIds;
     if (msg.frozen !== undefined) animationsFrozen = !!msg.frozen;
@@ -2988,26 +3010,6 @@ function renderContrastRow(prop: string, value: string): string {
 
   const popoverHtml = contrastSettingsOpen ? renderContrastSettingsPopover(res.resolvedCategory) : '';
 
-  let suggestionHtml = '';
-  if (ctx.role === 'fg' && !res.pass) {
-    const tok = tokenForProp(prop);
-    const colourTokens = designTokens.filter((t) => t.group === 'colour').map((t) => ({
-      cssVar: t.cssVar,
-      resolvedValue: t.resolvedValue || t.value,
-    }));
-    const tokenPick = pickAccessibleColourToken(colourTokens, ctx.bg, res.threshold, tok?.cssVar);
-    if (tokenPick) {
-      const value = 'var(' + tokenPick.cssVar + ')';
-      suggestionHtml = '<button type="button" class="dm-contrast-suggest" data-dm-action="apply-contrast-suggestion" data-dm-prop="' + escapeAttr(prop) + '" data-dm-value="' + escapeAttr(value) + '" title="Apply token ' + escapeAttr(tokenPick.cssVar) + ' (' + tokenPick.ratio.toFixed(2) + ':1)">' +
-        'Use ' + escapeAttr(tokenPick.cssVar) + '</button>';
-    } else {
-      const sug = suggestAccessibleForeground(ctx.fg, ctx.bg, res.threshold);
-      if (sug) {
-        suggestionHtml = '<button type="button" class="dm-contrast-suggest" data-dm-action="apply-contrast-suggestion" data-dm-prop="' + escapeAttr(prop) + '" data-dm-value="' + escapeAttr(sug.hex) + '" title="Apply ' + escapeAttr(sug.hex) + ' (' + sug.ratio.toFixed(2) + ':1)">' +
-          'Use ' + escapeAttr(sug.hex) + '</button>';
-      }
-    }
-  }
 
   return '<div class="dm-contrast-row" data-dm-contrast-row>' +
     '<span class="dm-contrast-chip" title="' + escapeAttr(ctx.pairLabel + ' • ' + bgCss) + '" style="background:linear-gradient(135deg, ' + safeFg + ' 50%, ' + safeBg + ' 50%);"></span>' +
@@ -3019,7 +3021,6 @@ function renderContrastRow(prop: string, value: string): string {
       icon('slidersHorizontal', 12) +
     '</button>' +
     popoverHtml +
-    suggestionHtml +
   '</div>';
 }
 
@@ -6322,7 +6323,6 @@ function renderActionRow(): string {
     '<button data-dm-action="delete" title="Remove" style="' + bs('var(--dm-danger)') + '">' + icon('trash', 14) + '</button>' +
     '<button data-dm-action="comment" title="Comment" style="' + bs() + '">' + icon('messageSquare', 14) + '</button>' +
     '<button data-dm-action="region-comment" title="Annotate" style="' + bs(undefined, true) + ';' + (awaitingRegionDraw ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('squareDashed', 14) + '</button>' +
-    '<button data-dm-action="toggle-comment-pins" aria-label="' + (commentPinsHidden ? 'Show comment pins' : 'Hide comment pins') + '" aria-pressed="' + commentPinsHidden + '" title="' + (commentPinsHidden ? 'Show comment pins' : 'Hide comment pins') + '" style="' + bs(undefined, true) + ';' + (commentPinsHidden ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon(commentPinsHidden ? 'eyeOff' : 'eye', 14) + '</button>' +
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
     '<button data-dm-action="open-tokens" title="Design system" style="' + bs(undefined, true) + ';' + (tokensOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('swatchBook', 14) + '</button>' +
@@ -6880,10 +6880,7 @@ function renderDesignTab(): string {
     '</div>' +
     '<div style="display:flex;align-items:center;gap:8px;">' +
     '<span style="font-size:10px;color:var(--dm-text-secondary);">Icon:</span>' +
-    (iconInfo.library === 'lucide' && iconInfo.availableIcons && iconInfo.availableIcons.length > 1
-      ? '<select class="dm-select" data-dm-icon-replace style="flex:1;min-width:0;">' +
-        iconInfo.availableIcons.map((ic: string) => '<option value="' + escapeAttr(ic) + '"' + (ic === 'lucide-' + iconInfo.name || ic === iconInfo.name ? ' selected' : '') + '>' + ic.replace('lucide-', '') + '</option>').join('') + '</select>'
-      : '<span style="font-size:11px;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);">' + escapeAttr(iconInfo.name) + '</span>') +
+    '<span style="font-size:11px;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);">' + escapeAttr(iconInfo.name) + '</span>' +
     '</div>'
   ) : '';
 
@@ -8585,6 +8582,17 @@ function renderChangesTab(): string {
       '</div></div></div>'
     : '';
 
+  const revertGroupOverlay = revertingGroupKey
+    ? '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
+      '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:250px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
+      '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;">Revert this change group?</div>' +
+      '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;line-height:1.5;">All changes and comments in this group will be removed. This can\'t be undone.</div>' +
+      '<div style="display:flex;gap:6px;">' +
+      '<button data-dm-action="cancel-revert-group" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Cancel</button>' +
+      '<button data-dm-action="confirm-revert-group" style="flex:1;padding:6px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:6px;color:var(--dm-danger);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Revert group</button>' +
+      '</div></div></div>'
+    : '';
+
   // Bulk-revert toolbar — appears when 2+ rows are selected via the
   // checkbox column. The "Revert selected" button drives every selected
   // change-id through the existing per-change revert path.
@@ -8605,43 +8613,8 @@ function renderChangesTab(): string {
   const stickyHeader = '<div style="position:sticky;top:0;z-index:5;background:var(--dm-bg);">' + topRow + searchRow + filterChipsRow + '</div>';
   const headerHtml = stickyHeader + commentsSubRow + statusSubRow + bulkBar + previewBanner;
 
-  // Char-level diff for text changes — Myers-style longest common
-  // subsequence, then collapse identical runs into <span>'s. Cheap enough
-  // for short strings; falls back to the short-truncation diff when both
-  // strings are tiny (< 30 chars combined) since the colour coding is
-  // already obvious there.
-  const diffChars = (oldStr: string, newStr: string): string => {
-    const aLen = oldStr.length, bLen = newStr.length;
-    // Heuristic: skip the LCS dance for tiny strings.
-    if (aLen + bLen < 60) return '';
-    // Build LCS dp matrix.
-    const dp: number[][] = Array.from({ length: aLen + 1 }, () => new Array(bLen + 1).fill(0));
-    for (let i = 1; i <= aLen; i++) {
-      for (let j = 1; j <= bLen; j++) {
-        dp[i][j] = oldStr[i - 1] === newStr[j - 1]
-          ? dp[i - 1][j - 1] + 1
-          : Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-    // Walk back to record edits as runs of {kind, text}.
-    type Run = { kind: 'eq' | 'add' | 'del'; text: string };
-    const runs: Run[] = [];
-    let i = aLen, j = bLen;
-    while (i > 0 && j > 0) {
-      if (oldStr[i - 1] === newStr[j - 1]) { runs.unshift({ kind: 'eq', text: oldStr[i - 1] }); i--; j--; }
-      else if (dp[i - 1][j] >= dp[i][j - 1]) { runs.unshift({ kind: 'del', text: oldStr[i - 1] }); i--; }
-      else { runs.unshift({ kind: 'add', text: newStr[j - 1] }); j--; }
-    }
-    while (i > 0) { runs.unshift({ kind: 'del', text: oldStr[i - 1] }); i--; }
-    while (j > 0) { runs.unshift({ kind: 'add', text: newStr[j - 1] }); j--; }
-    // Coalesce adjacent same-kind runs.
-    const coalesced: Run[] = [];
-    for (const r of runs) {
-      const last = coalesced[coalesced.length - 1];
-      if (last && last.kind === r.kind) last.text += r.text;
-      else coalesced.push({ ...r });
-    }
-    return coalesced.map(r => {
+  const renderWordDiff = (oldStr: string, newStr: string): string => {
+    return diffWords(oldStr, newStr).map(r => {
       const t = escapeAttr(r.text);
       if (r.kind === 'eq') return '<span style="color:var(--dm-text-secondary);">' + t + '</span>';
       if (r.kind === 'add') return '<span style="background:rgba(34,197,94,0.18);color:var(--dm-success);">' + t + '</span>';
@@ -8734,12 +8707,8 @@ function renderChangesTab(): string {
       } else if (item.type === 'text') {
         const c = item.data;
         const cid = c.id;
-        // Char-level diff for non-trivial text changes; falls back to the
-        // 20-char old \u2192 new format for short edits.
-        const diffHtml = diffChars(c.oldText || '', c.newText || '');
-        const inner = diffHtml
-          ? '<div style="font-size:10px;line-height:1.5;font-family:SF Mono,Monaco,monospace;word-break:break-word;"><span style="color:var(--dm-text-muted);">text:</span> ' + diffHtml + '</div>'
-          : '<div style="font-size:10px;"><span style="color:var(--dm-text-muted);">text</span>: <span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + escapeAttr((c.oldText || '').slice(0, 20)) + '</span> \u2192 <span style="color:var(--dm-success);">' + escapeAttr((c.newText || '').slice(0, 20)) + '</span></div>';
+        const diffHtml = renderWordDiff(c.oldText || '', c.newText || '');
+        const inner = '<div style="font-size:10px;line-height:1.5;font-family:SF Mono,Monaco,monospace;word-break:break-word;"><span style="color:var(--dm-text-muted);">text:</span> ' + diffHtml + '</div>';
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;margin-top:2px;">' + icon('type', 10) + '</span>' +
@@ -8908,7 +8877,7 @@ function renderChangesTab(): string {
     ? '<div style="text-align:center;padding:28px 16px;color:var(--dm-text-dim);font-size:11px;line-height:1.7;">No changes match this filter / search.<br/><a data-dm-action="reset-changes-filter" style="color:var(--dm-accent);cursor:pointer;text-decoration:underline;">Clear filter</a></div>'
     : '';
 
-  return '<div style="position:relative;">' + headerHtml + (filteredEmpty ? filteredEmptyHtml : groupHtml) + clearAllOverlay + deleteCommentOverlay + '</div>';
+  return '<div style="position:relative;">' + headerHtml + (filteredEmpty ? filteredEmptyHtml : groupHtml) + clearAllOverlay + deleteCommentOverlay + revertGroupOverlay + '</div>';
 }
 
 /* ── Settings View ── */
@@ -9764,17 +9733,6 @@ function setupDelegation() {
         case 'delete': domAction('delete'); break;
         case 'comment': startComment(); break;
         case 'region-comment': startRegionComment(); break;
-        case 'toggle-comment-pins': {
-          const next = !commentPinsHidden;
-          commentPinsHidden = next;
-          browser.storage?.local?.set?.({ 'dm-hide-comment-pins': next });
-          send({ type: 'SP_SET_COMMENT_PINS_HIDDEN', hidden: next }).then((r: any) => {
-            if (typeof r?.commentPinsHidden === 'boolean') commentPinsHidden = r.commentPinsHidden;
-            render();
-          });
-          render();
-          break;
-        }
         case 'screenshot': takeScreenshot(); break;
         case 'download-media': downloadMedia(); break;
         case 'copy-svg-markup': copySvgMarkup(); break;
@@ -9820,12 +9778,6 @@ function setupDelegation() {
         case 'toggle-contrast-settings': {
           contrastSettingsOpen = !contrastSettingsOpen;
           render();
-          break;
-        }
-        case 'apply-contrast-suggestion': {
-          const prop = actionBtn.dataset.dmProp;
-          const value = actionBtn.dataset.dmValue;
-          if (prop && value) applyStyle(prop, value);
           break;
         }
         case 'force-page-state': {
@@ -10111,6 +10063,15 @@ function setupDelegation() {
             const id = deletingCommentId;
             deletingCommentId = null;
             deleteCommentEntry(id);
+          }
+          break;
+        }
+        case 'cancel-revert-group': revertingGroupKey = null; render(); break;
+        case 'confirm-revert-group': {
+          if (revertingGroupKey) {
+            const key = revertingGroupKey;
+            revertingGroupKey = null;
+            revertGroup(key);
           }
           break;
         }
@@ -10556,8 +10517,8 @@ function setupDelegation() {
     const revertGroupBtn = target.closest<HTMLElement>('[data-dm-revert-group]');
     if (revertGroupBtn) {
       e.stopPropagation();
-      const key = revertGroupBtn.dataset.dmRevertGroup!;
-      revertGroup(key);
+      revertingGroupKey = revertGroupBtn.dataset.dmRevertGroup!;
+      render();
       return;
     }
 
@@ -12097,17 +12058,6 @@ function setupDelegation() {
   root.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
 
-    const iconReplaceSel = target.closest<HTMLSelectElement>('[data-dm-icon-replace]');
-    if (iconReplaceSel && iconReplaceSel.value) {
-      send({ type: 'SP_REPLACE_ICON', iconClass: iconReplaceSel.value }).then((r: any) => {
-        if (r?.info) info = r.info;
-        if (r?.textChanges) textChanges = r.textChanges;
-        if (r?.undoCount != null) undoCount = r.undoCount;
-        if (r?.redoCount != null) redoCount = r.redoCount;
-        render();
-      });
-      return;
-    }
 
     // Declared tab — scope filter dropdown.
     const scopeFilterSel = target.closest<HTMLSelectElement>('[data-dm-token-scope-filter]');
@@ -13279,11 +13229,12 @@ function setupDelegation() {
       return;
     }
 
-    // Escape dismisses confirmation overlays (Clear All / Delete comment).
-    if ((clearAllConfirming || deletingCommentId) && e.key === 'Escape') {
+    // Escape dismisses confirmation overlays.
+    if ((clearAllConfirming || deletingCommentId || revertingGroupKey) && e.key === 'Escape') {
       e.preventDefault();
       clearAllConfirming = false;
       deletingCommentId = null;
+      revertingGroupKey = null;
       render();
       return;
     }
@@ -13306,14 +13257,12 @@ function setupDelegation() {
       return;
     }
 
-    // Typography text-content editor (contenteditable): Enter commits the
-    // edited text to the element; Shift+Enter falls through to the browser's
-    // default line break. Focus is kept — morphdom preserves the focused
-    // contenteditable across the commit re-render.
+    // Typography text-content editor: Enter commits through the existing
+    // focusout path; Shift+Enter inserts a line break.
     const richEditor = target.closest<HTMLElement>('[data-dm-richtext]');
     if (richEditor && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      applyHtml(richEditor.innerHTML);
+      richEditor.blur();
       return;
     }
 
@@ -13335,9 +13284,24 @@ function setupDelegation() {
         activeColorPickerProp = null;
         colorAdvancedProp = null;
         colorPickerSearch = '';
+        colorTriggerKey.blur();
         if (val) applyStyle(prop, val); else render();
         return;
       }
+    }
+
+    // A single-line field commits through its existing change/input path when
+    // blurred. Enter should finish the edit rather than leave focus trapped in
+    // the field. Multiline property/text fields keep Shift+Enter for newlines.
+    if (e.key === 'Enter' && target instanceof HTMLInputElement) {
+      e.preventDefault();
+      target.blur();
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey && target instanceof HTMLTextAreaElement) {
+      e.preventDefault();
+      target.blur();
+      return;
     }
 
     // Numeric input arrow keys + strict numeric filter
@@ -13345,38 +13309,24 @@ function setupDelegation() {
     // behavior but recompose their parent property instead of writing the
     // sub-field value directly.
     const tcompKb = target.closest<HTMLInputElement>('[data-dm-tcomp-group]');
-    if (tcompKb && tcompKb.dataset.dmNumeric === '1' && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter')) {
+    if (tcompKb && tcompKb.dataset.dmNumeric === '1' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
-      if (e.key !== 'Enter') {
-        const step = e.shiftKey ? 10 : 1;
-        const current = parseFloat(tcompKb.value) || 0;
-        const newVal = e.key === 'ArrowUp' ? current + step : current - step;
-        tcompKb.value = String(Math.round(newVal * 100) / 100);
-      }
+      const step = e.shiftKey ? 10 : 1;
+      const current = parseFloat(tcompKb.value) || 0;
+      const newVal = e.key === 'ArrowUp' ? current + step : current - step;
+      tcompKb.value = String(Math.round(newVal * 100) / 100);
       applyTransformComponentFromFields(tcompKb.dataset.dmTcompGroup as 'translate' | 'scale');
       return;
     }
     const fcompKb = target.closest<HTMLInputElement>('[data-dm-fcomp-group]');
-    if (fcompKb && fcompKb.dataset.dmNumeric === '1' && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter')) {
+    if (fcompKb && fcompKb.dataset.dmNumeric === '1' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
-      if (e.key !== 'Enter') {
-        const step = e.shiftKey ? (fcompKb.dataset.dmUnit === 'deg' ? 10 : 0.1) : (fcompKb.dataset.dmUnit === 'px' || fcompKb.dataset.dmUnit === 'deg' ? 1 : 0.05);
-        const current = parseFloat(fcompKb.value) || 0;
-        const newVal = e.key === 'ArrowUp' ? current + step : current - step;
-        fcompKb.value = String(Math.round(newVal * 100) / 100);
-      }
+      const step = e.shiftKey ? (fcompKb.dataset.dmUnit === 'deg' ? 10 : 0.1) : (fcompKb.dataset.dmUnit === 'px' || fcompKb.dataset.dmUnit === 'deg' ? 1 : 0.05);
+      const current = parseFloat(fcompKb.value) || 0;
+      const newVal = e.key === 'ArrowUp' ? current + step : current - step;
+      fcompKb.value = String(Math.round(newVal * 100) / 100);
       syncFilterSiblings(fcompKb);
       applyFilterComponentsFromFields(fcompKb.dataset.dmFcompGroup as 'filter' | 'bfilter');
-      return;
-    }
-
-    // Value textarea (e.g. grid-template-areas): Enter commits the value,
-    // Shift+Enter inserts a newline. Commit routes through the existing
-    // change-event handler so the multi-line value is applied verbatim.
-    const propTextarea = target.closest<HTMLTextAreaElement>('textarea[data-dm-prop]');
-    if (propTextarea && e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      propTextarea.dispatchEvent(new Event('change', { bubbles: true }));
       return;
     }
 
@@ -13418,25 +13368,6 @@ function setupDelegation() {
         fillLayersByElement.set(id, layers);
         dispatchFillLayers(layers, applyStyle);
       };
-
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const raw = propInput.value.trim();
-        if (propName === '__opacity_pct') { commitOpacityPct(raw); return; }
-        if (fillOpacityMatch) { commitFillOpacityPct(raw); return; }
-        if (/^var\(\s*--/.test(raw)) { applyStyle(propName, raw); return; }
-        if (isNonNegativeNumericProp(propName)) {
-          const n = parseFloat(raw);
-          const clamped = !isFinite(n) || n < 0 ? 0 : n;
-          propInput.value = String(clamped);
-          applyStyle(propName, clamped + (unit || 'px'));
-          return;
-        }
-        const isPureNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
-        const val = isNumeric && unit && isPureNumber ? raw + unit : raw;
-        applyStyle(propName, val);
-        return;
-      }
 
       if (isNumeric && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
@@ -13492,13 +13423,6 @@ function setupDelegation() {
       }
     }
 
-    // Text area: Enter submits, Shift+Enter inserts a newline.
-    const textArea = target.closest<HTMLTextAreaElement>('[data-dm-text]');
-    if (textArea && e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      applyText(textArea.value);
-      return;
-    }
 
     // Phase 4C: Tab cycling through design panel inputs
     if (tab === 'design' && e.key === 'Tab') {
