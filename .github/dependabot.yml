@@ -34,6 +34,7 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: next
         update-types: ['version-update:semver-major']
+        versions: ['16.3.4']                        # Turbopack cannot resolve installed Sass
       - dependency-name: eslint
         update-types: ['version-update:semver-major']
 
