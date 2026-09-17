@@ -25,6 +25,20 @@ const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
 
 const log = (...args: any[]) => console.error(...args);
 
+let activeBridge: LocalBridge | null = null;
+let shuttingDown = false;
+
+async function shutdown(code = 0) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try {
+    await activeBridge?.close();
+  } catch {
+    // Best effort — we are exiting either way.
+  }
+  process.exit(code);
+}
+
 async function boot() {
   const port = parseInt(process.env.DM_PORT || String(DEFAULT_WS_PORT), 10);
 
@@ -35,6 +49,7 @@ async function boot() {
   let claim: LocalBridge;
   try {
     claim = await claimOrAttach(port);
+    activeBridge = claim;
     if (claim.role === 'owner') {
       log(`  ${green('\u2713')} WebSocket server listening on ${cyan(`ws://localhost:${port}`)}`);
     } else {
@@ -53,6 +68,7 @@ async function boot() {
   try {
     const dispatch = createResilientToolDispatch(port, claim, (nextClaim) => {
       claim = nextClaim;
+      activeBridge = nextClaim;
       if (claim.role === 'owner') {
         log(`  ${green('✓')} Previous owner closed; this client now owns ${cyan(`localhost:${port}`)}`);
       }
@@ -125,11 +141,21 @@ async function boot() {
 
 process.on('SIGINT', () => {
   log('\n\ud83d\uded1 Shutting down Design Mode MCP...');
-  process.exit(0);
+  void shutdown(0);
 });
 
 process.on('SIGTERM', () => {
-  process.exit(0);
+  void shutdown(0);
 });
+
+// An MCP client that exits closes our stdin. The SDK's StdioServerTransport
+// only listens for 'data' and 'error', so nothing else notices the EOF and the
+// process would outlive every session that spawned it — one leaked server per
+// session. A TTY means an interactive `npm start`, where the user expects a
+// long-lived owner, so leave that case alone.
+if (!process.stdin.isTTY) {
+  process.stdin.on('end', () => void shutdown(0));
+  process.stdin.on('close', () => void shutdown(0));
+}
 
 boot();
