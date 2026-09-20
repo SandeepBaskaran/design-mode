@@ -3,8 +3,9 @@
 import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { useInstallTarget } from "@/hooks/use-install-target";
+import { withNavRef } from "@/lib/nav-ref";
+import { cn } from "@/lib/utils";
 
 // Browser-aware install CTA. Points at the Chrome Web Store on Chromium and
 // at addons.mozilla.org (AMO) on Firefox; label + icon follow suit. Named
@@ -13,14 +14,18 @@ const STORES = {
   chrome: {
     name: "Chrome",
     label: "Add to Chrome",
-    href: "https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih",
+    href: withNavRef(
+      "https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih",
+    ),
     icon: "/chrome.svg",
     event: "add_to_chrome",
   },
   firefox: {
     name: "Firefox",
     label: "Add to Firefox",
-    href: "https://addons.mozilla.org/firefox/addon/design-mode-add-on/",
+    href: withNavRef(
+      "https://addons.mozilla.org/firefox/addon/design-mode-add-on/",
+    ),
     icon: "/firefox.svg",
     event: "add_to_firefox",
   },
@@ -41,7 +46,7 @@ export function AddToChromeCta({
   size = "default",
   label,
   className,
-  iconSize = 18,
+  iconSize = 16,
 }: {
   size?: "default" | "sm" | "lg";
   label?: string;

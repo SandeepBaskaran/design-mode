@@ -1,71 +1,52 @@
 @import "tailwindcss";
 
 @import "tw-animate-css";
-@plugin '@tailwindcss/typography';
+@plugin "@tailwindcss/typography";
 
 :root {
-  /* Warm-cream palette (Collective-OS language, Design Mode yellow accent).
-     Authored in OKLCH — hue ~85–90 keeps everything on a warm axis so the
-     cream, the ink, and the yellow read as one family. */
-  --background: oklch(0.966 0.013 88);   /* warm cream ~#FAF6EC */
-  --foreground: oklch(0.23 0.008 70);    /* warm near-black ~#1C1A17 */
-  --card: oklch(0.995 0.006 90);         /* near-white, lifts off the cream */
-  --card-foreground: oklch(0.23 0.008 70);
-  --popover: oklch(0.995 0.006 90);
-  --popover-foreground: oklch(0.23 0.008 70);
-  --primary: oklch(0.546 0.245 262.9);   /* accessible blue ~#2563EB — primary CTA (WCAG AA on white) */
-  --primary-foreground: oklch(0.985 0.01 255);
-  --secondary: oklch(0.94 0.012 88);     /* warm off-white chips / secondary */
-  --secondary-foreground: oklch(0.28 0.01 75);
-  --muted: oklch(0.935 0.011 88);
-  --muted-foreground: oklch(0.52 0.014 72);
-  --accent: oklch(0.93 0.022 88);        /* hover wash */
-  --accent-foreground: oklch(0.26 0.012 75);
+  --background: #f9f9f9;
+  --foreground: #0a0a0a;
+  --card: #f9f9f9;
+  --card-foreground: #0a0a0a;
+  --popover: #f9f9f9;
+  --popover-foreground: #0a0a0a;
+  --primary: #0275de;
+  --primary-foreground: #ffffff;
+  --secondary: #eeeeee;
+  --secondary-foreground: #0a0a0a;
+  --muted: #eeeeee;
+  --muted-foreground: #666666;
+  --accent: #e8f0f7;
+  --accent-foreground: #0a0a0a;
   --destructive: oklch(0.6 0.2 25);
   --destructive-foreground: oklch(0.98 0.01 90);
-  --border: oklch(0.9 0.012 86);
-  --input: oklch(0.9 0.012 86);
-  --ring: oklch(0.546 0.245 262.9);
+  --border: #dedede;
+  --input: #dedede;
+  --ring: #0275de;
 
-  /* Warm near-black for the floating nav pill + dark CTAs (the reference's
-     signature dark pill). Its own token so button/nav variants can target it. */
-  --ink: oklch(0.22 0.008 70);
-  --ink-foreground: oklch(0.97 0.012 90);
+  --ink: #0a0a0a;
+  --ink-foreground: #f9f9f9;
 
-  --radius: 1rem;
+  --radius: 8px;
 
   /* Soft, warm, low shadows — cards lift gently rather than punch. */
   --shadow-2xs: 0 1px 2px 0 oklch(0.22 0.01 70 / 0.04);
   --shadow-xs: 0 1px 2px 0 oklch(0.22 0.01 70 / 0.05);
   --shadow-sm: 0 1px 2px 0 oklch(0.22 0.01 70 / 0.06), 0 2px 6px -2px oklch(0.22 0.01 70 / 0.06);
   --shadow: 0 2px 4px -1px oklch(0.22 0.01 70 / 0.06), 0 6px 16px -4px oklch(0.22 0.01 70 / 0.08);
-  --shadow-md: 0 4px 8px -2px oklch(0.22 0.01 70 / 0.07), 0 10px 24px -6px oklch(0.22 0.01 70 / 0.10);
+  --shadow-md: 0 4px 8px -2px oklch(0.22 0.01 70 / 0.07), 0 10px 24px -6px oklch(0.22 0.01 70 / 0.1);
   --shadow-lg: 0 8px 16px -4px oklch(0.22 0.01 70 / 0.08), 0 18px 36px -10px oklch(0.22 0.01 70 / 0.12);
-  --shadow-xl: 0 16px 32px -8px oklch(0.22 0.01 70 / 0.10), 0 28px 56px -14px oklch(0.22 0.01 70 / 0.14);
+  --shadow-xl: 0 16px 32px -8px oklch(0.22 0.01 70 / 0.1), 0 28px 56px -14px oklch(0.22 0.01 70 / 0.14);
   --shadow-2xl: 0 28px 60px -14px oklch(0.22 0.01 70 / 0.18);
 
-  /* DM Sans (local, display) + Inter (google, body) — loaded in layout.tsx. */
-  --font-dm-sans: "dmSans", sans-serif;
-  --font-inter: "inter", sans-serif;
-
-  --font-sans: var(--font-dm-sans), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-sans: var(--font-google-sans-flex), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-sans);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
-  /* Display = DM Sans, body text = Inter (StyleGlide font abstraction). */
   --display-family: var(--font-sans);
-  --text-family: var(--font-inter);
+  --text-family: var(--font-sans);
   --display-weight: 600;
   --text-weight: 400;
-}
-
-/* Firefox brand accent. The pre-paint script in layout.tsx tags the document
-   with data-browser="firefox"; we swap the blue primary/ring for Firefox
-   purple (#8D4ABF) so the CTA and every accent follows the user's browser.
-   White-on-#8D4ABF is 5.4:1 (WCAG AA). */
-:root[data-browser="firefox"] {
-  --primary: oklch(0.544 0.181 307.9);
-  --ring: oklch(0.544 0.181 307.9);
 }
 
 @theme inline {
@@ -124,6 +105,13 @@
   --font-weight-display: var(--display-weight);
   --font-weight-text: var(--text-weight);
 
+  --text-3xl: 2rem;
+  --text-3xl--line-height: 1.2;
+  --text-4xl: 2.5rem;
+  --text-4xl--line-height: 1.2;
+  --text-6xl: 4rem;
+  --text-6xl--line-height: 1;
+
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
 
@@ -149,7 +137,7 @@
   margin-inline: auto;
   padding-inline: 1.5rem;
   @media (width >= 1400px) {
-    max-width: 1220px;
+    max-width: 1200px;
   }
 }
 
@@ -180,11 +168,6 @@
   .font-display {
     font-family: var(--font-display);
     font-weight: var(--display-weight);
-    /* DM Sans stylistic sets — the alt `a`/`g` and other characters. */
-    font-feature-settings:
-      "ss02" on,
-      "ss03" on,
-      "ss04" on;
   }
   .font-mono {
     font-family: var(--font-mono), monospace;
@@ -192,34 +175,13 @@
   /* Macro display headline — heavy, upright. Used on hero H1s. */
   .macro {
     font-family: var(--font-display);
-    font-weight: 700;
+    font-weight: var(--display-weight);
     letter-spacing: 0;
     line-height: 1;
     text-wrap: balance;
   }
 }
 
-/* Warm paper texture — a faint vertical wash behind all content, matching the
-   reference's hero fabric. Static + non-interactive, so no reduced-motion gate
-   needed; kept extremely low-contrast so it never fights text. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      oklch(0.22 0.01 70 / 0.014) 0 1px,
-      transparent 1px 3px
-    ),
-    radial-gradient(120% 80% at 50% -10%, oklch(0.93 0.015 90 / 0.2), transparent 60%);
-}
-
-/* Long-form prose (blog / docs / compare / use-cases) — warm ink on cream,
-   Jakarta, comfortable measure. Overrides the typography plugin once so every
-   content page inherits the palette. */
 .prose {
   --tw-prose-body: var(--foreground);
   --tw-prose-headings: var(--foreground);
@@ -238,7 +200,14 @@ body::before {
   --tw-prose-th-borders: var(--border);
   --tw-prose-td-borders: var(--border);
   font-family: var(--font-text);
+  font-size: 16px;
   line-height: 1.7;
+}
+.prose :where(h1) {
+  font-size: 32px;
+}
+.prose :where(h2, h3) {
+  font-size: 24px;
 }
 .prose :where(h1, h2, h3) {
   font-family: var(--font-display);
@@ -257,10 +226,36 @@ body::before {
   }
 }
 
+@supports (corner-shape: squircle) {
+  *,
+  *::before,
+  *::after {
+    corner-shape: squircle;
+  }
+
+  .rounded-full {
+    corner-shape: round;
+  }
+}
+
 html,
 body {
   scroll-behavior: smooth;
 }
 body {
   position: relative;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  [data-button-content] {
+    transition: transform 160ms ease;
+  }
+  [data-slot="button"]:not(:disabled):not([aria-disabled="true"]):hover > [data-button-content] {
+    transform: scale(1.1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html,
+  body {
+    scroll-behavior: auto;
+  }
 }

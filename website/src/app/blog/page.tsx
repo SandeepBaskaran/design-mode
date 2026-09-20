@@ -4,10 +4,11 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
+import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { posts } from "@/content/blog";
 
 export const metadata = {
-  title: "Blog — Design Mode build notes & workflow walkthroughs",
+  title: { absolute: "Build notes and visual editing guides | Design Mode" },
   description:
     "Stories from building Design Mode and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
   keywords: [
@@ -19,11 +20,33 @@ export const metadata = {
   ],
   alternates: { canonical: "https://designmode.app/blog" },
   openGraph: {
-    title: "Blog — Design Mode",
+    type: "website",
+    title: "Build notes and visual editing guides | Design Mode",
     description:
-      "Build notes and workflow walkthroughs for designers, developers, and vibe coders.",
+      "Stories from building Design Mode and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
     url: "https://designmode.app/blog",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Build notes and visual editing guides | Design Mode",
+    description:
+      "Stories from building Design Mode and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 
@@ -40,16 +63,28 @@ export default function BlogIndex() {
 
   return (
     <>
+      <JsonLd
+        data={collectionPageSchema({
+          name: "Design Mode build notes and guides",
+          description:
+            "Build notes and workflow guides for browser visual editing and coding-agent hand-off.",
+          url: "https://designmode.app/blog",
+          items: sorted.map((post) => ({
+            name: post.title,
+            url: `https://designmode.app/blog/${post.slug}`,
+          })),
+        })}
+      />
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Blog
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-              Build notes from Design Mode and walkthroughs of real
-              workflows — MCP architecture, vibe coding, Tailwind
-              redesigns, changelog deep-dives.
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+              Build notes from Design Mode and walkthroughs of real workflows —
+              MCP architecture, vibe coding, Tailwind redesigns, changelog
+              deep-dives.
             </p>
           </div>
         </section>
@@ -66,19 +101,19 @@ export default function BlogIndex() {
             >
               <time
                 dateTime={p.datePublished}
-                className="text-muted-foreground text-xs font-medium tracking-wide uppercase"
+                className="text-muted-foreground text-base font-medium tracking-wide uppercase"
               >
                 {dateFmt.format(new Date(p.datePublished))}
               </time>
-              <h2 className="font-display mt-2 text-xl font-semibold leading-snug md:text-2xl">
+              <h2 className="font-display mt-2 text-2xl leading-snug font-semibold md:text-3xl">
                 {p.title}
               </h2>
               <p className="text-muted-foreground mt-2 leading-relaxed">
                 {p.excerpt}
               </p>
-              <span className="text-foreground/80 mt-4 inline-flex items-center gap-1 text-sm font-medium underline underline-offset-4">
+              <span className="text-foreground/80 mt-4 inline-flex items-center gap-2 text-base font-medium underline underline-offset-8">
                 Read{" "}
-                <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                <ArrowUpRight className="size-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </span>
             </Link>
           ))}

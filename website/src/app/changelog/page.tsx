@@ -10,9 +10,9 @@ const REPO_CHANGELOG =
   "https://github.com/SandeepBaskaran/design-mode/blob/main/CHANGELOG.md";
 
 export const metadata = {
-  title: "Changelog — every Design Mode feature, and when it shipped",
+  title: "Changelog — Design Mode release highlights",
   description:
-    "A plain-language, dated log of every Design Mode feature — corner shapes, responsive edit tags, design-system tokens, motion, measure & resize, Firefox support, and more — so you can see exactly when each capability became available.",
+    "Dated release highlights for Design Mode: what each shipped version added, in plain language, with a link to the full technical changelog.",
   keywords: [
     "Design Mode changelog",
     "Design Mode release notes",
@@ -24,7 +24,7 @@ export const metadata = {
   openGraph: {
     title: "Changelog — Design Mode",
     description:
-      "Every Design Mode feature, in plain language, with the date it shipped.",
+      "Release highlights for Design Mode, in plain language, with the date each version shipped.",
     url: "https://designmode.app/changelog",
     images: ["/og-image.png"],
   },
@@ -46,14 +46,14 @@ export default function ChangelogPage() {
   return (
     <>
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-16 lg:py-24">
           <div className="container max-w-3xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Changelog
             </h1>
             <p className="text-muted-foreground mt-4 max-w-2xl text-lg md:text-xl">
-              Every Design Mode feature in plain language, with the date it
-              shipped — so you always know what you can do, and since when.
+              Release highlights in plain language, with the date each version
+              shipped — not a complete inventory of every change.
             </p>
             <p className="text-muted-foreground mt-3 text-sm">
               Want the technical detail?{" "}
@@ -71,15 +71,15 @@ export default function ChangelogPage() {
         </section>
       </Background>
 
-      <section className="pb-20 lg:pb-28">
+      <section className="py-16 lg:py-20">
         <DashedLine className="container max-w-3xl" />
         <div className="container mt-12 max-w-3xl">
-          <ol className="flex flex-col gap-14">
+          <ol className="flex flex-col gap-16">
             {releases.map((r) => (
-              <li key={r.version} id={`v${r.version}`} className="scroll-mt-28">
+              <li key={r.version} id={`v${r.version}`} className="scroll-mt-24">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h2 className="font-display text-xl font-semibold tracking-tight">
-                    <span className="bg-secondary text-secondary-foreground rounded-full px-2.5 py-0.5 text-sm font-medium">
+                    <span className="bg-secondary text-secondary-foreground rounded-lg px-2 py-1 text-sm font-medium">
                       v{r.version}
                     </span>
                   </h2>
@@ -91,11 +91,11 @@ export default function ChangelogPage() {
                   </time>
                 </div>
                 <p className="text-foreground mt-3 font-medium">{r.headline}</p>
-                <ul className="mt-3 flex flex-col gap-2.5">
-                  {r.highlights.map((h, i) => (
+                <ul className="mt-3 flex flex-col gap-2">
+                  {r.highlights.map((h) => (
                     <li
-                      key={i}
-                      className="text-muted-foreground flex gap-2.5 text-[15px] leading-relaxed"
+                      key={h}
+                      className="text-muted-foreground flex gap-2 text-[15px] leading-relaxed"
                     >
                       <span
                         aria-hidden

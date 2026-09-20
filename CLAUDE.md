@@ -9,6 +9,12 @@ tool), these rules are read automatically at session start.
 
 ---
 
+## Worktree workflow
+
+- Put task worktrees under `.hermes/worktrees/<task>`.
+- Create feature branches from local `main` unless the task specifies another base.
+- After creating a worktree, edit, build, and test only inside it; do not modify the primary checkout.
+
 ## Workspaces
 
 - `packages/extension` — Chrome MV3 side-panel extension (the main

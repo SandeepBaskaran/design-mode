@@ -12,7 +12,8 @@ export function HeroImage() {
             src="/hero.png"
             alt="Design Mode in action — the live website with the side panel attached"
             width={2360}
-            height={951}
+            height={1353}
+            sizes="(min-width: 1024px) 1024px, calc(100vw - 2rem)"
             className="h-auto w-full"
           />
         </div>

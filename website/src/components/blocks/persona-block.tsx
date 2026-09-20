@@ -98,7 +98,7 @@ export function PersonaBlock() {
           <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
             One design tool for every maker
           </h2>
-          <p className="text-muted-foreground mt-5 text-lg leading-snug">
+          <p className="text-muted-foreground mt-4 text-base leading-snug">
             Designers, developers, QA testers, PMs, content people, indie
             hackers, agencies, and vibe coders all share the same problem —
             getting from a visual idea to working code without losing
@@ -116,14 +116,14 @@ export function PersonaBlock() {
                 href={p.href}
                 className="group bg-card rounded-2xl border p-6 shadow-sm transition-shadow hover:shadow-md"
               >
-                <Icon className="text-foreground group-hover:text-primary mb-3 size-5 transition-colors" />
-                <h3 className="font-display text-lg font-semibold">
+                <Icon className="text-foreground group-hover:text-primary mb-4 size-6 transition-colors" />
+                <h3 className="font-display text-base font-semibold">
                   {p.title}
                 </h3>
-                <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+                <p className="text-muted-foreground mt-2 text-base leading-relaxed">
                   {p.blurb}
                 </p>
-                <span className="text-foreground/80 mt-3 inline-flex items-center gap-1 text-sm font-medium underline underline-offset-4 opacity-0 transition-opacity group-hover:opacity-100">
+                <span className="text-foreground/80 mt-4 inline-flex items-center gap-2 text-base font-medium underline underline-offset-8 opacity-0 transition-opacity group-hover:opacity-100">
                   See the workflow →
                 </span>
               </Link>
@@ -135,7 +135,7 @@ export function PersonaBlock() {
           <Users className="text-muted-foreground size-4" />
           <Link
             href="/use-cases"
-            className="text-foreground/80 text-sm underline underline-offset-4 hover:text-foreground"
+            className="text-foreground/80 text-base underline underline-offset-8 hover:text-foreground"
           >
             See every use case →
           </Link>

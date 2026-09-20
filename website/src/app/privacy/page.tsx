@@ -11,12 +11,12 @@ export default function PrivacyPage() {
     <>
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Privacy
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
               Design Mode runs locally by default. Here's exactly what data
               leaves your machine, when, and why.
             </p>
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
       {/* Middle — main privacy content */}
       <section className="py-16 lg:py-20">
         <DashedLine className="container max-w-5xl" />
-        <article className="prose prose-lg container mx-auto mt-12 max-w-3xl">
+        <article className="prose container mx-auto mt-12 max-w-3xl">
           <Privacy />
         </article>
       </section>
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
       <Background variant="bottom">
         <section className="py-20 lg:py-28">
           <DashedLine className="container max-w-5xl" />
-          <article className="prose prose-lg container mx-auto mt-12 max-w-3xl">
+          <article className="prose container mx-auto mt-12 max-w-3xl">
             <Reporting />
           </article>
         </section>

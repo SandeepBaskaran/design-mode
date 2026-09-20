@@ -1,21 +1,36 @@
 export const metadata = {
-  title: "Privacy — Design Mode runs locally by default",
+  title: { absolute: "Privacy — Extension storage, Cloud relay and analytics" },
   description:
-    "Design Mode is a privacy-first browser extension (Chrome + Firefox). No telemetry by default, no accounts, no training on your edits. Here's exactly what data leaves your machine in each MCP mode (Cloud, Local, Self-hosted), when, and why.",
-  keywords: [
-    "Design Mode privacy",
-    "privacy-first browser extension",
-    "no telemetry design tool",
-    "open source privacy",
-    "MCP privacy",
-  ],
+    "How Design Mode stores browser edits, when Cloud or Local MCP traffic starts, what the relay retains, and which analytics events the website sends.",
   alternates: { canonical: "https://designmode.app/privacy" },
   openGraph: {
-    title: "Privacy — Design Mode runs locally by default",
+    type: "website",
+    title: "Privacy — Extension storage, Cloud relay and analytics",
     description:
-      "What data leaves your machine in each MCP mode, when, and why.",
+      "How Design Mode stores browser edits, when Cloud or Local MCP traffic starts, what the relay retains, and which analytics events the website sends.",
     url: "https://designmode.app/privacy",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Privacy — Extension storage, Cloud relay and analytics",
+    description:
+      "How Design Mode stores browser edits, when Cloud or Local MCP traffic starts, what the relay retains, and which analytics events the website sends.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 

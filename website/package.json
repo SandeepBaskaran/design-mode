@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "check:built": "node scripts/check-built-pages.mjs && node scripts/check-comparison-discovery.mjs",
+    "indexnow": "node scripts/submit-indexnow.mjs",
     "lint": "eslint --fix src",
     "format": "prettier -w ."
   },

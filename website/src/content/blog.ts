@@ -12,6 +12,106 @@ export type BlogPost = {
 
 export const posts: BlogPost[] = [
   {
+    slug: "turn-visual-edits-into-precise-ai-prompts",
+    title: "Turn visual edits into precise AI prompts",
+    metaTitle: "Turn visual edits into precise AI prompts | Design Mode",
+    metaDescription:
+      "A practical Design Mode workflow: edit a rendered page, capture exact changes, add intent and constraints, then verify your coding agent's implementation.",
+    keywords: [
+      "AI UI prompts",
+      "visual editing workflow",
+      "Design Mode",
+      "Claude Code design changes",
+      "structured design feedback",
+    ],
+    datePublished: "2026-09-16",
+    excerpt:
+      "Make the change on the page. Give your coding agent the values, the context and the boundaries—not another request to make it look better.",
+    body: [
+      {
+        paragraphs: [
+          'You want the pricing cards to feel less cramped. You ask your coding agent to "give them more breathing room". It increases the gap between cards. You meant the space inside them. Neither interpretation was unreasonable; the request never made the distinction.',
+          "On an existing page, you can settle that decision before asking the agent to write code. Adjust the card in the browser, look at it alongside its neighbours, and hand over the change you actually chose. Design Mode records that visual edit; your coding agent still owns the source-code implementation.",
+          "The useful hand-off combines three things: an exact change, a reason for it, and a boundary around what should stay untouched. Numbers remove ambiguity about the result. Context prevents the right numbers being applied in the wrong place.",
+        ],
+      },
+      {
+        heading: "Start with the page, not a blank prompt",
+        paragraphs: [
+          "Open your app on a page that allows extension scripts, ideally a local development build connected to the repository your agent can access. Select the element in Design Mode and adjust its spacing, typography or other visual properties. Work on one coherent change at a time so the resulting specification stays reviewable.",
+          "The surrounding page matters. A card that looks balanced alone may be too tall in a row, push its action below the fold, or wrap awkwardly beside a longer heading. Editing the rendered interface lets you judge those relationships while choosing the values.",
+          "Review the Changes tab before exporting. Remove experiments you no longer want. A record of every idea you tried is not the same thing as a clear implementation request.",
+        ],
+      },
+      {
+        heading: "A worked example: give a pricing card more room",
+        paragraphs: [
+          "Suppose a pricing card has 16px of internal padding and a 12px gap between its content groups. You try 24px padding and a 16px gap on desktop, while keeping the compact mobile layout. These are illustrative values, not a measured result or a recommendation for every pricing page.",
+          "The visual changes answer what should change. Add a short note explaining why: the plan description and price need clearer separation, but the card should keep its current typography, colours and button treatment. Also say whether this is a shared change across all plan cards or an exception for one card.",
+          "A hand-written brief accompanying the exported changes could read as follows. This is an example of additional instructions, not a verbatim Design Mode export:",
+          "Target: the shared pricing-card component on the pricing page. Apply the desktop spacing change to all three plan cards, not just the selected instance.",
+          "Changes: increase internal padding from 16px to 24px and the gap between content groups from 12px to 16px at the existing desktop breakpoint. Keep the current mobile spacing. Preserve the title, price, colours, radius and button styling.",
+          "Implementation: inspect the existing component and spacing tokens first. Reuse a token only if its resolved value matches the intended result. If the design system cannot represent the change without a new value, flag that decision rather than silently choosing the nearest size. Do not add page-wide overrides.",
+          "Acceptance: check all three cards with their real content at desktop and mobile widths. Confirm that long plan names wrap cleanly, buttons remain usable by keyboard, and unrelated cards elsewhere in the app have not changed.",
+        ],
+      },
+      {
+        heading: "A real example: homepage hero spacing",
+        paragraphs: [
+          "The pricing-card numbers above are illustrative. The following is a labelled export from an actual Design Mode session on this site's homepage hero, quoted as exported:",
+          "- section.py-24: padding-top 96px → 64px; padding-bottom 96px → 64px _(mobile · 404px)_",
+          "The same session also recorded a change to the hero container's mobile side padding, from 24px to 16px.",
+          "Those preview values map to existing Tailwind breakpoints on the homepage hero: the section uses py-16 sm:py-24, and the inner container uses max-sm:px-4 against the default 24px container sides. At a 404px-wide viewport the rendered result was 64px vertical padding and 16px side padding; at 1440px it was 96px vertical and 24px sides. The exported selector identified the element before implementation; the agent used the existing sm breakpoint to keep desktop spacing unchanged.",
+          "This is not a speed benchmark. The browser preview is not the repository change: after implementation, inspect the source diff and re-check the page without Design Mode overrides.",
+        ],
+      },
+      {
+        heading: "Keep the values exact and the implementation flexible",
+        paragraphs: [
+          "A browser selector helps identify an element. It is not necessarily the selector that belongs in your stylesheet. The rendered node may come from a shared React component, a template loop or a third-party component with its own extension points.",
+          "Ask the agent to locate the source and follow its conventions. A padding change might belong in a component variant, an existing utility class or a design token. Copying a computed style into an inline override can reproduce the preview while creating the wrong maintenance burden.",
+          "Scope is especially important with tokens. Updating one shared spacing token can affect many screens. If the intent is local to pricing cards, the agent should not turn it into a global design-system change without asking.",
+        ],
+      },
+      {
+        heading: "Specify the states you actually intend to change",
+        paragraphs: [
+          "A screenshot shows a moment. It does not establish what should happen on keyboard focus, while a button is disabled, or when a user prefers reduced motion. Include those requirements when the edit touches an interactive component; leave unrelated behaviour alone.",
+          "For a hover adjustment, describe only the difference from the default state and name what must remain stable. For example: change the background on hover, but preserve the label colour and element dimensions. If you introduce a border, account for its space so the layout does not jump.",
+          "Treat accessibility checks as acceptance criteria, not a promise attached to a prompt. Preserve a visible keyboard-focus indicator, check text contrast against the actual background, and test any animation with reduced motion enabled. These instructions are yours to add where relevant; do not assume an export automatically covers them or proves compliance.",
+        ],
+      },
+      {
+        heading: "Choose a hand-off that fits your setup",
+        paragraphs: [
+          "Copy as Prompt gives you a portable Markdown specification to paste into your coding tool alongside the intent and acceptance criteria. It does not require an MCP connection.",
+          "Send to Agent uses Design Mode's MCP connection so a configured client can read the session. The connection does not grant repository access: your coding agent separately needs permission to inspect and edit the project. Use the current MCP setup guide for your client rather than assuming every client accepts the same configuration.",
+          "Before either hand-off, review what you are sharing. Page content, comments and screenshots can contain confidential information. Use representative test data and follow your team's rules for the agent provider and connection mode.",
+        ],
+      },
+      {
+        heading: "Verify the source change, not just the browser preview",
+        paragraphs: [
+          "Design Mode changes the rendered page as a preview. That preview is not evidence that the repository now produces the same result. After the agent implements the request, inspect the source diff, run the relevant project checks, and reopen the app without the temporary Design Mode overrides affecting the comparison.",
+          "Compare the result at the same viewport size, with the same content and fonts loaded. Check the edited values in browser developer tools where useful, then inspect the overall layout. Matching a padding value does not guarantee matching line wrapping or card height.",
+          "Test a neighbouring viewport as well as the one you designed at. Exercise hover, keyboard focus and disabled states when applicable. If the agent changed a shared component, inspect another place that uses it. Report a mismatch with the element, state and expected value instead of restarting with a vague visual request.",
+          "There is no guaranteed one-shot result here. Precise changes make the request easier to implement and the outcome easier to check; they do not remove the need to understand the codebase or review the work.",
+        ],
+      },
+      {
+        heading: "Try it on one change",
+        paragraphs: [
+          "Pick a spacing or typography adjustment on a page you own. Make it visually, clean up the Changes tab, and copy the specification. Add one sentence about intent, one about scope and a short acceptance check. Ask your coding agent to implement it, then review the result without the preview overrides.",
+          "That is the distinction worth keeping: Design Mode captures the visual decision, while the agent translates it into maintainable source code. A useful prompt connects those two jobs without pretending they are the same job.",
+        ],
+      },
+    ],
+    related: [
+      "vibe-coding-visual-editing-workflow",
+      "redesigning-a-tailwind-landing-page-with-claude-code",
+    ],
+  },
+  {
     slug: "why-we-built-an-mcp-server-for-design-edits",
     title: "Why we built an MCP server for design edits",
     metaTitle:
@@ -38,23 +138,23 @@ export const posts: BlogPost[] = [
       {
         heading: "Why MCP and not a custom protocol",
         paragraphs: [
-          "We could have built a bespoke WebSocket protocol and an SDK per agent. We didn't, because MCP solved three problems for free: every major coding agent already speaks it, the auth and transport story is settled, and the user's mental model is the same regardless of which agent they pick.",
-          "MCP is also one of the rare protocols designed by an AI lab that respects the principle of least privilege. The agent only gets the six tools we expose. It doesn't get filesystem, it doesn't get the network, it doesn't get to do anything we didn't sign up for.",
+          "We could have built a bespoke WebSocket protocol and an SDK per client. We chose MCP because it provides a shared tool boundary and supports both local stdio and remote HTTP transports, while still requiring client-specific configuration and verification.",
+          "Design Mode 2.0 exposes eight MCP tools. Those tools do not themselves grant filesystem or general network access; a coding client may have separate capabilities and repository permissions outside Design Mode.",
         ],
       },
       {
         heading: "Three connection modes",
         paragraphs: [
-          "We launched Local mode first — a stdio MCP server you run on your laptop. Zero network egress, lowest latency, best for power users. But Local mode has a steep on-ramp: you have to be comfortable with terminal commands and your agent has to be on the same machine.",
-          "Cloud mode came next. It's a hosted SSE relay at mcp.designmode.app. Your agent dials it over HTTPS with a bearer token. Nothing persists; payload bodies are dropped within ~60 seconds. The on-ramp is one paste of a config block — no install required.",
+          "We launched Local mode first — a stdio MCP server you run on your laptop. Design Mode MCP traffic stays on localhost, latency is low, and the agent must run on the same machine. The trade-off is a steeper setup for people who are not comfortable with terminal commands.",
+          "Cloud mode came next. It exposes a Streamable HTTP endpoint at mcp.designmode.app and uses an authenticated event stream for the extension. Relay queues request a 60-second Redis expiry and responses are normally deleted when consumed; the expiry is best-effort rather than a guaranteed maximum. A client-specific configuration and bearer token are required; no local companion process is needed.",
           "Self-hosted mode is the same Cloud relay code (packages/mcp-cloud) deployed on infrastructure you operate. For teams who want Cloud ergonomics but their own infra.",
         ],
       },
       {
         heading: "What changed in the loop",
         paragraphs: [
-          "Before MCP, sending edits felt like a tax. After MCP, it became the natural end of a design iteration. You tweak something in the side panel; you hit Send to Agent; the agent writes the production code. The loop stopped being three tools and three context-switches.",
-          "If you're building any kind of agent-facing tool, MCP is now the answer. The standard is settled enough to bet on, and the user experience compounds across every agent your users already have installed.",
+          "Before MCP, sending edits felt like a tax. With MCP, the hand-off can become the natural end of a design iteration: make the visual change, mark the session ready, then ask the connected client to read it and implement the source diff in a repository it can access.",
+          "MCP gives Design Mode a standard boundary for tools and prompts, but each client still has its own configuration, transport and authentication rules. The integration must be verified client by client.",
         ],
       },
     ],
@@ -65,11 +165,12 @@ export const posts: BlogPost[] = [
   },
   {
     slug: "vibe-coding-visual-editing-workflow",
-    title: "Vibe coding: how visual editing fits into the AI-coding-agent workflow",
+    title:
+      "Vibe coding: how visual editing fits into the AI-coding-agent workflow",
     metaTitle:
-      "Vibe coding workflow — visual editing + Claude Code / Cursor / Windsurf",
+      "Vibe coding workflow — visual editing with Claude Code or Cursor",
     metaDescription:
-      "A practical guide to vibe coding: how visual editing on the live page closes the design-intent gap with AI coding agents like Claude Code, Cursor, Windsurf, and Cline.",
+      "A practical guide to using browser visual editing with verified clients such as Claude Code or Cursor while keeping the repository hand-off explicit.",
     keywords: [
       "vibe coding",
       "vibe coding workflow",
@@ -94,7 +195,7 @@ export const posts: BlogPost[] = [
           "AI coding agents are great at writing CSS once they know what you want. The bottleneck is conveying what you want. Three options today:",
           "1. Screenshots. Lossy. Ambiguous about which property changed. Doesn't work for hover states, animations, or pixel-level work.",
           "2. Figma mockups. High-fidelity, but maintaining a Figma file that matches production is its own job. Indie hackers don't have time.",
-          "3. Prose descriptions. \"Make the hero pop more.\" \"Tighten the spacing.\" Imprecise, slow, error-prone.",
+          '3. Prose descriptions. "Make the hero pop more." "Tighten the spacing." Imprecise, slow, error-prone.',
           "Visual editing on the live page is a fourth option: tweak the real rendered surface, capture a structured diff, hand it to the agent.",
         ],
       },
@@ -102,15 +203,15 @@ export const posts: BlogPost[] = [
         heading: "What the loop looks like",
         paragraphs: [
           "Open the page you're iterating on in your browser. Open Design Mode's side panel. Make the change visually — drag a handle, pick a colour, adjust spacing. Every edit lands in the Changes tab as a structured row: selector, property, before, after.",
-          "Send to Agent. Claude Code / Cursor / Windsurf / Cline reads the diff via MCP, finds the source file, and writes the production change. You review, you ship.",
-          "The loop is fast because the spec is exact. The agent isn't guessing what \"more breathing room\" means; it has a literal `padding-block: 24px` to write.",
+          "Use Send to Agent with a verified client such as Claude Code or Cursor. It can read the live session through MCP, find the source file through its separate repository access, and propose the production change for you to review.",
+          'The loop is fast because the spec is exact. The agent isn\'t guessing what "more breathing room" means; it has a literal `padding-block: 24px` to write.',
         ],
       },
       {
         heading: "Where it doesn't work",
         paragraphs: [
           "Greenfield UI from scratch — Design Mode needs a page to edit. For brand-new components, Figma + AI generators are still better.",
-          "Pure logic changes — Design Mode is for visual surface. \"Fix this race condition\" is a job for the agent alone.",
+          'Pure logic changes — Design Mode is for visual surface. "Fix this race condition" is a job for the agent alone.',
           "Anywhere your design system mandates specific tokens and the agent can't infer them — pair Design Mode with a CONTRIBUTING.md that names the token system, and Claude Code will reach for the right utility classes.",
         ],
       },
@@ -153,7 +254,7 @@ export const posts: BlogPost[] = [
       {
         heading: "File size next to resolution in Media",
         paragraphs: [
-          "When you select an image, the Media section now shows file size alongside resolution. Useful for catching unoptimized assets during design review — \"that's a 4 MB JPG\" is a faster diagnosis than waiting for Lighthouse to flag it.",
+          'When you select an image, the Media section now shows file size alongside resolution. Useful for catching unoptimized assets during design review — "that\'s a 4 MB JPG" is a faster diagnosis than waiting for Lighthouse to flag it.',
         ],
       },
       {
@@ -220,7 +321,7 @@ export const posts: BlogPost[] = [
       {
         heading: "Send to Claude Code",
         paragraphs: [
-          "Hit Send to Agent. Claude Code reads the diff via MCP, finds the JSX file, and rewrites the utility classes. Type sizes become the nearest Tailwind step (`text-5xl` or a custom value via arbitrary), colours map to your design tokens if `tailwind.config.ts` lists them, spacing snaps to the nearest `space-y-*` or `gap-*`.",
+          "After Send to Agent marks the session ready, ask Claude Code to read the changes through MCP, find the JSX file and propose the utility-class update. Type sizes can map to a Tailwind step or arbitrary value; colours and spacing should be checked against the project's actual tokens and conventions.",
           "Review the diff in Claude Code's chat. Accept. Commit.",
         ],
       },
@@ -244,7 +345,8 @@ export const posts: BlogPost[] = [
   },
   {
     slug: "design-mode-1-9-0-release",
-    title: "Design Mode 1.9.0 — design tokens, trigger-first motion, and a dedicated MCP page",
+    title:
+      "Design Mode 1.9.0 — design tokens, trigger-first motion, and a dedicated MCP page",
     metaTitle:
       "Design Mode 1.9.0 changelog deep-dive — design-system tokens, trigger-first motion, dedicated MCP page",
     metaDescription:
@@ -313,7 +415,8 @@ export const posts: BlogPost[] = [
   },
   {
     slug: "design-mode-2-0-0-release",
-    title: "Design Mode 2.0.0 — now on Firefox, with alignment guides and a calmer color picker",
+    title:
+      "Design Mode 2.0.0 — now on Firefox, with alignment guides and a calmer color picker",
     metaTitle:
       "Design Mode 2.0.0 — Firefox support, alignment guides, compact color picker",
     metaDescription:

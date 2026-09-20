@@ -9,9 +9,9 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const items = [
   {
-    title: "Inspect any element on any site",
+    title: "Inspect a rendered webpage",
     image: "/features/inspect-card.png",
-    href: "/mcp",
+    href: "/features",
   },
   {
     title: "Edit type, colour, layout, structure",
@@ -19,7 +19,7 @@ const items = [
     href: "/demo",
   },
   {
-    title: "Ship the diff straight to your agent",
+    title: "Hand the exact changes to your agent",
     image: "/features/ship-card.png",
     href: "/mcp",
   },
@@ -32,7 +32,7 @@ export const Features = () => {
         {/* Top dashed line with text */}
         <div className="relative flex items-center justify-center">
           <DashedLine className="text-muted-foreground" />
-          <span className="border-border bg-card text-muted-foreground absolute rounded-full border px-3 py-1 text-sm font-medium tracking-wide max-md:hidden">
+          <span className="border-border bg-card text-muted-foreground absolute rounded-lg border px-4 py-2 text-base font-medium tracking-wide max-md:hidden">
             DESIGN ON THE LIVE PAGE.
           </span>
         </div>
@@ -40,16 +40,14 @@ export const Features = () => {
         {/* Content — vertical stack of title + body */}
         <div className="mx-auto mt-10 flex max-w-4xl flex-col gap-4 lg:mt-24">
           <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
-            Made for the vibe-coding loop
+            From visual edit to reviewed source diff
           </h2>
           <p className="text-muted-foreground max-w-2xl leading-snug">
-            Most design-to-code workflows force you to mock the change, paste
-            a screenshot, and hope your AI agent guesses your CSS. Design
-            Mode skips the mocking step entirely — edit the real, rendered
-            page in your browser, capture a structured diff (selector →
-            property → value), and ship it to Claude Code, Cursor, Claude
-            Desktop, Windsurf, Cline, or any MCP-compatible agent in one
-            click.
+            Edit the rendered interface with visual controls. Design Mode
+            records selectors, properties, old values, new values, text edits,
+            DOM changes and comments. Copy that specification as Markdown or let
+            a connected MCP client read it, update the repository and return a
+            result for you to review.
           </p>
         </div>
 
@@ -64,6 +62,7 @@ export const Features = () => {
                       src={item.image}
                       alt={`${item.title} interface`}
                       fill
+                      sizes="(min-width: 1280px) 384px, (min-width: 768px) 33vw, calc(100vw - 2rem)"
                       className="object-cover object-left-top ps-4 pt-2"
                     />
                     <div className="from-background absolute inset-0 z-10 bg-linear-to-t via-transparent to-transparent" />
@@ -76,8 +75,8 @@ export const Features = () => {
                     <h3 className="font-display max-w-60 text-2xl leading-tight font-bold tracking-tight">
                       {item.title}
                     </h3>
-                    <div className="rounded-full border p-2 transition-colors group-hover:border-primary group-hover:bg-primary/10">
-                      <ChevronRight className="size-6 transition-transform group-hover:translate-x-1 lg:size-9" />
+                    <div className="group-hover:border-primary group-hover:bg-primary/10 rounded-lg border p-2 transition-colors">
+                      <ChevronRight className="size-6 transition-transform group-hover:translate-x-1 lg:size-8" />
                     </div>
                   </Link>
                 </div>

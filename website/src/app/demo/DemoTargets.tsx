@@ -7,16 +7,15 @@ import styles from "./demo.module.scss";
 // in the Layers tab. They do NOT carry `data-dm-*` attributes — those
 // belong to the extension.
 
-const PHOTO_URL =
-  "https://images.unsplash.com/photo-1502744688674-c619d1586c9e?auto=format&fit=crop&w=400&q=80";
+const PHOTO_URL = "/cover.png";
 
 export const DEMO_TARGETS: Record<string, () => ReactElement> = {
   inspector: () => (
     <div id="demo-inspector-card" className={styles.targetCard}>
       <h3>Hover me. Then click me.</h3>
       <p>
-        I'm a generic card waiting for you to pick me. Selecting locks the
-        focus on me until you click somewhere else.
+        I'm a generic card waiting for you to pick me. Selecting locks the focus
+        on me until you click somewhere else.
       </p>
     </div>
   ),
@@ -25,8 +24,8 @@ export const DEMO_TARGETS: Record<string, () => ReactElement> = {
     <div id="demo-measure-card" className={styles.targetCard}>
       <h3>Select me, then resize me</h3>
       <p>
-        Grab one of my 8 handles and drag. Hover the elements around me to
-        read the edge-to-edge spacing pills.
+        Grab one of my 8 handles and drag. Hover the elements around me to read
+        the edge-to-edge spacing pills.
       </p>
     </div>
   ),
@@ -52,8 +51,8 @@ export const DEMO_TARGETS: Record<string, () => ReactElement> = {
     <div id="demo-annotate-card" className={styles.targetCard}>
       <h3>Pin a comment on me</h3>
       <p>
-        Drop a comment pin here with Alt+C, then drag a region comment around
-        me with Alt+R. Both stay as overlays — my own styles never change.
+        Drop a comment pin here with Alt+C, then drag a region comment around me
+        with Alt+R. Both stay as overlays — my own styles never change.
       </p>
     </div>
   ),
@@ -79,7 +78,7 @@ export const DEMO_TARGETS: Record<string, () => ReactElement> = {
       <img
         id="demo-photo"
         src={PHOTO_URL}
-        alt="A mountain at sunrise"
+        alt="Design Mode's visual editor on a webpage"
         width={160}
         height={120}
         className={styles.targetPhoto}
@@ -162,7 +161,10 @@ export const DEMO_TARGETS: Record<string, () => ReactElement> = {
   ),
 
   "design-layout-guide": () => (
-    <div id="demo-layout-guide-container" className={styles.targetLayoutGuideContainer}>
+    <div
+      id="demo-layout-guide-container"
+      className={styles.targetLayoutGuideContainer}
+    >
       <span className={styles.targetLayoutGuideHint}>
         Wide container — apply a Columns × 12 layout guide on me.
       </span>

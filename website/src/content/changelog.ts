@@ -1,7 +1,7 @@
-// Designer-friendly, dated feature log for the public /changelog page.
-// Plain language on purpose — this is the "what you can do, and since when"
-// record (mirrors the technical CHANGELOG.md, but for designers and for AI
-// agents crawling the site to see when a feature became available).
+// Designer-friendly, dated release highlights for the public /changelog page.
+// Plain language on purpose — this is the "what shipped in this version"
+// record (mirrors released versions in CHANGELOG.md, not an inventory of
+// every change). Do not add Unreleased items as if they have shipped.
 //
 // Newest release first. Each `date` is an ISO YYYY-MM-DD so it renders in a
 // <time datetime> element. Keep entries user-facing — skip pure internal /
@@ -166,7 +166,7 @@ export const releases: Release[] = [
     date: "2026-05-04",
     headline: "First public release.",
     highlights: [
-      "The first public release — inspect any element on any live website and edit its layout, type, colour, and spacing with real visual controls, then ship the diff to your AI coding agent.",
+      "The first public release — inspect elements on a scriptable webpage and edit layout, type, colour, and spacing with visual controls, then hand the diff to a coding agent that has repository access.",
     ],
   },
 ];

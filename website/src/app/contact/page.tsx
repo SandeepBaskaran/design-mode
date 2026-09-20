@@ -9,7 +9,7 @@ import {
 import { DashedLine } from "@/components/dashed-line";
 
 export const metadata = {
-  title: "Contact — Bug reports, ideas, sponsorship",
+  title: { absolute: "Contact and support | Design Mode" },
   description:
     "Get in touch about Design Mode — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
   keywords: [
@@ -20,10 +20,33 @@ export const metadata = {
   ],
   alternates: { canonical: "https://designmode.app/contact" },
   openGraph: {
-    title: "Contact — Bug reports, ideas, sponsorship",
-    description: "Email, GitHub, security disclosure for Design Mode.",
+    type: "website",
+    title: "Contact and support | Design Mode",
+    description:
+      "Get in touch about Design Mode — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
     url: "https://designmode.app/contact",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Contact and support | Design Mode",
+    description:
+      "Get in touch about Design Mode — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 
@@ -32,7 +55,7 @@ const Page = () => {
     <>
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <ContactHero />
         </section>
       </Background>

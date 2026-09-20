@@ -28,20 +28,20 @@ const topItems: Item[] = [
       width: 1485,
       height: 558,
     },
-    className: "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
+    className: "flex-1 [&>.title-container]:mb-4 md:[&>.title-container]:mb-8",
     fade: [""],
   },
   {
-    title: "Bottom buttons — ship your edits.",
+    title: "Bottom buttons — choose the hand-off.",
     description:
-      "Two buttons collapse every change in the session into a shippable diff. Copy as Prompt goes to the clipboard; Send to Agent goes over MCP to a connected coding agent.",
+      "Copy as Prompt puts a Markdown specification on the clipboard. Send to Agent marks the live session ready for a connected MCP client to retrieve.",
     image: {
       src: "/panel-anatomy/bottom-row.png",
       alt: "Bottom buttons of the side panel",
       width: 1485,
       height: 558,
     },
-    className: "flex-1 [&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
+    className: "flex-1 [&>.title-container]:mb-4 md:[&>.title-container]:mb-8",
     fade: [""],
   },
 ];
@@ -57,7 +57,7 @@ const bottomItems: Item[] = [
       width: 981,
       height: 840,
     },
-    className: "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
+    className: "[&>.title-container]:mb-4 md:[&>.title-container]:mb-8",
     fade: ["bottom"],
   },
   {
@@ -70,7 +70,7 @@ const bottomItems: Item[] = [
       width: 981,
       height: 840,
     },
-    className: "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
+    className: "[&>.title-container]:mb-4 md:[&>.title-container]:mb-8",
     fade: ["bottom"],
   },
   {
@@ -83,17 +83,14 @@ const bottomItems: Item[] = [
       width: 981,
       height: 840,
     },
-    className: "[&>.title-container]:mb-5 md:[&>.title-container]:mb-8",
+    className: "[&>.title-container]:mb-4 md:[&>.title-container]:mb-8",
     fade: ["bottom"],
   },
 ];
 
 export const PanelAnatomy = () => {
   return (
-    <section
-      id="panel-anatomy"
-      className="overflow-hidden pb-28 lg:pb-32"
-    >
+    <section id="panel-anatomy" className="overflow-hidden pb-28 lg:pb-32">
       <div>
         <h2 className="container text-center text-3xl tracking-tight text-balance sm:text-4xl md:text-5xl lg:text-6xl">
           Every design control, in one side panel
@@ -108,7 +105,11 @@ export const PanelAnatomy = () => {
           {/* Top row - 2 cards */}
           <div className="relative container flex max-md:flex-col">
             {topItems.map((item, i) => (
-              <ItemCard key={i} item={item} isLast={i === topItems.length - 1} />
+              <ItemCard
+                key={i}
+                item={item}
+                isLast={i === topItems.length - 1}
+              />
             ))}
           </div>
           <DashedLine

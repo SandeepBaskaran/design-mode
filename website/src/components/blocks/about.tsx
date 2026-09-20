@@ -1,8 +1,9 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { withNavRef } from "@/lib/nav-ref";
 
-const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
+const REPO_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");
 
 // Exported separately so the page can wrap it in <Background variant="bottom">.
 export function WhyThisExists() {
@@ -11,8 +12,8 @@ export function WhyThisExists() {
       <TextSection
         title="Why this exists"
         paragraphs={[
-          "Most design-to-code workflows look like this: open a mock, take a screenshot, paste it into an agent, then hope it guesses your CSS correctly. It works often enough that we tolerate it, but the round-trip is brutal — and the agent never sees the real page state.",
-          "Design Mode skips the mocking step. You inspect a real element on a real page in your real browser, change it visually, and send the exact diff to your agent over MCP. The agent gets ground truth instead of a guess.",
+          "Screenshots and prose are useful for broad direction, but they often lose selectors, computed values and the relationship between the intended change and the rendered page.",
+          "Design Mode lets you make the intended change on the rendered page, records a structured specification, and hands it to a coding agent as Markdown or through MCP. The agent still has to find the source, implement the change and return a diff for review.",
           "Built in the open under MIT. Read the source, file an issue, or open a PR.",
         ]}
         ctaButton={{
@@ -41,7 +42,7 @@ export function TextSection({
   ctaButton,
 }: TextSectionProps) {
   return (
-    <section className="flex-1 space-y-4 text-lg md:space-y-6">
+    <section className="flex-1 space-y-4 text-base md:space-y-6">
       {title && (
         <h2 className="text-foreground text-2xl tracking-tight md:text-3xl">
           {title}
@@ -55,19 +56,21 @@ export function TextSection({
       {ctaButton &&
         (ctaButton.external ? (
           <div className="mt-8">
-            <a
-              href={ctaButton.href}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button size="lg">{ctaButton.text}</Button>
-            </a>
+            <Button size="lg" asChild>
+              <a
+                href={ctaButton.href}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {ctaButton.text}
+              </a>
+            </Button>
           </div>
         ) : (
           <div className="mt-8">
-            <Link href={ctaButton.href}>
-              <Button size="lg">{ctaButton.text}</Button>
-            </Link>
+            <Button size="lg" asChild>
+              <Link href={ctaButton.href}>{ctaButton.text}</Link>
+            </Button>
           </div>
         ))}
     </section>

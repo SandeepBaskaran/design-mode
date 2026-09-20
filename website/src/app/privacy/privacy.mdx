@@ -1,78 +1,188 @@
-## What the extension stores, and where
+## The short version
 
-All extension data lives on **your machine**, in the browser's extension storage.
+Design Mode edits the page rendered in your browser and records a local change
+session. The extension has no product analytics or telemetry. A fresh install
+selects Cloud mode, but it does **not** contact the hosted relay until you choose
+**Connect to Cloud** and create an anonymous device credential.
 
-| Storage area              | What's there                                                                        | Lifetime                       |
-| ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ |
-| `storage.local`           | UI preferences including theme, colour/capture formats, Tokens tab, inspector colours, contrast settings, nudge amount, cursor, and Chrome launch/PiP window preferences | Until you uninstall the ext.   |
-| `storage.sync`            | User-saved presets you opt to sync across devices                                   | Synced via your browser account (Chrome / Firefox) |
-| `storage.session`         | Per-page edit sessions (style/text/DOM changes), keyed by `origin + path + search`  | Until tab/browser closes       |
+When you deliberately send changes to Claude, Cursor or another coding agent,
+that provider processes the content under your account settings and its own
+privacy terms.
 
-The extension never reads form contents, passwords, or page-script
-data. It only reads computed CSS, geometry, and DOM structure for
-elements you actively inspect.
+## What the extension stores
 
-## What leaves your machine
+<div
+  role="region"
+  aria-label="Extension storage details"
+  tabIndex={0}
+  className="max-w-full overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-4"
+>
+  <table>
+    <caption>Design Mode extension storage</caption>
+    <thead>
+      <tr>
+        <th scope="col">Storage</th>
+        <th scope="col">Contents</th>
+        <th scope="col">Lifetime</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th scope="row">
+          <code>storage.local</code>
+        </th>
+        <td>
+          Interface preferences, including Chrome launch and floating-window
+          preferences, shortcuts, comments, MCP mode, relay URL and the
+          plaintext Cloud credential
+        </td>
+        <td>Until you clear it or uninstall the extension</td>
+      </tr>
+      <tr>
+        <th scope="row">
+          <code>storage.sync</code>
+        </th>
+        <td>Presets you explicitly save</td>
+        <td>
+          Synced through your browser account, subject to browser quotas and
+          settings
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">
+          <code>storage.session</code> on Chromium
+        </th>
+        <td>Per-URL style, text and DOM change sessions</td>
+        <td>
+          Browser session; survives reloads but not a full browser restart
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">
+          <code>storage.local</code> fallback on Firefox
+        </th>
+        <td>
+          Per-URL style, text and DOM change sessions when{" "}
+          <code>storage.session</code> is unavailable
+        </td>
+        <td>Until cleared, overwritten or the extension is removed</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
 
-The extension sends data only through the MCP mode you configure. Fresh
-installs select Cloud; existing installs retain their saved mode. Cloud and
-Self-hosted need a configured relay and bearer token. Local mode talks only to
-your machine.
+A session key is based on the page origin, path and query string. Comments are
+stored separately in local extension storage. Use the Changes tab to inspect,
+revert or clear recorded changes.
 
-**Local browser operations:**
+Design Mode reads the rendered DOM, computed styles and geometry required for
+features you invoke. It cannot run on browser-internal pages, extension-store
+pages or other surfaces where the browser blocks extension scripts. Do not use
+it to capture passwords, private form data, confidential screenshots or content
+you are not authorised to share.
 
-- A token-authenticated WebSocket connection to `ws://127.0.0.1:9960` (or your configured port) if you've opted in
-  by starting the companion MCP server (`npm start`). The server
-  runs on your machine; nothing is uploaded.
-- `chrome.tabs.captureVisibleTab` for screenshots — captured locally,
-  never uploaded. The capture-mode setting (clipboard / download /
-  both) controls what happens to the PNG.
-- `fetch(media.src)` when you click "Download" on an inspected
-  `<img>` / `<video>` / `<audio>` / SVG — this is a normal browser
-  request to whatever URL the page already references; nothing is
-  added by the extension.
+## When network traffic starts
 
-**Configured Cloud or Self-hosted mode:**
+### No MCP connection
 
-- An HTTPS connection to `https://mcp.designmode.app` (or any
-  self-hosted deployment URL you configure) authenticated with a bearer
-  token stored in `chrome.storage.local`. The cloud server (open
-  source at `packages/mcp-cloud`) acts as a relay between the
-  extension and a remote MCP agent — it doesn't store your edits;
-  messages flow through and are dropped when the connection closes.
-  Switch to Local mode on the MCP page to keep MCP traffic on your machine.
+On a fresh install, Cloud is the selected mode but no Cloud credential exists.
+Design Mode leaves all MCP transports closed until you connect one. Copy as
+Prompt continues to work without MCP.
 
-There are **no analytics, no telemetry, and no error reporting** in
-the extension or the MCP server. There is no remote update channel
-beyond the standard store mechanism — the Chrome Web Store for Chromium browsers and addons.mozilla.org (AMO) for Firefox.
+Normal webpage and browser actions can still make requests—for example, loading
+the page you opened or downloading media from a URL already present in that
+page. Those are browser requests to the referenced site, not uploads to Design
+Mode.
 
-## What the website (designmode.app) does
+### Local mode
 
-The marketing/docs site is a separate concern from the extension.
-The site:
+Local mode connects the extension to the companion server on your machine over
+the token-authenticated `ws://127.0.0.1:9960` connection by default. Design Mode does not route that transport
+through its hosted relay.
 
-- Loads **DM Sans** (local) and **Inter** (Google Fonts) from
-  `fonts.googleapis.com`. Visiting the site sends your IP to
-  Google's CDN as part of the font fetch.
-- Loads **Google Analytics (gtag.js)** if the deployment sets the
-  `NEXT_PUBLIC_GA_ID` environment variable. The upstream production
-  deploy does so; forks and self-hosts opt in by setting their own
-  ID. If unset, no analytics script is rendered.
+### Cloud mode
 
-GA collects standard pageview/session data per Google's policy. We
-don't configure custom user IDs, custom events, or PII. To opt out,
-use a tracker blocker — the site degrades gracefully without GA.
+Choosing **Connect to Cloud** registers an anonymous device credential and opens
+an authenticated connection to `https://mcp.designmode.app`. The extension keeps
+the plaintext credential in `storage.local`. The service stores only its
+SHA-256 hash, an anonymous tenant identifier, and created/last-seen timestamps
+until the credential is revoked.
 
-## Permissions explained
+Agent-to-extension requests and extension responses are temporarily queued in
+Redis. The implementation requests a 60-second expiry and normally deletes
+responses as soon as they are consumed. Queue insertion and expiry are separate
+operations, and expiry failure is suppressed, so 60 seconds is a best-effort
+target rather than a guaranteed maximum. The relay also keeps operational quota
+and presence state needed to operate the service.
+
+Structured service logs may include:
+
+- anonymous tenant identifier;
+- message or event type;
+- payload byte count;
+- latency and HTTP status;
+- bounded error codes or messages.
+
+The logging API does not accept selectors, screenshots or message payload
+bodies. Design Mode does not use relay traffic to train a model.
+
+### Self-hosted mode
+
+Self-hosted mode points the extension at a deployment you operate. Its retention,
+logging and access controls are your responsibility. The repository implementation
+uses the same short-lived queue design as the hosted relay, but your deployed
+configuration is authoritative.
+
+## Screenshots and agent hand-off
+
+Screenshots are captured by the browser. Clipboard and download actions stay on
+your machine. A screenshot leaves the machine only when you explicitly use an
+MCP action that returns it to a connected agent. The agent provider then handles
+it under that provider's terms.
+
+Copy as Prompt writes a Markdown specification to your clipboard. Send to Agent
+makes the recorded changes available to a connected MCP client. Neither action
+grants Design Mode access to your repository; the coding agent must already have
+that access.
+
+## What designmode.app collects
+
+The marketing and documentation site is separate from the extension.
+
+- Google Sans Flex is fetched by the build system and self-hosted by Next.js; visiting the
+  deployed site does not request it from Google Fonts.
+- Google Analytics is rendered only when the deployment defines
+  `NEXT_PUBLIC_GA_ID`.
+- When enabled, the site sends page views plus `cta_click`, `contact_click` and
+  `outbound_click` events. CTA events include the store and browser label;
+  contact events include the clicked `mailto:` or `tel:` target; outbound events
+  include the destination URL and link text. The repository does not configure a
+  custom user ID or send extension edits or MCP payloads.
+
+Google processes Analytics traffic under its own terms. A content or tracker
+blocker may prevent the script from loading without blocking the core site.
+
+## Browser permissions
 
 The extension requests:
 
-- `activeTab`, `tabs` — open the side panel against your current
-  tab and re-attach after navigations/reloads.
-- `scripting` — inject the inspector script when you open the panel.
-- `storage` — see the storage table above.
-- `sidePanel` — render the editor in the browser's side panel (Firefox uses `sidebar_action` for the same purpose).
-- `<all_urls>` — so the editor works on any site you choose to
-  inspect. The extension does nothing until you open the panel on a
-  tab.
+- `activeTab` and `tabs` to open the editor against the current tab and respond
+  to navigation;
+- `scripting` to inject the inspector after you invoke the extension;
+- `storage` for the data described above;
+- `sidePanel` on Chromium or Firefox's sidebar integration for the editor;
+- broad host access so the editor can run on sites you choose, except protected
+  browser surfaces.
 
+The extension does not modify a page until you invoke it on that tab.
+
+## Revoking or deleting data
+
+- Clear a change session from the Changes tab.
+- Remove saved presets or comments in the extension.
+- Revoke the Cloud credential from the MCP settings page before deleting it
+  locally if you want the server-side token hash removed.
+- Uninstall the extension to remove its browser-managed local storage.
+
+For a security concern, follow the private disclosure process linked below
+rather than posting credentials or exploit details publicly.

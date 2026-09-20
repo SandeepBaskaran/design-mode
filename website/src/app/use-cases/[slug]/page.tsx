@@ -5,7 +5,6 @@ import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import {
   JsonLd,
-  articleSchema,
   breadcrumbSchema,
   howToSchema,
 } from "@/components/site/json-ld";
@@ -17,6 +16,8 @@ export function generateStaticParams() {
   return useCases.map((u) => ({ slug: u.slug }));
 }
 
+export const dynamicParams = false;
+
 export async function generateMetadata({
   params,
 }: {
@@ -26,17 +27,42 @@ export async function generateMetadata({
   const u = getUseCase(slug);
   if (!u) return {};
   const url = `https://designmode.app/use-cases/${u.slug}`;
+  const title =
+    u.slug === "ui-testing-export-to-developers"
+      ? "Export visual UI bugs with context | Design Mode"
+      : `${u.title} | Design Mode`;
+  const description = `${u.title}: edit the rendered page, capture the exact changes, and hand a structured specification to a coding agent.`;
   return {
-    title: u.metaTitle,
-    description: u.metaDescription,
+    title: { absolute: title },
+    description,
     keywords: u.keywords,
     alternates: { canonical: url },
     openGraph: {
-      title: u.metaTitle,
-      description: u.metaDescription,
+      title,
+      description,
       url,
       type: "article",
-      images: ["/og-image.png"],
+      images: [
+        {
+          url: "/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: "Design Mode browser visual editor for AI coding agents",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [
+        {
+          url: "/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: "Design Mode browser visual editor for AI coding agents",
+        },
+      ],
     },
   };
 }
@@ -51,18 +77,9 @@ export default async function UseCasePage({
   if (!u) notFound();
 
   const url = `https://designmode.app/use-cases/${u.slug}`;
-  const datePublished = "2026-05-24";
 
   return (
     <>
-      <JsonLd
-        data={articleSchema({
-          title: u.metaTitle,
-          description: u.metaDescription,
-          url,
-          datePublished,
-        })}
-      />
       <JsonLd
         data={howToSchema({
           name: u.title,
@@ -80,15 +97,15 @@ export default async function UseCasePage({
       />
 
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-4xl">
-            <div className="text-muted-foreground mb-4 text-sm font-medium tracking-wide uppercase">
+            <div className="text-muted-foreground mb-4 text-base font-medium tracking-wide uppercase">
               {u.persona}
             </div>
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {u.title}
             </h1>
-            <p className="text-muted-foreground mt-4 text-lg md:text-xl">
+            <p className="text-muted-foreground mt-4 text-base md:text-2xl">
               {u.intro}
             </p>
           </div>
@@ -99,9 +116,7 @@ export default async function UseCasePage({
         <DashedLine className="container max-w-4xl" />
         <article className="container mt-12 max-w-4xl space-y-12">
           <div>
-            <h2 className="text-2xl tracking-tight md:text-3xl">
-              The problem
-            </h2>
+            <h2 className="text-2xl tracking-tight md:text-3xl">The problem</h2>
             <p className="text-muted-foreground mt-4 leading-relaxed">
               {u.problem}
             </p>
@@ -116,12 +131,12 @@ export default async function UseCasePage({
                 <li
                   key={i}
                   id={`step-${i + 1}`}
-                  className="border-l-2 border-foreground/10 pl-5"
+                  className="border-foreground/10 border-l-2 pl-6"
                 >
-                  <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                  <div className="text-muted-foreground text-base font-medium tracking-wide uppercase">
                     Step {i + 1}
                   </div>
-                  <h3 className="font-display mt-1 text-lg font-semibold">
+                  <h3 className="font-display mt-2 text-2xl font-semibold">
                     {step.name}
                   </h3>
                   <p className="text-muted-foreground mt-2 leading-relaxed">
@@ -133,9 +148,7 @@ export default async function UseCasePage({
           </div>
 
           <div>
-            <h2 className="text-2xl tracking-tight md:text-3xl">
-              The outcome
-            </h2>
+            <h2 className="text-2xl tracking-tight md:text-3xl">The outcome</h2>
             <p className="text-muted-foreground mt-4 leading-relaxed">
               {u.outcome}
             </p>

@@ -17,50 +17,613 @@ export type Comparison = {
   whenToPickCompetitor: string[];
   table: ComparisonRow[];
   honesty: string;
+  research?: {
+    checkedOn: string;
+    methodology: string;
+    sources: { label: string; url: string }[];
+  };
   related: string[];
 };
 
+export function isComparisonIndexable(comparison: Comparison): boolean {
+  return Boolean(
+    comparison.research?.checkedOn &&
+      comparison.research.methodology &&
+      comparison.research.sources.length,
+  );
+}
+
 const baseFeatures = (competitorBlanks: Record<string, string>): ComparisonRow[] => [
   {
-    feature: "Visual editing of any live website",
-    designMode: "Yes — full design surface (typography, colour, layout, spacing, motion, effects)",
-    competitor: competitorBlanks.editing ?? "Partial / inspection-only",
+    feature: "Visual editing on a scriptable webpage",
+    designMode:
+      "Yes — typography, colour, layout, spacing, motion and effects on localhost, staging or production pages the extension can script. Browser-protected pages are excluded.",
+    competitor: competitorBlanks.editing ?? "Not yet verified",
   },
   {
     feature: "MCP (Model Context Protocol) handoff to AI agents",
     designMode:
       "Yes — Cloud, Local, and Self-hosted modes; eight MCP tools",
-    competitor: competitorBlanks.mcp ?? "No",
+    competitor: competitorBlanks.mcp ?? "Not yet verified",
   },
   {
     feature: "Persistent change history (Changes tab)",
     designMode: "Yes — searchable, filterable, exportable",
-    competitor: competitorBlanks.history ?? "No",
+    competitor: competitorBlanks.history ?? "Not yet verified",
   },
   {
     feature: "Open source",
     designMode: "Yes (MIT)",
-    competitor: competitorBlanks.os ?? "No / proprietary",
+    competitor: competitorBlanks.os ?? "Not yet verified",
   },
   {
     feature: "Price",
-    designMode: "Free forever",
-    competitor: competitorBlanks.price ?? "—",
+    designMode: "Free MIT-licensed extension",
+    competitor: competitorBlanks.price ?? "Not yet verified",
   },
   {
     feature: "Markdown / JSON export of the diff",
     designMode: "Yes",
-    competitor: competitorBlanks.export ?? "No",
+    competitor: competitorBlanks.export ?? "Not yet verified",
   },
   {
     feature: "Best fit for",
     designMode:
       "Designers, developers, QA, PMs, content, indie hackers, agencies, vibe coders",
-    competitor: competitorBlanks.fit ?? "—",
+    competitor: competitorBlanks.fit ?? "Not yet verified",
   },
 ];
 
 export const comparisons: Comparison[] = [
+  {
+    slug: "design-mode-vs-magicpath",
+    competitor: "MagicPath",
+    title: "Design Mode vs MagicPath",
+    metaTitle: "Design Mode vs MagicPath — browser edits or a shared AI canvas",
+    metaDescription:
+      "Compare Design Mode's live-page edits and agent hand-off with MagicPath's shared cloud canvas, interactive prototypes, external agents and credit-based plans.",
+    keywords: [
+      "Design Mode vs MagicPath",
+      "MagicPath alternative",
+      "AI design canvas",
+    ],
+    oneLiner:
+      "Design Mode refines an existing webpage and records changes for your coding agent. MagicPath provides a shared cloud canvas for creating interactive designs with humans and agents.",
+    positioning:
+      "Choose by starting point: a rendered product you want to refine, or a canvas where you want to create and collaborate. MagicPath 2.0 positions itself as a shared workspace for interactive prototypes and apps, with external-agent access and code export. Design Mode keeps the visual review on your existing page and leaves source implementation to your agent. Neither workflow removes the need to review and test the resulting code.",
+    whenToPickDesignMode: [
+      "You want to refine localhost, staging or production without moving the project into another design workspace.",
+      "You want a free MIT-licensed Chrome or Firefox editor with portable prompt exports and optional MCP hand-off.",
+      "Your existing repository, coding agent and release process should remain the source of truth.",
+    ],
+    whenToPickCompetitor: [
+      "You want to create interactive prototypes and explore multiple designs in a shared canvas.",
+      "Your team wants a cloud workspace that external agents can access even when the canvas is closed.",
+      "Figma import/export, component libraries and team administration matter more than editing an existing page in place.",
+    ],
+    table: [
+      {
+        feature: "Starting point",
+        designMode:
+          "A scriptable webpage rendered in Chrome or Firefox. Browser-protected pages are excluded.",
+        competitor:
+          "A shared visual canvas, accessible through its web app or macOS app, for interactive prototypes and app creation.",
+      },
+      {
+        feature: "Source-code workflow",
+        designMode:
+          "Records browser previews and a structured specification. Your agent needs separate repository access to implement it.",
+        competitor:
+          "Advertises runnable prototypes, code downloads and external-agent workflows between the canvas and a repository. Source round-trip fidelity was not tested.",
+      },
+      {
+        feature: "Agents and collaboration",
+        designMode:
+          "Copy as Prompt or Cloud, Local and Self-hosted MCP hand-off from the browser session.",
+        competitor:
+          "Cloud canvas for humans and agents. Lists Claude Code, Codex and Cursor; free accounts have 50 external agent calls per week, paid plans list unlimited calls.",
+      },
+      {
+        feature: "Design assets",
+        designMode:
+          "Inspect and refine the existing page's layout, typography, colours and other visual properties in context.",
+        competitor:
+          "Lists component libraries, custom fonts, use of your own design system and plan-dependent Figma import/export allowances. Its pricing page also lists a Chrome extension; that extension was not evaluated.",
+      },
+      {
+        feature: "Cost and allowances",
+        designMode:
+          "Free MIT-licensed extension. Your coding agent or model provider may charge separately.",
+        competitor:
+          "Free: 20 generation credits/day, capped at 120/month. Annual billing shown: Builder $84/year ($7/month equivalent); Pro $252/year ($21/month equivalent) with the displayed 600-credit pack. Teams: custom. External-agent billing is separate from MagicPath credits. Checked 16 September 2026.",
+      },
+    ],
+    honesty:
+      "MagicPath is the broader creation and collaboration workspace; Design Mode is the focused browser-editing and hand-off tool. MagicPath's credits fund its own AI generation, not external-agent usage, and its pricing FAQ says manual edits, exports and library use do not spend credits. Annual equivalents are not month-to-month prices. Validate code export, repository integration and collaboration with a representative project before committing.",
+    research: {
+      checkedOn: "16 September 2026",
+      methodology:
+        "Documentation review of MagicPath's current 2.0 homepage and pricing page, including plan allowances and billing FAQs. No account, installation, paid plan, canvas editing or agent integration was tested. Product capabilities are vendor-documented, not independently runtime-verified.",
+      sources: [
+        { label: "MagicPath 2.0 product", url: "https://www.magicpath.ai/" },
+        {
+          label: "MagicPath pricing and billing FAQ",
+          url: "https://www.magicpath.ai/pricing",
+        },
+      ],
+    },
+    related: [
+      "design-mode-vs-backdraft",
+      "design-mode-vs-uiprompt",
+      "design-mode-vs-css-studio",
+    ],
+  },
+  {
+    slug: "design-mode-vs-backdraft",
+    competitor: "Backdraft",
+    title: "Design Mode vs Backdraft",
+    metaTitle: "Design Mode vs Backdraft — browser hand-off or source editing",
+    metaDescription:
+      "Compare Design Mode's free browser editing and agent hand-off with Backdraft's paid code-and-canvas workspace, responsive previews and source editing.",
+    keywords: [
+      "Design Mode vs Backdraft",
+      "Backdraft alternative",
+      "visual source code editor",
+    ],
+    oneLiner:
+      "Design Mode previews changes on a live page and hands them to your agent. Backdraft brings source files, a visual canvas and coding agents into one paid workspace.",
+    positioning:
+      "The main difference is who owns the source-editing step. Design Mode runs on a scriptable webpage, records your visual changes and lets your existing coding agent implement them. Backdraft's documented workflow imports a project into a code-and-canvas editor, where visual edits write back to source. It is a broader development environment, not just a browser feedback tool.",
+    whenToPickDesignMode: [
+      "You want to review localhost, staging or production without importing a project into another editor.",
+      "You prefer to keep source edits, Git and deployment in your existing development tools.",
+      "You need free, MIT-licensed visual editing, exports and optional MCP hand-off.",
+    ],
+    whenToPickCompetitor: [
+      "You want a visual canvas and code editor working on the same source files.",
+      "You want to evaluate its multi-page, multi-breakpoint Overwatch view and integrated screenshot-verification tools.",
+      "You want project import and deployment tools in the same workspace and accept the relevant paid plan.",
+    ],
+    table: [
+      {
+        feature: "Starting point",
+        designMode:
+          "A rendered webpage in Chrome or Firefox; no project import or site-code changes needed.",
+        competitor:
+          "An imported HTML/CSS, React/Tailwind or supported TypeScript project in a desktop or web canvas.",
+      },
+      {
+        feature: "What an edit changes",
+        designMode:
+          "The browser preview and its recorded specification. An agent or developer must implement the source change.",
+        competitor:
+          "According to its documentation, visual edits write to source and code edits update the canvas. Source fidelity was not hands-on tested.",
+      },
+      {
+        feature: "Responsive review",
+        designMode:
+          "Responsive preview and breakpoint-tagged changes on the page being inspected.",
+        competitor:
+          "Overwatch displays multiple pages at desktop, tablet and mobile sizes; agent tools include screenshots and visual comparison.",
+      },
+      {
+        feature: "Agent and delivery workflow",
+        designMode:
+          "Copy/export a specification or use Cloud, Local or Self-hosted MCP. Keep your existing agent, repository and release process.",
+        competitor:
+          "Built-in agent workflow plus CLI-agent integrations and GitHub tools. Figma/Webflow imports and Netlify deployment are listed under Pro.",
+      },
+      {
+        feature: "Tool price",
+        designMode:
+          "Free under MIT. Paid agent or model usage remains separate.",
+        competitor:
+          "Basic: $9/month or $84/year. Pro: $19/month or $180/year. Seven-day trial advertised. Model/API costs are separate; prices checked 16 September 2026.",
+      },
+    ],
+    honesty:
+      "Backdraft is worth evaluating if you want to move more of development into a visual workspace. Design Mode is the lighter choice when you want precise browser feedback without replacing your editor or deployment process. Backdraft also advertises a $135 one-year desktop licence available to Pro users: it is not a lifetime purchase. Validate its source round-trip behaviour on a disposable project before trusting it with your app.",
+    research: {
+      checkedOn: "16 September 2026",
+      methodology:
+        "Browsed the official site and exercised the monthly/annual pricing toggle; reviewed documentation and roadmap. The web app failed TLS certificate validation in the audit browser, so its editor, imports and source writes were not tested. No certificate bypass, installation or trial was attempted. Platform and roadmap inconsistencies are not treated as verified capabilities.",
+      sources: [
+        { label: "Backdraft product", url: "https://backdraftai.com/" },
+        {
+          label: "Backdraft pricing",
+          url: "https://backdraftai.com/pricing.html",
+        },
+        {
+          label: "Backdraft documentation",
+          url: "https://backdraftai.com/docs.html",
+        },
+        {
+          label: "Backdraft roadmap",
+          url: "https://backdraftai.com/roadmap.html",
+        },
+      ],
+    },
+    related: [
+      "design-mode-vs-css-studio",
+      "design-mode-vs-handle-extension",
+      "design-mode-vs-uiprompt",
+    ],
+  },
+  {
+    slug: "design-mode-vs-uiprompt",
+    competitor: "UIPrompt",
+    title: "Design Mode vs UIPrompt",
+    metaTitle: "Design Mode vs UIPrompt — live-page edits or component specs",
+    metaDescription:
+      "Compare Design Mode's live-page editing with UIPrompt's component specifications, interaction-state diffs, theme tokens and prompt exports. Includes free and paid limits.",
+    keywords: [
+      "Design Mode vs UIPrompt",
+      "UIPrompt alternative",
+      "component design prompts",
+    ],
+    oneLiner:
+      "Design Mode starts with your rendered product. UIPrompt starts with a component design and turns its values, states and tokens into an implementation prompt.",
+    positioning:
+      "These tools solve different stages of the same problem: communicating precise design intent to a coding agent. Design Mode captures changes in the context of an existing page. UIPrompt offers a standalone component playground with exact values, interaction-state overrides and theme-aware tokens. It specifies what to build rather than editing your deployed interface.",
+    whenToPickDesignMode: [
+      "The component already exists in your product and you need to refine it alongside real layout and content.",
+      "You need page-level edits, element or region comments, and optional direct MCP hand-off.",
+      "You want free editing and exports without saved-component limits.",
+    ],
+    whenToPickCompetitor: [
+      "You are defining a reusable component before it exists in the app.",
+      "You want default, hover, focus, active and disabled specifications with explicit differences between states.",
+      "You want a shared-token component-library prompt rather than a diff from a live webpage.",
+    ],
+    table: [
+      {
+        feature: "Design surface",
+        designMode:
+          "Edit the real rendered page, including styles, text and DOM structure on supported scriptable websites.",
+        competitor:
+          "Standalone browser component editor. Its public catalogue lists twelve component types, including buttons, inputs, tabs and toasts.",
+      },
+      {
+        feature: "Output for the agent",
+        designMode:
+          "Recorded changes and comments as a copied prompt, export or MCP hand-off. The agent implements them in your repository.",
+        competitor:
+          "Generated component or system prompts. The public editor exposes Claude Code, Cursor and v0 targets, React/CSS/Vue output options, and full or concise text.",
+      },
+      {
+        feature: "States and design tokens",
+        designMode:
+          "Detect and edit existing page tokens, preserve token references in exports, and record trigger-specific motion changes. Starts from the page rather than a standalone component library.",
+        competitor:
+          "Explicit state overrides and tokens with light/dark values. In the playground, a hover-colour edit produced a differences-only section in the prompt.",
+      },
+      {
+        feature: "Implementation guidance",
+        designMode:
+          "Send the intended change with page context; review the agent's implementation and test accessibility in the real app.",
+        competitor:
+          "Generated prompts include focus-visible, reduced-motion, contrast and hit-target guidance. These instructions do not prove the resulting component is accessible.",
+      },
+      {
+        feature: "Cost and saving",
+        designMode:
+          "Free under MIT; no paid component quota. Any paid coding agent or model is separate.",
+        competitor:
+          "Anonymous playground; free accounts save three components with full single-component prompts. Advertised $39 one-time launch price (regular $59) unlocks unlimited components and system-pack export. Agent costs are separate.",
+      },
+    ],
+    honesty:
+      "UIPrompt is a useful specification tool, not a direct substitute for live-page editing. Its strongest idea is making interaction states and implementation constraints explicit. Use it to define a component library; use Design Mode to refine how components actually behave in a product. The vendor's exact-match experiment is not a guarantee that every agent will reproduce every design correctly.",
+    research: {
+      checkedOn: "16 September 2026",
+      methodology:
+        "Opened the anonymous editor, changed a button radius from 8px to 12px and confirmed the prompt updated. Selected Hover, changed its background to #2563EB and confirmed a separate hover-diff section. Inspected state, token and output controls. Pricing and paid system-pack/share capabilities come from the homepage; no login, purchase, public sharing or paid export was tested. No editor version was exposed.",
+      sources: [
+        {
+          label: "UIPrompt product and pricing FAQ",
+          url: "https://uiprompt.co/",
+        },
+        { label: "UIPrompt public editor", url: "https://uiprompt.co/editor" },
+      ],
+    },
+    related: [
+      "design-mode-vs-css-studio",
+      "design-mode-vs-backdraft",
+      "design-mode-vs-figma-dev-mode",
+    ],
+  },
+  {
+    slug: "design-mode-vs-handle-extension",
+    competitor: "Handle Extension",
+    title: "Design Mode vs Handle Extension",
+    metaTitle:
+      "Design Mode vs Handle Extension — two free browser editing tools",
+    metaDescription:
+      "Compare Design Mode and Handle Extension: two free MIT-licensed visual browser tools with different agent setup, connection and feedback workflows.",
+    keywords: [
+      "Design Mode vs Handle",
+      "Handle Extension alternative",
+      "handle-ext",
+      "browser editing for AI agents",
+    ],
+    oneLiner:
+      "Both are free, MIT-licensed browser tools for visual changes and agent hand-off. The choice is between Design Mode's exports and connection modes, and Handle's local agent-session workflow.",
+    positioning:
+      "Handle Extension is a close alternative, not just an annotation tool. Its Chrome side panel supports visual refinements, inline text editing and natural-language feedback, then returns context to your coding agent. Design Mode offers live editing, recorded changes and comments with copy/export hand-off or Cloud, Local and Self-hosted MCP. The meaningful difference is workflow, not a free-versus-paid split.",
+    whenToPickDesignMode: [
+      "You use Firefox as well as Chromium, or want to review a scriptable page without first starting an agent session.",
+      "You want a portable copied/exported specification as well as direct MCP hand-off.",
+      "You want to choose between hosted Cloud, Local and Self-hosted relay connections.",
+    ],
+    whenToPickCompetitor: [
+      "You work in Chrome with a local dev server and want the agent to initiate a live feedback session.",
+      "You want its setup command to configure a supported agent rather than enter the MCP configuration yourself.",
+      "You want to evaluate its session discovery and repeated feedback rounds with an explicit stop action.",
+    ],
+    table: [
+      {
+        feature: "Core editing workflow",
+        designMode:
+          "Edit the rendered page, record changes, add comment pins and hand the specification to a developer or agent.",
+        competitor:
+          "Select elements in a Chrome side panel, refine styles or text, attach notes and send structured feedback to the active agent.",
+      },
+      {
+        feature: "Setup and browsers",
+        designMode:
+          "Chrome/Chromium or Firefox extension. Start editing without MCP; configure it when you want a connected agent.",
+        competitor:
+          "Chrome extension plus a local MCP server. The documented setup runs npx handle-ext@latest init and restarts the agent; invocation varies by agent.",
+      },
+      {
+        feature: "Connection model",
+        designMode:
+          "Cloud, Local or Self-hosted MCP, plus copy/export without a live agent connection.",
+        competitor:
+          "Documented local stdio MCP and Socket.IO bridge. A discovery server exposes active sessions with agent and repository context.",
+      },
+      {
+        feature: "Feedback rounds",
+        designMode:
+          "Agent tools read changes, return browser previews and update statuses, including resolving or reopening comments.",
+        competitor:
+          "The published MCP implementation continues a live feedback session across rounds, with a user-stop action and a grace period for brief extension disconnects.",
+      },
+      {
+        feature: "Cost and licence",
+        designMode:
+          "Free, MIT-licensed. Your paid agent or model costs are separate.",
+        competitor:
+          "Also free and MIT-licensed, using your existing agent. No paid extension tier is advertised on the reviewed page; agent costs remain separate.",
+      },
+    ],
+    honesty:
+      "Handle deserves consideration if your work already revolves around a local coding-agent session. Design Mode is the better fit when browser choice, portable hand-off or relay choice matters more. Do not confuse Handle Extension with Handle Studio: the separate Studio app's macOS requirement is not an extension restriction. Neither browser tool independently guarantees a correct source-code change.",
+    research: {
+      checkedOn: "16 September 2026",
+      methodology:
+        "Browsed the extension page and its v1.0.3 revision notes; reviewed the public repository, MIT licence and MCP server source. The repository documents agent-specific commands rather than a universal /handle invocation. No extension installation, setup command or live agent round trip was performed; implementation details are source-reviewed, not runtime-verified.",
+      sources: [
+        {
+          label: "Handle Extension product and revision notes",
+          url: "https://gethandle.ai/extension",
+        },
+        {
+          label: "Handle setup and architecture",
+          url: "https://github.com/tonkotsu-ai/handle",
+        },
+        {
+          label: "Handle MIT licence",
+          url: "https://github.com/tonkotsu-ai/handle/blob/main/LICENSE",
+        },
+        {
+          label: "Handle agent-session implementation",
+          url: "https://github.com/tonkotsu-ai/handle/blob/main/mcp/src/server.ts",
+        },
+      ],
+    },
+    related: [
+      "design-mode-vs-css-studio",
+      "design-mode-vs-ui-ticket-mcp",
+      "design-mode-vs-stagewise",
+    ],
+  },
+  {
+    slug: "design-mode-vs-ui-ticket-mcp",
+    competitor: "UI Ticket MCP",
+    title: "Design Mode vs UI Ticket MCP",
+    metaTitle: "Design Mode vs UI Ticket MCP — visual edits or review tickets",
+    metaDescription:
+      "Compare Design Mode and UI Ticket MCP by visual editing, review threads, setup, storage and commercial-use licensing. Choose the workflow that fits your review.",
+    keywords: [
+      "Design Mode vs UI Ticket MCP",
+      "UI Ticket MCP alternative",
+      "ui-ticket-mcp",
+      "visual feedback for AI coding agents",
+    ],
+    oneLiner:
+      "Design Mode lets you make the visual change and hand off the specification. UI Ticket MCP turns annotated feedback into a review queue for your coding agent.",
+    positioning:
+      "Both connect browser feedback to an AI coding agent, but they start with different jobs. Design Mode combines live style, text and DOM editing with comment pins and structured change exports. UI Ticket MCP centres on tickets: point at an element, describe the problem, discuss it in a thread and let an agent read, implement and resolve the feedback. Choose based on whether you need to demonstrate the intended result or manage a conversation about what should change.",
+    whenToPickDesignMode: [
+      "You want to set the spacing, typography or copy yourself rather than describe the intended result in a ticket.",
+      "You review scriptable localhost, staging or production pages without adding a review component to each app.",
+      "You need an MIT-licensed tool for commercial work, with exports or optional MCP hand-off.",
+    ],
+    whenToPickCompetitor: [
+      "Your primary job is reviewing prototypes through tagged tickets, threaded replies and an open-work queue.",
+      "You control the app and want reviews stored with the project, or want to evaluate its optional multi-project Ticket Hub.",
+      "Your use fits its non-commercial licence, or you have separately obtained the permissions needed for commercial use.",
+    ],
+    table: [
+      {
+        feature: "Core workflow",
+        designMode:
+          "Edit the rendered page, record exact changes and add element or region comments. Export the specification or send it to an agent.",
+        competitor:
+          "Annotate elements or regions, write feedback and let the agent implement it. The documented product centres on reviews rather than direct visual style editing.",
+      },
+      {
+        feature: "Installation and page access",
+        designMode:
+          "Chrome or Firefox extension; no code added to the inspected app. Works on scriptable pages, not browser-protected surfaces.",
+        competitor:
+          "Embed a Web Component using npm or a CDN script. The local setup also runs a Python MCP server and HTTP API; SSR apps need client-side loading.",
+      },
+      {
+        feature: "Review conversations",
+        designMode:
+          "Element and region comment pins, searchable Changes tab, and resolve or reopen through MCP.",
+        competitor:
+          "Threaded replies, bug/suggestion/question/general tags, search, open/resolved filters and per-page pending-work summaries.",
+      },
+      {
+        feature: "Agent hand-off",
+        designMode:
+          "Copy or export changes without MCP, or connect through Cloud, Local or Self-hosted MCP. The agent still needs access to your source repository.",
+        competitor:
+          "MCP tools expose review context, pending work and resolution actions. A page-name-based source-file finder suggests matching files in the configured project.",
+      },
+      {
+        feature: "Where feedback lives",
+        designMode:
+          "Comments are saved in local browser extension storage. Change exports provide a portable hand-off; the Cloud relay is not a shared ticket dashboard.",
+        competitor:
+          "Local reviews live in a project SQLite database. The v1.5.0 changelog also documents an optional multi-project Ticket Hub with a dashboard and Docker self-hosting.",
+      },
+      {
+        feature: "Cost and commercial use",
+        designMode:
+          "Free under MIT, including commercial use subject to the licence terms. Paid agent or model usage is separate.",
+        competitor:
+          "Published under CC BY-NC 4.0, described as free for study, research and non-commercial use. Commercial-use permission and Hub pricing were not established in the reviewed sources; check with the maintainers. Agent costs are separate.",
+      },
+    ],
+    honesty:
+      "UI Ticket MCP has a stronger documented ticket-discussion workflow: tags, reply chains and a project-level queue are useful when feedback needs clarification before implementation. Design Mode is the better fit when you want to show the exact visual change, work without modifying the app, or use a permissively licensed tool commercially. Both can mark feedback resolved; neither status proves the resulting code is correct. Review the source diff and rendered result before accepting a fix.",
+    research: {
+      checkedOn: "14 September 2026",
+      methodology:
+        "Documentation comparison of the official site, public README, licence and changelog through v1.6.0, checked against Design Mode's implementation. UI Ticket MCP was not installed or hands-on tested. The site lists 11 MCP tools while the README lists 10; tool count is not used as a differentiator. Hub support comes from the newer changelog, not the README's local-only setup description.",
+      sources: [
+        {
+          label: "UI Ticket MCP official site",
+          url: "https://uiticket.0ics.ai/",
+        },
+        {
+          label: "UI Ticket MCP setup and review workflow",
+          url: "https://github.com/0ics-srls/ui-ticket-mcp_public#readme",
+        },
+        {
+          label: "UI Ticket MCP licence",
+          url: "https://github.com/0ics-srls/ui-ticket-mcp_public/blob/main/LICENSE",
+        },
+        {
+          label: "UI Ticket MCP changelog and Ticket Hub",
+          url: "https://github.com/0ics-srls/ui-ticket-mcp_public/blob/main/CHANGELOG.md",
+        },
+      ],
+    },
+    related: [
+      "design-mode-vs-drawbridge",
+      "design-mode-vs-pls-fix",
+      "design-mode-vs-css-studio",
+    ],
+  },
+  {
+    slug: "design-mode-vs-css-studio",
+    competitor: "CSS Studio",
+    title: "Design Mode vs CSS Studio",
+    metaTitle: "Design Mode vs CSS Studio — workflow and cost compared",
+    metaDescription:
+      "Compare Design Mode's free browser extension with CSS Studio's project-installed visual editor: live-page reviews, animation workflows, AI hand-off and cost.",
+    keywords: [
+      "Design Mode vs CSS Studio",
+      "CSS Studio alternative",
+      "CSS Studio pricing",
+      "visual CSS editor",
+    ],
+    oneLiner:
+      "Design Mode is a free extension for live-page editing and hand-off. CSS Studio installs into your site, with a free visual editor and a $99 one-time AI integration.",
+    positioning:
+      "Both let you make visual changes on a rendered website and ask your existing coding agent to implement them. The useful distinction is where you work: Design Mode suits reviews across localhost, staging and production without adding code to each site. CSS Studio's documented setup adds an editor to your own site in development mode, bringing visual controls, chat and animation authoring into that project.",
+    whenToPickDesignMode: [
+      "You review multiple live sites or staging builds and do not want to install an editor into each project.",
+      "You want to inspect recorded changes and export a specification for a developer, or connect an MCP agent without buying a tool licence.",
+      "Your work centres on design QA, copy changes and visual feedback on an existing page.",
+    ],
+    whenToPickCompetitor: [
+      "You control the site's development setup and want visual editing, agent chat and tasks inside that project.",
+      "Your work calls for CSS animation authoring with a scrubbable timeline, draggable keyframes, springs or scroll-linked motion.",
+      "You prefer its integrated workflow and accept a one-time purchase for AI integration.",
+    ],
+    table: [
+      {
+        feature: "Where you work and what you install",
+        designMode:
+          "Chrome or Firefox extension on scriptable localhost, staging or production pages. No package or script added to the inspected site; browser-protected pages are excluded.",
+        competitor:
+          "Editor added to your site through the cssstudio package or a script tag. The installation guide runs it in development mode.",
+      },
+      {
+        feature: "Best-fit use case",
+        designMode:
+          "Review and refine existing pages, record precise visual feedback, then hand it to a developer or coding agent.",
+        competitor:
+          "Iterate inside your own development project with visual editing, agent chat, generated variants and animation authoring.",
+      },
+      {
+        feature: "Animation workflow",
+        designMode:
+          "Adjust motion through the side panel's animation and transition controls.",
+        competitor:
+          "Timeline editor with playback scrubbing, draggable CSS keyframes, spring easing and scroll-linked animations.",
+      },
+      {
+        feature: "Getting edits into source code",
+        designMode:
+          "Review the Changes tab, copy or export a specification, or hand it to a connected MCP agent. The agent needs repository access to implement it.",
+        competitor:
+          "Connect Cursor directly, or configure MCP and the /studio skill for other agents. The agent implements visual edits in your source files; a copy-prompt fallback is documented.",
+      },
+      {
+        feature: "Tool cost",
+        designMode: "Free, MIT-licensed editor and MCP integration.",
+        competitor:
+          "Visual editor free without AI source updates. AI integration is a $99 one-time purchase; future core updates included. Pricing checked 14 September 2026.",
+      },
+      {
+        feature: "AI costs beyond the tool",
+        designMode:
+          "Bring your own agent. Any paid agent subscription or model usage is separate from Design Mode.",
+        competitor:
+          "Bring your own agent. The one-time purchase does not include paid agent or model usage.",
+      },
+    ],
+    honesty:
+      "CSS Studio is a credible choice for project-local editing, especially when timeline-based animation work matters. Design Mode is the simpler fit for reviewing pages without modifying their setup and for free structured hand-off. Neither tool removes the need to review the agent's source diff and test the result: Design Mode's Changes tab records browser edits, not a guarantee that generated code is correct.",
+    research: {
+      checkedOn: "14 September 2026",
+      methodology:
+        "Documentation comparison using CSS Studio's first-party pricing and guides, and Design Mode's documented workflow. CSS Studio was not installed or hands-on tested; no tested version is claimed. Pricing and capabilities may change.",
+      sources: [
+        { label: "CSS Studio pricing", url: "https://cssstudio.ai/pricing" },
+        {
+          label: "CSS Studio installation and agent workflow",
+          url: "https://cssstudio.ai/learn",
+        },
+        {
+          label: "CSS Studio animation guide",
+          url: "https://cssstudio.ai/learn/animations",
+        },
+      ],
+    },
+    related: [
+      "design-mode-vs-stagewise",
+      "design-mode-vs-cursor-design-mode",
+      "design-mode-vs-visbug",
+    ],
+  },
   {
     slug: "design-mode-vs-stagewise",
     competitor: "Stagewise",

@@ -4,6 +4,7 @@ import {
   Camera,
   CheckCircle2,
   Cloud,
+  Copy,
   Eraser,
   FileDown,
   GitCompareArrows,
@@ -11,6 +12,7 @@ import {
   ListTree,
   Monitor,
   Server,
+  Send,
   Wand2,
 } from "lucide-react";
 
@@ -25,12 +27,14 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { withNavRef } from "@/lib/nav-ref";
 
 export const metadata = {
-  title:
-    "MCP setup — Connect Claude Code, Cursor, Claude Desktop, Windsurf & more",
+  title: {
+    absolute: "Send browser design changes to coding agents | Design Mode",
+  },
   description:
-    "Three ways to connect any MCP-compatible AI coding agent to Design Mode — Cloud (default, hosted), Local (offline), or Self-hosted. Step-by-step setup for Claude Desktop, Claude Code, Cursor, Windsurf, Cline, and any client that speaks Model Context Protocol.",
+    "Copy visual changes as Markdown or connect Design Mode to a compatible coding agent through Cloud, Local or Self-hosted MCP.",
   keywords: [
     "MCP setup",
     "Model Context Protocol",
@@ -46,19 +50,39 @@ export const metadata = {
   ],
   alternates: { canonical: "https://designmode.app/mcp" },
   openGraph: {
-    title:
-      "MCP setup — Connect Claude Code, Cursor, Claude Desktop, Windsurf & more",
+    type: "website",
+    title: "Send browser design changes to coding agents | Design Mode",
     description:
-      "Three connection modes (Cloud, Local, Self-hosted) and the eight MCP tools your agent gets.",
+      "Copy visual changes as Markdown or connect Design Mode to a compatible coding agent through Cloud, Local or Self-hosted MCP.",
     url: "https://designmode.app/mcp",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Send browser design changes to coding agents | Design Mode",
+    description:
+      "Copy visual changes as Markdown or connect Design Mode to a compatible coding agent through Cloud, Local or Self-hosted MCP.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 
-// One reasonable, IDE-agnostic snippet per mode. The `mcpServers`
-// wrapper + `type: "http"` is what Claude Code / Claude Desktop / VS Code
-// / current Cursor all accept; trim the wrapper if your client wants the
-// bare object.
+// Illustrative transport settings only. MCP clients use different wrappers,
+// scopes, files and authentication rules; the verified client-specific guide
+// lives at /docs/mcp-setup.
 const localConfig = `{
   "mcpServers": {
     "design-mode": {
@@ -106,9 +130,9 @@ const modes: Mode[] = [
     id: "cloud",
     name: "Cloud",
     icon: Cloud,
-    tagline: "Default. Hosted SSE relay.",
+    tagline: "Selected by default; connects only after setup.",
     description:
-      "Use mcp.designmode.app as the relay. The extension dials the relay over HTTPS, your agent connects via the same URL with a bearer token. Edits flow through; nothing persists.",
+      "Create an anonymous credential, then connect the extension and agent through mcp.designmode.app. Agent calls use Streamable HTTP; the extension receives requests over an authenticated event stream.",
     bestFor:
       "Best for: anyone who'd rather not run a local process — including agents that can't reach localhost (sandboxed CI, remote VSCode tunnels, web-based agents).",
     highlight: true,
@@ -120,9 +144,9 @@ const modes: Mode[] = [
     icon: Monitor,
     tagline: "Fastest, fully offline.",
     description:
-      "Run the companion MCP server on your own machine. Nothing leaves the laptop.",
+      "Run the companion MCP server on your own machine. Design Mode MCP traffic stays on localhost.",
     bestFor:
-      "Best for: power users with a terminal who want zero network egress and the lowest possible latency.",
+      "Best for: power users with a terminal who want no Design Mode relay egress and the lowest possible latency.",
     config: localConfig,
     note: "No npm package to install — clone the repo, run npm install, and point cwd at the absolute path of the repo root. npm start launches the local companion server. Concurrent agent sessions attach to one shared owner on port 9960; if that owner closes, a surviving session takes ownership on its next tool call. Design Mode never kills a foreign process. If another app needs 9960, set DM_PORT to another port and select the same Local port in the extension.",
   },
@@ -143,7 +167,8 @@ const tools = [
   {
     name: "get_changes",
     icon: ListTree,
-    description: "Return the list of style/text/DOM changes for the current session.",
+    description:
+      "Read style, text, DOM and token changes, comments, addressable items, CSS and hand-off state.",
   },
   {
     name: "apply_changes",
@@ -153,7 +178,8 @@ const tools = [
   {
     name: "set_change_status",
     icon: ListChecks,
-    description: "Mark changes/comments to-do, in-progress, or resolved as you implement them — the user sees the status in their Changes tab.",
+    description:
+      "Mark changes/comments to-do, in-progress, or resolved as you implement them — the user sees the status in their Changes tab.",
   },
   {
     name: "clear_changes",
@@ -163,22 +189,25 @@ const tools = [
   {
     name: "get_session_summary",
     icon: GitCompareArrows,
-    description: "High-level diff: what selectors changed, by how many properties.",
+    description:
+      "Connection status, active browser sessions, tracked-item counts and the current hand-off marker.",
   },
   {
     name: "export_changes",
     icon: FileDown,
-    description: "Markdown export with selector → property → value lines.",
+    description: "Export the current changes as CSS, Tailwind, SCSS or JSX.",
   },
   {
     name: "get_screenshot",
     icon: Camera,
-    description: "Visible-tab PNG of the page in its current edited state.",
+    description:
+      "Capture the edited viewport or crop to an element or comment region.",
   },
   {
     name: "mark_comment_resolved",
     icon: CheckCircle2,
-    description: "Mark a pinned comment done (or reopen it) once the agent has acted on it.",
+    description:
+      "Mark a pinned comment done (or reopen it) once the agent has acted on it.",
   },
 ];
 
@@ -187,44 +216,47 @@ export default function McpPage() {
     <>
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Connect your AI agent over MCP
+              Send visual changes to your coding agent
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-              Design Mode talks to Claude Desktop, Claude Code, Cursor,
-              Windsurf, Cline, Continue, Zed — any AI coding agent that
-              speaks Model Context Protocol. Pick one of three connection
-              modes, paste the snippet, restart your agent.
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+              Design Mode records what you changed on the rendered page. Copy
+              that specification as Markdown, or let a compatible MCP client
+              read it and keep the Changes tab in sync while it updates your
+              repository.
             </p>
             <div className="text-muted-foreground mt-8 max-w-3xl space-y-4 text-base leading-relaxed">
               <p>
                 <strong className="text-foreground">
                   What is Model Context Protocol (MCP)?
                 </strong>{" "}
-                MCP is Anthropic&apos;s open standard for letting AI agents
-                call external tools safely. A &quot;tool&quot; is anything
-                the agent can read from or write to — a database, a
-                filesystem, a web service, or in this case, the design
-                state of your live page. Design Mode exposes eight MCP tools
-                so your agent can read every edit you made in the side
-                panel, push patches back to the page, grab screenshots, and
-                mark your comments resolved — all without copy-paste. MCP
-                connection, mode, and token management now live on their
-                own dedicated page inside the extension, opened from the
-                header MCP chip.
+                MCP is an open protocol for connecting AI applications to
+                external tools and data. A &quot;tool&quot; is anything the
+                agent can read from or write to — a database, a filesystem, a
+                web service, or in this case, the design state of your live
+                page. Design Mode exposes eight session tools so your agent can
+                read every edit you made in the side panel, push patches back
+                to the page, grab screenshots, and mark your comments resolved
+                — all without copy-paste. MCP connection, mode, and token
+                management now live on their own dedicated page inside the
+                extension, opened from the header MCP chip. The current
+                repository&apos;s Local companion also registers{" "}
+                <code>wait_for_handoff</code> for opt-in live feedback rounds;
+                that tool is Local-only, current-repository / unreleased, and
+                not a guaranteed store-listing capability.
               </p>
               <p>
                 <strong className="text-foreground">
                   Why three connection modes?
                 </strong>{" "}
-                Different teams have different constraints. Cloud is the
-                no-install default for solo makers and anyone whose agent
-                can&apos;t reach localhost. Local is for power users who
-                want zero network egress and the lowest possible latency.
-                Self-hosted is for teams who want Cloud ergonomics on
-                their own infrastructure.
+                Different teams have different constraints. Cloud is selected on
+                a fresh install but stays disconnected until you create a
+                credential. It suits anyone whose agent can&apos;t reach
+                localhost. Local is for power users who want zero network egress
+                and the lowest possible latency. Self-hosted is for teams who
+                want Cloud ergonomics on their own infrastructure.
               </p>
             </div>
           </div>
@@ -233,6 +265,32 @@ export default function McpPage() {
 
       {/* Middle — plain */}
       <section className="py-16 lg:py-20">
+        <div className="container grid max-w-5xl gap-6 md:grid-cols-2">
+          <Card>
+            <CardContent className="flex h-full flex-col gap-4 p-6">
+              <Copy className="size-6" />
+              <h2 className="text-2xl font-semibold">Copy as Prompt</h2>
+              <p className="text-muted-foreground text-base leading-relaxed">
+                Copy the recorded selectors, properties, old values, new values,
+                text edits, DOM changes and comments as Markdown. Paste it into
+                any coding agent. No MCP connection is required.
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex h-full flex-col gap-4 p-6">
+              <Send className="size-6" />
+              <h2 className="text-2xl font-semibold">Send to Agent over MCP</h2>
+              <p className="text-muted-foreground text-base leading-relaxed">
+                Connect a compatible client so it can fetch the change set,
+                preview updates in the browser, capture screenshots and mark
+                work resolved. The client still needs separate repository
+                access.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
         <DashedLine className="container max-w-5xl" />
 
         <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-3">
@@ -244,17 +302,17 @@ export default function McpPage() {
                 className={mode.highlight ? "outline-primary outline-4" : ""}
               >
                 <CardContent className="flex h-full flex-col gap-4 p-6">
-                  <div className="flex items-center gap-3">
-                    <Icon className="text-foreground size-5" />
-                    <h2 className="text-xl font-semibold">{mode.name}</h2>
+                  <div className="flex items-center gap-4">
+                    <Icon className="text-foreground size-6" />
+                    <h2 className="text-2xl font-semibold">{mode.name}</h2>
                   </div>
-                  <p className="text-muted-foreground text-sm font-medium">
+                  <p className="text-muted-foreground text-base font-medium">
                     {mode.tagline}
                   </p>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
+                  <p className="text-muted-foreground text-base leading-relaxed">
                     {mode.description}
                   </p>
-                  <p className="text-muted-foreground mt-auto text-sm">
+                  <p className="text-muted-foreground mt-auto text-base">
                     {mode.bestFor}
                   </p>
                 </CardContent>
@@ -270,8 +328,8 @@ export default function McpPage() {
             Mode comparison
           </h2>
           <p className="text-muted-foreground mt-2 max-w-2xl">
-            Setup steps, privacy posture, agent compatibility, and cost
-            across the three modes.
+            Setup steps, privacy posture, agent compatibility, and cost across
+            the three modes.
           </p>
         </div>
         <ModesComparison />
@@ -284,36 +342,41 @@ export default function McpPage() {
           </h2>
           <p className="text-muted-foreground mt-2 max-w-2xl">
             Paste the right block into your agent's config file, replace any{" "}
-            <code className="bg-muted rounded px-1 py-0.5 text-sm">
+            <code className="bg-muted rounded px-2 py-2 text-base">
               dm_&lt;your-token&gt;
             </code>{" "}
-            placeholder with the bearer token from the extension's
-            dedicated MCP page (Copy token), and restart the agent.
+            placeholder with the bearer token from the extension's dedicated MCP
+            page (Copy token), and restart the agent.
           </p>
 
           <Accordion type="single" collapsible className="mt-8 w-full">
             {modes.map((mode) => (
               <AccordionItem key={mode.id} value={mode.id}>
-                <AccordionTrigger className="text-lg font-semibold">
+                <AccordionTrigger className="text-2xl font-semibold">
                   {mode.name}
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-6 pt-2">
-                    <Snippet label="MCP config — Claude Code · Claude Desktop · Cursor · VS Code">
+                    <Snippet label="Generic MCP config — adapt to your client">
                       {mode.config}
                     </Snippet>
                     {mode.note && (
-                      <p className="text-muted-foreground text-sm">
+                      <p className="text-muted-foreground text-base">
                         {mode.note}
                       </p>
                     )}
-                    <p className="text-muted-foreground text-sm">
-                      Same JSON everywhere: under <code>mcpServers</code> in
-                      Claude Desktop / Claude Code{" "}
-                      (<code>.claude/settings.json</code>), or your editor's
-                      MCP config. Some clients want the bare{" "}
-                      <code>design-mode</code> object without the{" "}
-                      <code>mcpServers</code> wrapper.
+                    <p className="text-muted-foreground text-base">
+                      Configuration location, wrapper, transport names and
+                      authentication support differ by client and version. Use
+                      the client-specific, version-stamped instructions in the{" "}
+                      <Link
+                        href="/docs/mcp-setup"
+                        className="underline underline-offset-8"
+                      >
+                        MCP setup guide
+                      </Link>{" "}
+                      rather than pasting this generic shape without checking
+                      it.
                     </p>
                   </div>
                 </AccordionContent>
@@ -329,13 +392,13 @@ export default function McpPage() {
             Give your agent the workflow
           </h2>
           <p className="text-muted-foreground mt-2 max-w-2xl">
-            The config above connects your agent to Design Mode. This one file
-            tells it <em>what to do</em> when you press{" "}
-            <strong className="text-foreground">Send to Agent</strong>: read
-            your edits, comments, and token changes over MCP, map each to its
-            source, and implement them — updating your Changes tab as it works.
-            Drop it into your agent&apos;s commands folder and run{" "}
-            <code className="bg-muted rounded px-1 py-0.5 text-sm">
+            MCP configuration only connects the tools. This optional workflow
+            prompt gives an agent a repeatable sequence for retrieving the live
+            changes and hand-off marker, mapping them to source, implementing
+            them and updating status. Install it in the client-specific command
+            location, invoke it after you press{" "}
+            <strong className="text-foreground">Send to Agent</strong>, and run{" "}
+            <code className="bg-muted rounded px-2 py-2 text-base">
               /design-mode
             </code>
             .
@@ -348,36 +411,22 @@ export default function McpPage() {
                 Download design-mode.md
               </a>
             </Button>
-            <span className="text-muted-foreground text-sm">
-              One file, works with every agent below.
+            <span className="text-muted-foreground text-base">
+              Portable prompt reference; no MCP connection is required to read
+              it.
             </span>
           </div>
 
-          <div className="mt-8">
-            <p className="text-muted-foreground mb-3 text-sm font-medium">
-              Where to save it
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {[
-                { label: "Claude Code", path: ".claude/commands/design-mode.md" },
-                { label: "Cursor", path: ".cursor/commands/design-mode.md" },
-                { label: "Codex", path: ".codex/prompts/design-mode.md" },
-                { label: "Windsurf", path: ".windsurf/workflows/design-mode.md" },
-              ].map((t) => (
-                <div
-                  key={t.label}
-                  className="bg-card border-border flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5"
-                >
-                  <span className="text-sm font-medium">{t.label}</span>
-                  <code className="text-muted-foreground text-xs">
-                    {t.path}
-                  </code>
-                </div>
-              ))}
-            </div>
-            <p className="text-muted-foreground mt-3 text-sm">
-              Any other MCP client works too — save the file wherever it looks
-              for slash-command or workflow prompts.
+          <div className="bg-muted/50 border-border mt-8 rounded-xl border p-4">
+            <h3 className="text-base font-semibold">
+              Import it using current client documentation
+            </h3>
+            <p className="text-muted-foreground mt-2 text-base leading-relaxed">
+              Prompt and workflow paths change independently of the MCP
+              protocol. Paste the file into a chat or save it only at the
+              project command location documented by your client version. The
+              MCP connection and this optional workflow prompt are separate
+              pieces.
             </p>
           </div>
         </div>
@@ -389,12 +438,18 @@ export default function McpPage() {
           <DashedLine className="container max-w-5xl" />
           <div className="container mt-16 max-w-5xl">
             <h2 className="text-2xl tracking-tight md:text-3xl">
-              The eight MCP tools
+              The eight session tools
             </h2>
             <p className="text-muted-foreground mt-2 max-w-2xl">
-              Every mode exposes the same eight tools — your agent can read
-              the current page diff, push patches back, grab screenshots,
-              track change status, and resolve your comments as it works.
+              Every mode exposes the same eight session tools — your agent can
+              read the current page diff, push patches back, grab screenshots,
+              track change status, and resolve your comments as it works. The
+              current repository&apos;s Local companion also registers{" "}
+              <code>wait_for_handoff</code> for opt-in live feedback rounds
+              (bounded waits, Local-only). That tool is current-repository /
+              unreleased and is not a guaranteed Chrome Web Store or Firefox
+              Add-ons listing capability. Cloud and Self-hosted keep one-shot
+              Send.
             </p>
 
             <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -402,14 +457,14 @@ export default function McpPage() {
                 const Icon = tool.icon;
                 return (
                   <Card key={tool.name}>
-                    <CardContent className="flex flex-col gap-2 p-5">
+                    <CardContent className="flex flex-col gap-2 p-6">
                       <div className="flex items-center gap-2">
                         <Icon className="text-foreground size-4" />
-                        <code className="text-sm font-semibold">
+                        <code className="text-base font-semibold">
                           {tool.name}
                         </code>
                       </div>
-                      <p className="text-muted-foreground text-sm leading-relaxed">
+                      <p className="text-muted-foreground text-base leading-relaxed">
                         {tool.description}
                       </p>
                     </CardContent>
@@ -418,11 +473,11 @@ export default function McpPage() {
               })}
             </div>
 
-            <p className="text-muted-foreground mt-10 text-sm">
-              Privacy: Local mode keeps everything on your machine. Cloud
-              and Self-hosted modes pass messages through the relay
-              without persisting payloads.{" "}
-              <Link href="/privacy" className="underline underline-offset-4">
+            <p className="text-muted-foreground mt-10 text-base">
+              Privacy: Local mode keeps Design Mode MCP traffic on your machine.
+              Cloud and Self-hosted modes request a 60-second queue expiry and
+              normally delete responses when consumed; expiry is best-effort.{" "}
+              <Link href="/privacy" className="underline underline-offset-8">
                 Full privacy disclosure →
               </Link>
             </p>
@@ -434,10 +489,11 @@ export default function McpPage() {
                 Compatible AI coding agents
               </h2>
               <p className="text-muted-foreground mt-2 max-w-2xl">
-                Any agent that supports Model Context Protocol works with
-                Design Mode. Confirmed:
+                These clients publish MCP support, but their configuration and
+                transport capabilities change by version. Check the setup guide
+                and the client&apos;s current documentation:
               </p>
-              <ul className="text-foreground mt-6 grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-3">
+              <ul className="text-foreground mt-6 grid grid-cols-2 gap-x-6 gap-y-2 text-base md:grid-cols-3">
                 <li>• Claude Desktop</li>
                 <li>• Claude Code</li>
                 <li>• Cursor</li>
@@ -448,19 +504,21 @@ export default function McpPage() {
                 <li>• VS Code (with MCP extension)</li>
                 <li>• Any custom MCP client</li>
               </ul>
-              <p className="text-muted-foreground mt-6 max-w-2xl text-sm">
-                Don&apos;t see your tool? If it speaks MCP, the
-                Self-hosted or Cloud snippet above will work. File an
-                issue on{" "}
+              <p className="text-muted-foreground mt-6 max-w-2xl text-base">
+                Don&apos;t see your tool? If it speaks MCP, the Self-hosted or
+                Cloud snippet above will work. File an issue on{" "}
                 <a
-                  href="https://github.com/SandeepBaskaran/design-mode/issues"
+                  href={withNavRef(
+                    "https://github.com/SandeepBaskaran/design-mode/issues",
+                  )}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline underline-offset-4"
+                  className="underline underline-offset-8"
                 >
                   GitHub
                 </a>{" "}
-                if you hit a quirk and we&apos;ll add a dedicated snippet.
+                if you hit a version-specific issue so it can be reproduced and
+                documented.
               </p>
             </div>
           </div>
@@ -470,17 +528,11 @@ export default function McpPage() {
   );
 }
 
-function Snippet({
-  label,
-  children,
-}: {
-  label: string;
-  children: string;
-}) {
+function Snippet({ label, children }: { label: string; children: string }) {
   return (
     <div>
-      <p className="text-muted-foreground mb-2 text-sm font-medium">{label}</p>
-      <pre className="bg-ink text-ink-foreground overflow-x-auto rounded-xl p-4 font-mono text-xs leading-relaxed">
+      <p className="text-muted-foreground mb-2 text-base font-medium">{label}</p>
+      <pre className="bg-ink text-ink-foreground overflow-x-auto rounded-xl p-4 font-mono text-base leading-relaxed">
         <code>{children}</code>
       </pre>
     </div>

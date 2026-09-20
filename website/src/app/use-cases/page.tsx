@@ -4,13 +4,15 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
+import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { useCases } from "@/content/use-cases";
 
 export const metadata = {
-  title:
-    "Use cases — One design tool for designers, developers, QA, PMs & vibe coders",
+  title: {
+    absolute: "Visual editing workflows for AI coding agents | Design Mode",
+  },
   description:
-    "Real workflows for Design Mode: vibe coding with Claude Code, visual editing with Cursor, UI testing exports to developers with full context, design review in production, copy edits without a PR, accessibility fixes, design-system audits, agency handoff — and more.",
+    "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
   keywords: [
     "design tool use cases",
     "design workflows",
@@ -23,30 +25,62 @@ export const metadata = {
   ],
   alternates: { canonical: "https://designmode.app/use-cases" },
   openGraph: {
-    title: "Use cases — Design Mode",
+    type: "website",
+    title: "Visual editing workflows for AI coding agents | Design Mode",
     description:
-      "One design tool for every maker. Workflows by persona — designers, developers, QA, PMs, content, indie hackers, agencies, vibe coders.",
+      "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
     url: "https://designmode.app/use-cases",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Visual editing workflows for AI coding agents | Design Mode",
+    description:
+      "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 
 export default function UseCasesIndex() {
   return (
     <>
+      <JsonLd
+        data={collectionPageSchema({
+          name: "Visual editing workflows for AI coding agents",
+          description:
+            "Practical workflows for rendered-page editing and structured coding-agent hand-off.",
+          url: "https://designmode.app/use-cases",
+          items: useCases.map((item) => ({
+            name: item.title,
+            url: `https://designmode.app/use-cases/${item.slug}`,
+          })),
+        })}
+      />
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              One design tool for every maker
+              Workflows for visual editing and agent hand-off
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-              Designers, developers, design engineers, QA testers, PMs,
-              content and marketing teams, indie hackers, solo founders,
-              agencies, design-system maintainers, and vibe coders — every
-              role shares the same problem: getting from a visual idea to
-              working code without losing intent. These are the workflows
-              Design Mode is built for.
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+              Start with the shared loop: make the intended change on the
+              rendered interface, capture the exact specification, then ask a
+              coding agent or developer to update and verify the source. The
+              examples below apply that loop to specific jobs.
             </p>
           </div>
         </section>
@@ -61,18 +95,18 @@ export default function UseCasesIndex() {
               href={`/use-cases/${u.slug}`}
               className="group flex flex-col rounded-2xl border p-6 transition-shadow hover:shadow-md"
             >
-              <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              <span className="text-muted-foreground text-base font-medium tracking-wide uppercase">
                 {u.persona}
               </span>
-              <h2 className="font-display mt-2 text-lg font-semibold leading-snug">
+              <h2 className="font-display mt-2 text-2xl leading-snug font-semibold">
                 {u.title}
               </h2>
-              <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+              <p className="text-muted-foreground mt-2 text-base leading-relaxed">
                 {u.intro.split(". ")[0]}.
               </p>
-              <span className="text-foreground/80 mt-4 inline-flex items-center gap-1 text-sm font-medium underline underline-offset-4">
+              <span className="text-foreground/80 mt-4 inline-flex items-center gap-2 text-base font-medium underline underline-offset-8">
                 Read the workflow{" "}
-                <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                <ArrowUpRight className="size-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </span>
             </Link>
           ))}

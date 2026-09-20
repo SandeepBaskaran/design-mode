@@ -102,12 +102,17 @@ secrets/
 .claude/worktrees/
 .worktrees/
 /.hermes/worktrees/
+/.hermes/recovery/
+/.hermes/removed-pages/
+/website/.hermes-qa/
+/website/.next.bak*/
 .codegraph/
 .codegraph-cache/
 /graphify-out/
 /graph.json
 /graph.html
 /GRAPH_REPORT.md
+
 .aider*
 
 # ── macOS ────────────────────────────────────────────────────────────────

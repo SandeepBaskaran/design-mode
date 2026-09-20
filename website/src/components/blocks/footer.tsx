@@ -1,101 +1,136 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
 
-import { ProductHunt } from "@/components/blocks/product-hunt";
-import { VisualEditorPill } from "@/components/blocks/visual-editor-pill";
-import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
-import { Button } from "@/components/ui/button";
+import { withNavRef } from "@/lib/nav-ref";
 
-const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
-const X_URL = "https://x.com/sandeepbaskaran";
-const SPONSORS_URL = "https://github.com/sponsors/SandeepBaskaran";
+const REPO_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");
+const X_URL = withNavRef("https://x.com/sandeepbaskaran");
+const SPONSORS_URL = withNavRef("https://github.com/sponsors/SandeepBaskaran");
+const PRODUCT_HUNT_URL = withNavRef(
+  "https://www.producthunt.com/products/design-mode",
+);
+const AUTHOR_URL = withNavRef("https://sandeepbaskaran.com");
 
 export function Footer() {
-  const navigation = [
-    { name: "Features", href: "/features" },
-    { name: "Demo", href: "/demo" },
-    { name: "MCP", href: "/mcp" },
-    { name: "Use cases", href: "/use-cases" },
-    { name: "Compare", href: "/compare" },
-    { name: "Docs", href: "/docs" },
-    { name: "Changelog", href: "/changelog" },
-    { name: "Blog", href: "/blog" },
-    { name: "FAQ", href: "/faq" },
-    { name: "About", href: "/about" },
-    { name: "Contact", href: "/contact" },
-    { name: "Privacy", href: "/privacy" },
-  ];
-
-  const social = [
-    { name: "GitHub", href: REPO_URL },
-    { name: "X (Twitter)", href: X_URL },
-    { name: "Sponsor", href: SPONSORS_URL },
+  const groups = [
+    {
+      title: "Product",
+      links: [
+        { name: "Features", href: "/features" },
+        { name: "Try the demo", href: "/demo" },
+        { name: "Connect your agent", href: "/mcp" },
+        { name: "Use cases", href: "/use-cases" },
+        { name: "Compare", href: "/compare" },
+      ],
+    },
+    {
+      title: "Resources",
+      links: [
+        { name: "Documentation", href: "/docs" },
+        { name: "Changelog", href: "/changelog" },
+        { name: "Install Design Mode", href: "/docs/install" },
+        { name: "Blog", href: "/blog" },
+        { name: "FAQ", href: "/faq" },
+      ],
+    },
+    {
+      title: "Project",
+      links: [
+        { name: "About", href: "/about" },
+        { name: "Contact", href: "/contact" },
+        { name: "Privacy", href: "/privacy" },
+        { name: "Source code", href: REPO_URL },
+      ],
+    },
+    {
+      title: "Community",
+      links: [
+        { name: "GitHub", href: REPO_URL },
+        { name: "X (Twitter)", href: X_URL },
+        { name: "Product Hunt", href: PRODUCT_HUNT_URL },
+        { name: "Sponsor", href: SPONSORS_URL },
+      ],
+    },
   ];
 
   return (
-    <footer className="flex flex-col items-center gap-14 py-12">
-      <div className="container flex flex-col gap-4 text-center">
-        <div className="mb-6 flex justify-center">
-          <ProductHunt />
+    <footer className="border-t py-16 md:pt-24 md:pb-8">
+      <div className="container grid max-w-[1200px] gap-16 lg:grid-cols-[1.5fr_3fr] lg:gap-x-16 lg:gap-y-16">
+        <div className="flex flex-col items-start">
+          <Link
+            href="/"
+            className="focus-visible:outline-ring inline-flex items-center gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4"
+          >
+            <Image
+              src="/brand-icon.png"
+              width={40}
+              height={40}
+              alt=""
+              unoptimized
+            />
+            <span className="text-2xl font-semibold tracking-tight">
+              Design Mode
+            </span>
+          </Link>
+          <p className="mt-4 max-w-xs text-base leading-relaxed text-[#444444]">
+            Make the change you want to see.
+            <br />
+            Give your agent the details.
+          </p>
+          <p className="text-muted-foreground mt-8 text-base">
+            Free to install. Open source under MIT.
+          </p>
         </div>
-        <div className="mb-2 flex justify-center">
-          <VisualEditorPill />
-        </div>
-        <h2 className="text-3xl md:text-4xl lg:text-[3.25rem]">
-          Design directly in your browser.
-        </h2>
-        <p className="text-muted-foreground mx-auto max-w-xl text-lg leading-snug text-balance">
-          Free forever, open source. Edit any live site with visual
-          controls and ship the changes to your coding agent over MCP.
-        </p>
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-          <AddToChromeCta size="lg" />
-          <Button variant="outline" size="lg" asChild>
-            <Link href="/demo">Try by yourself</Link>
-          </Button>
+        <nav
+          aria-label="Footer"
+          className="grid grid-cols-2 gap-x-8 gap-y-8 md:grid-cols-4"
+        >
+          {groups.map((group) => (
+            <div key={group.title}>
+              <h2 className="text-muted-foreground mb-4 text-base font-medium">
+                {group.title}
+              </h2>
+              <ul className="space-y-0">
+                {group.links.map((item) => (
+                  <li key={item.name}>
+                    <Link
+                      href={item.href}
+                      {...(item.href.startsWith("https://")
+                        ? { target: "_blank", rel: "noopener noreferrer" }
+                        : {})}
+                      className="hover:text-primary focus-visible:outline-ring inline-flex items-center gap-2 rounded-lg py-1 text-base leading-snug transition-colors focus-visible:outline-2 focus-visible:outline-offset-4"
+                    >
+                      {item.name}
+                      {item.href.startsWith("https://") && (
+                        <ArrowUpRight
+                          className="size-4 shrink-0"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+        <div className="text-muted-foreground col-span-full flex w-full flex-col items-center gap-2 text-center text-base sm:flex-row sm:justify-between sm:text-left">
+          <p>© {new Date().getFullYear()} Design Mode</p>
+          <p>
+            Made by{" "}
+            <a
+              href={AUTHOR_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary focus-visible:outline-ring rounded-lg underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4"
+            >
+              Sandeep Baskaran
+            </a>
+          </p>
         </div>
       </div>
-
-      <nav className="container flex flex-col items-center gap-4">
-        <ul className="flex flex-wrap items-center justify-center gap-6">
-          {navigation.map((item) => (
-            <li key={item.name}>
-              <Link
-                href={item.href}
-                className="font-medium transition-opacity hover:opacity-75"
-              >
-                {item.name}
-              </Link>
-            </li>
-          ))}
-          {social.map((item) => (
-            <li key={item.name}>
-              <a
-                href={item.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-0.5 font-medium transition-opacity hover:opacity-75"
-              >
-                {item.name} <ArrowUpRight className="size-4" />
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      <p className="text-muted-foreground text-center text-xs">
-        Made by{" "}
-        <a
-          href="https://sandeepbaskaran.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-foreground transition-colors"
-        >
-          Sandeep Baskaran
-        </a>
-        .
-      </p>
     </footer>
   );
 }

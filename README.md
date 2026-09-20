@@ -1,5 +1,7 @@
 # Design Mode ✦
 
+[README](./README.md) · [Code of conduct](./CODE_OF_CONDUCT.md) · [Contributing](./CONTRIBUTING.md) · **[Remix](./REMIX.md)** · [MIT licence](./LICENSE) · [Security](./SECURITY.md)
+
 > Design directly in your browser. Your agent writes the code.
 
 A free, open-source browser extension (Chrome + Firefox) that turns any website into a live design surface. Edit layout, type, colour, spacing and structure with visual controls — then ship the result straight to Claude Code, Cursor, or any AI coding agent over MCP. No mock files, no copy-paste.

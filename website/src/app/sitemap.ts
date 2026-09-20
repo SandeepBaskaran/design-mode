@@ -1,104 +1,67 @@
 import type { MetadataRoute } from "next";
 
+import { posts } from "@/content/blog";
+import { comparisons, isComparisonIndexable } from "@/content/comparisons";
+import { docs } from "@/content/docs";
+import { useCases } from "@/content/use-cases";
+
 const BASE = "https://designmode.app";
 
-const useCaseSlugs = [
-  "vibe-coding-with-claude-code",
-  "visual-editing-with-cursor",
-  "redesign-any-website",
-  "design-review-in-production",
-  "tailwind-component-tuning",
-  "figma-to-code-without-figma",
-  "ui-testing-export-to-developers",
-  "bug-report-with-visual-diff",
-  "copy-edits-without-a-pr",
-  "accessibility-quick-fixes",
-  "landing-page-iteration-for-indie-hackers",
-  "client-handoff-from-agency-to-engineering",
-  "design-system-audit",
-];
-
-const compareSlugs = [
-  "design-mode-vs-stagewise",
-  "design-mode-vs-pls-fix",
-  "design-mode-vs-drawbridge",
-  "design-mode-vs-agentation",
-  "design-mode-vs-dialkit",
-  "design-mode-vs-ui-inspector",
-  "design-mode-vs-cursor-design-mode",
-  "design-mode-vs-csspeeper",
-  "design-mode-vs-hover-inspector",
-  "design-mode-vs-builder-io-visual-copilot",
-  "design-mode-vs-locofy",
-  "design-mode-vs-chrome-devtools",
-  "design-mode-vs-figma-dev-mode",
-  "design-mode-vs-visbug",
-  "design-mode-vs-figma-make",
-];
-
-const docsSlugs = [
-  "install",
-  "browser-support",
-  "keyboard-shortcuts",
-  "mcp-setup",
-  "changes-tab",
-  "troubleshooting",
-];
-
-const blogSlugs = [
-  "why-we-built-an-mcp-server-for-design-edits",
-  "vibe-coding-visual-editing-workflow",
-  "design-mode-1-5-0-changelog-deep-dive",
-  "redesigning-a-tailwind-landing-page-with-claude-code",
-  "design-mode-1-9-0-release",
-  "design-mode-2-0-0-release",
-];
-
-const now = new Date();
+const staticRoutes = [
+  { path: "/", changeFrequency: "weekly", priority: 1 },
+  { path: "/features", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/demo", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/mcp", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/about", changeFrequency: "monthly", priority: 0.6 },
+  { path: "/contact", changeFrequency: "monthly", priority: 0.5 },
+  { path: "/privacy", changeFrequency: "monthly", priority: 0.5 },
+  { path: "/faq", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/use-cases", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/compare", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/docs", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/changelog", changeFrequency: "weekly", priority: 0.7 },
+  { path: "/blog", changeFrequency: "weekly", priority: 0.7 },
+] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const root: MetadataRoute.Sitemap = [
-    { url: `${BASE}/`, lastModified: now, changeFrequency: "weekly", priority: 1.0 },
-    { url: `${BASE}/features`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
-    { url: `${BASE}/demo`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
-    { url: `${BASE}/mcp`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
-    { url: `${BASE}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${BASE}/contact`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-    { url: `${BASE}/privacy`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-    { url: `${BASE}/faq`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
-    { url: `${BASE}/use-cases`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
-    { url: `${BASE}/compare`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
-    { url: `${BASE}/docs`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
-    { url: `${BASE}/changelog`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
-    { url: `${BASE}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
-  ];
+  const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
+    url: `${BASE}${route.path}`,
+    changeFrequency: route.changeFrequency,
+    priority: route.priority,
+  }));
 
-  const children: MetadataRoute.Sitemap = [
-    ...useCaseSlugs.map((slug) => ({
-      url: `${BASE}/use-cases/${slug}`,
-      lastModified: now,
-      changeFrequency: "monthly" as const,
-      priority: 0.8,
-    })),
-    ...compareSlugs.map((slug) => ({
-      url: `${BASE}/compare/${slug}`,
-      lastModified: now,
-      changeFrequency: "monthly" as const,
-      priority: 0.8,
-    })),
-    ...docsSlugs.map((slug) => ({
-      url: `${BASE}/docs/${slug}`,
-      lastModified: now,
-      changeFrequency: "monthly" as const,
-      priority: 0.7,
-    })),
-    ...blogSlugs.map((slug) => ({
-      url: `${BASE}/blog/${slug}`,
-      lastModified: now,
-      changeFrequency: "monthly" as const,
+  const useCaseEntries: MetadataRoute.Sitemap = useCases.map((item) => ({
+    url: `${BASE}/use-cases/${item.slug}`,
+    changeFrequency: "monthly",
+    priority: 0.8,
+  }));
+
+  const docsEntries: MetadataRoute.Sitemap = docs.map((item) => ({
+    url: `${BASE}/docs/${item.slug}`,
+    changeFrequency: "monthly",
+    priority: 0.7,
+  }));
+
+  const blogEntries: MetadataRoute.Sitemap = posts.map((post) => ({
+    url: `${BASE}/blog/${post.slug}`,
+    lastModified: post.datePublished,
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
+
+  const comparisonEntries: MetadataRoute.Sitemap = comparisons
+    .filter(isComparisonIndexable)
+    .map((comparison) => ({
+      url: `${BASE}/compare/${comparison.slug}`,
+      changeFrequency: "monthly",
       priority: 0.6,
-    })),
-  ];
+    }));
 
-  return [...root, ...children];
+  return [
+    ...staticEntries,
+    ...useCaseEntries,
+    ...docsEntries,
+    ...blogEntries,
+    ...comparisonEntries,
+  ];
 }

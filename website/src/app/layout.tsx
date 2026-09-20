@@ -1,45 +1,31 @@
-import { Inter } from "next/font/google";
-import localFont from "next/font/local";
+import { Google_Sans_Flex } from "next/font/google";
 
 import type { Metadata } from "next";
 
 import { Footer } from "@/components/blocks/footer";
 import { Navbar } from "@/components/blocks/navbar";
 import { Analytics } from "@/components/site/analytics";
-import {
-  JsonLd,
-  organizationSchema,
-  websiteSchema,
-} from "@/components/site/json-ld";
+import { BackToTop } from "@/components/site/back-to-top";
+import { FirefoxBanner } from "@/components/site/firefox-banner";
+import { JsonLd, personSchema, websiteSchema } from "@/components/site/json-ld";
 import { LinkTracker } from "@/components/site/link-tracker";
 import "@/styles/globals.css";
 
-const dmSans = localFont({
-  src: [
-    { path: "../../fonts/dm-sans/DMSans-Regular.ttf", weight: "400", style: "normal" },
-    { path: "../../fonts/dm-sans/DMSans-Italic.ttf", weight: "400", style: "italic" },
-    { path: "../../fonts/dm-sans/DMSans-Medium.ttf", weight: "500", style: "normal" },
-    { path: "../../fonts/dm-sans/DMSans-MediumItalic.ttf", weight: "500", style: "italic" },
-    { path: "../../fonts/dm-sans/DMSans-SemiBold.ttf", weight: "600", style: "normal" },
-    { path: "../../fonts/dm-sans/DMSans-SemiBoldItalic.ttf", weight: "600", style: "italic" },
-    { path: "../../fonts/dm-sans/DMSans-Bold.ttf", weight: "700", style: "normal" },
-    { path: "../../fonts/dm-sans/DMSans-BoldItalic.ttf", weight: "700", style: "italic" },
-  ],
-  variable: "--font-dm-sans",
+const googleSansFlex = Google_Sans_Flex({
+  subsets: ["latin"],
+  variable: "--font-google-sans-flex",
   display: "swap",
+  preload: true,
 });
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://designmode.app"),
   title: {
-    default:
-      "Design Mode — Visual editor for any live website, ships to Claude Code, Cursor & MCP agents",
+    default: "Design Mode — Browser visual editor for AI coding agents",
     template: "%s | Design Mode",
   },
   description:
-    "Free, open-source browser extension (Chrome + Firefox) that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM structure, then ship the diff to Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible AI coding agent. One design tool for designers, developers, QA testers, PMs, indie hackers, and vibe coders.",
+    "Edit a live webpage visually in Chrome or Firefox, capture the exact changes, and send them to Claude Code, Cursor or another MCP-compatible coding agent.",
   applicationName: "Design Mode",
   category: "Developer Tools",
   keywords: [
@@ -85,27 +71,13 @@ export const metadata: Metadata = {
   authors: [{ name: "Sandeep Baskaran", url: "https://sandeepbaskaran.com" }],
   creator: "Sandeep Baskaran",
   publisher: "Sandeep Baskaran",
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-snippet": -1,
-      "max-image-preview": "large",
-      "max-video-preview": -1,
-    },
-  },
-  alternates: {
-    canonical: "https://designmode.app",
-  },
+
   openGraph: {
     type: "website",
     locale: "en_US",
-    title:
-      "Design Mode — Visual editor for any live website, ships to Claude Code, Cursor & MCP agents",
+    title: "Design Mode — Browser visual editor for AI coding agents",
     description:
-      "Edit any live website with visual controls — typography, colour, layout, spacing, copy, DOM — then ship the diff to Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible agent. Free + open source.",
+      "Edit a live webpage visually, capture the exact changes, and send them to Claude Code, Cursor or another MCP-compatible coding agent.",
     siteName: "Design Mode",
     url: "https://designmode.app",
     images: [
@@ -119,13 +91,16 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title:
-      "Design Mode — Visual editor for any live website, ships to Claude Code, Cursor & MCP agents",
-    description:
-      "Edit any live website with visual controls, then ship the diff to Claude Code, Cursor, or any MCP-compatible AI coding agent. Free + open source.",
     creator: "@sandeepbaskaran",
     site: "@sandeepbaskaran",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 
@@ -135,22 +110,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <body className={`${dmSans.variable} ${inter.variable} antialiased`}>
-        {/* Tag Firefox before paint so the Firefox brand accent (#8D4ABF) is
-            applied without a blue→purple flash. See :root[data-browser="firefox"]
-            in globals.css. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "(function(){try{if(/firefox/i.test(navigator.userAgent))document.documentElement.setAttribute('data-browser','firefox');}catch(e){}})();",
-          }}
-        />
-        <JsonLd data={organizationSchema} />
+    <html
+      lang="en"
+      className={googleSansFlex.variable}
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+    >
+      <body className="antialiased">
+        <JsonLd data={personSchema} />
         <JsonLd data={websiteSchema} />
+        <a
+          href="#main-content"
+          className="bg-background text-foreground focus:ring-ring sr-only fixed top-4 left-4 z-[100] rounded-md px-4 py-2 font-medium focus:not-sr-only focus:ring-2 focus:outline-none"
+        >
+          Skip to content
+        </a>
         <Navbar />
-        <main className="mx-auto w-full max-w-[1200px]">{children}</main>
+        <FirefoxBanner />
+        <main id="main-content" className="mx-auto w-full max-w-[1200px]">
+          {children}
+        </main>
         <Footer />
+        <BackToTop />
         <Analytics />
         <LinkTracker />
       </body>

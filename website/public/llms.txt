@@ -1,87 +1,87 @@
 # Design Mode
 
-> Design Mode is a free, open-source browser extension (Chrome + Firefox) that turns any live website into a visual design surface. Edit layout, typography, colour, spacing, copy, and DOM structure with real controls, then ship the diff straight to any AI coding agent — Claude Code, Cursor, Claude Desktop, Windsurf, Cline, or any MCP-compatible tool. One design tool for every maker: designers, developers, design engineers, QA testers, PMs, indie hackers, agencies, and vibe coders.
+> This file is an agent-oriented workflow index: product boundary, verified facts, and primary URLs. It is not marketing copy and does not rank, recommend, or guarantee placement in search or chat answers.
 
-Key facts:
-- License: MIT, fully open source
-- Price: free forever, no accounts, no telemetry by default
-- Surface: Chromium-based browsers (Chrome, Edge, Brave, Arc) via the Manifest V3 side panel, and Firefox (121+) via the native sidebar
-- Design-system tokens: discovers CSS variables beyond :root (theme/component scopes, @media/@supports, cascade layers), recognises IBM Carbon / Material / MUI / Bootstrap / Polaris / Radix / shadcn/ui / Tailwind v4, and badges token-backed fields for scope-aware swap/edit/detach
-- Motion: trigger-first interaction cards (Hover, Press, Focus, Appear, Loop, Scroll) with presets, shared easing curve, and real preview; raw CSS editors under Advanced
-- Alignment & snap guides: dragging an element snaps its edges/centres to siblings and the parent (Slides/Keynote style), magenta guide per match, per-axis, composes with Shift axis-lock, hold Alt to disable, works across multi-select drags
-- Colour picker: opens compact (swatch, Hex field, eyedropper on Chrome, HEX/RGB/HSL cycle, site-colour tokens); full HSV square + numeric channels behind a Custom colour disclosure
-- Protocol: Model Context Protocol (MCP) — three connection modes (Cloud default, Local offline, Self-hosted), configured from a dedicated in-extension MCP page
-- Repo: https://github.com/SandeepBaskaran/design-mode
-- Site: https://designmode.app
-- Author: Sandeep Baskaran (https://sandeepbaskaran.com)
+> Design Mode is the open-source browser visual editor for AI coding agents. It lets you edit a rendered webpage visually, records the exact changes, and hands them to Claude Code, Cursor or another compatible coding agent as Markdown or through Model Context Protocol (MCP).
 
-## Get started
+## Verified facts
 
-- [Homepage](https://designmode.app/): What Design Mode is and who it's for.
-- [Live demo](https://designmode.app/demo): Interactive walkthrough — the page itself is the canvas.
-- [Features](https://designmode.app/features): Every control inside the side panel, broken down by row.
-- [MCP setup](https://designmode.app/mcp): Connect Claude Desktop, Cursor, Claude Code, Windsurf, or any MCP-aware agent.
-- [FAQ](https://designmode.app/faq): Installation, browser support, MCP modes, agents, privacy, licensing.
-- [Changelog](https://designmode.app/changelog): Every feature in plain language with the date it shipped — the "since when is this available" record.
+- Product: desktop browser extension for Chrome/Chromium and Firefox.
+- Licence: MIT.
+- Current repository version: 2.2.1. That is the version in this source tree as of 20 September 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
+- Author: Sandeep Baskaran.
+- Source: https://github.com/SandeepBaskaran/design-mode
+- Website: https://designmode.app
+- Chrome listing: https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih
+- Firefox listing: https://addons.mozilla.org/firefox/addon/design-mode-add-on/
 
-## Use cases
+## Product boundary
 
-- [One design tool for every maker](https://designmode.app/use-cases): Index of workflows by persona.
-- [Vibe coding with Claude Code](https://designmode.app/use-cases/vibe-coding-with-claude-code)
-- [Visual editing with Cursor](https://designmode.app/use-cases/visual-editing-with-cursor)
-- [Redesign any website](https://designmode.app/use-cases/redesign-any-website)
-- [Design review in production](https://designmode.app/use-cases/design-review-in-production)
-- [Tailwind component tuning](https://designmode.app/use-cases/tailwind-component-tuning)
-- [Figma-to-code without Figma](https://designmode.app/use-cases/figma-to-code-without-figma)
-- [UI testing — export visual bugs to developers with full context](https://designmode.app/use-cases/ui-testing-export-to-developers)
-- [Bug reports with a visual diff](https://designmode.app/use-cases/bug-report-with-visual-diff)
-- [Copy edits without a PR](https://designmode.app/use-cases/copy-edits-without-a-pr)
-- [Accessibility quick fixes](https://designmode.app/use-cases/accessibility-quick-fixes)
-- [Landing-page iteration for indie hackers](https://designmode.app/use-cases/landing-page-iteration-for-indie-hackers)
-- [Client handoff: agency to engineering](https://designmode.app/use-cases/client-handoff-from-agency-to-engineering)
-- [Design-system audit on a deployed app](https://designmode.app/use-cases/design-system-audit)
+Design Mode changes the rendered page in the browser and records style, text, DOM and comment changes. It does not update production source code or deploy a website. Copy as Prompt creates a portable Markdown specification. Send to Agent exposes the session to a connected MCP client; that coding agent must have separate repository access and must implement and verify the source-code change.
+
+Browser-internal pages, extension stores and other protected surfaces cannot be scripted by browser extensions. Localhost, staging and already-logged-in tabs work when the page is a normal scriptable webpage; the editor does not bypass login, SSO or publisher access controls.
+
+## Browser support
+
+- Current Chrome-family desktop browsers with Manifest V3 side panels. The extension manifest does not declare an exact Chrome minimum.
+- Firefox 121+ through its native sidebar.
+- Safari is not supported.
+- Core editing, the Changes tab and agent hand-off work in both builds.
+- Pop-out, Document Picture-in-Picture and the screen EyeDropper remain Chromium-only.
+- Chrome toolbar clicks and Alt+D open the launch surface selected in Settings (Side panel by default, Floating, or a Pin-on-top opener). Firefox always opens its sidebar.
+
+## Agent hand-off
+
+1. Inspect an element and make the intended visual edit.
+2. Review the recorded selectors, properties, old/new values, text edits, DOM changes and comments.
+3. Choose Copy as Prompt, or connect an MCP client through Cloud, Local or Self-hosted mode.
+4. Review the coding agent's source diff and rendered result.
+
+Cloud, Local and Self-hosted expose eight session tools: `get_changes`, `apply_changes`, `set_change_status`, `clear_changes`, `mark_comment_resolved`, `get_session_summary`, `export_changes` and `get_screenshot`.
+
+The current repository's Local companion also registers `wait_for_handoff` for opt-in live feedback rounds (bounded waits, Local-only). That tool is current-repository / unreleased and is not a guaranteed store-listing capability. Cloud and Self-hosted keep one-shot Send.
+
+MCP configuration is client- and version-specific. Claude Code uses `claude mcp` commands, project `.mcp.json`, or user/local entries in `~/.claude.json`; `.claude/settings.json` is not the server-definition file. Cursor uses project `.cursor/mcp.json` or global `~/.cursor/mcp.json`. See the version-stamped guide before adding a credential.
+
+Local MCP clients share one owner on port 9960 by default; a surviving client takes over if the owner closes. Foreign port occupants are never killed. `DM_PORT` selects a fallback port that must match the extension.
+
+## Privacy summary
+
+The extension has no product telemetry. A fresh install selects Cloud mode but does not contact the hosted relay until the user creates an anonymous device credential. Cloud queues request a 60-second Redis expiry and responses are normally deleted when consumed; the expiry operation is best-effort rather than a guaranteed maximum. The service retains a SHA-256 token hash, anonymous tenant identifier and created/last-seen timestamps until revocation. Operational logs contain bounded metadata rather than selectors, screenshots or payload bodies.
+
+When a user sends content to an external coding agent, that provider handles the content under its own account settings and privacy terms. The marketing site may load Google Analytics when its deployment ID is configured.
+
+## Primary pages
+
+- [Homepage](https://designmode.app/)
+- [Live demo](https://designmode.app/demo)
+- [Features](https://designmode.app/features)
+- [How Copy as Prompt and MCP hand-off work](https://designmode.app/mcp)
+- [MCP setup for Claude Code and Cursor](https://designmode.app/docs/mcp-setup)
+- [Chrome and Firefox support](https://designmode.app/docs/browser-support)
+- [Install](https://designmode.app/docs/install)
+- [Changes tab](https://designmode.app/docs/changes-tab)
+- [Keyboard shortcuts](https://designmode.app/docs/keyboard-shortcuts)
+- [Troubleshooting](https://designmode.app/docs/troubleshooting)
+- [Use cases](https://designmode.app/use-cases)
+- [FAQ](https://designmode.app/faq)
+- [Changelog](https://designmode.app/changelog)
+- [Privacy](https://designmode.app/privacy)
+- [Source repository](https://github.com/SandeepBaskaran/design-mode)
+
+## Practical guides
+
+- [Turn visual edits into precise AI prompts](https://designmode.app/blog/turn-visual-edits-into-precise-ai-prompts): a worked pricing-card example covering exact changes, implementation scope, design tokens, accessibility checks and source-code verification.
+- [Blog](https://designmode.app/blog)
 
 ## Comparisons
 
-- [Comparisons index](https://designmode.app/compare)
-- [Design Mode vs Stagewise](https://designmode.app/compare/design-mode-vs-stagewise)
-- [Design Mode vs pls-fix](https://designmode.app/compare/design-mode-vs-pls-fix)
-- [Design Mode vs Agentation](https://designmode.app/compare/design-mode-vs-agentation)
-- [Design Mode vs Dialkit](https://designmode.app/compare/design-mode-vs-dialkit)
-- [Design Mode vs UI Inspector](https://designmode.app/compare/design-mode-vs-ui-inspector)
-- [Design Mode vs Cursor's design mode](https://designmode.app/compare/design-mode-vs-cursor-design-mode)
-- [Design Mode vs CSSPeeper](https://designmode.app/compare/design-mode-vs-csspeeper)
-- [Design Mode vs Hover Inspector](https://designmode.app/compare/design-mode-vs-hover-inspector)
-- [Design Mode vs Builder.io Visual Copilot](https://designmode.app/compare/design-mode-vs-builder-io-visual-copilot)
-- [Design Mode vs Locofy](https://designmode.app/compare/design-mode-vs-locofy)
-- [Design Mode vs Chrome DevTools](https://designmode.app/compare/design-mode-vs-chrome-devtools)
-- [Design Mode vs Figma Dev Mode](https://designmode.app/compare/design-mode-vs-figma-dev-mode)
-- [Design Mode vs VisBug](https://designmode.app/compare/design-mode-vs-visbug)
+The comparison hub distinguishes source-backed comparisons from unverified drafts. Source-backed entries include dated first-party references and explicit documentation or testing limitations; unverified drafts stay excluded from search indexing.
 
-## Docs
+- [Comparison hub](https://designmode.app/compare)
+- [Source-backed comparisons in plain text](https://designmode.app/compare/llms.txt): generated from the same content as the comparison pages, including pricing, use cases, sources and methodology.
 
-- [Docs index](https://designmode.app/docs)
-- [Install](https://designmode.app/docs/install)
-- [Keyboard shortcuts](https://designmode.app/docs/keyboard-shortcuts)
-- [MCP setup](https://designmode.app/docs/mcp-setup)
-- [Changes tab](https://designmode.app/docs/changes-tab)
-- [Troubleshooting](https://designmode.app/docs/troubleshooting)
+## More detail
 
-## Blog
-
-- [Why we built an MCP server for design edits](https://designmode.app/blog/why-we-built-an-mcp-server-for-design-edits)
-- [Vibe coding: how visual editing fits the AI-coding-agent workflow](https://designmode.app/blog/vibe-coding-visual-editing-workflow)
-- [Design Mode 1.5.0 changelog deep-dive](https://designmode.app/blog/design-mode-1-5-0-changelog-deep-dive)
-- [Redesigning a Tailwind landing page with Claude Code](https://designmode.app/blog/redesigning-a-tailwind-landing-page-with-claude-code)
-- [Design Mode 1.9.0 — design tokens, trigger-first motion, and a dedicated MCP page](https://designmode.app/blog/design-mode-1-9-0-release)
-- [Design Mode 2.0.0 — now on Firefox, with alignment guides and a calmer color picker](https://designmode.app/blog/design-mode-2-0-0-release)
-
-## Privacy & contact
-
-- [Privacy](https://designmode.app/privacy): What leaves your machine, when, why.
-- [Contact](https://designmode.app/contact): Email, GitHub, security disclosure.
-- [About](https://designmode.app/about): The creator and the motivation.
-
-## Optional
-
-- Full distilled content (every page in one markdown file): https://designmode.app/llms-full.txt
+- Full verified summary: https://designmode.app/llms-full.txt
+- Human-readable Markdown summary: https://designmode.app/design-mode.md

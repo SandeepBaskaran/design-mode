@@ -5,14 +5,20 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Design Mode",
     short_name: "Design Mode",
     description:
-      "A free, open-source browser extension (Chrome + Firefox) that turns any website into a live design surface, then ships the diff to Claude Code, Cursor, and any MCP-compatible AI coding agent.",
+      "An open-source Chrome and Firefox visual editor that records rendered-page changes for coding-agent hand-off.",
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",
     theme_color: "#ffffff",
     icons: [
-      { src: "/favicon.ico", sizes: "any", type: "image/x-icon" },
-      { src: "/og-image.png", sizes: "1200x630", type: "image/png" },
+      { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      {
+        src: "/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "maskable",
+      },
     ],
   };
 }

@@ -4,70 +4,136 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
-import { comparisons } from "@/content/comparisons";
+import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
+import { comparisons, isComparisonIndexable } from "@/content/comparisons";
+
+const pageTitle = "Browser visual editors and AI feedback tools";
+const pageDescription =
+  "Compare live-page editors, browser inspectors, annotation tools, Figma-to-code products and editor-native design modes by the workflow they actually support.";
 
 export const metadata = {
-  title:
-    "Comparisons — Design Mode vs Stagewise, DevTools, Figma Dev Mode & more",
-  description:
-    "Honest comparisons of Design Mode against every adjacent tool: Stagewise, pls-fix, Agentation, Dialkit, UI Inspector, Cursor's design mode, CSSPeeper, Hover Inspector, Builder.io Visual Copilot, Locofy, Chrome DevTools, Figma Dev Mode, VisBug.",
-  keywords: [
-    "Design Mode alternative",
-    "Stagewise alternative",
-    "Chrome DevTools alternative",
-    "Figma Dev Mode alternative",
-    "VisBug alternative",
-    "visual editor comparison",
-    "AI design tool comparison",
-  ],
+  title: { absolute: `${pageTitle} | Design Mode` },
+  description: pageDescription,
   alternates: { canonical: "https://designmode.app/compare" },
   openGraph: {
-    title: "Comparisons — Design Mode",
-    description:
-      "Honest side-by-side comparisons against every adjacent design + visual-editing tool.",
+    type: "website",
+    title: `${pageTitle} | Design Mode`,
+    description: pageDescription,
     url: "https://designmode.app/compare",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${pageTitle} | Design Mode`,
+    description: pageDescription,
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
+
+const criteria = [
+  "Can it directly edit the rendered page, or only annotate and inspect?",
+  "What changes does it capture: styles, text, DOM, comments or screenshots?",
+  "How does it hand work to a person or coding agent?",
+  "Which browsers, editors and source frameworks constrain the workflow?",
+  "Is the product open source, paid, hosted or tied to another platform?",
+];
 
 export default function ComparisonsIndex() {
   return (
     <>
+      <JsonLd
+        data={collectionPageSchema({
+          name: pageTitle,
+          description: pageDescription,
+          url: "https://designmode.app/compare",
+          items: comparisons.filter(isComparisonIndexable).map((item) => ({
+            name: `Design Mode vs ${item.competitor}`,
+            url: `https://designmode.app/compare/${item.slug}`,
+          })),
+        })}
+      />
+
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Design Mode vs everything else
+              Which browser visual editor fits your workflow?
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-              Honest, no-disparagement side-by-sides against every
-              adjacent tool — visual editors, browser inspectors, Figma
-              plugins, and in-editor design modes. Pick the one that fits
-              your workflow. If that one isn&apos;t Design Mode, that&apos;s
-              fine too.
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed md:text-2xl">
+              There is no single best tool for every job. Choose a direct
+              live-page editor when you need to make the intended visual change,
+              an annotation tool when feedback is enough, browser automation for
+              agent verification, or Figma-to-code software when the design file
+              is the source of truth.
             </p>
           </div>
         </section>
       </Background>
 
       <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-5xl" />
+        <div className="container max-w-5xl">
+          <h2 className="text-2xl tracking-tight md:text-3xl">
+            How to evaluate the options
+          </h2>
+          <p className="text-muted-foreground mt-4 max-w-3xl leading-relaxed">
+            Design Mode is strongest when you want to edit a rendered webpage,
+            record structured changes, and hand them to an independent coding
+            agent. It is not a source-code editor, deployment system or
+            substitute for a design file when you need greenfield exploration.
+          </p>
+          <ul className="text-muted-foreground mt-6 grid gap-4 md:grid-cols-2">
+            {criteria.map((criterion) => (
+              <li
+                key={criterion}
+                className="rounded-lg border p-4 leading-relaxed"
+              >
+                {criterion}
+              </li>
+            ))}
+          </ul>
+          <p className="bg-muted text-muted-foreground mt-6 rounded-lg border p-4 text-base leading-relaxed">
+            Source-backed comparisons include dated references and explain what
+            was documented or tested. Older unverified drafts remain excluded
+            from search indexing until their claims have been reviewed.
+          </p>
+        </div>
+
+        <DashedLine className="container mt-16 max-w-5xl" />
         <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {comparisons.map((c) => (
+          {comparisons.map((comparison) => (
             <Link
-              key={c.slug}
-              href={`/compare/${c.slug}`}
-              className="group flex flex-col rounded-2xl border p-6 transition-shadow hover:shadow-md"
+              key={comparison.slug}
+              href={`/compare/${comparison.slug}`}
+              className="group flex flex-col rounded-lg border p-6 transition-shadow hover:shadow-md"
             >
-              <h2 className="font-display text-lg font-semibold">
-                vs {c.competitor}
+              <span className="text-muted-foreground text-base font-medium tracking-wide uppercase">
+                {isComparisonIndexable(comparison)
+                  ? "Source-backed comparison"
+                  : "Research draft"}
+              </span>
+              <h2 className="font-display mt-2 text-2xl font-semibold">
+                Design Mode vs {comparison.competitor}
               </h2>
-              <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-                {c.oneLiner}
+              <p className="text-muted-foreground mt-2 text-base leading-relaxed">
+                {comparison.oneLiner}
               </p>
-              <span className="text-foreground/80 mt-4 inline-flex items-center gap-1 text-sm font-medium underline underline-offset-4">
+              <span className="text-foreground/80 mt-4 inline-flex items-center gap-2 text-base font-medium underline underline-offset-8">
                 Read the comparison{" "}
-                <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                <ArrowUpRight className="size-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
               </span>
             </Link>
           ))}

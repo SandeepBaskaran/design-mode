@@ -124,14 +124,14 @@ export const Testimonials = ({
                           />
                         </div>
                         <div className="flex flex-1 flex-col justify-between gap-10 p-6">
-                          <blockquote className="font-display text-lg leading-none! font-medium md:text-xl lg:text-2xl">
+                          <blockquote className="font-display text-2xl leading-none! font-medium lg:text-3xl">
                             {testimonial.quote}
                           </blockquote>
-                          <div className="space-y-0.5">
+                          <div className="space-y-0">
                             <div className="text-primary font-semibold">
                               {testimonial.author}, {testimonial.role}
                             </div>
-                            <div className="text-muted-foreground text-sm">
+                            <div className="text-muted-foreground text-base">
                               {testimonial.company}
                             </div>
                           </div>
@@ -141,7 +141,7 @@ export const Testimonials = ({
                   </CarouselItem>
                 ))}
               </CarouselContent>
-              <div className="mt-8 flex gap-3">
+              <div className="mt-8 flex gap-4">
                 <CarouselPrevious className="bg-muted hover:bg-muted/80 static size-14.5 translate-x-0 translate-y-0 transition-colors [&>svg]:size-6 lg:[&>svg]:size-8" />
                 <CarouselNext className="bg-muted hover:bg-muted/80 static size-14.5 translate-x-0 translate-y-0 transition-colors [&>svg]:size-6 lg:[&>svg]:size-8" />
               </div>

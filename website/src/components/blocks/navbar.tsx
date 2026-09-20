@@ -2,16 +2,21 @@
 
 import { useState } from "react";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { AddToChromeCta, OtherStoreLink } from "@/components/site/add-to-chrome-cta";
+import {
+  AddToChromeCta,
+  OtherStoreLink,
+} from "@/components/site/add-to-chrome-cta";
 import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
   NavigationMenuItem,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
+import { withNavRef } from "@/lib/nav-ref";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
@@ -24,7 +29,7 @@ const ITEMS = [
   { label: "Blog", href: "/blog" },
 ];
 
-const REPO_URL = "https://github.com/SandeepBaskaran/design-mode";
+const REPO_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");
 
 type GtagFn = (
   command: "event",
@@ -35,30 +40,6 @@ type GtagFn = (
 function trackCtaClick(cta: string) {
   const w = window as unknown as { gtag?: GtagFn };
   if (w.gtag) w.gtag("event", "cta_click", { cta });
-}
-
-function DesignModeMark({ size = 22 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id="dm-mark-grad" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6366f1" />
-          <stop offset="1" stopColor="#ec4899" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M6 3.2 L20 12 L13 13.2 L9.6 19.6 Z"
-        fill="url(#dm-mark-grad)"
-      />
-    </svg>
-  );
 }
 
 function GithubMark({ size = 16 }: { size?: number }) {
@@ -81,32 +62,32 @@ export const Navbar = () => {
   const pathname = usePathname();
 
   return (
-    <section
-      className={cn(
-        "bg-ink/90 text-ink-foreground absolute left-1/2 z-50 w-[min(95%,1024px)] max-w-[1024px] -translate-x-1/2 rounded-full border border-white/10 shadow-lg backdrop-blur-md transition-all duration-300",
-        "top-3",
-      )}
-    >
-      <div className="flex items-center justify-between py-2.5 pr-2.5 pl-4">
+    <header className="bg-background text-foreground sticky top-0 z-50 w-full border-b">
+      <div className="mx-auto grid min-h-16 max-w-[1440px] grid-cols-[1fr_auto] items-center gap-4 px-6 py-2 xl:grid-cols-[1fr_auto_1fr]">
         <Link href="/" className="flex shrink-0 items-center gap-2">
-          <DesignModeMark size={22} />
-          <span className="font-display text-ink-foreground text-sm font-semibold tracking-tight">
+          <Image
+            src="/brand-icon.png"
+            width={24}
+            height={24}
+            alt=""
+            unoptimized
+            className="size-6"
+          />
+          <span className="font-display text-foreground text-base font-semibold tracking-tight">
             Design Mode
           </span>
         </Link>
 
         {/* Desktop Navigation */}
-        <NavigationMenu className="max-lg:hidden">
-          <NavigationMenuList className="gap-4">
+        <NavigationMenu className="max-xl:hidden">
+          <NavigationMenuList className="gap-0">
             {ITEMS.map((link) => (
               <NavigationMenuItem key={link.label}>
                 <Link
                   href={link.href}
                   className={cn(
-                    "relative bg-transparent px-1.5 text-sm transition-colors",
-                    pathname === link.href
-                      ? "text-ink-foreground font-semibold"
-                      : "text-ink-foreground/60 hover:text-ink-foreground font-medium",
+                    "text-foreground rounded-lg px-4 py-2 text-base font-medium transition-colors hover:bg-[#eeeeee]",
+                    pathname === link.href && "font-semibold",
                   )}
                 >
                   {link.label}
@@ -117,36 +98,35 @@ export const Navbar = () => {
         </NavigationMenu>
 
         {/* CTA cluster: github → other-store icon → primary install CTA */}
-        <div className="flex items-center gap-2">
-          <a
-            href={REPO_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => trackCtaClick("github")}
-          >
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-ink-foreground/80 hover:text-ink-foreground hover:bg-white/10"
-              aria-label="GitHub repository"
+        <div className="flex items-center gap-2 justify-self-end">
+          <Button asChild variant="ghost" size="icon-sm">
+            <a
+              href={REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Design Mode source code on GitHub"
+              onClick={() => trackCtaClick("github")}
             >
               <GithubMark size={16} />
-            </Button>
-          </a>
+            </a>
+          </Button>
           {/* "Also available on the other browser" — Firefox icon on Chrome,
               Chrome icon on Firefox. Signals cross-browser availability. */}
-          <OtherStoreLink className="hover:bg-white/10" />
-          <div className="max-lg:hidden">
-            <AddToChromeCta size="sm" />
+          <OtherStoreLink />
+          <div className="max-xl:hidden">
+            <AddToChromeCta />
           </div>
 
           {/* Hamburger (mobile only) */}
           <button
-            className="text-ink-foreground relative flex size-8 lg:hidden"
+            data-slot="button"
+            className="text-foreground relative flex size-8 xl:hidden"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            aria-label="Open main menu"
+            aria-label={isMenuOpen ? "Close main menu" : "Open main menu"}
+            aria-expanded={isMenuOpen}
+            aria-controls="mobile-navigation"
           >
-            <div className="absolute top-1/2 left-1/2 block w-[18px] -translate-x-1/2 -translate-y-1/2">
+            <span data-button-content className="relative m-auto block w-4">
               <span
                 aria-hidden="true"
                 className={`absolute block h-0.5 w-full rounded-full bg-current transition duration-500 ease-in-out ${isMenuOpen ? "rotate-45" : "-translate-y-1.5"}`}
@@ -159,41 +139,42 @@ export const Navbar = () => {
                 aria-hidden="true"
                 className={`absolute block h-0.5 w-full rounded-full bg-current transition duration-500 ease-in-out ${isMenuOpen ? "-rotate-45" : "translate-y-1.5"}`}
               />
-            </div>
+            </span>
           </button>
         </div>
       </div>
 
       {/* Mobile menu */}
       <div
+        id="mobile-navigation"
+        aria-hidden={!isMenuOpen}
+        inert={!isMenuOpen}
         className={cn(
-          "bg-ink text-ink-foreground fixed inset-x-0 top-[calc(100%+0.75rem)] flex flex-col rounded-3xl border border-white/10 p-6 shadow-xl transition-all duration-300 ease-in-out lg:hidden",
+          "bg-background text-foreground absolute inset-x-0 top-full flex max-h-[calc(100dvh-5rem)] flex-col overflow-y-auto border-b p-6 shadow-xl transition-all duration-300 ease-in-out motion-reduce:transition-none xl:hidden",
           isMenuOpen
             ? "visible translate-y-0 opacity-100"
             : "invisible -translate-y-4 opacity-0",
         )}
       >
-        <nav className="flex flex-1 flex-col divide-y divide-white/10">
+        <nav className="divide-border flex flex-1 flex-col divide-y">
           {ITEMS.map((link) => (
             <Link
               key={link.label}
               href={link.href}
               className={cn(
-                "py-4 text-base transition-colors first:pt-0 last:pb-0",
-                pathname === link.href
-                  ? "text-ink-foreground font-semibold"
-                  : "text-ink-foreground/60 hover:text-ink-foreground font-medium",
+                "text-foreground rounded-lg px-4 py-2 text-base font-medium transition-colors first:mt-0 hover:bg-[#eeeeee]",
+                pathname === link.href && "font-semibold",
               )}
               onClick={() => setIsMenuOpen(false)}
             >
               {link.label}
             </Link>
           ))}
-          <div className="pt-5">
+          <div className="pt-4">
             <AddToChromeCta className="w-full" />
           </div>
         </nav>
       </div>
-    </section>
+    </header>
   );
 };

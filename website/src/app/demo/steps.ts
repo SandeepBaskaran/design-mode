@@ -5,10 +5,10 @@
 export type Step = {
   id: string;
   title: string;
-  body: string[];        // paragraphs
-  tryIt?: string;        // copy for the "Try it" callout
-  targetId?: string;     // matches a key in DemoTargets if this step has an interactive demo block
-  parentId?: string;     // for nested nav (Design sub-sections)
+  body: string[]; // paragraphs
+  tryIt?: string; // copy for the "Try it" callout
+  targetId?: string; // matches a key in DemoTargets if this step has an interactive demo block
+  parentId?: string; // for nested nav (Design sub-sections)
   // Optional follow-on link rendered at the bottom of the step card —
   // used to bridge the demo into the /mcp setup tour.
   nextLink?: { label: string; href: string };
@@ -308,7 +308,7 @@ export const STEPS: Step[] = [
     body: [
       "Design Mode ships with an optional MCP companion that bridges the extension to your coding agent (Claude Code, Cursor, etc.). With MCP running and an agent connected, your changes can be sent live with one click instead of being copied through the clipboard.",
       "MCP configuration lives on its own dedicated page inside the extension — not in Settings. Click the MCP chip in the panel header (its trailing chevron opens the page) to pick a connection mode, watch status, and manage the token.",
-      "Three connection modes: Cloud (default, hosted relay, no install), Local (a companion server on your machine, started with npm start), and Self-hosted (the same relay code on infrastructure you run).",
+      "Three connection modes: Cloud (selected on a fresh install but disconnected until you create a credential), Local (a companion server on your machine, started with npm start), and Self-hosted (relay code on infrastructure you operate).",
     ],
     tryIt:
       "Click the MCP chip in the panel header to open the dedicated MCP page. From the repo root: `npm start --prefix packages/mcp-local` for Local mode. Watch the chip flip from offline (grey) to running to connected once your agent attaches.",
@@ -328,13 +328,13 @@ export const STEPS: Step[] = [
     id: "send-to-agent",
     title: "Send to Agent",
     body: [
-      "Send to Agent opens a step-based guided modal — confirm the connection, review what's about to ship, then push it over MCP. No clipboard round-trip. Enabled when MCP is running AND an agent is connected; the button's tooltip names the specific blocker if either is missing.",
+      "Send to Agent opens a step-based guided modal — confirm the connection, review the session, then mark it ready over MCP. No clipboard round-trip. It is enabled when MCP is running and an agent is connected; the button's tooltip names the blocker if either is missing.",
       "Once you send, get_changes and get_session_summary expose a real handoff field, so the agent's next read knows this batch of edits is the one you just approved — an explicit 'these are ready' signal instead of the agent guessing.",
-      "This is the fastest path from 'I just designed it in the browser' to 'the source code is now updated'.",
-      "Haven't set up an agent yet? The MCP tour walks you through all three connection modes (Local, Cloud, Self-hosted) with copy-paste config snippets for Claude Desktop, Cursor, and Claude Code — `Set up your agent →` link below.",
+      "The connected client still needs separate repository access, and you must ask it to implement the changes and review its source diff.",
+      "Haven't set up an agent yet? The MCP guide covers Local, Cloud and Self-hosted modes, with version-stamped instructions for Claude Code and Cursor and a warning to verify other clients separately.",
     ],
     tryIt:
-      "With MCP running and your agent attached, click Send to Agent and step through the guided modal. The agent receives a structured message with every change in this demo session, flagged via the handoff field.",
+      "With MCP running and your agent attached, click Send to Agent and step through the guided modal. Then ask the client to read the current session; the handoff field identifies the batch you marked ready.",
     nextLink: { label: "Set up your agent →", href: "/mcp" },
   },
 ];

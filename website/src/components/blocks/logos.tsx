@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import Marquee from "react-fast-marquee";
 
+import { withNavRef } from "@/lib/nav-ref";
 import { cn } from "@/lib/utils";
 
 type Company = {
@@ -73,7 +74,7 @@ export const Logos = () => {
     <section className="overflow-hidden pb-28 lg:pb-32">
       <div className="container space-y-10 lg:space-y-16">
         <div className="text-center">
-          <h2 className="mb-4 text-xl text-balance md:text-2xl lg:text-3xl">
+          <h2 className="mb-4 text-2xl text-balance md:text-3xl lg:text-4xl">
             Talks to every AI tool that speaks MCP.
             <br className="max-md:hidden" />
             <span className="text-muted-foreground">
@@ -114,13 +115,13 @@ const LogoRow = ({ companies, gridClassName, direction }: LogoRowProps) => {
           )}
         >
           {companies.map((company, index) => (
-            <Link href={company.href} target="_blank" key={index}>
+            <Link href={withNavRef(company.href)} target="_blank" key={index}>
               <Image
                 src={company.logo}
                 alt={`${company.name} logo`}
                 width={company.width}
                 height={company.height}
-                className="h-7 w-auto object-contain brightness-0 opacity-50 transition hover:opacity-100"
+                className="h-8 w-auto object-contain opacity-50 brightness-0 transition hover:opacity-100"
               />
             </Link>
           ))}
@@ -132,7 +133,7 @@ const LogoRow = ({ companies, gridClassName, direction }: LogoRowProps) => {
         <Marquee direction={direction} pauseOnHover>
           {companies.map((company, index) => (
             <Link
-              href={company.href}
+              href={withNavRef(company.href)}
               target="_blank"
               key={index}
               className="mx-8 inline-block"
@@ -142,7 +143,7 @@ const LogoRow = ({ companies, gridClassName, direction }: LogoRowProps) => {
                 alt={`${company.name} logo`}
                 width={company.width}
                 height={company.height}
-                className="h-7 w-auto object-contain brightness-0 opacity-50 transition hover:opacity-100"
+                className="h-8 w-auto object-contain opacity-50 brightness-0 transition hover:opacity-100"
               />
             </Link>
           ))}

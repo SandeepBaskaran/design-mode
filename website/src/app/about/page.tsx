@@ -5,9 +5,9 @@ import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, personSchema } from "@/components/site/json-ld";
 
 export const metadata = {
-  title: "About — Why Design Mode exists",
+  title: { absolute: "Why Design Mode exists | Design Mode" },
   description:
-    "Design Mode is built by Sandeep Baskaran, a design engineer based in Bengaluru. Built to close the loop between visual design intent and AI coding agents — agents write the code, you stay in the design loop.",
+    "Why Sandeep Baskaran built an open-source browser visual editor that turns rendered-page changes into precise coding-agent instructions.",
   keywords: [
     "Sandeep Baskaran",
     "design engineer",
@@ -17,11 +17,33 @@ export const metadata = {
   ],
   alternates: { canonical: "https://designmode.app/about" },
   openGraph: {
-    title: "About — Why Design Mode exists",
+    type: "website",
+    title: "Why Design Mode exists | Design Mode",
     description:
-      "Built by Sandeep Baskaran to close the loop between visual design and AI coding agents.",
+      "Why Sandeep Baskaran built an open-source browser visual editor that turns rendered-page changes into precise coding-agent instructions.",
     url: "https://designmode.app/about",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Why Design Mode exists | Design Mode",
+    description:
+      "Why Sandeep Baskaran built an open-source browser visual editor that turns rendered-page changes into precise coding-agent instructions.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 
@@ -31,7 +53,7 @@ export default function AboutPage() {
       <JsonLd data={personSchema} />
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <AboutHero />
         </section>
       </Background>

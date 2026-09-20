@@ -10,259 +10,64 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { faqGroups } from "@/content/product-facts";
 
 export const metadata = {
-  title:
-    "FAQ — Design Mode questions: installation, MCP, Claude Code, Cursor, privacy",
+  title: { absolute: "Design Mode FAQ — Browser editing, MCP and privacy" },
   description:
-    "Frequently asked questions about Design Mode: install, supported browsers, MCP setup for Claude Code / Cursor / Claude Desktop / Windsurf / Cline, privacy, comparisons (DevTools, Figma Dev Mode, Stagewise), licensing, contributing, troubleshooting.",
-  keywords: [
-    "Design Mode FAQ",
-    "Design Mode install help",
-    "Design Mode privacy questions",
-    "MCP setup FAQ",
-    "Design Mode vs Chrome DevTools",
-    "Design Mode vs Figma",
-    "Claude Code FAQ",
-    "Cursor MCP FAQ",
-  ],
+    "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome and Firefox, and handles storage and Cloud relay data.",
   alternates: { canonical: "https://designmode.app/faq" },
   openGraph: {
-    title: "FAQ — Design Mode",
+    type: "website",
+    title: "Design Mode FAQ — Browser editing, MCP and privacy",
     description:
-      "Install, MCP setup, agent compatibility, privacy, comparisons, and contributing — answered.",
+      "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome and Firefox, and handles storage and Cloud relay data.",
     url: "https://designmode.app/faq",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Design Mode FAQ — Browser editing, MCP and privacy",
+    description:
+      "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome and Firefox, and handles storage and Cloud relay data.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 
-type QA = { question: string; answer: string };
-type Group = { title: string; items: QA[] };
-
-const groups: Group[] = [
-  {
-    title: "Getting started",
-    items: [
-      {
-        question: "What is Design Mode?",
-        answer:
-          "Design Mode is a free, open-source browser extension (Chrome + Firefox) that turns any live website into a visual design surface. Click any element on any page and edit its layout, typography, colour, spacing, copy, or DOM with real controls — then ship the diff to your AI coding agent over Model Context Protocol (MCP). One design tool for designers, developers, QA testers, PMs, indie hackers, and vibe coders.",
-      },
-      {
-        question: "Who is Design Mode for?",
-        answer:
-          "Designers (edit on the live product, not a drifted mockup), design engineers (own the loop from sketch to PR), frontend developers and vibe coders (visually iterate, then have the agent commit the code), QA / UI testers (export visual bugs with full developer context), product managers (file precise bug reports), content / marketing teams (fix microcopy without a Figma round-trip), indie hackers and solo founders (iterate on their own landing page with an AI agent in the loop), agencies (hand engineering a precise spec), and design-system maintainers (audit token drift on the deployed app).",
-      },
-      {
-        question: "How is Design Mode different from Chrome DevTools?",
-        answer:
-          "Chrome DevTools is a developer inspector — edits don't persist across reloads, there's no design surface (sliders, colour pickers, motion controls, contrast checker), and there's no handoff to an AI agent. Design Mode is design-intent-first: persistent change history, real visual controls, and one-click ship-to-agent over MCP.",
-      },
-      {
-        question: "Is Design Mode for designers or developers?",
-        answer:
-          "Both. The shared surface is: edit the live page visually, ship a precise diff to whoever (or whatever AI agent) writes the code.",
-      },
-      {
-        question: "Does Design Mode understand my design system's tokens?",
-        answer:
-          "Yes. A token-discovery engine finds every CSS custom property a page declares — not just :root — including theme scopes, component scopes, matching @media/@supports blocks, and cascade layers, and recognises known systems (IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, Tailwind v4). Any Design-tab field authored from a token shows a ◆ badge for Swap token…, Edit token globally, or Detach from token, and edits are scope-aware so a themed token doesn't get clobbered across every theme at once.",
-      },
-      {
-        question: "How does Motion work?",
-        answer:
-          "Motion leads with trigger-first interaction cards — Hover, Press, and Focus animate to a target state; Appear animates from a start state on mount; Loop plays an infinite keyframe; Scroll drives a scroll-linked animation. Each card gets presets, a shared easing curve, a plain-English summary, and a real preview. Raw per-property CSS editors (transition, animation, transform, and more) still exist under Motion → Advanced.",
-      },
-      {
-        question: "How do I install it?",
-        answer:
-          "On Chrome, Edge, Brave, or Arc: open the Chrome Web Store listing, click Add to Chrome, pin the side panel. On Firefox: open the Firefox Add-ons (AMO) listing and click Add to Firefox — the toolbar button (or Alt+D) toggles the sidebar. Then open any web page and click the toolbar icon. No account required. Detailed steps: /docs/install.",
-      },
-      {
-        question: "Which browsers does it work in?",
-        answer:
-          "Chromium browsers with Manifest V3 side panels — Chrome, Edge, Arc, Brave — and Firefox (121+), which uses the native sidebar. Safari is out of scope (no MV3 side-panel API). Desktop-primary; the pop-out window, Picture-in-Picture, and screen eyedropper are Chrome-only (Firefox lacks those APIs).",
-      },
-    ],
-  },
-  {
-    title: "Pricing & licence",
-    items: [
-      {
-        question: "Is it really free?",
-        answer:
-          "Yes — free forever, MIT-licensed, no accounts, no paywalls, no trial, no telemetry by default. If you find it useful, the in-panel Contribute panel has optional ways to help (star the repo, share, sponsor).",
-      },
-      {
-        question: "Will it always be free?",
-        answer:
-          "The extension is MIT-licensed, so even if the maintainer disappears tomorrow, the source stays free. There are no plans to add a paid tier to the extension itself.",
-      },
-      {
-        question: "Can I use Design Mode commercially?",
-        answer:
-          "Yes — MIT permits commercial use without restriction. Use it at work, on client projects, inside an agency, etc.",
-      },
-    ],
-  },
-  {
-    title: "MCP & AI coding agents",
-    items: [
-      {
-        question: "What is MCP (Model Context Protocol)?",
-        answer:
-          "MCP is Anthropic's open standard that lets AI agents safely call external tools. Design Mode exposes eight MCP tools so your agent can read every edit you made (get_changes), push patches back to the page (apply_changes), mark changes to-do/in-progress/resolved as it works (set_change_status), wipe the buffer between iterations (clear_changes), get a high-level summary (get_session_summary), export markdown (export_changes), grab a screenshot of the current page state (get_screenshot), and mark your pinned comments resolved (mark_comment_resolved).",
-      },
-      {
-        question: "Which AI coding agents does Design Mode work with?",
-        answer:
-          "Anything that speaks MCP — Claude Desktop, Claude Code, Cursor, Windsurf, Cline, Continue, Zed, VS Code with the MCP extension, and any custom MCP client. Setup snippets live at /mcp.",
-      },
-      {
-        question: "Does Design Mode work with Claude Code?",
-        answer:
-          "Yes. Claude Code reads MCP servers from your project's .claude/settings.json under \"mcpServers\". Paste the Cloud or Local snippet from /mcp, restart Claude Code, and the eight Design Mode tools become available.",
-      },
-      {
-        question: "Does Design Mode work with Cursor?",
-        answer:
-          "Yes. Cursor reads MCP servers from ~/.cursor/mcp.json (or the per-project equivalent). The /mcp page has the exact JSON for Cloud, Local, and Self-hosted modes.",
-      },
-      {
-        question: "Does Design Mode work with Windsurf, Cline, Continue, or Zed?",
-        answer:
-          "Yes — all four are MCP-aware. The JSON shape varies slightly per tool, but the URL + bearer token (or stdio + npx) blocks from /mcp apply directly.",
-      },
-      {
-        question: "What's the difference between Cloud, Local, and Self-hosted modes?",
-        answer:
-          "Cloud is the no-install default — your agent connects to mcp.designmode.app over HTTPS with a bearer token. Local runs a companion MCP server on your laptop with zero network egress and the lowest latency. Self-hosted is the same Cloud relay code (packages/mcp-cloud) deployed on your own Node.js + Redis infrastructure — Vercel, Railway, Fly, your own VM.",
-      },
-      {
-        question: "Do I have to run a local server?",
-        answer:
-          "No. Cloud mode is the default and requires no local install. Local mode is opt-in for power users.",
-      },
-      {
-        question: "Can I self-host the relay?",
-        answer:
-          "Yes — packages/mcp-cloud in the repo deploys to any Node.js host with Redis. Point the extension at your URL, issue your own bearer tokens, done.",
-      },
-    ],
-  },
-  {
-    title: "Privacy & security",
-    items: [
-      {
-        question: "What data leaves my machine by default?",
-        answer:
-          "Nothing. The extension stores edits in chrome.storage locally. The Cloud relay is opt-in. Local mode never makes outbound calls. Full disclosure: /privacy.",
-      },
-      {
-        question: "Does Design Mode train on my edits?",
-        answer:
-          "No. There is no telemetry by default. The Cloud relay does not persist payloads, does not log edit contents, and nothing about your edits is used to train any model — by Design Mode or by any third party.",
-      },
-      {
-        question: "How long does the Cloud relay keep my data?",
-        answer:
-          "Payload bodies are dropped within roughly 60 seconds — they're transient pass-through, not storage. Token + connection metadata is hashed and logged for abuse prevention only.",
-      },
-      {
-        question: "Where do I report a security issue?",
-        answer:
-          "Email hello@sandeepbaskaran.com (not a public issue). SECURITY.md in the repo has the disclosure flow.",
-      },
-    ],
-  },
-  {
-    title: "Comparisons",
-    items: [
-      {
-        question: "Design Mode vs Stagewise?",
-        answer:
-          "Both target the AI-coding-agent loop. Design Mode is MIT-licensed with a hosted Cloud relay you don't have to run, ships a broader design control set (motion, effects, variants, contrast checker), and includes persistent change history out of the box. Full comparison: /compare/design-mode-vs-stagewise.",
-      },
-      {
-        question: "Design Mode vs Figma Dev Mode?",
-        answer:
-          "Figma Dev Mode reads a static design file; Design Mode edits the live deployed page. Pair them: design in Figma, refine on the rendered page in Design Mode. Full comparison: /compare/design-mode-vs-figma-dev-mode.",
-      },
-      {
-        question: "Design Mode vs Builder.io Visual Copilot or Locofy?",
-        answer:
-          "Those tools generate code from a Figma file. Design Mode goes the other direction: tweak the live page, hand the agent precise CSS deltas. Different problem, different fit.",
-      },
-      {
-        question: "Design Mode vs VisBug?",
-        answer:
-          "VisBug edits the live page but has no agent / MCP handoff, no persistent change history, and a narrower design control set.",
-      },
-    ],
-  },
-  {
-    title: "Workflows",
-    items: [
-      {
-        question: "Can I use Design Mode for UI testing and bug reports?",
-        answer:
-          "Yes — QA testers and designers walk a staging URL, annotate broken layout / contrast / copy / spacing, and export the structured diff (selector → property → value) into Linear, GitHub, or Jira. Developers see the exact change to make, not a vague screenshot. See /use-cases/ui-testing-export-to-developers.",
-      },
-      {
-        question: "Can content people use it to fix microcopy without a PR?",
-        answer:
-          "Yes. Edit the copy in the live page, export the diff, send it to engineering. No Figma round-trip, no Slack screenshot. See /use-cases/copy-edits-without-a-pr.",
-      },
-      {
-        question: "Can I do accessibility audits with it?",
-        answer:
-          "Yes. The colour picker has a WCAG contrast checker, you can bump text sizes visually, and you can fix focus states with the inspector. Export the diff for the a11y backlog. See /use-cases/accessibility-quick-fixes.",
-      },
-    ],
-  },
-  {
-    title: "Contributing & support",
-    items: [
-      {
-        question: "Can I contribute?",
-        answer:
-          "Yes. CONTRIBUTING.md in the repo has the contributor flow. Easy first issues are tagged on GitHub; bigger changes start in a Discussion or a draft PR.",
-      },
-      {
-        question: "How do I report a bug?",
-        answer:
-          "Open the Help panel inside the extension (? icon in the side-panel header) → click Copy diagnostics → file an issue on GitHub with the pasted diagnostics, repro steps, and what you expected.",
-      },
-      {
-        question: "Where do I get troubleshooting help?",
-        answer:
-          "/docs/troubleshooting covers the most common issues (panel won't open, MCP not connecting, edits not persisting). GitHub Discussions is the place for everything else.",
-      },
-    ],
-  },
-];
-
-const flatQA = groups.flatMap((g) => g.items);
+const flatQA = faqGroups.flatMap((group) => group.items);
 
 export default function FaqPage() {
   return (
     <>
       <JsonLd data={faqSchema(flatQA)} />
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Frequently asked questions
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-              Everything about Design Mode — installation, MCP setup,
-              compatible AI coding agents, privacy, comparisons, and
-              contributing. Can&apos;t find what you&apos;re looking for?{" "}
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed md:text-2xl">
+              Direct answers about browser editing, source-code hand-off, MCP,
+              storage and privacy. For setup steps, use the{" "}
               <Link
-                href="/contact"
-                className="text-foreground underline underline-offset-4"
+                href="/docs"
+                className="text-foreground underline underline-offset-8"
               >
-                Get in touch
+                documentation
               </Link>
               .
             </p>
@@ -273,14 +78,23 @@ export default function FaqPage() {
       <section className="py-16 lg:py-20">
         <DashedLine className="container max-w-5xl" />
         <div className="container mt-12 max-w-5xl space-y-12">
-          {groups.map((group, gi) => (
-            <div key={group.title}>
-              <h2 className="text-foreground border-b pb-3 text-xl font-semibold tracking-tight md:text-2xl">
+          {faqGroups.map((group, groupIndex) => (
+            <section
+              key={group.title}
+              aria-labelledby={`faq-group-${groupIndex}`}
+            >
+              <h2
+                id={`faq-group-${groupIndex}`}
+                className="text-foreground border-b pb-4 text-2xl font-semibold tracking-tight md:text-3xl"
+              >
                 {group.title}
               </h2>
               <Accordion type="single" collapsible className="mt-2 w-full">
-                {group.items.map((qa, i) => (
-                  <AccordionItem key={i} value={`${gi}-${i}`}>
+                {group.items.map((qa, itemIndex) => (
+                  <AccordionItem
+                    key={qa.question}
+                    value={`${groupIndex}-${itemIndex}`}
+                  >
                     <AccordionTrigger className="text-left">
                       {qa.question}
                     </AccordionTrigger>
@@ -290,46 +104,35 @@ export default function FaqPage() {
                   </AccordionItem>
                 ))}
               </Accordion>
-            </div>
+            </section>
           ))}
         </div>
 
         <RelatedLinks
-          title="Related"
+          title="Continue"
           links={[
             {
               href: "/mcp",
-              title: "MCP setup",
-              description: "Connect Claude Code, Cursor, Windsurf, and more.",
+              title: "How the agent hand-off works",
+              description: "Choose Copy as Prompt or connect an MCP client.",
             },
             {
-              href: "/use-cases",
-              title: "Use cases",
+              href: "/docs/browser-support",
+              title: "Chrome and Firefox support",
               description:
-                "Workflows for designers, developers, QA, PMs, vibe coders.",
-            },
-            {
-              href: "/compare",
-              title: "Comparisons",
-              description:
-                "Honest side-by-sides vs DevTools, Stagewise, Figma Dev Mode, and more.",
-            },
-            {
-              href: "/docs",
-              title: "Docs",
-              description:
-                "Install, keyboard shortcuts, MCP setup, Changes tab, troubleshooting.",
+                "Core parity, browser-specific features and limitations.",
             },
             {
               href: "/privacy",
-              title: "Privacy",
-              description: "What leaves your machine, when, and why.",
+              title: "Privacy details",
+              description:
+                "Storage, relay retention, operational logs and website analytics.",
             },
             {
-              href: "/blog",
-              title: "Blog",
+              href: "/docs/mcp-setup",
+              title: "MCP setup",
               description:
-                "Stories from the build and walkthroughs of real workflows.",
+                "Client-specific configuration and verification steps.",
             },
           ]}
         />

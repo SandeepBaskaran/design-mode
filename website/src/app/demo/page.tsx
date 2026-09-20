@@ -8,9 +8,9 @@ import { STEPS } from "./steps";
 import { Background } from "@/components/background";
 
 export const metadata = {
-  title: "Demo — Try Design Mode live in your browser",
+  title: { absolute: "Try the browser visual editor | Design Mode" },
   description:
-    "Live, interactive walkthrough of every Design Mode feature. The page itself is the canvas — open the side panel and edit headings, colours, spacing, layout, copy, and DOM in real time.",
+    "Install Design Mode, then use this guided canvas to inspect demo targets, change styles and copy the exact change specification.",
   keywords: [
     "Design Mode demo",
     "try visual editor for websites",
@@ -20,11 +20,33 @@ export const metadata = {
   ],
   alternates: { canonical: "https://designmode.app/demo" },
   openGraph: {
-    title: "Demo — Try Design Mode live in your browser",
+    type: "website",
+    title: "Try the browser visual editor | Design Mode",
     description:
-      "Open the side panel on this page and try every feature with the demo targets — no recordings.",
+      "Install Design Mode, then use this guided canvas to inspect demo targets, change styles and copy the exact change specification.",
     url: "https://designmode.app/demo",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Try the browser visual editor | Design Mode",
+    description:
+      "Install Design Mode, then use this guided canvas to inspect demo targets, change styles and copy the exact change specification.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 
@@ -33,15 +55,14 @@ export default function DemoPage() {
     <>
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Live demo
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-              Open the side panel on this page and try every feature with
-              the demo targets below — no recordings, the canvas is the
-              real thing.
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+              Open the side panel on this page and try every feature with the
+              demo targets below — no recordings, the canvas is the real thing.
             </p>
           </div>
         </section>
@@ -49,24 +70,20 @@ export default function DemoPage() {
 
       {/* Middle — interactive canvas */}
       <section className="py-12 lg:py-16">
-        <div
-          className={`${styles.extensionBannerWrap} container max-w-5xl`}
-        >
+        <div className={`${styles.extensionBannerWrap} container max-w-5xl`}>
           <ExtensionDetected />
         </div>
 
-        <div
-          className={`${styles.demoLayout} container mt-10 max-w-5xl`}
-        >
+        <div className={`${styles.demoLayout} container mt-10 max-w-5xl`}>
           <DemoLeftNav />
 
-          <main className={styles.content}>
+          <div className={styles.content} aria-label="Demo steps">
             {STEPS.map((step) => (
               <DemoStep key={step.id} step={step}>
                 {renderDemoTarget(step.targetId)}
               </DemoStep>
             ))}
-          </main>
+          </div>
         </div>
       </section>
     </>

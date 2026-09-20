@@ -17,10 +17,9 @@ export const useCases: UseCase[] = [
     slug: "vibe-coding-with-claude-code",
     persona: "Vibe coders & AI-coding-agent users",
     title: "Vibe coding with Claude Code",
-    metaTitle:
-      "Vibe coding with Claude Code — visual editing + AI agent loop",
+    metaTitle: "Vibe coding with Claude Code — visual editing + AI agent loop",
     metaDescription:
-      "Use Design Mode and Claude Code together: edit the live page visually, ship the diff over MCP, let Claude Code write the production CSS. The cleanest vibe-coding loop for any web project.",
+      "Use Design Mode, a Chrome and Firefox extension, with Claude Code: edit a scriptable page visually, hand the structured diff over MCP, then review Claude Code's repository implementation.",
     keywords: [
       "vibe coding",
       "Claude Code visual editor",
@@ -29,13 +28,13 @@ export const useCases: UseCase[] = [
       "design with AI agent",
     ],
     intro:
-      "Vibe coding is the loop where you describe a UI change in plain English to an AI agent, see the result on the real page, and refine visually. Design Mode + Claude Code is the cleanest version of that loop — no copy-paste, no screenshot guessing, no mocking in Figma first.",
+      "Design Mode is a Chrome and Firefox extension that edits the rendered page. Claude Code is a coding agent that implements changes in a repository it can access. The loop is: decide the look in the browser, ask Claude Code to implement a scoped change, then review the source diff. Design Mode is not Claude's editor, and it does not write your files.",
     problem:
-      "Claude Code is great at writing CSS once it knows exactly what you want. The bottleneck is conveying design intent. Screenshots are ambiguous. Mock files drift from the production page. \"Make the hero pop more\" is too vague.",
+      'Claude Code is strong at writing CSS once it knows exactly what you want. The bottleneck is conveying design intent. Screenshots are ambiguous. Mock files drift from the production page. "Make the hero pop more" is too vague.',
     workflow: [
       {
-        name: "Open the live page in your browser",
-        text: "Browse to your dev server, your staging URL, or any deployed page. Open the Design Mode side panel.",
+        name: "Open a scriptable page in your browser",
+        text: "Browse to your dev server, staging URL, or a production page the extension can script. Browser-protected surfaces are out of scope. Open the Design Mode side panel.",
       },
       {
         name: "Make the change visually",
@@ -43,15 +42,15 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Send to Claude Code over MCP",
-        text: "With Claude Code's MCP config pointed at Design Mode (Cloud, Local, or Self-hosted), click Send to Agent. Claude reads the exact selectors and properties, then writes the production change in your repo.",
+        text: "With Claude Code connected through Cloud, Local, or Self-hosted MCP, click Send to Agent to mark the session ready. Ask Claude Code to read the selectors and properties, implement only that scoped change in the repository it already has access to, and show you the diff. Setup lives on /mcp.",
       },
       {
-        name: "Iterate",
-        text: "If the result isn't quite right, tweak again in Design Mode and resend. Each round is a structured diff, not a screenshot.",
+        name: "Review the repository change",
+        text: "Inspect the source diff, then reload without Design Mode overrides. The browser preview is not evidence that production source already matches. Tweak in Design Mode and resend if needed.",
       },
     ],
     outcome:
-      "Claude Code gets ground truth instead of a guess. The result lands closer to intent on the first try, and the iteration loop is measured in seconds, not minutes.",
+      "Claude Code receives selectors and values instead of a screenshot guess. You still review the implementation in the repository; a closer first pass is not a timed guarantee.",
     related: [
       "visual-editing-with-cursor",
       "tailwind-component-tuning",
@@ -64,7 +63,7 @@ export const useCases: UseCase[] = [
     title: "Visual editing with Cursor",
     metaTitle: "Visual editing with Cursor — MCP-powered UI design loop",
     metaDescription:
-      "Use Design Mode with Cursor to edit any live website visually, then send the diff to Cursor over MCP. Faster than describing UI changes in chat, more precise than screenshots.",
+      "Use Design Mode, a browser extension, with Cursor: edit a scriptable webpage, send the structured diff over MCP, then review Cursor's repository implementation. Distinct from Cursor's built-in design mode.",
     keywords: [
       "Cursor visual editor",
       "Cursor MCP",
@@ -73,9 +72,9 @@ export const useCases: UseCase[] = [
       "Cursor + Design Mode",
     ],
     intro:
-      "Cursor is fantastic at code; less ideal as a design canvas. Design Mode bolts a real visual editor onto your Cursor workflow over MCP — edit any live page, ship the diff, let Cursor commit the code.",
+      "Cursor's built-in design mode lives inside the editor. Design Mode is a Chrome and Firefox extension that edits the actual rendered page. Use them together when you want live layout, fonts, and states in the browser, then ask Cursor to implement only the scoped change in the repo you already opened. Cursor does not commit automatically.",
     problem:
-      "Cursor's chat is text-first. Describing a hover state, a gradient, or a kerning tweak in prose is slow and imprecise. Pasting screenshots works for big changes but falls apart at the pixel level.",
+      "Cursor's chat is text-first. Describing a hover state, a gradient, or a kerning tweak in prose is slow and imprecise. Pasting screenshots works for big changes but falls apart at the pixel level. Cursor's editor-native design surface is also not the live rendered page.",
     workflow: [
       {
         name: "Point Cursor at Design Mode",
@@ -83,15 +82,15 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Edit the page in the browser",
-        text: "Open the Design Mode side panel on your dev server. Make the visual change with sliders and pickers.",
+        text: "Open the Design Mode side panel on a scriptable page such as your dev server. Make the visual change with sliders and pickers. Browser-protected pages are out of scope.",
       },
       {
-        name: "Pull the diff into Cursor",
-        text: "From a Cursor chat, ask the agent to apply the latest design changes. It calls get_changes over MCP, reads the structured diff, and writes the CSS in your repo.",
+        name: "Ask Cursor to implement, then review",
+        text: "From a Cursor chat, ask the agent to apply only the latest Design Mode changes in the current repository. It can call get_changes over MCP and write CSS where it has access. Review the source diff before you commit.",
       },
     ],
     outcome:
-      "Design intent gets to code in one round instead of three. Cursor stays focused on what it's good at — writing the change — while Design Mode handles the visual specification.",
+      "Design Mode specifies the visual change on the rendered page; Cursor implements it only where it has repository access. You review and commit. The two surfaces can coexist: editor-native for in-Cursor work, the extension for the live page.",
     related: [
       "vibe-coding-with-claude-code",
       "tailwind-component-tuning",
@@ -105,7 +104,7 @@ export const useCases: UseCase[] = [
     metaTitle:
       "Redesign any website — browser-as-design-surface with Design Mode",
     metaDescription:
-      "Open any URL in your browser, click anything, and redesign it visually — no source code, no Figma mock. Every change is a structured diff you can ship to your team or AI agent.",
+      "Open a scriptable URL in your browser, click anything, and redesign it visually — no source code, no Figma mock. Every change is a structured preview you can hand to your team or AI agent.",
     keywords: [
       "redesign a website",
       "in-browser website editor",
@@ -114,13 +113,13 @@ export const useCases: UseCase[] = [
       "browser extension for designers",
     ],
     intro:
-      "Most design tools want you to start in a file. Design Mode lets you start on the actual page — your site, a competitor's, an open-source landing page, anything on the open web — and redesign it visually in your browser.",
+      "Most design tools want you to start in a file. Design Mode lets you start on a rendered page the extension can script — your site, a staging URL, or another scriptable page — and redesign it visually in your browser. It does not bypass browser protections, and the preview is not a source change.",
     problem:
       "Recreating a real page in Figma so you can iterate on it is enormous setup cost. By the time the mock is ready, the live page has changed. Iteration in a mock that doesn't match production means decisions that don't translate.",
     workflow: [
       {
         name: "Open the page",
-        text: "Browse to any URL. Open the Design Mode side panel.",
+        text: "Browse to a localhost, staging, or production URL the extension can script. Open the Design Mode side panel.",
       },
       {
         name: "Click anything; edit anything",
@@ -132,11 +131,11 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Export the spec",
-        text: "Send to your engineering team as a structured diff, or push to an AI agent to write the code.",
+        text: "Hand a structured diff to engineering, or to a coding agent that has separate repository access. Someone still reviews the source change.",
       },
     ],
     outcome:
-      "No mock-up gap. The thing you designed and the thing in production are the same page.",
+      "You designed on the rendered page. Shipping still requires a source change; the browser preview is not production.",
     related: [
       "design-review-in-production",
       "tailwind-component-tuning",
@@ -161,7 +160,7 @@ export const useCases: UseCase[] = [
     intro:
       "Design reviews on staging always end the same way: a Loom recording, a Notion doc full of screenshots, and engineering scrambling to interpret ambiguous arrows. Design Mode collapses that into one structured artefact.",
     problem:
-      "Verbal feedback is lossy. \"This needs more breathing room\" can mean any of five different changes depending on who reads it. Engineers waste cycles asking which spacing token.",
+      'Verbal feedback is lossy. "This needs more breathing room" can mean any of five different changes depending on who reads it. Engineers waste cycles asking which spacing token.',
     workflow: [
       {
         name: "Walk the deployed app",
@@ -177,7 +176,7 @@ export const useCases: UseCase[] = [
       },
     ],
     outcome:
-      "Engineering knows exactly what to change. No \"what did you mean by this?\" follow-up.",
+      'Engineering knows exactly what to change. No "what did you mean by this?" follow-up.',
     related: [
       "ui-testing-export-to-developers",
       "bug-report-with-visual-diff",
@@ -251,7 +250,7 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Ship to your AI agent",
-        text: "Send to Agent → Claude Code, Cursor, or your tool of choice writes the production change.",
+        text: "Send to Agent marks the session ready for a connected client such as Claude Code or Cursor. The client can retrieve the changes and implement them only when it has separate repository access.",
       },
       {
         name: "Optional: use Figma for greenfield",
@@ -294,7 +293,7 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Annotate with structured edits",
-        text: "Drop a comment pin with a description (\"misaligned with header\"). If you know the fix, make it — change the spacing, the colour, the type size — and let Design Mode log the exact selector + property + before/after value.",
+        text: 'Drop a comment pin with a description ("misaligned with header"). If you know the fix, make it — change the spacing, the colour, the type size — and let Design Mode log the exact selector + property + before/after value.',
       },
       {
         name: "Capture before / after screenshots",
@@ -306,7 +305,7 @@ export const useCases: UseCase[] = [
       },
     ],
     outcome:
-      "Developers stop asking \"what did you mean?\" The bug ticket has the exact change to make. Cycle time drops from days to a single PR review.",
+      'Developers stop asking "what did you mean?" The bug ticket has the exact change to make. Cycle time drops from days to a single PR review.',
     related: [
       "bug-report-with-visual-diff",
       "design-review-in-production",
@@ -332,7 +331,7 @@ export const useCases: UseCase[] = [
     intro:
       "PMs and designers file most of the visual bugs. Engineering has to translate ambiguous descriptions into code changes. Design Mode bridges the two — annotate the bug visually, export a developer-ready diff.",
     problem:
-      "\"The button is wrong\" is not actionable. \"The button's `padding-block` should change from 8px to 12px and the `background-color` from #3B82F6 to #4F46E5\" is. The latter takes 30 seconds in Design Mode.",
+      '"The button is wrong" is not actionable. "The button\'s `padding-block` should change from 8px to 12px and the `background-color` from #3B82F6 to #4F46E5" is. The latter takes 30 seconds in Design Mode.',
     workflow: [
       {
         name: "Open the affected page",
@@ -363,8 +362,7 @@ export const useCases: UseCase[] = [
     slug: "copy-edits-without-a-pr",
     persona: "Content & marketing teams",
     title: "Copy edits without a PR",
-    metaTitle:
-      "Copy edits without a PR — marketing and content team workflow",
+    metaTitle: "Copy edits without a PR — marketing and content team workflow",
     metaDescription:
       "Marketing and content people fix microcopy in the live page with Design Mode, export the structured diff, and hand it to engineering. No Figma round-trip, no Slack screenshot back-and-forth.",
     keywords: [
@@ -375,7 +373,7 @@ export const useCases: UseCase[] = [
       "content handoff",
     ],
     intro:
-      "Marketing teams ship copy changes all day. Every \"can we change this headline?\" turns into a Slack thread, a Figma comment, and finally a PR — for what amounts to seven words. Design Mode removes every middle step.",
+      'Marketing teams ship copy changes all day. Every "can we change this headline?" turns into a Slack thread, a Figma comment, and finally a PR — for what amounts to seven words. Design Mode removes every middle step.',
     problem:
       "Content people don't have repo access. Designers don't want to update mocks for microcopy. Engineering interrupts their flow to commit a four-word change.",
     workflow: [
@@ -418,7 +416,7 @@ export const useCases: UseCase[] = [
     intro:
       "Most accessibility issues are visual — contrast ratios, small type, missing focus states, low-touch targets. Design Mode catches and fixes all four directly in the browser.",
     problem:
-      "Accessibility audit tools list violations. They don't help you fix them on the rendered page or generate a ticket developers can act on. The gap between \"this fails WCAG 2.2 AA\" and \"here's the change\" is the slowest part.",
+      'Accessibility audit tools list violations. They don\'t help you fix them on the rendered page or generate a ticket developers can act on. The gap between "this fails WCAG 2.2 AA" and "here\'s the change" is the slowest part.',
     workflow: [
       {
         name: "Open the page and walk it",
@@ -433,8 +431,7 @@ export const useCases: UseCase[] = [
         text: "Markdown export lists each fix with the failing selector. Attach to the a11y backlog or a single PR.",
       },
     ],
-    outcome:
-      "An a11y pass that produces shippable code, not just findings.",
+    outcome: "An a11y pass that produces shippable code, not just findings.",
     related: [
       "ui-testing-export-to-developers",
       "bug-report-with-visual-diff",
@@ -448,7 +445,7 @@ export const useCases: UseCase[] = [
     metaTitle:
       "Landing-page iteration for indie hackers — Design Mode + Claude Code",
     metaDescription:
-      "Solo makers iterate on their landing page faster: edit the live page in Design Mode, hand the diff to Claude Code or Cursor, ship the change in minutes. No Figma, no copy-paste.",
+      "Solo makers iterate on their landing page: edit the rendered page in Design Mode, hand the diff to Claude Code or Cursor, then review the source change. No Figma, no copy-paste.",
     keywords: [
       "landing page iteration",
       "indie hacker tools",
@@ -471,11 +468,10 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Ship via your agent",
-        text: "Send to Agent (Claude Code, Cursor, anything MCP-aware). The agent writes the change and you push.",
+        text: "Use Send to Agent with a verified MCP client. The client retrieves the session, implements the source change with its own repository access, and returns a diff for review.",
       },
     ],
-    outcome:
-      "Hypothesis to live in minutes. Fewer abandoned iterations.",
+    outcome: "You can test a hypothesis on the rendered page, then implement and review it in source. The preview is not a live deploy.",
     related: [
       "redesign-any-website",
       "figma-to-code-without-figma",
@@ -512,11 +508,10 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Send to the client's engineers",
-        text: "Engineering reads the structured spec and ships. Optional: their AI agent applies it automatically.",
+        text: "Engineering reads the structured spec and ships. Optional: their coding agent implements the change when it has repository access; someone still reviews the diff.",
       },
     ],
-    outcome:
-      "Fewer billable rounds. Cleaner handoff. Happier clients.",
+    outcome: "Fewer billable rounds. Cleaner handoff. Happier clients.",
     related: [
       "design-review-in-production",
       "bug-report-with-visual-diff",

@@ -1,0 +1,110 @@
+.headline h1 {
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.05em;
+  font-weight: var(--display-weight);
+}
+
+.line {
+  display: block;
+  white-space: nowrap;
+}
+
+.logos {
+  position: relative;
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  vertical-align: -0.04em;
+}
+
+.logo {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: rotate-logo 0.7s ease-in-out 1 forwards;
+}
+
+.logo:last-child {
+  animation-name: settle-logo;
+}
+
+.logo:first-child {
+  opacity: 1;
+}
+
+.mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+@media (min-width: 360px) {
+  .headline h1 {
+    font-size: 32px;
+  }
+}
+
+@media (min-width: 400px) {
+  .headline h1 {
+    font-size: 36px;
+  }
+}
+@media (min-width: 640px) {
+  .headline h1 {
+    font-size: 40px;
+  }
+}
+@media (min-width: 768px) {
+  .headline h1 {
+    font-size: 48px;
+  }
+}
+@media (min-width: 1024px) {
+  .headline h1 {
+    font-size: 64px;
+  }
+}
+@media (min-width: 1280px) {
+  .headline h1 {
+    font-size: 80px;
+  }
+}
+
+@keyframes rotate-logo {
+  0% {
+    opacity: 0;
+    transform: translateY(0.12em);
+  }
+  15%,
+  85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-0.12em);
+  }
+}
+
+@keyframes settle-logo {
+  from {
+    opacity: 0;
+    transform: translateY(0.12em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo {
+    animation: none;
+    opacity: 0;
+  }
+
+  .logo:first-child {
+    opacity: 1;
+  }
+}

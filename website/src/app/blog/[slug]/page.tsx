@@ -14,6 +14,31 @@ export function generateStaticParams() {
   return posts.map((p) => ({ slug: p.slug }));
 }
 
+export const dynamicParams = false;
+
+const socialCopy: Record<string, { title: string; description: string }> = {
+  "vibe-coding-visual-editing-workflow": {
+    title: "Visual editing in the AI coding loop | Design Mode",
+    description:
+      "Where browser visual editing fits between an initial coding-agent build and the reviewed source-code correction.",
+  },
+  "redesigning-a-tailwind-landing-page-with-claude-code": {
+    title: "Redesign a Tailwind page with Claude Code | Design Mode",
+    description:
+      "A practical workflow for editing a rendered Tailwind page and handing the structured change set to Claude Code.",
+  },
+  "design-mode-1-9-0-release": {
+    title: "Design Mode 1.9.0 release notes",
+    description:
+      "Design-system tokens, trigger-first motion controls and the dedicated MCP page introduced in Design Mode 1.9.0.",
+  },
+  "design-mode-2-0-0-release": {
+    title: "Design Mode 2.0.0 release notes",
+    description:
+      "Firefox support, alignment guides and a compact colour-picker workflow in Design Mode 2.0.0.",
+  },
+};
+
 export async function generateMetadata({
   params,
 }: {
@@ -23,18 +48,40 @@ export async function generateMetadata({
   const p = getPost(slug);
   if (!p) return {};
   const url = `https://designmode.app/blog/${p.slug}`;
+  const title = socialCopy[p.slug]?.title ?? p.title;
+  const description = socialCopy[p.slug]?.description ?? p.excerpt;
   return {
-    title: p.metaTitle,
-    description: p.metaDescription,
+    title: { absolute: title },
+    description,
     keywords: p.keywords,
     alternates: { canonical: url },
     openGraph: {
-      title: p.metaTitle,
-      description: p.metaDescription,
+      title,
+      description,
       url,
       type: "article",
       publishedTime: p.datePublished,
-      images: ["/og-image.png"],
+      images: [
+        {
+          url: "/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: "Design Mode browser visual editor for AI coding agents",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [
+        {
+          url: "/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: "Design Mode browser visual editor for AI coding agents",
+        },
+      ],
     },
   };
 }
@@ -75,18 +122,18 @@ export default async function BlogPostPage({
       />
 
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-4xl">
             <time
               dateTime={p.datePublished}
-              className="text-muted-foreground text-sm font-medium tracking-wide uppercase"
+              className="text-muted-foreground text-base font-medium tracking-wide uppercase"
             >
               {dateFmt.format(new Date(p.datePublished))}
             </time>
-            <h1 className="mt-3 text-3xl tracking-tight sm:text-4xl md:text-5xl">
+            <h1 className="mt-4 text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {p.title}
             </h1>
-            <p className="text-muted-foreground mt-4 text-lg md:text-xl">
+            <p className="text-muted-foreground mt-4 text-base md:text-2xl">
               {p.excerpt}
             </p>
           </div>
@@ -99,11 +146,11 @@ export default async function BlogPostPage({
           {p.body.map((block, i) => (
             <div key={i}>
               {block.heading && (
-                <h2 className="text-xl tracking-tight md:text-2xl">
+                <h2 className="text-2xl tracking-tight md:text-3xl">
                   {block.heading}
                 </h2>
               )}
-              <div className="text-muted-foreground mt-3 space-y-4 leading-relaxed">
+              <div className="text-muted-foreground mt-4 space-y-4 leading-relaxed">
                 {block.paragraphs.map((para, j) => (
                   <p key={j}>{para}</p>
                 ))}
@@ -114,14 +161,28 @@ export default async function BlogPostPage({
 
         <RelatedLinks
           title="Keep reading"
-          links={p.related
-            .map((slug) => getPost(slug))
-            .filter((r): r is NonNullable<typeof r> => Boolean(r))
-            .map((r) => ({
-              href: `/blog/${r.slug}`,
-              title: r.title,
-              description: r.excerpt,
-            }))}
+          links={[
+            ...p.related
+              .map((slug) => getPost(slug))
+              .filter((r): r is NonNullable<typeof r> => Boolean(r))
+              .map((r) => ({
+                href: `/blog/${r.slug}`,
+                title: r.title,
+                description: r.excerpt,
+              })),
+            {
+              href: "/docs/mcp-setup",
+              title: "Use the current MCP setup guide",
+              description:
+                "Version-stamped Claude Code and Cursor configuration and verification.",
+            },
+            {
+              href: "/features",
+              title: "Review the current feature surface",
+              description:
+                "Layers, visual controls, Changes and the two hand-off methods.",
+            },
+          ]}
         />
       </section>
     </>

@@ -30,10 +30,9 @@ import { DashedLine } from "@/components/dashed-line";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = {
-  title:
-    "Features — Visual controls for any live website (Layers, Design, Changes)",
+  title: { absolute: "Browser visual editor features | Design Mode" },
   description:
-    "Every control inside the Design Mode side panel: header icons, action toolbar, the Layers / Design / Changes tabs, and the Copy as Prompt + Send to Agent handoff. Visual editing for live websites — no devtools fork.",
+    "Inspect and edit a rendered webpage with Layers, visual controls, structured change history, Copy as Prompt and MCP agent hand-off.",
   keywords: [
     "Design Mode features",
     "side panel design editor",
@@ -48,12 +47,33 @@ export const metadata = {
   ],
   alternates: { canonical: "https://designmode.app/features" },
   openGraph: {
-    title:
-      "Design Mode features — every visual control inside the side panel",
+    type: "website",
+    title: "Browser visual editor features | Design Mode",
     description:
-      "Header icons, action toolbar, Layers / Design / Changes panels, and the Copy as Prompt + Send-to-Agent handoff.",
+      "Inspect and edit a rendered webpage with Layers, visual controls, structured change history, Copy as Prompt and MCP agent hand-off.",
     url: "https://designmode.app/features",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Browser visual editor features | Design Mode",
+    description:
+      "Inspect and edit a rendered webpage with Layers, visual controls, structured change history, Copy as Prompt and MCP agent hand-off.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode browser visual editor for AI coding agents",
+      },
+    ],
   },
 };
 
@@ -90,13 +110,43 @@ const headerIcons = [
 ];
 
 const actionItems = [
-  { icon: ArrowUp, title: "Parent / Child", description: "Walk selection up and down the DOM tree." },
-  { icon: ArrowDown, title: "Duplicate / Delete", description: "DOM mutations recorded as undoable changes." },
-  { icon: MessageCircle, title: "Comment", description: "Drop a numbered sticky-pin on the selected element." },
-  { icon: Pause, title: "Freeze animations", description: "Pause every CSS/JS animation on the page so you can edit mid-state." },
-  { icon: Camera, title: "Screenshot", description: "Capture the visible tab to clipboard, download, or both." },
-  { icon: Bookmark, title: "Presets", description: "Save and reapply styles across all nine Design-tab sections." },
-  { icon: CornerUpLeft, title: "Undo / Redo", description: "Step backward and forward through every style, text, and DOM change." },
+  {
+    icon: ArrowUp,
+    title: "Parent / Child",
+    description: "Walk selection up and down the DOM tree.",
+  },
+  {
+    icon: ArrowDown,
+    title: "Duplicate / Delete",
+    description: "DOM mutations recorded as undoable changes.",
+  },
+  {
+    icon: MessageCircle,
+    title: "Comment",
+    description: "Drop a numbered sticky-pin on the selected element.",
+  },
+  {
+    icon: Pause,
+    title: "Freeze animations",
+    description:
+      "Pause every CSS/JS animation on the page so you can edit mid-state.",
+  },
+  {
+    icon: Camera,
+    title: "Screenshot",
+    description: "Capture the visible tab to clipboard, download, or both.",
+  },
+  {
+    icon: Bookmark,
+    title: "Presets",
+    description: "Save and reapply styles across all nine Design-tab sections.",
+  },
+  {
+    icon: CornerUpLeft,
+    title: "Undo / Redo",
+    description:
+      "Step backward and forward through every style, text, and DOM change.",
+  },
 ];
 
 const designSections = [
@@ -116,16 +166,16 @@ export default function FeaturesPage() {
     <>
       {/* Hero — yellow background confined to this slab */}
       <Background>
-        <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+        <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Every control, where you need it
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-lg md:text-xl">
-              The Design Mode side panel is split into three rows. A header
-              row to pick what you're working on, three middle panels for
-              the actual editing, and a bottom row that ships your edits
-              to your AI coding agent.
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+              The Design Mode side panel is split into three rows. A header row
+              to pick what you're working on, three middle panels for the actual
+              editing, and a bottom row that ships your edits to your AI coding
+              agent.
             </p>
           </div>
         </section>
@@ -137,8 +187,8 @@ export default function FeaturesPage() {
 
         {/* Section 1: Header row + Action toolbar (one merged card) */}
         <div className="container mt-16 max-w-5xl">
-          <div className="mb-8 flex items-baseline gap-3">
-            <span className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
+          <div className="mb-8 flex items-baseline gap-4">
+            <span className="text-muted-foreground font-mono text-base tracking-wide uppercase">
               Row 1
             </span>
             <h2 className="text-2xl tracking-tight md:text-3xl">
@@ -146,10 +196,9 @@ export default function FeaturesPage() {
             </h2>
           </div>
           <p className="text-muted-foreground mb-10 max-w-2xl">
-            Five icons set up your session and surface the overlays
-            (Contribute, Help, Settings). Just below them, an action
-            toolbar puts the most-used DOM and session mutations one
-            click away.
+            Five icons set up your session and surface the overlays (Contribute,
+            Help, Settings). Just below them, an action toolbar puts the
+            most-used DOM and session mutations one click away.
           </p>
 
           <Card>
@@ -158,20 +207,17 @@ export default function FeaturesPage() {
                 <h3 className="text-foreground mb-4 text-base font-semibold">
                   Header icons
                 </h3>
-                <ul className="space-y-3">
+                <ul className="space-y-4">
                   {headerIcons.map((item) => {
                     const Icon = item.icon;
                     return (
-                      <li
-                        key={item.title}
-                        className="flex items-start gap-3"
-                      >
-                        <Icon className="text-foreground mt-0.5 size-4 shrink-0" />
+                      <li key={item.title} className="flex items-start gap-4">
+                        <Icon className="text-foreground mt-0 size-4 shrink-0" />
                         <div>
-                          <div className="text-foreground text-sm font-semibold">
+                          <div className="text-foreground text-base font-semibold">
                             {item.title}
                           </div>
-                          <div className="text-muted-foreground text-sm leading-relaxed">
+                          <div className="text-muted-foreground text-base leading-relaxed">
                             {item.description}
                           </div>
                         </div>
@@ -185,20 +231,17 @@ export default function FeaturesPage() {
                 <h3 className="text-foreground mb-4 text-base font-semibold">
                   Action toolbar
                 </h3>
-                <ul className="space-y-3">
+                <ul className="space-y-4">
                   {actionItems.map((item) => {
                     const Icon = item.icon;
                     return (
-                      <li
-                        key={item.title}
-                        className="flex items-start gap-3"
-                      >
-                        <Icon className="text-foreground mt-0.5 size-4 shrink-0" />
+                      <li key={item.title} className="flex items-start gap-4">
+                        <Icon className="text-foreground mt-0 size-4 shrink-0" />
                         <div>
-                          <div className="text-foreground text-sm font-semibold">
+                          <div className="text-foreground text-base font-semibold">
                             {item.title}
                           </div>
-                          <div className="text-muted-foreground text-sm leading-relaxed">
+                          <div className="text-muted-foreground text-base leading-relaxed">
                             {item.description}
                           </div>
                         </div>
@@ -215,8 +258,8 @@ export default function FeaturesPage() {
 
         {/* Section 2: Three middle panels */}
         <div className="container mt-16 max-w-5xl">
-          <div className="mb-8 flex items-baseline gap-3">
-            <span className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
+          <div className="mb-8 flex items-baseline gap-4">
+            <span className="text-muted-foreground font-mono text-base tracking-wide uppercase">
               Row 2
             </span>
             <h2 className="text-2xl tracking-tight md:text-3xl">
@@ -224,25 +267,24 @@ export default function FeaturesPage() {
             </h2>
           </div>
           <p className="text-muted-foreground mb-10 max-w-2xl">
-            Layers, Design, and Changes. Each tab is its own scrollable
-            surface; switching keeps the selection alive. On the canvas
-            itself, hovering measures spacing between elements and the
-            selection gets eight drag-to-resize handles — every resize
-            ships as a change like any other edit.
+            Layers, Design, and Changes. Each tab is its own scrollable surface;
+            switching keeps the selection alive. On the canvas itself, hovering
+            measures spacing between elements and the selection gets eight
+            drag-to-resize handles — every resize ships as a change like any
+            other edit.
           </p>
 
           <div className="grid gap-6 md:grid-cols-3">
             <Card>
-              <CardContent className="flex h-full flex-col gap-3 p-6">
-                <Layers className="text-foreground size-5" />
-                <h3 className="text-lg font-semibold">Layers</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
+              <CardContent className="flex h-full flex-col gap-4 p-6">
+                <Layers className="text-foreground size-6" />
+                <h3 className="text-2xl font-semibold">Layers</h3>
+                <p className="text-muted-foreground text-base leading-relaxed">
                   Full DOM tree of the page you're editing. Search,
-                  expand/collapse, multi-select, drag rows to
-                  rearrange the actual document, toggle visibility
-                  with an eye icon per row.
+                  expand/collapse, multi-select, drag rows to rearrange the
+                  actual document, toggle visibility with an eye icon per row.
                 </p>
-                <ul className="text-muted-foreground mt-2 space-y-1 text-sm">
+                <ul className="text-muted-foreground mt-2 space-y-2 text-base">
                   <li>• Search by tag, class, id, or text</li>
                   <li>• Drag to reorder · drop on a row to nest</li>
                   <li>• Multi-select for batch edits</li>
@@ -252,19 +294,20 @@ export default function FeaturesPage() {
             </Card>
 
             <Card className="outline-primary outline-4">
-              <CardContent className="flex h-full flex-col gap-3 p-6">
-                <Sparkles className="text-foreground size-5" />
-                <h3 className="text-lg font-semibold">Design</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  Nine sections, Figma-aligned. Every input is a real
-                  control — sliders, colour pickers, segmented buttons —
-                  not a textarea of CSS. Motion leads with trigger-first
-                  interaction cards (Hover / Press / Focus / Appear / Loop
-                  / Scroll). Inspect authored hover, focus, and active states;
-                  force-preview them, or overlay computed flex/grid tracks.
-                  Any field bound to a design-system token shows a ◆ badge.
+              <CardContent className="flex h-full flex-col gap-4 p-6">
+                <Sparkles className="text-foreground size-6" />
+                <h3 className="text-2xl font-semibold">Design</h3>
+                <p className="text-muted-foreground text-base leading-relaxed">
+                  Nine sections, Figma-aligned. Every input is a real control —
+                  sliders, colour pickers, segmented buttons — not a textarea of
+                  CSS. Motion leads with trigger-first interaction cards (Hover
+                  / Press / Focus / Appear / Loop / Scroll). Inspect authored
+                  hover, focus, and active states; force-preview them, or
+                  overlay computed flex/grid tracks. Any field bound to a
+                  design-system token shows a ◆ badge for swapping or editing
+                  it.
                 </p>
-                <ul className="mt-2 grid grid-cols-1 gap-1.5 text-sm">
+                <ul className="mt-2 grid grid-cols-1 gap-2 text-base">
                   {designSections.map((s) => {
                     const Icon = s.icon;
                     return (
@@ -272,7 +315,7 @@ export default function FeaturesPage() {
                         key={s.label}
                         className="text-foreground/90 flex items-center gap-2"
                       >
-                        <Icon className="text-foreground/70 size-3.5" />
+                        <Icon className="text-foreground/70 size-4" />
                         {s.label}
                       </li>
                     );
@@ -282,15 +325,15 @@ export default function FeaturesPage() {
             </Card>
 
             <Card>
-              <CardContent className="flex h-full flex-col gap-3 p-6">
-                <Layers3 className="text-foreground size-5" />
-                <h3 className="text-lg font-semibold">Changes</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
+              <CardContent className="flex h-full flex-col gap-4 p-6">
+                <Layers3 className="text-foreground size-6" />
+                <h3 className="text-2xl font-semibold">Changes</h3>
+                <p className="text-muted-foreground text-base leading-relaxed">
                   Every style, text, DOM, and comment edit collected in
-                  reverse-chronological order. Group by selector, filter
-                  by kind, search by value, resolve or revert anything.
+                  reverse-chronological order. Group by selector, filter by
+                  kind, search by value, resolve or revert anything.
                 </p>
-                <ul className="text-muted-foreground mt-2 space-y-1 text-sm">
+                <ul className="text-muted-foreground mt-2 space-y-2 text-base">
                   <li>• Sticky search + filter chips header</li>
                   <li>• Numbered pin badges match the page overlay</li>
                   <li>• Resolve / Reopen / Edit / Delete per row</li>
@@ -307,8 +350,8 @@ export default function FeaturesPage() {
         <section className="py-20 lg:py-28">
           <DashedLine className="container max-w-5xl" />
           <div className="container mt-16 max-w-5xl">
-            <div className="mb-8 flex items-baseline gap-3">
-              <span className="text-muted-foreground font-mono text-xs tracking-wide uppercase">
+            <div className="mb-8 flex items-baseline gap-4">
+              <span className="text-muted-foreground font-mono text-base tracking-wide uppercase">
                 Row 3
               </span>
               <h2 className="text-2xl tracking-tight md:text-3xl">
@@ -316,35 +359,36 @@ export default function FeaturesPage() {
               </h2>
             </div>
             <p className="text-muted-foreground mb-10 max-w-2xl">
-              Two buttons. The only two ways your changes leave the panel
-              — one to the clipboard, one to a connected AI coding agent.
+              Two buttons. The only two ways your changes leave the panel — one
+              to the clipboard, one to a connected AI coding agent.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
               <Card>
                 <CardContent className="flex flex-col gap-2 p-6">
                   <div className="flex items-center gap-2">
-                    <Copy className="text-foreground size-5" />
-                    <h3 className="text-lg font-semibold">Copy as Prompt</h3>
+                    <Copy className="text-foreground size-6" />
+                    <h3 className="text-2xl font-semibold">Copy as Prompt</h3>
                   </div>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Bundles every change into a Markdown export
-                    (selector → property → value lines) and writes it to
-                    your clipboard. Paste into whichever agent you use —
-                    works without any MCP setup.
+                  <p className="text-muted-foreground text-base leading-relaxed">
+                    Bundles every change into a Markdown export (selector →
+                    property → value lines) and writes it to your clipboard.
+                    Paste into whichever agent you use — works without any MCP
+                    setup.
                   </p>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="flex flex-col gap-2 p-6">
                   <div className="flex items-center gap-2">
-                    <Send className="text-foreground size-5" />
-                    <h3 className="text-lg font-semibold">Send to Agent</h3>
+                    <Send className="text-foreground size-6" />
+                    <h3 className="text-2xl font-semibold">Send to Agent</h3>
                   </div>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Pushes the same Markdown straight to the connected
-                    MCP agent — Claude Desktop, Cursor, Claude Code, or
-                    any MCP-aware tool. Enables once an agent is actually
-                    attached; greyed out otherwise.
+                  <p className="text-muted-foreground text-base leading-relaxed">
+                    Marks the current edit session as ready over MCP. A
+                    connected agent retrieves the live changes and hand-off
+                    marker through the MCP tools. Without an attached agent,
+                    Design Mode opens setup guidance instead of claiming the
+                    hand-off succeeded.
                   </p>
                 </CardContent>
               </Card>

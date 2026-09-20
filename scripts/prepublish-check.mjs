@@ -182,6 +182,10 @@ step('Website export integrity', () => {
   }
 });
 
+step('Website routes, images and comparison discovery', () => {
+  run('npm --workspace design-mode-website run check:built', { stdio: 'pipe' });
+});
+
 // ── Report ────────────────────────────────────────────────────────────────
 console.log();
 if (failed === 0) {

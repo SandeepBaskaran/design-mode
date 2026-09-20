@@ -3,8 +3,7 @@ import Link from "next/link";
 
 import { Heart, MousePointer2, Palette, Ruler, Wand2 } from "lucide-react";
 
-import { ProductHunt } from "@/components/blocks/product-hunt";
-import { VisualEditorPill } from "@/components/blocks/visual-editor-pill";
+import { HeroHeadline } from "@/components/blocks/hero-headline";
 import { DashedLine } from "@/components/dashed-line";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 import { Button } from "@/components/ui/button";
@@ -12,70 +11,65 @@ import { Button } from "@/components/ui/button";
 const features = [
   {
     title: "Inspect anything",
-    description: "Click any element on any live site and edit its CSS visually.",
+    description:
+      "Inspect elements on a scriptable webpage and edit the rendered result visually.",
     icon: MousePointer2,
   },
   {
     title: "Layout, type, colour",
-    description: "A full design surface in the side panel — not a devtools fork.",
+    description:
+      "A full design surface in the side panel — not a devtools fork.",
     icon: Palette,
   },
   {
     title: "Measure & resize",
-    description: "Drag 8 handles to resize, and see pixel spacing between elements live.",
+    description:
+      "Drag 8 handles to resize, and see pixel spacing between elements live.",
     icon: Ruler,
   },
   {
     title: "Ship to your agent",
-    description: "Send the diff to Claude Code, Cursor, or any MCP-aware tool.",
+    description:
+      "Copy a structured specification or send it to a compatible MCP client.",
     icon: Wand2,
   },
   {
-    title: "Free, forever",
-    description: "Open source under MIT. No accounts, no telemetry by default.",
+    title: "Free and open source",
+    description:
+      "MIT-licensed, no account required, and no product telemetry in the extension.",
     icon: Heart,
   },
 ];
 
 export const Hero = () => {
   return (
-    <section className="pt-28 pb-12 lg:pt-44 lg:pb-16">
+    <section className="py-16 sm:py-24">
       {/* Hero — vertical stack, centred */}
-      <div className="container max-w-4xl text-center">
-        <div className="mb-6 flex justify-center">
-          <ProductHunt />
-        </div>
+      <div className="container max-w-[1200px] text-center max-sm:px-4">
+        <HeroHeadline />
 
-        <div className="mb-5 flex justify-center">
-          <VisualEditorPill />
-        </div>
-
-        <h1 className="macro text-foreground text-[clamp(2rem,6vw,3.375rem)]">
-          Design directly in your browser.
-          <br className="hidden md:block" /> Your agent writes the code.
-        </h1>
-
-        <p className="text-muted-foreground mx-auto mt-5 max-w-[848px] text-lg">
-          Design Mode is a free, open-source browser extension that turns any
-          live website into a visual design surface — one design tool for
-          every maker, from designers and developers to QA testers, PMs,
-          indie hackers, and vibe coders.
-        </p>
-        <p className="text-muted-foreground mx-auto mt-3 max-w-[848px] text-sm md:text-base">
-          Edit layout, typography, colour, spacing, copy and DOM with real
-          controls, then ship the diff to{" "}
-          <span className="text-foreground">Claude Code</span>,{" "}
-          <span className="text-foreground">Cursor</span>,{" "}
-          <span className="text-foreground">Claude Desktop</span>,{" "}
-          <span className="text-foreground">Windsurf</span>,{" "}
-          <span className="text-foreground">Cline</span>, or any
-          MCP-compatible AI coding agent.
+        <p className="text-muted-foreground mx-auto mt-8 max-w-[848px] text-[14px] sm:text-[20px]">
+          <span className="sm:hidden">Edit</span>
+          <span className="max-sm:hidden">
+            Design Mode is a free, open-source Chrome and Firefox extension that
+            lets you edit
+          </span>{" "}
+          a rendered webpage visually, record the exact changes, and hand them
+          to a coding agent.
         </p>
 
         {/* Secondary on the LEFT (Try by yourself → /demo), primary on the RIGHT (Add to Chrome) */}
-        <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-          <AddToChromeCta size="lg" />
-          <Button variant="outline" size="lg" asChild>
+        <div className="mt-16 grid grid-cols-2 items-stretch gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-4">
+          <AddToChromeCta
+            size="lg"
+            className="h-14 max-sm:w-full max-sm:px-2 max-sm:py-1 max-sm:text-[14px]"
+          />
+          <Button
+            variant="outline"
+            size="lg"
+            className="h-14 max-sm:w-full max-sm:px-2 max-sm:py-1 max-sm:text-[14px]"
+            asChild
+          >
             <Link href="/demo">Try by yourself</Link>
           </Button>
         </div>
@@ -103,7 +97,7 @@ export const HeroShowcase = () => {
         </div>
 
         {/* Right — feature bullets */}
-        <div className="relative flex flex-1 flex-col justify-center space-y-5 lg:max-w-md lg:pl-10">
+        <div className="relative flex flex-1 flex-col justify-center space-y-4 lg:max-w-md lg:pl-10">
           <DashedLine
             orientation="vertical"
             className="absolute top-0 left-0 max-lg:hidden"
@@ -111,13 +105,13 @@ export const HeroShowcase = () => {
           {features.map((feature) => {
             const Icon = feature.icon;
             return (
-              <div key={feature.title} className="flex gap-2.5 lg:gap-5">
-                <Icon className="text-foreground mt-1 size-4 shrink-0 lg:size-5" />
+              <div key={feature.title} className="flex gap-2 lg:gap-8">
+                <Icon className="text-foreground mt-2 size-4 shrink-0 lg:size-6" />
                 <div>
                   <h2 className="font-text text-foreground font-semibold">
                     {feature.title}
                   </h2>
-                  <p className="text-muted-foreground max-w-76 text-sm">
+                  <p className="text-muted-foreground max-w-76 text-base">
                     {feature.description}
                   </p>
                 </div>

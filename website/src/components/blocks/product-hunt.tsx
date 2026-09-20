@@ -1,9 +1,13 @@
 // Product Hunt featured badge — inline atom, parent controls layout/spacing.
 // Used at the top of the homepage Hero and at the top of the global Footer.
+import { withNavRef } from "@/lib/nav-ref";
+
 export function ProductHunt() {
   return (
     <a
-      href="https://www.producthunt.com/products/design-mode?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-design-mode-2"
+      href={withNavRef(
+        "https://www.producthunt.com/products/design-mode?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-design-mode-2",
+      )}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-block"
