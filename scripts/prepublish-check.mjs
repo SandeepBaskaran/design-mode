@@ -36,6 +36,8 @@ function step(name, fn) {
     results.push({ name, ok: true });
   } catch (err) {
     process.stdout.write(`\r${RED}✗${RESET} ${name}\n`);
+    if (err.stdout) process.stdout.write(String(err.stdout));
+    if (err.stderr) process.stdout.write(String(err.stderr));
     process.stdout.write(`   ${RED}${err.message}${RESET}\n`);
     results.push({ name, ok: false, err: err.message });
     failed++;
