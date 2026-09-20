@@ -1182,7 +1182,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       const sid = getSelectedElementId();
       if (sid && msg.text) {
         const el = getElementById(sid);
-        const selector = el ? (el.id ? `#${el.id}` : el.tagName.toLowerCase()) : sid;
+        const selector = el ? generateSelector(el) : sid;
         addComment(sid, selector, msg.text).then(comment => {
           syncCommentChange(comment);
           sendResponse({ comment });
