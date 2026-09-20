@@ -18,7 +18,7 @@ import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOve
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
 import { initCustomCursor, applyBaseCursor, clearBaseCursor } from './custom-cursor';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff, getFeedbackSessionView, isLiveFeedbackSupported, stopFeedbackSessionFromUi } from './change-tracker';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { captureElementScreenshot, captureViewportScreenshotClean } from './screenshots';
 import {
@@ -33,6 +33,7 @@ import { buildDomTree, isPageContentSealed } from './dom-tree';
 import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments, restoreCommentPins } from './comments';
 import { buildCloudSessionSummary, buildMcpItems } from './mcp-items';
 import { startRegionDraw, cancelRegionDraw, clearPendingRegionBox, type Region } from './region-annotate';
+import { getChangeComponentContexts } from './change-context';
 // Source detection — kept; surfaced in the prompt + Design tab
 import { getSourceLocation, getComponentHierarchy, openInVSCode } from './source-detection';
 // Animation controls — kept (freeze/preview helpers)
@@ -53,7 +54,7 @@ import { setResizeCommitHandler, setResizePreviewHandler, setMoveCommitHandler, 
 // Enhanced export — markdown for Copy Prompt
 import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } from './enhanced-export';
 // Keyboard shortcuts
-import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts } from './keyboard-shortcuts';
+import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts, triggerShortcut } from './keyboard-shortcuts';
 
 // Re-injection guard. The manifest injects content.js at document_idle AND
 // the background re-injects it on panel-connect (a fallback for tabs open
@@ -411,12 +412,24 @@ async function getChangesPayload() {
     try { matchCount = Math.max(1, document.querySelectorAll(c.selector).length); } catch {}
     return { ...c, matchCount };
   });
+  const contextChanges = [...decorated, ...getTextChanges(), ...getDomChanges(), ...pageComments];
+  const componentContexts = getChangeComponentContexts(contextChanges);
+  const elementIds = [...new Set(contextChanges.map(c => c.elementId).filter(Boolean))];
+  if (elementIds.length) {
+    try {
+      const pageContexts = await browser.runtime.sendMessage({ type: 'GET_CHANGE_COMPONENT_CONTEXTS', elementIds });
+      for (const id of elementIds) {
+        if (pageContexts?.[id]?.name || pageContexts?.[id]?.file) componentContexts[id] = pageContexts[id];
+      }
+    } catch { /* Source metadata is optional on restricted pages. */ }
+  }
   return {
     styleChanges: decorated,
     textChanges: getTextChanges(),
     comments: pageComments,
     domChanges: getDomChanges(),
     tokenChanges: getTokenEdits(),
+    componentContexts,
   };
 }
 
@@ -869,15 +882,20 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       if (isInspectActive()) disableInspect();
       else enableInspect((i: ElementInfo) => onElementSelected(i));
       sendResponse({ inspecting: isInspectActive() });
+      notifyPanel('STATE_UPDATE', getFullState());
       break;
 
-    // Explicit on/off (vs toggle) — used to suspend inspect while a comment
-    // composer is open, then restore it. Idempotent.
+    case 'TRIGGER_SHORTCUT': {
+      sendResponse({ ok: triggerShortcut(msg.action) });
+      break;
+    }
+    // Explicit state keeps the panel and comment suspension in sync.
     case 'SET_INSPECT': {
       const want = !!(msg as any).on;
       if (want && !isInspectActive()) enableInspect((i: ElementInfo) => onElementSelected(i));
       else if (!want && isInspectActive()) disableInspect();
       sendResponse({ inspecting: isInspectActive() });
+      notifyPanel('STATE_UPDATE', getFullState());
       break;
     }
 
@@ -1911,8 +1929,27 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     // server so the agent's next get_changes sees it.
     case 'SEND_TO_AGENT': {
       if (!isConnected() || !isAgentConnected()) { sendResponse({ ok: false, error: 'No agent connected' }); break; }
-      sendResponse({ ok: true, handoff: stageAgentHandoff() });
+      if (getFeedbackSessionView()?.state === 'implementing') { sendResponse({ ok: false, error: 'Agent is implementing the current round' }); break; }
+      stageAgentHandoff().then(
+        result => sendResponse({ ...result, supported: isLiveFeedbackSupported() }),
+        () => sendResponse({ ok: false, error: 'Could not send feedback' }),
+      );
+      return true;
+    }
+    case 'GET_FEEDBACK_SESSION': {
+      sendResponse({
+        ok: true,
+        supported: isLiveFeedbackSupported(),
+        session: getFeedbackSessionView(),
+      });
       break;
+    }
+    case 'STOP_FEEDBACK_SESSION': {
+      stopFeedbackSessionFromUi().then(
+        result => sendResponse({ ...result, supported: isLiveFeedbackSupported() }),
+        () => sendResponse({ ok: false, error: 'Could not stop feedback' }),
+      );
+      return true;
     }
 
     case 'SCREENSHOT_ELEMENT': { const sid = getSelectedElementId(); if (sid) { captureElementScreenshot(sid).then(dataUrl => sendResponse({ dataUrl })); return true; } sendResponse({ dataUrl: null }); break; }

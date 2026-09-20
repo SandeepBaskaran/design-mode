@@ -75,5 +75,17 @@ export function createMcpServer(dispatch: ToolDispatch = executeLocalTool): McpS
     async ({ selector, elementId, commentId }) => dispatch('get_screenshot', { selector, elementId, commentId })
   );
 
+  server.tool(
+    'wait_for_handoff',
+    'Local MCP only. Wait up to 20 seconds for the next user "Send to Agent" round on this page. First call (pageUrl, no sessionId) creates a live session; resume only with the returned sessionId. JSON status is waiting | feedback | stopped | busy. On feedback, the report field is an immutable snapshot — implement those ids only and do not assume later edits. Cloud and Self-hosted do not expose this tool.',
+    {
+      pageUrl: z.string().describe('Exact page URL the live session is bound to'),
+      sessionId: z.string().optional().describe('Unpredictable id from a previous wait_for_handoff. Omit to start a new session.'),
+      after: z.number().int().nonnegative().optional().describe('Last consumed cursor. The next unconsumed send after this value is returned.'),
+      timeoutMs: z.number().int().positive().max(20_000).optional().describe('Cap in milliseconds, maximum 20000'),
+    },
+    async (args, extra) => dispatch('wait_for_handoff', args, extra)
+  );
+
   return server;
 }

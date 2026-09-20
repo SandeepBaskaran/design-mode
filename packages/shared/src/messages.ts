@@ -72,6 +72,9 @@ export type ServerMessage =
   | { type: 'COMMENT_DELETED'; payload: { id: string } }
   // "Send to Agent" marker — extension → server
   | { type: 'HANDOFF'; payload: { requestedAt: number; pageUrl: string; pageTitle: string } }
+  | { type: 'FEEDBACK_SESSION'; payload: { sessionId: string; pageUrl: string; state: 'waiting' | 'implementing' | 'stopped'; cursor: number } | null }
+  | { type: 'STOP_FEEDBACK'; payload?: { sessionId?: string } }
+  | { type: 'PAGE_NAVIGATED'; payload: { pageUrl: string } }
   | { type: 'APPLY_CHANGES'; requestId?: string; payload: { changes: Array<{ elementId: string; styles: PartialElementStyle }> } }
   | { type: 'SET_CHANGE_STATUS'; requestId?: string; payload: { status: ChangeStatus; ids?: string[] } }
   | { type: 'CLEAR_CHANGES'; requestId?: string; payload?: Record<string, never> }

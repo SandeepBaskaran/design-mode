@@ -101,6 +101,13 @@ secrets/
 .claude
 .claude/worktrees/
 .worktrees/
+/.hermes/worktrees/
+.codegraph/
+.codegraph-cache/
+/graphify-out/
+/graph.json
+/graph.html
+/GRAPH_REPORT.md
 .aider*
 
 # ── macOS ────────────────────────────────────────────────────────────────

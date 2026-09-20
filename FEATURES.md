@@ -165,6 +165,10 @@ hovered) element. Every field updates the page live.
 ### 2.6 Size & Spacing
 
 - Width / Height / Min-Max with unit-aware number inputs.
+- W/H distinguish authored values (`auto`, `%`, `rem`, intrinsic sizes,
+  expressions and tokens) from the separate computed-size hint. Auto is not
+  labelled Hug. Ambiguous/inaccessible cascade values show as unknown rather
+  than being presented as fixed authored pixels.
 - Margin and Padding rendered as a Figma-style box-model with linkable sides.
 
 ### 2.7 Layout
@@ -450,6 +454,12 @@ A Figma-style DOM tree of the page.
 ---
 
 ## 4. Side panel — Changes tab
+
+The **Group changes** selector switches between the default element view and
+optional component/source headings. It preserves element selectors, filters,
+sort order within components, preview-original and all existing row actions.
+Missing metadata is labelled **Unattributed elements**; name-only hints are
+**Source unverified** and do not merge unrelated elements.
 
 Every edit you've made grouped by element.
 
@@ -897,6 +907,17 @@ reconnects to the same port.
 ```
 
 ### `/design-mode` agent command
+
+For **Local MCP**, opt-in live feedback rounds use `wait_for_handoff` with
+bounded waits and immutable per-Send snapshots. The panel shows Waiting,
+Implementing and Stopped, with an explicit Stop that leaves edits intact.
+Stop ends the loop, not commands already running in the agent. Cloud and
+Self-hosted retain one-shot handoffs.
+
+The companion's `setup` command previews project-local Claude Code / Cursor
+configuration and the workflow file, then writes only after confirmation,
+with backups and repeat-run safety. `doctor` checks local connectivity.
+See [guided local setup](docs/agent-setup.md).
 
 Settings → **Set up your agent** copies a ready-made `/design-mode` workflow
 command for Claude Code, Cursor, Codex, or Windsurf (it names the save path

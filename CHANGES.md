@@ -50,7 +50,8 @@ When the Changes toggle is in **previewing-original** state:
 |---|---|
 | **Search input** (with magnifier icon) | Live-filters the visible list. Case-insensitive, matches against selector / property name / old + new value / comment text / DOM action / tag name. A small `×` clears the box when typed. |
 | **Expand all / Collapse all** (chevron icon) | One-click toggle for every group's open / closed state. The label flips based on what's actually open right now (if any group is collapsed, button reads *Expand all*; otherwise *Collapse all*). |
-| **Sort dropdown** | Three options: **Oldest first** (default), **Newest first**, **By element** (groups all of an element's edits together while preserving relative group age). |
+| **Group changes** | **Elements** (default) preserves element groups. **Components** adds source/component headings while keeping selectors, per-element controls, filters and change order within each component. Name-only hints stay separate and show *source unverified*. Missing metadata appears under *Unattributed elements*; tokens keep their scope groups and comments remain separate. This choice lasts for the panel session only. |
+| **Sort dropdown** | **Oldest first** (default), **Newest first**, or **By element**. Component grouping preserves this order within each component. |
 
 ### Row 3 — Filter chips
 

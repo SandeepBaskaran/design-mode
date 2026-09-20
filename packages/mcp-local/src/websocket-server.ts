@@ -1,6 +1,15 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { state } from './state.js';
+import {
+  onExtensionConnect,
+  onExtensionDisconnect,
+  onHandoff,
+  onPageNavigated,
+  onSessionPage,
+  setFeedbackSessionNotifier,
+  stopFeedbackSession,
+} from './feedback-session.js';
 
 let wss: WebSocketServer | null = null;
 let activeConnection: WebSocket | null = null;
@@ -11,6 +20,24 @@ interface PendingRequest {
   timer: NodeJS.Timeout;
 }
 const pending = new Map<string, PendingRequest>();
+
+function rejectPending(err: Error) {
+  for (const [, p] of pending) {
+    clearTimeout(p.timer);
+    p.reject(err);
+  }
+  pending.clear();
+}
+
+export function sendToExtension(msg: object): boolean {
+  if (!activeConnection || activeConnection.readyState !== WebSocket.OPEN) return false;
+  activeConnection.send(JSON.stringify(msg));
+  return true;
+}
+
+setFeedbackSessionNotifier((session) => {
+  sendToExtension({ type: 'FEEDBACK_SESSION', payload: session });
+});
 
 export function attachWebSocketServer(server: HttpServer, token: string): WebSocketServer {
   wss = new WebSocketServer({
@@ -25,8 +52,10 @@ export function attachWebSocketServer(server: HttpServer, token: string): WebSoc
     console.error('[Design Mode] Extension connected');
     activeConnection = ws;
     ws.send(JSON.stringify({ type: 'HELLO', payload: { version: '2.2.1', agentConnected: true } }));
+    onExtensionConnect();
 
     ws.on('message', (data) => {
+      if (activeConnection !== ws) return;
       try {
         const msg = JSON.parse(data.toString());
         handleMessage(msg);
@@ -37,12 +66,10 @@ export function attachWebSocketServer(server: HttpServer, token: string): WebSoc
 
     ws.on('close', () => {
       console.error('[Design Mode] Extension disconnected');
-      if (activeConnection === ws) activeConnection = null;
-      for (const [, p] of pending) {
-        clearTimeout(p.timer);
-        p.reject(new Error('Extension disconnected'));
-      }
-      pending.clear();
+      if (activeConnection !== ws) return;
+      activeConnection = null;
+      onExtensionDisconnect();
+      rejectPending(new Error('Extension disconnected'));
     });
 
     ws.on('error', (err) => {
@@ -67,7 +94,21 @@ function handleMessage(msg: any) {
     case 'STYLE_CHANGED': if (msg.payload) state.addStyleChange(msg.payload); break;
     case 'TEXT_CHANGED': if (msg.payload) state.addTextChange(msg.payload); break;
     case 'DOM_CHANGED': if (msg.payload) state.addDomChange(msg.payload); break;
-    case 'HANDOFF': if (msg.payload) state.setHandoff(msg.payload); break;
+    case 'HANDOFF':
+      if (msg.payload) {
+        state.setHandoff(msg.payload);
+        onHandoff();
+      }
+      break;
+    case 'STOP_FEEDBACK':
+      sendToExtension({
+        type: 'FEEDBACK_SESSION',
+        payload: stopFeedbackSession(typeof msg.payload?.sessionId === 'string' ? msg.payload.sessionId : undefined),
+      });
+      break;
+    case 'PAGE_NAVIGATED':
+      onPageNavigated(msg.payload?.pageUrl);
+      break;
     case 'SESSION_UPDATE':
       if (msg.payload) {
         state.updateSession(msg.payload);
@@ -80,6 +121,7 @@ function handleMessage(msg: any) {
             pageTitle: msg.payload.handoff.pageTitle,
           });
         }
+        onSessionPage(msg.payload.pageUrl);
       }
       break;
     case 'COMMENT_ADDED': if (msg.payload) state.addComment(msg.payload); break;
@@ -116,6 +158,15 @@ export function isExtensionConnected(): boolean {
 }
 
 export function stopWebSocketServer() {
-  if (wss) { wss.close(); wss = null; }
+  const ws = activeConnection;
   activeConnection = null;
+  rejectPending(new Error('Server shutting down'));
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    try { ws.close(); } catch {}
+  }
+  if (wss) {
+    wss.close();
+    wss = null;
+  }
+  onExtensionDisconnect();
 }

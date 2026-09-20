@@ -121,11 +121,11 @@ step('Focused extension logic tests', () => {
 });
 
 // ── 4. MCP tool count check (catch accidental tool deletions) ─────────────
-step('Local MCP server has all 8 tools', () => {
+step('Local MCP server retains core tools and live feedback', () => {
   const mcp = readFileSync(resolve(root, 'packages/mcp-local/src/mcp-server.ts'), 'utf8');
   const matches = mcp.match(/server\.tool\(/g) || [];
-  if (matches.length < 8) {
-    throw new Error(`Expected ≥8 tools registered in mcp-server.ts, found ${matches.length}`);
+  if (matches.length < 9 || !/server\.tool\(\s*'wait_for_handoff'/.test(mcp)) {
+    throw new Error(`Expected ≥9 tools including wait_for_handoff, found ${matches.length}`);
   }
 });
 
@@ -142,6 +142,10 @@ step('design-mode.md matches AGENT_COMMAND_MARKDOWN', () => {
   const m = src.match(/AGENT_COMMAND_MARKDOWN = `((?:[^`\\]|\\.)*)`;/);
   if (!m) throw new Error('Could not find AGENT_COMMAND_MARKDOWN in agent-workflow.ts');
   const expected = m[1].replace(/\\`/g, '`').replace(/\\\$/g, '$').trim();
+  const setupWorkflow = readFileSync(resolve(root, 'packages/mcp-local/src/setup-workflow.ts'), 'utf8');
+  if (!setupWorkflow.includes('export const SETUP_WORKFLOW_MARKDOWN = `' + m[1] + '`;')) {
+    throw new Error('Local setup workflow is out of sync with AGENT_COMMAND_MARKDOWN');
+  }
   const actual = readFileSync(resolve(root, 'website/public/design-mode.md'), 'utf8').trim();
   if (expected !== actual) {
     throw new Error('website/public/design-mode.md is out of sync with AGENT_COMMAND_MARKDOWN — regenerate it from agent-workflow.ts');

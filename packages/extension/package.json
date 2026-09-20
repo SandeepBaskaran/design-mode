@@ -14,8 +14,8 @@
     "webextension-polyfill": "^0.12.0"
   },
   "devDependencies": {
-    "@types/chrome": "^0.2.7",
-    "@types/webextension-polyfill": "^0.12.5",
+    "@types/chrome": "^0.2.9",
+    "@types/webextension-polyfill": "^0.12.6",
     "typescript": "^5.7.0",
     "vite": "^6.4.3"
   }

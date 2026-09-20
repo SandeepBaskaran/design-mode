@@ -24,12 +24,24 @@ server — drive them live; do not look for task files on disk.
 - `set_change_status` — flip change `id`s to `in_progress` / `resolved`
   as you work; the user's Changes tab updates live.
 - `mark_comment_resolved` — mark a comment done (pass its `id`).
+- `wait_for_handoff` — Local MCP only. Bounded wait (max 20s) for the next
+  user "Send to Agent" round. First call passes `pageUrl` and omits
+  `sessionId` to opt in; resume only with the returned `sessionId` and
+  `after` cursor. JSON `status` is `waiting` | `feedback` |
+  `stopped` | `busy`. On `feedback`, `report` is an immutable
+  snapshot — implement those ids only. Cloud / Self-hosted do not expose
+  this tool; if it is missing or unknown, do a single `get_changes` and
+  do not loop.
 
 ## Workflow
 1. Call `get_session_summary`. If the extension isn't connected, ask the
    user to open the Design Mode side panel, then stop.
-2. Call `get_changes`. Build a task list from the token/style/text/DOM
-   changes and the comments.
+2. Ask whether the user wants one pass or live feedback rounds. Live rounds
+   require the Local `wait_for_handoff` tool. For live rounds, select the
+   exact `pageUrl` from the session summary (ask if ambiguous), call
+   `wait_for_handoff` without `sessionId`, and wait for an explicit Send.
+   Otherwise call `get_changes` once. Build a task list from unresolved
+   token/style/text/DOM changes and comments; skip already-resolved items.
 3. For each item:
    - Call `set_change_status` with `{ status: 'in_progress', ids: [id] }`
      so the user sees a WIP badge on the row you're working.
@@ -50,7 +62,18 @@ server — drive them live; do not look for task files on disk.
    - Once shipped, call `set_change_status` with `{ status: 'resolved',
      ids: [id] }` — the row gets struck through in the user's Changes tab.
      For a comment, call `mark_comment_resolved` with its `id` instead.
-4. Summarise what you changed and which comments you resolved.
+     Never auto-resolve edits that were not in the snapshot you are working;
+     ids only.
+4. Only if the user chose live rounds, call `wait_for_handoff` with the same
+   `sessionId` and `after` set to the last consumed cursor (timeout
+   ≤ 20s). Repeat:
+   - `waiting` — poll again; do not invent work.
+   - `feedback` — implement that snapshot's ids, then wait again.
+   - `stopped` — the user ended the live session; summarise and stop.
+   - `busy` — another session owns the page; stop.
+   If the tool errors, is missing, or the client is Cloud /
+   Self-hosted, skip this loop.
+5. Summarise what you changed and which comments you resolved.
 
 ## Processing modes (ask the user if unspecified)
 - **step** — one item at a time; confirm with the user between each.

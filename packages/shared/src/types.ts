@@ -382,6 +382,7 @@ export interface MCPSession {
 
 export interface KeyboardShortcut {
   key: string;
+  code?: string;
   modifiers: Array<'ctrl' | 'alt' | 'shift' | 'meta'>;
   action: string;
   label: string;

@@ -4,6 +4,7 @@
 
 import { getOrAssignId, getElementById, getElementRect, generateSelector, getBreadcrumbs, getComputedStyleSubset } from './helpers';
 import { getAuthoredVarsForElement, getAuthoredShadowVars, type PropToken, type ShadowVarInfo } from './token-engine';
+import { inspectAuthoredSizing, unknownDimension, type AuthoredDimension } from './authored-sizing';
 import { showHover, hideHover, showSelect, updateSelectPosition, isOverlayElement } from './overlays';
 import { isMultiSelectActive, enableMultiSelect, disableMultiSelect, toggleSelection, getSelectedIds } from './multi-select';
 import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag } from './measure-guides';
@@ -29,6 +30,8 @@ export type ElementInfo = {
   parentJustifyContent?: string;
   parentAlignItems?: string;
   parentGap?: string;
+  authoredWidth?: AuthoredDimension;
+  authoredHeight?: AuthoredDimension;
 };
 
 export type SelectionCallback = (info: ElementInfo) => void;
@@ -124,11 +127,15 @@ export function buildElementInfo(el: HTMLElement, skipTokens = false): ElementIn
     : el.innerHTML;
   const parent = el.parentElement;
   const pcs = parent ? window.getComputedStyle(parent) : null;
+  const computedStyles = getComputedStyleSubset(el);
+  const sizing = skipTokens
+    ? { width: unknownDimension(computedStyles.width), height: unknownDimension(computedStyles.height) }
+    : inspectAuthoredSizing(el);
   return {
     id, tagName: el.tagName.toLowerCase(),
     className: typeof el.className === 'string' ? el.className : '',
     elementId: el.id || '', breadcrumbs: getBreadcrumbs(el),
-    computedStyles: getComputedStyleSubset(el),
+    computedStyles,
     styleTokens: skipTokens ? {} : getAuthoredVarsForElement(el),
     shadowVars: skipTokens ? {} : getAuthoredShadowVars(el),
     rect: getElementRect(el),
@@ -142,6 +149,8 @@ export function buildElementInfo(el: HTMLElement, skipTokens = false): ElementIn
     parentAlignItems: pcs?.alignItems || '',
     parentGap: pcs?.gap || '',
     childGap: measureChildGap(el),
+    authoredWidth: sizing.width,
+    authoredHeight: sizing.height,
   };
 }
 

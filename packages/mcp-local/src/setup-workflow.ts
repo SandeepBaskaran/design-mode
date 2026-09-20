@@ -1,13 +1,5 @@
-// ============================================================
-// Design Mode — agent workflow command
-// ============================================================
-//
-// Single source of truth for the `/design-mode` slash-command / workflow
-// file we hand to coding agents. The body is tool-agnostic (it drives the
-// live MCP tools, not files), so the same text works for Claude Code,
-// Cursor, Codex, and Windsurf — only the install path differs.
-
-export const AGENT_COMMAND_MARKDOWN = `---
+// Mirrored for the standalone Node build; prepublish verifies this against the panel workflow.
+export const SETUP_WORKFLOW_MARKDOWN = `---
 description: Apply the user's Design Mode edits and resolve their comments
 ---
 
@@ -89,17 +81,3 @@ server — drive them live; do not look for task files on disk.
 - **batch** — group related items; one confirmation per group.
 - **yolo** — apply everything autonomously (use with care).
 `;
-
-export interface AgentTool {
-  key: 'claude' | 'cursor' | 'codex' | 'windsurf';
-  label: string;
-  path: string;
-}
-
-// Where each tool expects the command file. Copy the body, save it here.
-export const AGENT_TOOLS: AgentTool[] = [
-  { key: 'claude', label: 'Claude Code', path: '.claude/commands/design-mode.md' },
-  { key: 'cursor', label: 'Cursor', path: '.cursor/commands/design-mode.md' },
-  { key: 'codex', label: 'Codex', path: '.codex/prompts/design-mode.md' },
-  { key: 'windsurf', label: 'Windsurf', path: '.windsurf/workflows/design-mode.md' },
-];

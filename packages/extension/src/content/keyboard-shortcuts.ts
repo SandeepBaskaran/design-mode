@@ -6,12 +6,20 @@
 
 import { DEFAULT_SHORTCUTS } from '@shared/constants';
 import type { KeyboardShortcut } from '@shared/types';
+import {
+  bindingFromKeyboardEvent,
+  isTypingTarget,
+  matchShortcut,
+  mergeSavedShortcuts,
+} from './shortcut-binding';
 
 type ShortcutHandler = () => void;
 
 const handlers = new Map<string, ShortcutHandler>();
-let shortcuts: KeyboardShortcut[] = [...DEFAULT_SHORTCUTS.map(s => ({ ...s })) as any];
+const defaultShortcuts: KeyboardShortcut[] = DEFAULT_SHORTCUTS.map(s => ({ ...s, modifiers: [...s.modifiers] }));
+let shortcuts = mergeSavedShortcuts(defaultShortcuts, undefined);
 let enabled = false;
+let storageHooked = false;
 
 // ── Register / Unregister ──
 
@@ -23,11 +31,19 @@ export function unregisterShortcut(action: string) {
   handlers.delete(action);
 }
 
+export function triggerShortcut(action: string): boolean {
+  const handler = enabled ? handlers.get(action) : undefined;
+  if (!handler) return false;
+  handler();
+  return true;
+}
+
 // ── Enable / Disable ──
 
 export function enableShortcuts() {
   if (enabled) return;
   enabled = true;
+  hookShortcutStorage();
   document.addEventListener('keydown', onKeyDown, true);
 }
 
@@ -37,12 +53,7 @@ export function disableShortcuts() {
 }
 
 function onKeyDown(e: KeyboardEvent) {
-  // Don't intercept when typing in inputs
-  const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-  if (tag === 'input' || tag === 'textarea' || tag === 'select' || (e.target as HTMLElement)?.isContentEditable) {
-    // Only allow Escape
-    if (e.key !== 'Escape') return;
-  }
+  if (isTypingTarget(e.target) && e.key !== 'Escape') return;
 
   for (const sc of shortcuts) {
     if (matchShortcut(e, sc)) {
@@ -57,27 +68,33 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-function matchShortcut(e: KeyboardEvent, sc: KeyboardShortcut): boolean {
-  if (e.key.toLowerCase() !== sc.key.toLowerCase()) return false;
-  const mods = sc.modifiers || [];
-  if (mods.includes('ctrl') !== (e.ctrlKey || e.metaKey)) return false;
-  if (mods.includes('alt') !== e.altKey) return false;
-  if (mods.includes('shift') !== e.shiftKey) return false;
-  return true;
-}
-
 // ── Custom Shortcuts ──
 
-export function updateShortcut(action: string, key: string, modifiers: KeyboardShortcut['modifiers']) {
+export function updateShortcut(
+  action: string,
+  key: string,
+  modifiers: KeyboardShortcut['modifiers'],
+  code?: string,
+) {
   const idx = shortcuts.findIndex(s => s.action === action);
   if (idx > -1) {
-    shortcuts[idx] = { ...shortcuts[idx], key, modifiers };
+    const binding = bindingFromKeyboardEvent({
+      key, code: code || '',
+      altKey: modifiers.includes('alt'),
+      ctrlKey: modifiers.includes('ctrl'),
+      metaKey: modifiers.includes('meta'),
+      shiftKey: modifiers.includes('shift'),
+    });
+    if (!binding) return;
+    const next: KeyboardShortcut = { ...shortcuts[idx], ...binding, modifiers };
+    if (!binding.code) delete next.code;
+    shortcuts[idx] = next;
   }
   saveShortcuts();
 }
 
 export function resetShortcuts() {
-  shortcuts = [...DEFAULT_SHORTCUTS.map(s => ({ ...s })) as any];
+  shortcuts = mergeSavedShortcuts(defaultShortcuts, undefined);
   saveShortcuts();
 }
 
@@ -92,11 +109,22 @@ async function saveShortcuts() {
 }
 
 export async function loadShortcuts() {
+  hookShortcutStorage();
   try {
     const data = await browser.storage.local.get('dm-shortcuts');
-    if (data['dm-shortcuts']) {
-      shortcuts = data['dm-shortcuts'] as KeyboardShortcut[];
-    }
+    shortcuts = mergeSavedShortcuts(defaultShortcuts, data['dm-shortcuts']);
+  } catch {}
+}
+
+function hookShortcutStorage() {
+  if (storageHooked) return;
+  storageHooked = true;
+  try {
+    browser.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      if (!changes['dm-shortcuts']) return;
+      shortcuts = mergeSavedShortcuts(defaultShortcuts, changes['dm-shortcuts'].newValue);
+    });
   } catch {}
 }
 

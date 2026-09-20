@@ -13,11 +13,22 @@ All extension data lives on **your machine**, in the browser's extension storage
 | `chrome.storage.sync`     | User-saved presets you opt to sync across devices                                   | Synced via your browser's sync account (Chrome Sync / Firefox Sync) |
 | `chrome.storage.session`  | Per-page edit sessions (style/text/DOM changes), keyed by `origin + path + search`  | Until tab/browser closes       |
 
-The extension never reads form contents, passwords, or page-script data.
-It only reads computed CSS, geometry, and DOM structure for elements you
-actively inspect.
+The extension never reads password values or framework props/state. It reads
+CSS, geometry and DOM structure for elements you inspect. For component-grouped
+change review, a bounded read-only probe also reads React/Vue component names
+and source-file hints for changed elements. These hints stay in the local
+review UI; production builds may omit them. The grouping choice is in memory,
+not a new stored preference.
 
 ## What leaves your machine
+
+Guided Local setup only reads/writes the project configuration files selected
+in its preview after explicit apply confirmation. Backups stay beside the
+changed files; they may contain other tools' credentials, so do not commit
+them. Doctor probes only the configured localhost bridge. Live feedback
+rounds reuse that Local connection and retain snapshots/session state only
+in process memory. No new external service or stored browser preference is
+introduced by these features.
 
 The extension sends data only through the MCP mode you configure. Fresh
 installs select Cloud; existing installs retain their saved mode. Cloud and

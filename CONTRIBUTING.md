@@ -46,6 +46,11 @@ npm start          # from repo root — boots ws://localhost:9960 + MCP stdio
                    # (a second start attaches to the first; it does not kill it)
 ```
 
+When launched by an MCP client, the companion exits when that client's stdin
+closes. An interactive terminal start stays alive until stopped. Redirecting stdin
+from `/dev/null` is not a supported detached bridge mode: EOF ends that process.
+An attached client exiting does not stop the shared owner.
+
 ## What kinds of PRs are welcome
 
 - **Bug fixes** with steps to reproduce against the test fixture or a public URL.

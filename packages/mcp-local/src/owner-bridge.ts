@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { attachWebSocketServer, isExtensionConnected, stopWebSocketServer } from './websocket-server.js';
-import { executeLocalTool, type ToolDispatch, type ToolResult } from './tools.js';
+import { executeLocalTool, type ToolDispatch, type ToolExtra, type ToolResult } from './tools.js';
 
 export const OWNER_IDENTITY = 'design-mode-mcp';
 export const OWNER_HEALTH_PATH = '/.design-mode/health';
@@ -112,8 +112,15 @@ async function handleOwnerHttp(req: http.IncomingMessage, res: http.ServerRespon
       sendJson(res, 400, { error: 'name required' });
       return;
     }
-    const result = await executeLocalTool(name, args);
-    sendJson(res, 200, result);
+    const ac = new AbortController();
+    const abort = () => { if (!ac.signal.aborted) ac.abort(); };
+    res.once('close', abort);
+    try {
+      const result = await executeLocalTool(name, args, { signal: ac.signal });
+      if (!res.writableEnded && !res.destroyed) sendJson(res, 200, result);
+    } finally {
+      res.off('close', abort);
+    }
     return;
   }
 
@@ -181,6 +188,7 @@ export async function proxyToolCall(
   port: number,
   name: string,
   args: Record<string, unknown> = {},
+  extra?: ToolExtra,
 ): Promise<ToolResult> {
   try {
     const res = await fetch(`http://${LOOPBACK_HOST}:${port}${OWNER_TOOLS_PATH}`, {
@@ -190,6 +198,7 @@ export async function proxyToolCall(
         [OWNER_HEADER]: OWNER_IDENTITY,
       },
       body: JSON.stringify({ name, arguments: args }),
+      signal: extra?.signal,
     });
     if (!res.ok) {
       const text = await res.text();
@@ -260,7 +269,7 @@ export function createResilientToolDispatch(
   onBridgeChange?: (bridge: LocalBridge) => void,
 ): ToolDispatch {
   let bridge = initialBridge;
-  return async (name, args = {}) => {
+  return async (name, args = {}, extra) => {
     if (bridge.role === 'attacher' && !(await probeOwnerHealth(port))) {
       try {
         bridge = await claimOrAttach(port);
@@ -273,7 +282,7 @@ export function createResilientToolDispatch(
       onBridgeChange?.(bridge);
     }
     return bridge.role === 'owner'
-      ? executeLocalTool(name, args)
-      : proxyToolCall(port, name, args);
+      ? executeLocalTool(name, args, extra)
+      : proxyToolCall(port, name, args, extra);
   };
 }

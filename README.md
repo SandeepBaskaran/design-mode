@@ -144,6 +144,10 @@ Design Mode brings a coding agent inside the page through a small bridge called 
 
 # For contributors & developers
 
+**Local agent setup:** [Preview and install project-local Claude Code or Cursor
+configuration](docs/agent-setup.md), check connectivity with `doctor`, and use
+opt-in live feedback rounds with an explicit Stop.
+
 The rest of this README is for people who want to build the project from source, run the MCP server locally, or hack on the codebase. If you just want to use Design Mode, the [60-second install path](#-install-in-60-seconds) above is all you need.
 
 ## Repo layout

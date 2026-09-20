@@ -110,10 +110,20 @@ through `registerShortcut(action, handler)` in `packages/extension/src/content/i
 Shortcuts are suppressed while typing in `<input>` / `<textarea>` / `contenteditable` (except
 `Escape`).
 
+Editor shortcuts work with webpage or side-panel focus, outside editable controls;
+the address bar and DevTools do not forward them. Only manifest commands belong in `chrome://extensions/shortcuts`; Chrome's
+limit on suggested command bindings does not apply to in-page handlers.
+
 | #      | Test | Steps | Expected |
 |--------|------|-------|----------|
 | 0.10.0 | Shortcuts popover | Help (`?`) → **Keyboard shortcuts** | A popover card opens listing every shortcut grouped by category (General / Annotations / Animation / Editing / Export / Navigation), keys as `<kbd>` chips. Backdrop click, ✕, and `Esc` each close it; clicking inside the card does not |
 | 0.10.1 | Alt+I — Toggle inspect | Press | Inspect crosshair toggles on/off |
+| 0.10.1a | macOS Option shortcuts | On macOS, press Option+I/C/R/P/X and Option+1/2/3 with page focus | Each action fires even when macOS produces an alternate glyph or dead key; extra modifiers do not trigger unrelated bindings |
+| 0.10.1b | Inspect button without selection | Enable Design Mode with no selection; toggle Inspect off/on, then repeat with a selection | Button stays available, exposes pressed state, and controls only inspection; edits and Design Mode remain active |
+| 0.10.1c | Saved Option binding | With a saved custom Alt+letter binding in `dm-shortcuts`, reload and use it on the page | Logical-letter bindings remain usable when macOS emits an alternate glyph; an optional physical code preserves normalised bindings |
+| 0.10.1d | Keyboard layout and composition | Use a non-QWERTY layout; exercise logical-letter shortcuts, AltGr text entry and IME composition | Logical-letter shortcuts remain usable; AltGr/IME text entry is not intercepted |
+| 0.10.1e | Incomplete saved shortcuts | In a disposable test profile, try empty, partial and malformed `dm-shortcuts` values, then reload or update storage live | Default actions remain available; valid custom bindings are preserved; invalid entries do not disable other shortcuts |
+| 0.10.1f | Side-panel shortcut focus | Focus a non-editable panel area, then use Option+I/C/R/P/X and Option+1/2/3; repeat in a panel text field | Editor shortcuts reach the pinned page; text fields retain normal typing behaviour |
 | 0.10.2 | Alt+C — Comment on selected element | Select an element → press | Side panel switches to comment-add mode with the textarea focused; if nothing is selected, no-op |
 | 0.10.2b | Alt+R — Comment on a region | Press | Crosshair draw mode activates; drag a rectangle → side panel opens the comment composer in "region" mode; Esc mid-draw cancels |
 | 0.10.3 | Alt+P — Pause motion | Press | Toggles a global freeze: CSS animations + transitions + Web-Animations API instances + `<video>` elements pause; press again to resume |
@@ -459,6 +469,10 @@ at `https://mcp.designmode.app`). Both expose the **same eight MCP tools**.
 | 11.2a | Second MCP client attaches | Start a second `npm start` while the first is still running | Second process attaches to the owner (does not exit on EADDRINUSE); MCP tools proxy to the owner; WebSocket stays on the first process |
 | 11.2b | Owner survival + shared state | Stop the second process; call `get_changes` from a third client | Owner still listens on 9960; extension stays connected; session state is the owner's |
 | 11.2c | Owner failover | Start two MCP clients, stop the first process (the owner), then call `get_changes` from the surviving client | The surviving attacher claims the same port, logs that it is now the owner, and serves the tool without requiring an app restart; the extension reconnects to that port |
+| 11.2d | MCP client EOF | Start the built CLI on an unused `DM_PORT` with piped stdin; close stdin while an extension socket is connected | Process exits promptly and releases its port; no orphaned companion remains |
+| 11.2e | Attached client EOF | Start an owner and an attached client on an unused port; close only the attacher's stdin | Attacher exits; owner stays alive and continues serving other clients |
+| 11.2f | Startup EOF and detached start | Close piped stdin immediately, then repeat with stdin redirected from `/dev/null` | Both processes exit promptly without leaving a bridge; startup does not miss the EOF |
+| 11.2g | Interactive start and signals | Run `npm start` from an interactive terminal; send SIGINT or SIGTERM | Companion stays alive during interactive use, then exits promptly and releases its own resources on either signal |
 | 11.3  | Extension connects | Side panel open + auto-connect on (default) | Green dot in MCP indicator |
 | 11.4  | `get_changes` | Invoke from agent | Returns `{ pageUrl, pageTitle, styleChanges[], textChanges[], domChanges[], cssBlock, comments[] }` |
 | 11.5  | `apply_changes` | Push styles from agent: `{ changes: [{ elementId, styles: { color: 'red' } }] }` | Styles apply live on the page; row appears in Changes tab |
@@ -631,6 +645,23 @@ everything not listed here must behave exactly as on Chrome.
 | F.14 | Launch setting omitted | Open Settings | There is **no** Launch / Side panel / Floating / Pin on top control. Toolbar and Alt+D always open the sidebar |
 
 ---
+
+## Phase 18 — Authored sizing and agent review workflow
+
+| Test | Action | Expected |
+|---|---|---|
+| 18.1 Authored sizing | Inspect `auto`, percentage, intrinsic, `calc()` and token-derived widths/heights; resize the viewport. | Authored value and computed-size hint remain distinct; selecting/blur without editing creates no override. |
+| 18.2 Cascade and fallback | Inspect important inline styles, media rules, layers, container rules, inaccessible sheets and logical sizes. | Only supported winning declarations appear as authored; ambiguous cases use an explicitly computed fallback, never an invented author value. |
+| 18.3 Sizing edits | Edit W/H, reselect Fixed on a relative length, Undo, Redo, reload and drag resize. | Fields preserve authored units; Fixed does not convert an existing relative length. Drag preview ticks in pixels and commits fixed pixels; selection refresh clears the preview. Changes use the normal managed stylesheet and undo path. |
+| 18.4 Component grouping | Change two elements in one component and an identically named component in another source; switch Elements ↔ Components. | Separate source identities, original element selectors/actions and change counts preserved; selection does not mutate changes. |
+| 18.5 Missing component metadata | Review a production build, a deleted element, token edits and comments. | Unattributed/source-unverified labels are honest; tokens retain scopes; comments stay available. |
+| 18.6 Group search and actions | Search a component/file, sort, filter, select rows, revert one element, and preview original. | Search finds source hints; order inside each component follows sort; actions keep their original scope. |
+| 18.7 Live feedback rounds (Local) | Start the agent wait, edit, Send, implement, then wait and Send again. | Waiting → Implementing → Waiting; each Send produces a distinct structured round; no automatic resend. |
+| 18.8 Stop and disconnect | Stop while waiting/implementing; disconnect, reload or close the inspected page. | Pending waits settle; stopped rounds cannot restart implicitly; Stop explains that an agent's already-running command cannot be killed by the extension. |
+| 18.9 Concurrent agents | Have two MCP clients request the same live session. | No duplicated delivery or silent ownership takeover; timeout and cancellation are bounded. |
+| 18.10 Other MCP modes | Select Cloud/Self-hosted and Send. | Existing one-shot handoff remains usable; Local-only feedback controls do not imply cloud support. |
+| 18.11 Guided setup | Run setup against disposable JSON/JSONC agent-config fixtures; inspect preview; decline then approve; repeat. | No writes on decline; approved writes preserve unrelated config and environment settings, warn before normalising comments, back up original files and are idempotent. |
+| 18.12 Setup safety | Use invalid JSON, conflicting entries, symlink targets, unsupported client and unavailable server. | Actionable errors; no destructive overwrite; diagnostic checks do not leak credentials. |
 
 ## Sign-off
 

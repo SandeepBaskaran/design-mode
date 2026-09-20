@@ -356,6 +356,14 @@ How the layer **lays out itself and its children** — sizing, flow direction, g
 
 ### W (`width`) / H (`height`) + aspect-ratio + shrink
 
+W/H show the authored CSS value separately from a **Computed: …px** hint.
+Percentages, relative units, intrinsic keywords and expressions are not
+silently converted to pixels on selection. Auto has its own mode; it does
+not imply Hug. When stylesheet access or cascade constructs prevent a
+reliable answer, the field indicates unknown authored sizing and still
+shows the measured hint. Switch explicitly to Fixed/Hug/Fill/Auto to override.
+Field edits retain authored units; dragging resize handles previews and commits fixed pixel dimensions.
+
 | Field | Property | What | Values |
 |---|---|---|---|
 | **W** | `width` | Box width. | Any CSS length / keyword: `auto`, `100%`, `400px`, `min-content`, `max-content`, `fit-content`, `fit-content(200px)`, `stretch`. |

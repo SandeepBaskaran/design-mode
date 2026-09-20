@@ -105,6 +105,7 @@ export function getAllChanges(): Array<StyleChange | TextChange | DomChange> {
 }
 
 export function clearAllChanges() {
+  requestStopFeedback();
   styleChanges.length = 0;
   textChanges.length = 0;
   domChanges.length = 0;
@@ -1242,12 +1243,48 @@ export function getChangeReport() {
 
 // User clicked "Send to Agent". Stash the marker locally (cloud tools read
 // the page live via getChangeReport) and push it to the local server's
-// state (local get_changes reads server-side). Returns the marker so the
-// panel can confirm the staging.
-export function stageAgentHandoff(): AgentHandoff {
+// state (local get_changes reads server-side). Waits for the live-session
+// ACK so the caller can return an authoritative session (or ok:false).
+export async function stageAgentHandoff(): Promise<{
+  ok: boolean;
+  error?: string;
+  handoff?: AgentHandoff;
+  session: FeedbackSessionView | null;
+}> {
   pendingHandoff = { requestedAt: Date.now(), pageUrl: location.href, pageTitle: document.title };
+  if (!isLiveFeedbackSupported()) {
+    transportSend({ type: 'HANDOFF', payload: pendingHandoff });
+    return { ok: true, handoff: pendingHandoff, session: null };
+  }
+  const live = feedbackSession;
+  if (live && live.state !== 'stopped') {
+    if (live.state === 'implementing') {
+      return { ok: false, error: 'Agent is implementing the current round', session: getFeedbackSessionView() };
+    }
+    if (live.pageUrl !== pendingHandoff.pageUrl) {
+      return { ok: false, error: 'This page does not match the live feedback session', session: getFeedbackSessionView() };
+    }
+  }
+  if (!isConnected()) {
+    return { ok: false, error: 'Not connected to the local agent', handoff: pendingHandoff, session: getFeedbackSessionView() };
+  }
+  const sessionId = live && live.state !== 'stopped' ? live.sessionId : null;
+  const cursor = live?.cursor ?? 0;
   transportSend({ type: 'HANDOFF', payload: pendingHandoff });
-  return pendingHandoff;
+  if (!sessionId) return { ok: true, handoff: pendingHandoff, session: getFeedbackSessionView() };
+  try {
+    const session = await waitForFeedbackAck(
+      s => !!s && s.sessionId === sessionId && (s.state === 'implementing' || s.cursor > cursor),
+    );
+    return { ok: true, handoff: pendingHandoff, session };
+  } catch {
+    return {
+      ok: false,
+      error: 'Agent did not acknowledge this send',
+      handoff: pendingHandoff,
+      session: getFeedbackSessionView(),
+    };
+  }
 }
 
 // --- Transport sync ---
@@ -1267,7 +1304,108 @@ let sseAbort: AbortController | null = null;
 let unhandledMessageHandler: ((msg: any) => void) | null = null;
 let agentConnected = false;
 
+export type FeedbackUiState = 'waiting' | 'implementing' | 'stopped';
+export type FeedbackSessionView = {
+  sessionId: string;
+  pageUrl: string;
+  state: FeedbackUiState;
+  cursor: number;
+};
+
+let feedbackSession: FeedbackSessionView | null = null;
+
+type FeedbackAckWaiter = {
+  pred: (session: FeedbackSessionView | null) => boolean;
+  resolve: (session: FeedbackSessionView | null) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+const feedbackAckWaiters: FeedbackAckWaiter[] = [];
+
+function waitForFeedbackAck(
+  pred: (session: FeedbackSessionView | null) => boolean,
+  timeoutMs = 4_000,
+): Promise<FeedbackSessionView | null> {
+  if (pred(getFeedbackSessionView())) return Promise.resolve(getFeedbackSessionView());
+  return new Promise((resolve, reject) => {
+    const waiter: FeedbackAckWaiter = {
+      pred,
+      resolve: (session) => { clearTimeout(waiter.timer); resolve(session); },
+      reject: (err) => { clearTimeout(waiter.timer); reject(err); },
+      timer: setTimeout(() => {
+        const idx = feedbackAckWaiters.indexOf(waiter);
+        if (idx >= 0) feedbackAckWaiters.splice(idx, 1);
+        reject(new Error('Timed out waiting for the agent to acknowledge'));
+      }, timeoutMs),
+    };
+    feedbackAckWaiters.push(waiter);
+  });
+}
+
+function flushFeedbackAckWaiters() {
+  const session = getFeedbackSessionView();
+  for (let i = feedbackAckWaiters.length - 1; i >= 0; i--) {
+    if (!feedbackAckWaiters[i].pred(session)) continue;
+    const waiter = feedbackAckWaiters[i];
+    feedbackAckWaiters.splice(i, 1);
+    waiter.resolve(session);
+  }
+}
+
 export function isAgentConnected() { return agentConnected; }
+
+export function isLiveFeedbackSupported() { return transportMode === 'local'; }
+
+export function getFeedbackSessionView(): FeedbackSessionView | null {
+  return isLiveFeedbackSupported() ? feedbackSession : null;
+}
+
+function broadcastFeedbackSession() {
+  try {
+    browser.runtime.sendMessage({
+      type: 'FEEDBACK_SESSION_UPDATE',
+      supported: isLiveFeedbackSupported(),
+      session: getFeedbackSessionView(),
+    });
+  } catch { /* SW gone — next poll will reconcile */ }
+}
+
+export function applyFeedbackSessionPush(session: FeedbackSessionView | null) {
+  if (transportMode !== 'local') return;
+  feedbackSession = session;
+  broadcastFeedbackSession();
+  flushFeedbackAckWaiters();
+}
+
+export async function stopFeedbackSessionFromUi(): Promise<{
+  ok: boolean;
+  error?: string;
+  session: FeedbackSessionView | null;
+}> {
+  if (!isLiveFeedbackSupported()) return { ok: true, session: null };
+  if (!feedbackSession || feedbackSession.state === 'stopped') {
+    return { ok: true, session: getFeedbackSessionView() };
+  }
+  if (!isConnected()) {
+    return { ok: false, error: 'Not connected to the local agent', session: getFeedbackSessionView() };
+  }
+  const sessionId = feedbackSession.sessionId;
+  transportSend({ type: 'STOP_FEEDBACK', payload: { sessionId } });
+  try {
+    const session = await waitForFeedbackAck(s => !s || s.sessionId !== sessionId || s.state === 'stopped');
+    if (session && session.state !== 'stopped') {
+      return { ok: false, error: 'The feedback session changed. Review it and Stop again.', session };
+    }
+    return { ok: true, session };
+  } catch {
+    return { ok: false, error: 'Agent did not acknowledge stop', session: getFeedbackSessionView() };
+  }
+}
+
+function requestStopFeedback() {
+  if (!isLiveFeedbackSupported() || !feedbackSession || feedbackSession.state === 'stopped') return;
+  transportSend({ type: 'STOP_FEEDBACK', payload: { sessionId: feedbackSession.sessionId } });
+}
 
 function setAgentConnected(next: boolean) {
   if (agentConnected === next) return;
@@ -1295,6 +1433,10 @@ function dispatchIncoming(msg: any) {
     }
     if (msg.type === 'HELLO') {
       if (msg.payload?.agentConnected) setAgentConnected(true);
+      return;
+    }
+    if (msg.type === 'FEEDBACK_SESSION') {
+      applyFeedbackSessionPush(msg.payload ?? null);
       return;
     }
     if (msg.type === 'APPLY_CHANGES' && msg.payload) {
@@ -1333,10 +1475,18 @@ export interface ConnectOpts {
 export function connectToServer(opts: ConnectOpts | number = {}) {
   // Back-compat: callers passing a port number still work.
   const o: ConnectOpts = typeof opts === 'number' ? { port: opts } : opts;
-  disconnectFromServer();
-  transportMode = o.mode || 'local';
+  const nextMode: TransportMode = o.mode || 'local';
+  const switchingAway = nextMode !== transportMode;
+  disconnectFromServer({ preserveSession: !switchingAway && nextMode === 'local' });
+  transportMode = nextMode;
+  if (transportMode !== 'local' && feedbackSession) {
+    feedbackSession = null;
+    broadcastFeedbackSession();
+  }
 
   if (transportMode === 'local') {
+    localReconnectAllowed = true;
+    localReconnectAttempt = 0;
     const port = o.port ?? DEFAULT_WS_PORT;
     void connectLocal(port);
     return;
@@ -1350,24 +1500,74 @@ export function connectToServer(opts: ConnectOpts | number = {}) {
   void runCloudStream();
 }
 
+const LOCAL_RECONNECT_MAX = 5;
+let localReconnectAllowed = false;
+let localConnectionGeneration = 0;
+let localReconnectAttempt = 0;
+let localReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearLocalReconnect() {
+  localConnectionGeneration += 1;
+  if (!localReconnectTimer) return;
+  clearTimeout(localReconnectTimer);
+  localReconnectTimer = null;
+}
+
+function dropLocalSocket() {
+  const socket = ws;
+  ws = null;
+  if (!socket) return;
+  try { socket.close(); } catch {}
+}
+
+function armLocalReconnect(port: number) {
+  if (!localReconnectAllowed || transportMode !== 'local' || localReconnectTimer) return;
+  if (localReconnectAttempt >= LOCAL_RECONNECT_MAX) return;
+  const delay = Math.min(500 * (2 ** localReconnectAttempt), 8_000);
+  localReconnectAttempt += 1;
+  localReconnectTimer = setTimeout(() => {
+    localReconnectTimer = null;
+    if (!localReconnectAllowed || transportMode !== 'local') return;
+    void connectLocal(port);
+  }, delay);
+}
+
 async function connectLocal(port: number) {
+  if (transportMode !== 'local' || !localReconnectAllowed) return;
+  const generation = localConnectionGeneration;
   try {
     const response = await browser.runtime.sendMessage({ type: 'GET_LOCAL_MCP_TOKEN', port });
-    if (transportMode !== 'local' || typeof response?.token !== 'string') return;
-    ws = new WebSocket(`ws://127.0.0.1:${port}/?token=${encodeURIComponent(response.token)}`);
-      ws.onopen = () => {
+    if (transportMode !== 'local' || !localReconnectAllowed || generation !== localConnectionGeneration) return;
+    if (typeof response?.token !== 'string') { armLocalReconnect(port); return; }
+    dropLocalSocket();
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/?token=${encodeURIComponent(response.token)}`);
+    ws = socket;
+      socket.onopen = () => {
+        if (ws !== socket || transportMode !== 'local') return;
+        localReconnectAttempt = 0;
         console.log('[Design Mode] Connected to companion server');
         // Back-fill everything recorded before the server came up (it is
         // spawned by the agent, usually after the user already edited).
         syncAllChanges();
         void loadComments().then(cs => { for (const c of cs) syncCommentChange(c); }).catch(() => {});
       };
-      ws.onclose = () => { ws = null; setAgentConnected(false); };
-      ws.onerror = () => { ws = null; setAgentConnected(false); };
-      ws.onmessage = (event) => {
+      socket.onclose = () => {
+        if (ws !== socket) return;
+        ws = null;
+        setAgentConnected(false);
+        armLocalReconnect(port);
+      };
+      socket.onerror = () => {
+        if (ws !== socket) return;
+        setAgentConnected(false);
+      };
+      socket.onmessage = (event) => {
+        if (ws !== socket) return;
         try { dispatchIncoming(JSON.parse(event.data)); } catch {}
       };
-  } catch { ws = null; }
+  } catch {
+    if (generation === localConnectionGeneration) { ws = null; armLocalReconnect(port); }
+  }
 }
 
 async function runCloudStream() {
@@ -1446,6 +1646,12 @@ function transportSend(msg: object) {
     keepalive: true,
   }).catch(() => {});
 }
+
+window.addEventListener('pagehide', () => {
+  if (transportMode === 'local') {
+    transportSend({ type: 'PAGE_NAVIGATED', payload: { pageUrl: location.href } });
+  }
+});
 
 // Reply to a request received via the relay. Used by handleScreenshotRequest
 // and by cloud tool dispatchers in content/index.ts (re-exported).
@@ -1568,8 +1774,11 @@ export function syncCommentDeleted(id: string) {
   transportSend({ type: 'COMMENT_DELETED', payload: { id } });
 }
 
-export function disconnectFromServer() {
-  if (ws) { try { ws.close(); } catch {} ws = null; }
+export function disconnectFromServer(opts?: { preserveSession?: boolean }) {
+  localReconnectAllowed = false;
+  clearLocalReconnect();
+  if (!opts?.preserveSession) requestStopFeedback();
+  dropLocalSocket();
   if (sseAbort) { try { sseAbort.abort(); } catch {} sseAbort = null; }
   setAgentConnected(false);
 }

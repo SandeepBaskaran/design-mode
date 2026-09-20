@@ -12,6 +12,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createMcpServer } from '../mcp-server.js';
 import { isExtensionConnected } from '../websocket-server.js';
 import { claimOrAttach, createResilientToolDispatch, probeOwnerHealth, type LocalBridge } from '../owner-bridge.js';
+import { runCliCommand } from '../setup.js';
+import { createProcessShutdown, watchStdinEof } from '../stdio-lifecycle.js';
 
 const DEFAULT_WS_PORT = 9960;
 const VERSION = '2.2.1';
@@ -25,6 +27,23 @@ const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
 
 const log = (...args: any[]) => console.error(...args);
 
+let activeBridge: LocalBridge | null = null;
+const { shutdown, isShuttingDown } = createProcessShutdown({
+  getBridge: () => activeBridge,
+  exit: (code) => process.exit(code),
+});
+
+function installServerLifecycle() {
+  process.on('SIGINT', () => {
+    log('\n\ud83d\uded1 Shutting down Design Mode MCP...');
+    void shutdown(0);
+  });
+  process.on('SIGTERM', () => {
+    void shutdown(0);
+  });
+  watchStdinEof(process.stdin, () => void shutdown(0));
+}
+
 async function boot() {
   const port = parseInt(process.env.DM_PORT || String(DEFAULT_WS_PORT), 10);
 
@@ -35,6 +54,11 @@ async function boot() {
   let claim: LocalBridge;
   try {
     claim = await claimOrAttach(port);
+    activeBridge = claim;
+    if (isShuttingDown()) {
+      await shutdown(0);
+      return;
+    }
     if (claim.role === 'owner') {
       log(`  ${green('\u2713')} WebSocket server listening on ${cyan(`ws://localhost:${port}`)}`);
     } else {
@@ -53,6 +77,7 @@ async function boot() {
   try {
     const dispatch = createResilientToolDispatch(port, claim, (nextClaim) => {
       claim = nextClaim;
+      activeBridge = nextClaim;
       if (claim.role === 'owner') {
         log(`  ${green('✓')} Previous owner closed; this client now owns ${cyan(`localhost:${port}`)}`);
       }
@@ -116,20 +141,28 @@ async function boot() {
     }, 2000);
     connectionCheck.unref();
 
+    if (isShuttingDown()) {
+      await shutdown(0);
+      return;
+    }
+
     await mcpServer.connect(transport);
   } catch (error) {
     log(`  ${red('\u2717')} Failed to start MCP server:`, error);
-    process.exit(1);
+    await shutdown(1);
   }
 }
 
-process.on('SIGINT', () => {
-  log('\n\ud83d\uded1 Shutting down Design Mode MCP...');
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  process.exit(0);
-});
-
-boot();
+const command = process.argv[2];
+if (command === 'setup' || command === 'doctor') {
+  runCliCommand(process.argv.slice(2)).then(
+    (code: number) => process.exit(code),
+    (err: unknown) => {
+      log(`  ${red('\u2717')} ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    },
+  );
+} else {
+  installServerLifecycle();
+  boot();
+}

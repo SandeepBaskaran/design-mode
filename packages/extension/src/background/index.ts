@@ -6,6 +6,7 @@
 // ============================================================
 import '../platform/polyfill';
 import { IS_FIREFOX } from '../platform/target';
+import { readPageComponentContexts } from '../content/page-component-context';
 import { openPanel, setActionOpensPanel } from '../platform/panel';
 import {
   DEFAULT_LAUNCH_SURFACE,
@@ -425,6 +426,10 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     forwardToPinnedTab({ type: 'ADD_COMMENT', text: msg.text }, sendResponse);
     return true;
   }
+  if (msg.type === 'SP_TRIGGER_SHORTCUT') {
+    forwardToPinnedTab({ type: 'TRIGGER_SHORTCUT', action: msg.action }, sendResponse);
+    return true;
+  }
   if (msg.type === 'SP_SET_INSPECT') {
     forwardToPinnedTab({ type: 'SET_INSPECT', on: msg.on }, sendResponse);
     return true;
@@ -500,6 +505,32 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     forwardToPinnedTab({ type: 'RECONFIGURE_TRANSPORT' }, sendResponse);
     return true;
   }
+  if (msg.type === 'GET_CHANGE_COMPONENT_CONTEXTS') {
+    const tabId = sender.tab?.id;
+    const ids = Array.isArray(msg.elementIds)
+      ? msg.elementIds.filter((id: unknown): id is string => typeof id === 'string' && /^dm-[\w-]{1,100}$/.test(id)).slice(0, 500)
+      : [];
+    if (tabId == null || !ids.length) { sendResponse({}); return true; }
+    browser.scripting.executeScript({
+      target: { tabId, frameIds: [sender.frameId ?? 0] },
+      world: 'MAIN',
+      func: readPageComponentContexts,
+      args: [ids],
+    }).then(results => {
+      const raw = results[0]?.result;
+      const contexts: Record<string, { name?: string; file?: string }> = Object.create(null);
+      for (const id of ids) {
+        const entry = raw?.[id];
+        if (!entry || typeof entry !== 'object') continue;
+        contexts[id] = {
+          name: typeof entry.name === 'string' ? entry.name.slice(0, 500) : undefined,
+          file: typeof entry.file === 'string' ? entry.file.slice(0, 500) : undefined,
+        };
+      }
+      sendResponse(contexts);
+    }).catch(() => sendResponse({}));
+    return true;
+  }
   if (msg.type === 'SP_EXPORT') {
     forwardToPinnedTab({ type: 'EXPORT', format: msg.format }, sendResponse);
     return true;
@@ -531,6 +562,8 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // (sourceId, targetId, position) forward without hand-maintained mapping.
   // SP_SEND_TO_AGENT falls through the SP_ fallback → content's SEND_TO_AGENT
   // handler, which stages the handoff and pushes it over the MCP transport.
+  // SP_GET_FEEDBACK_SESSION / SP_STOP_FEEDBACK_SESSION likewise fall through
+  // to GET_FEEDBACK_SESSION / STOP_FEEDBACK_SESSION. Do not add rows here.
   if (msg.type === 'SP_GET_MCP_STATUS') { forwardToPinnedTab({ type: 'GET_MCP_STATUS' }, sendResponse); return true; }
   if (msg.type === 'SP_GET_DESIGN_TOKENS') { forwardToPinnedTab({ type: 'GET_DESIGN_TOKENS' }, sendResponse); return true; }
   if (msg.type === 'SP_GET_COMPUTED_CSS') { forwardToPinnedTab({ type: 'GET_COMPUTED_CSS', elementId: msg.elementId }, sendResponse); return true; }

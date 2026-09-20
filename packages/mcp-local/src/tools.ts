@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { requestFromExtension, isExtensionConnected } from './websocket-server.js';
+import { stopFeedbackSession, waitForHandoff, type ToolExtra } from './feedback-session.js';
 
 function toKebab(s: string): string {
   return s.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
@@ -16,7 +17,8 @@ export type ToolResult = {
   isError?: boolean;
 };
 
-export type ToolDispatch = (name: string, args?: Record<string, unknown>) => Promise<ToolResult>;
+export type { ToolExtra } from './feedback-session.js';
+export type ToolDispatch = (name: string, args?: Record<string, unknown>, extra?: ToolExtra) => Promise<ToolResult>;
 
 function groupBySelector(): Map<string, Map<string, string>> {
   const bySelector = new Map<string, Map<string, string>>();
@@ -85,28 +87,7 @@ function renderExport(format: ExportFormat): string {
 }
 
 async function getChanges(): Promise<ToolResult> {
-  const report: any = state.getChangeReport();
-  report.comments = state.getComments().map(c => ({
-    id: c.id,
-    selector: c.selector,
-    text: c.text,
-    region: c.region,
-    timestamp: new Date(c.timestamp).toISOString(),
-    pageUrl: c.pageUrl,
-    resolved: c.resolved || false,
-    screenshot: `get_screenshot({ commentId: "${c.id}" })`,
-  }));
-  report.items = [
-    ...state.getStyleChanges().map(c => ({ id: c.id, kind: 'style', selector: c.selector, property: c.property, status: c.status || 'todo' })),
-    ...state.getTextChanges().map(c => ({ id: c.id, kind: 'text', selector: c.selector, status: c.status || 'todo' })),
-    ...state.getDomChanges().map(c => ({ id: c.id, kind: 'dom', selector: c.selector, action: c.action, status: c.status || 'todo' })),
-    ...state.getComments().map(c => ({ id: c.id, kind: 'comment', selector: c.selector, status: c.resolved ? 'resolved' : 'todo' })),
-  ];
-  const handoff = state.getHandoff();
-  if (handoff) {
-    report.handoff = { ...handoff, requestedAt: new Date(handoff.requestedAt).toISOString() };
-  }
-  return { content: [{ type: 'text', text: JSON.stringify(report, null, 2) }] };
+  return { content: [{ type: 'text', text: JSON.stringify(state.getFullChangeReport(), null, 2) }] };
 }
 
 async function applyChanges(args: Record<string, unknown>): Promise<ToolResult> {
@@ -144,7 +125,17 @@ async function setChangeStatus(args: Record<string, unknown>): Promise<ToolResul
   return { content: [{ type: 'text', text: `Marked ${count} item${count === 1 ? '' : 's'} as ${status} (extension offline — panel will not reflect it until reconnect).` }] };
 }
 
+async function waitForHandoffTool(args: Record<string, unknown>, extra?: ToolExtra): Promise<ToolResult> {
+  try {
+    const result = await waitForHandoff(args, extra);
+    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+  } catch (e: any) {
+    return { content: [{ type: 'text', text: `Invalid wait_for_handoff arguments: ${e?.message || e}` }], isError: true };
+  }
+}
+
 async function clearChanges(): Promise<ToolResult> {
+  stopFeedbackSession();
   state.clear();
   if (!isExtensionConnected()) {
     return { content: [{ type: 'text', text: 'Server state cleared. Extension offline — the page keeps its edits until it reconnects.' }] };
@@ -251,7 +242,11 @@ async function getScreenshot(args: Record<string, unknown>): Promise<ToolResult>
   }
 }
 
-export async function executeLocalTool(name: string, args: Record<string, unknown> = {}): Promise<ToolResult> {
+export async function executeLocalTool(
+  name: string,
+  args: Record<string, unknown> = {},
+  extra?: ToolExtra,
+): Promise<ToolResult> {
   switch (name) {
     case 'get_changes': return getChanges();
     case 'apply_changes': return applyChanges(args);
@@ -261,6 +256,7 @@ export async function executeLocalTool(name: string, args: Record<string, unknow
     case 'get_session_summary': return getSessionSummary();
     case 'export_changes': return exportChanges(args);
     case 'get_screenshot': return getScreenshot(args);
+    case 'wait_for_handoff': return waitForHandoffTool(args, extra);
     default:
       return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
   }

@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>authored-sizing fixture</title>
+  <style>
+    .px { width: 120px; height: 40px; }
+    .pct { width: 50%; height: auto; }
+    .rem { width: 2rem; height: 1.5rem; }
+    .hug { width: fit-content; height: max-content; }
+    .fill { width: 100%; height: 100%; }
+    .calc { width: calc(100% - 16px); height: calc(10px + 2rem); }
+    .token { width: var(--box); height: var(--box); }
+    .auto { width: auto; height: auto; }
+    #id-wins { width: 10px; }
+    .spec { width: 99px; }
+    @media (min-width: 1px) {
+      .media-on { width: 77px; }
+    }
+    @media (min-width: 10000px) {
+      .media-off { width: 1px; }
+    }
+    @supports (display: grid) {
+      .supports-on { width: 66px; }
+    }
+    .important { width: 5px !important; }
+    .important { width: 50px; }
+    .logical { inline-size: 200px; block-size: 40px; }
+    .nested {
+      & { width: 33px; }
+    }
+    @layer base {
+      .layered { width: 1px; }
+      @layer inner {
+        .layered { width: 2px; }
+      }
+    }
+    @layer dotted.inner {
+      .dotted { width: 3px; }
+    }
+  </style>
+  <style>
+    :root { --box: 48px; }
+  </style>
+  <style media="print">
+    .print-only { width: 1px; height: 1px; }
+  </style>
+  <style disabled>
+    .disabled-sheet { width: 1px; height: 1px; }
+  </style>
+</head>
+<body>
+  <div id="px" class="px"></div>
+  <div id="pct" class="pct"></div>
+  <div id="rem" class="rem"></div>
+  <div id="hug" class="hug">x</div>
+  <div id="fill" class="fill"></div>
+  <div id="calc" class="calc"></div>
+  <div id="token" class="token"></div>
+  <div id="auto" class="auto">hello</div>
+  <div id="id-wins" class="spec"></div>
+  <div id="media-on" class="media-on"></div>
+  <div id="media-off" class="media-off"></div>
+  <div id="supports-on" class="supports-on"></div>
+  <div id="inline-imp" class="px" style="width: 9px !important"></div>
+  <div id="important" class="important"></div>
+  <div id="ua-auto">no size</div>
+  <div id="logical" class="logical"></div>
+  <div id="nested" class="nested"></div>
+  <div id="layered" class="layered"></div>
+  <div id="dotted" class="dotted"></div>
+  <div id="print-only" class="print-only"></div>
+  <div id="disabled-sheet" class="disabled-sheet"></div>
+</body>
+</html>

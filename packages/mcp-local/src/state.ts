@@ -198,6 +198,32 @@ class DesignModeState {
     };
   }
 
+  getFullChangeReport(): object {
+    const report: Record<string, unknown> = { ...this.getChangeReport() as Record<string, unknown> };
+    if (this.session?.tokenChanges) report.tokenChanges = this.session.tokenChanges.map(t => ({ ...t }));
+    if (this.session?.tokenGuidance) report.tokenGuidance = this.session.tokenGuidance;
+    report.comments = this.getComments().map(c => ({
+      id: c.id,
+      selector: c.selector,
+      text: c.text,
+      region: c.region,
+      timestamp: new Date(c.timestamp).toISOString(),
+      pageUrl: c.pageUrl,
+      resolved: c.resolved || false,
+      screenshot: `get_screenshot({ commentId: "${c.id}" })`,
+    }));
+    report.items = [
+      ...this.styleChanges.map(c => ({ id: c.id, kind: 'style', selector: c.selector, property: c.property, status: c.status || 'todo' })),
+      ...this.textChanges.map(c => ({ id: c.id, kind: 'text', selector: c.selector, status: c.status || 'todo' })),
+      ...this.domChanges.map(c => ({ id: c.id, kind: 'dom', selector: c.selector, action: c.action, status: c.status || 'todo' })),
+      ...this.getComments().map(c => ({ id: c.id, kind: 'comment', selector: c.selector, status: c.resolved ? 'resolved' : 'todo' })),
+    ];
+    if (this.handoff) {
+      report.handoff = { ...this.handoff, requestedAt: new Date(this.handoff.requestedAt).toISOString() };
+    }
+    return report;
+  }
+
   clear() {
     this.styleChanges = [];
     this.textChanges = [];

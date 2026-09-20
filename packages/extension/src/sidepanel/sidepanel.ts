@@ -19,8 +19,12 @@ import {
 import morphdom from 'morphdom';
 import { icon, icons } from '../content/icons';
 import { escapeAttr, rgbToHex } from '../content/helpers';
+import { sizeFieldView, type AuthoredDimension } from '../content/authored-sizing';
 import { AGENT_COMMAND_MARKDOWN, AGENT_TOOLS } from './agent-workflow';
 import { changeGroupKey, collectGroupRevertIds } from './change-group';
+import { componentGroup, groupByComponent, type ComponentContext } from '../component-group';
+import { parseFeedbackSession, type FeedbackSessionView } from './feedback-view';
+import { enableShortcuts, loadShortcuts, registerShortcut } from '../content/keyboard-shortcuts';
 import { diffWords } from './word-diff';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
@@ -166,6 +170,9 @@ interface ElementInfo {
   parentJustifyContent?: string;
   parentAlignItems?: string;
   parentGap?: string;
+  authoredWidth?: AuthoredDimension;
+  authoredHeight?: AuthoredDimension;
+  liveSizePreview?: { width?: string; height?: string };
   pageStates?: { ':hover': number; ':focus-visible': number; ':focus': number; ':active': number };
 }
 type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
@@ -262,6 +269,10 @@ let styleChanges: StyleChange[] = [];
 let textChanges: TextChange[] = [];
 let domChanges: DomChange[] = [];
 let comments: CommentEntry[] = [];
+let componentContexts: Record<string, ComponentContext> = {};
+let changesGrouping: 'element' | 'component' = 'element';
+let feedbackSession: FeedbackSessionView | null = null;
+let sendingFeedback = false;
 // Design-system :root token edits, synced from the content change payload
 // (same source the Copy Prompt reads) so they appear in the Changes tab.
 let tokenChanges: Array<{ cssVar: string; scopeSelector: string; original: string; current: string; system?: string }> = [];
@@ -882,9 +893,13 @@ function openPipWindow() {
 }
 
 /* ── Async actions ── */
-async function refreshMcpStatus() { const res = await send({ type: 'SP_GET_MCP_STATUS' }); if (res.mcpState) mcpState = res.mcpState; else if (res.connected && res.agentConnected) mcpState = 'connected'; else if (res.connected) mcpState = 'running'; else mcpState = 'offline'; render(); }
+async function refreshMcpStatus() { const res = await send({ type: 'SP_GET_MCP_STATUS' }); if (res.mcpState) mcpState = res.mcpState; else if (res.connected && res.agentConnected) mcpState = 'connected'; else if (res.connected) mcpState = 'running'; else mcpState = 'offline'; await refreshFeedbackSession(); render(); }
+async function refreshFeedbackSession() {
+  const res = mcpMode === 'local' && mcpState === 'connected' ? await send({ type: 'SP_GET_FEEDBACK_SESSION' }) : null;
+  feedbackSession = res?.supported ? parseFeedbackSession(res.session) : null;
+}
 async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; if (typeof res.hoverAvailable === 'boolean') applyHoverAvailable(res.hoverAvailable); undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
-async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; render(); }
+async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; componentContexts = res.componentContexts || {}; render(); }
 async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
@@ -1882,16 +1897,30 @@ async function revertGroup(groupKey: string) {
 
 async function copyPrompt() { const res = await send({ type: 'SP_EXPORT', format: 'markdown' }); const output = res.output || res.markdown || ''; if (output) { await navigator.clipboard.writeText(output); const btn = root.querySelector('#dm-copy-prompt-btn'); if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); } } }
 async function sendToAgent() {
+  if (sendingFeedback || previewingOriginal) return;
+  sendingFeedback = true;
+  try {
   await refreshMcpStatus();
   if (mcpState !== 'connected') { sendAgentHelpOpen = true; render(); return; }
+  if (feedbackSession?.state === 'implementing') return;
   const res = await send({ type: 'SP_SEND_TO_AGENT' });
   if (res?.ok) {
+    feedbackSession = res.supported ? parseFeedbackSession(res.session) : null;
     const btn = root.querySelector('#dm-send-agent-btn');
     if (btn) { (btn as HTMLElement).textContent = 'Sent!'; setTimeout(() => render(), 1500); }
-    showCaptureToast('success', 'Staged for your agent — run /design-mode to implement.');
+    showCaptureToast('success', feedbackSession?.state === 'implementing' ? 'Feedback sent. Make your next edits while the agent works.' : 'Staged for your agent — run /design-mode to implement.');
   } else {
     showCaptureToast('error', 'Could not reach the agent — check the MCP status and retry.');
   }
+  } finally { sendingFeedback = false; render(); }
+}
+async function stopLiveFeedback() {
+  const res = await send({ type: 'SP_STOP_FEEDBACK_SESSION' });
+  if (res?.ok && res.supported) {
+    feedbackSession = parseFeedbackSession(res.session);
+    showCaptureToast('success', 'Feedback loop stopped. Already-running agent commands may still finish.');
+  } else showCaptureToast('error', 'Could not stop the loop. Stop your agent directly if it is still running.');
+  render();
 }
 function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); browser.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
 
@@ -1965,12 +1994,18 @@ function dropZoneAt(target: HTMLElement, clientY: number): 'before' | 'inside' |
 }
 
 /* ── Message handling ── */
-browser.runtime.onMessage.addListener((msg) => {
+browser.runtime.onMessage.addListener((msg, sender) => {
   // Content scripts broadcast to every panel context. Ignore broadcasts from
   // a tab this surface isn't bound to (multiple side panels / floating windows
   // can be open at once). Messages without `_dmTab` (or before we know our
   // tab) pass through.
   if (msg && msg._dmTab != null && myTabId != null && msg._dmTab !== myTabId) return;
+  if (msg.type === 'FEEDBACK_SESSION_UPDATE') {
+    if (sender.tab?.id != null && myTabId != null && sender.tab.id !== myTabId) return;
+    feedbackSession = mcpMode === 'local' && msg.supported ? parseFeedbackSession(msg.session) : null;
+    render();
+    return;
+  }
 
   // Region draw finished on the page — open the comment composer for it.
   if (msg.type === 'REGION_DRAWN') {
@@ -2030,8 +2065,9 @@ browser.runtime.onMessage.addListener((msg) => {
   // tick along; the full ELEMENT_SELECTED roundtrip settles state on mouseup.
   if (msg.type === 'LIVE_RESIZE') {
     if (!info || info.id !== msg.elementId || !info.computedStyles) return;
-    if (msg.width) info.computedStyles.width = msg.width;
-    if (msg.height) info.computedStyles.height = msg.height;
+    info.liveSizePreview ??= {};
+    if (msg.width) info.computedStyles.width = info.liveSizePreview.width = msg.width;
+    if (msg.height) info.computedStyles.height = info.liveSizePreview.height = msg.height;
     if (tab === 'design') render();
   }
   // Live left/top streamed while the selected element's body is dragged.
@@ -2119,7 +2155,7 @@ browser.runtime.onMessage.addListener((msg) => {
     pageForcedState = null;
     info = null; hoverInfo = null; render();
   }
-  if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; render(); }
+  if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; componentContexts = msg.componentContexts || {}; render(); }
   if (msg.type === 'AGENT_PRESENCE_UPDATE') {
     // Transport state is implicit from current mcpState — if we were
     // 'offline' an AGENT_PRESENCE_UPDATE shouldn't suddenly say
@@ -2452,24 +2488,6 @@ function inp(label: string, prop: string, value: string, unit = 'px', badgeProp?
     '</div>' + overlays + '</div>';
 }
 
-// Figma-style W / H input with a Fixed / Hug / Fill mode picker.
-//   Fixed → user-entered number + unit (px, %, em, …).
-//   Hug   → `fit-content` — the box shrinks to its children.
-//   Fill  → `100%` — the box expands to its parent.
-// The mode is inferred from the user's most recent override for this
-// (element, property) so the dropdown reflects intent rather than the
-// resolved px that getComputedStyle reports for every layout state. When
-// the user has never overridden the property, the resolved value is
-// shown as Fixed — the most honest default.
-function inferSizeMode(value: string): 'fixed' | 'hug' | 'fill' {
-  const v = (value || '').trim().toLowerCase();
-  if (!v) return 'fixed';
-  if (v === 'fit-content' || v === 'max-content' || v === 'min-content' || v === 'auto') return 'hug';
-  if (v.startsWith('fit-content(') || v.startsWith('max-content(') || v.startsWith('min-content(')) return 'hug';
-  if (v === '100%' || v === 'stretch' || v === '-webkit-fill-available') return 'fill';
-  return 'fixed';
-}
-
 function lastStyleChangeFor(elementId: string, property: string): string | null {
   for (let i = styleChanges.length - 1; i >= 0; i--) {
     const c = styleChanges[i];
@@ -2622,41 +2640,44 @@ function renderShadowVarChip(prop: string, menuKey: string, label: string, data:
 }
 
 function sizeInput(label: string, prop: 'width' | 'height', resolvedValue: string, elementId: string): string {
-  // Intent from the override stylesheet wins. Without an override, the
-  // resolved computed value (always px) implies Fixed mode.
-  const intent = elementId ? lastStyleChangeFor(elementId, prop) : null;
-  const mode = inferSizeMode(intent ?? resolvedValue);
-  // Display always shows the *resolved* numeric value — even in Hug / Fill
-  // mode the user wants to see what the browser actually rendered. The
-  // dropdown is the mode indicator; the number is the truth.
-  // (Display honours the px / rem unit preference; the value the change
-  // tracker stores is still the literal CSS — `fit-content`, `100%`, or
-  // the user-typed number with the chosen unit.)
-  const formatted = formatPxValueForDisplay(resolvedValue);
-  const numericDisplay = formatted.display;
-  const displayUnit = formatted.unit;
-  const writeUnit = formatted.writeUnit;
-  const isFixed = mode === 'fixed';
-  // We render either an <input> (Fixed, editable) or a <span> (Hug /
-  // Fill, read-only). Swapping element types makes morphdom replace the
-  // node outright rather than trying to morph readonly / value
-  // attributes back and forth across mode changes — which it does
-  // unreliably when an input has been focused recently.
+  // Authored CSS is the field value; computed px is only a hint. Unknown
+  // cascade must not become Fixed, and auto must not become Hug.
+  const intent = info?.liveSizePreview?.[prop] || (elementId ? lastStyleChangeFor(elementId, prop) : null);
+  const dim = prop === 'width' ? info?.authoredWidth : info?.authoredHeight;
+  const view = sizeFieldView({ dim, override: intent, computed: resolvedValue });
+  const mode = view.mode;
+  let displayValue = view.displayValue;
+  let displayUnit = view.displayUnit;
+  let writeUnit = view.writeUnit;
+  if (mode === 'fixed' && view.writeUnit === 'px') {
+    const formatted = formatPxValueForDisplay(view.authoredText || resolvedValue);
+    displayValue = formatted.display;
+    displayUnit = formatted.unit;
+    writeUnit = formatted.writeUnit;
+  }
+  const hint = view.computedHint;
+  const isFixed = mode === 'fixed' && view.editable;
+  const readonlyTitle = mode === 'unknown'
+    ? 'Authored size unknown — computed ' + hint
+    : 'Authored ' + (view.authoredText || mode) + ' · computed ' + hint;
   const valueCell = isFixed
-    ? '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(writeUnit) + '" inputmode="decimal" value="' + escapeAttr(numericDisplay) + '"/>'
-    : '<span class="dm-input-readonly" data-dm-size-readonly="' + prop + '" title="Read-only in ' + mode + ' mode — switch to Fixed to edit">' + escapeAttr(numericDisplay) + '</span>';
+    ? '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(writeUnit) + '" inputmode="decimal" value="' + escapeAttr(displayValue) + '" title="' + escapeAttr(readonlyTitle) + '"/>'
+    : '<span class="dm-input-readonly" data-dm-size-readonly="' + prop + '" data-dm-size-authored="' + escapeAttr(view.authoredText || '') + '" title="' + escapeAttr(readonlyTitle) + '">' + escapeAttr(displayValue) + '</span>';
+  const unitLabel = isFixed ? displayUnit : '';
   return '<div class="dm-field">' +
     '<label class="dm-field-label">' + label + '</label>' +
     '<div class="dm-input-shell">' +
     valueCell +
     renderTokenBadge(prop) +
-    '<span class="dm-input-unit">' + displayUnit + '</span>' +
+    '<span class="dm-input-unit" title="' + escapeAttr(hint ? 'Computed ' + hint : '') + '">' + escapeAttr(unitLabel) + '</span>' +
     '<select class="dm-size-mode" data-dm-size-mode="' + prop + '" title="Size mode" aria-label="' + label + ' size mode">' +
+      (mode === 'unknown' ? '<option value="unknown" selected>—</option>' : '') +
       '<option value="fixed"' + (mode === 'fixed' ? ' selected' : '') + '>Fixed</option>' +
       '<option value="hug"' + (mode === 'hug' ? ' selected' : '') + '>Hug</option>' +
       '<option value="fill"' + (mode === 'fill' ? ' selected' : '') + '>Fill</option>' +
+      '<option value="auto"' + (mode === 'auto' ? ' selected' : '') + '>Auto</option>' +
     '</select>' +
-    '</div>' + renderTokenOverlays(prop) + '</div>';
+    '</div>' + (hint ? '<span data-dm-computed-size="' + prop + '" style="display:block;font-size:9px;color:var(--dm-text-muted);padding-top:3px;">Computed: ' + escapeAttr(hint) + '</span>' : '') + renderTokenOverlays(prop) + '</div>';
 }
 
 // Which distribution property a gap field's "Auto" mode drives. The visible
@@ -6311,9 +6332,12 @@ function renderActionRow(): string {
   const bs = (cc?: string, alwaysEnabled?: boolean) => {
     const d = alwaysEnabled ? false : dis;
     const c = d ? 'var(--dm-text-dim)' : (cc || 'var(--dm-text-secondary)');
-    return 'background:' + (d ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-btn-bg)') + ';border:1px solid ' + (d ? 'var(--dm-btn-border-disabled)' : 'var(--dm-btn-border)') + ';border-radius:5px;color:' + c + ';padding:5px 7px;cursor:' + (d ? 'default' : 'pointer') + ';display:flex;align-items:center;justify-content:center;opacity:' + (d ? '0.5' : '1') + ';pointer-events:' + (d ? 'none' : 'auto') + ';';
+    return 'background:' + (d ? 'var(--dm-btn-bg-disabled)' : 'var(--dm-btn-bg)') + ';border:1px solid ' + (d ? 'var(--dm-btn-border-disabled)' : 'var(--dm-btn-border)') + ';border-radius:5px;color:' + c + ';padding:5px;cursor:' + (d ? 'default' : 'pointer') + ';display:flex;align-items:center;justify-content:center;opacity:' + (d ? '0.5' : '1') + ';pointer-events:' + (d ? 'none' : 'auto') + ';';
   };
-  return '<div style="display:flex;align-items:center;gap:3px;padding:6px 12px;border-bottom:1px solid var(--dm-separator);flex-shrink:0;">' +
+  const inspectTitle = commentMode ? 'Inspection paused while commenting' : inspecting ? 'Stop inspecting' : 'Start inspecting';
+  const inspectStyle = bs(undefined, true) + (inspecting ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '');
+  return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:3px;padding:6px 12px;border-bottom:1px solid var(--dm-separator);flex-shrink:0;">' +
+    '<button type="button" data-dm-action="toggle-inspect" title="' + inspectTitle + '" aria-label="Inspect" aria-pressed="' + inspecting + '"' + (commentMode ? ' disabled' : '') + ' style="' + inspectStyle + '">' + icon('crosshair', 14) + '</button>' +
     '<button data-dm-action="select-parent" title="Parent" style="' + bs() + '">' + icon('arrowUp', 14) + '</button>' +
     '<button data-dm-action="select-child" title="Child" style="' + bs() + '">' + icon('arrowDown', 14) + '</button>' +
     // Spacer + the spacer before Undo flank the middle cluster, centering it as
@@ -6322,7 +6346,7 @@ function renderActionRow(): string {
     '<button data-dm-action="duplicate" title="Duplicate" style="' + bs() + '">' + icon('copy', 14) + '</button>' +
     '<button data-dm-action="delete" title="Remove" style="' + bs('var(--dm-danger)') + '">' + icon('trash', 14) + '</button>' +
     '<button data-dm-action="comment" title="Comment" style="' + bs() + '">' + icon('messageSquare', 14) + '</button>' +
-    '<button data-dm-action="region-comment" title="Annotate" style="' + bs(undefined, true) + ';' + (awaitingRegionDraw ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('squareDashed', 14) + '</button>' +
+    '<button data-dm-action="region-comment" title="Annotate" style="' + bs(undefined, true) + ';' + (awaitingRegionDraw ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('squareDashedMousePointer', 14) + '</button>' +
     '<button data-dm-action="screenshot" title="Screenshot" style="' + bs(undefined, true) + '">' + icon('camera', 14) + '</button>' +
     '<div style="width:1px;height:16px;background:var(--dm-separator-strong);margin:0 2px;"></div>' +
     '<button data-dm-action="open-tokens" title="Design system" style="' + bs(undefined, true) + ';' + (tokensOpen ? 'color:var(--dm-accent);background:var(--dm-accent-bg);border-color:var(--dm-accent-border);' : '') + '">' + icon('swatchBook', 14) + '</button>' +
@@ -6374,14 +6398,26 @@ function renderTabs(): string {
     }).join('') + '</div>';
 }
 
+function renderLiveFeedbackStatus(): string {
+  if (mcpMode !== 'local' || !feedbackSession) return '';
+  const stopped = feedbackSession.state === 'stopped';
+  const label = stopped ? 'Stopped' : feedbackSession.state === 'waiting' ? 'Waiting for feedback' : 'Implementing';
+  const detail = stopped ? 'Run /design-mode again to start a new loop.' : feedbackSession.state === 'waiting' ? 'Make your edits, then Send to Agent.' : 'You can keep editing. Send the next round when the agent is waiting.';
+  return '<div style="padding:8px 12px 0;display:flex;gap:8px;align-items:center;">' +
+    '<div role="status" aria-live="polite" style="flex:1;min-width:0;font-size:10px;line-height:1.5;color:var(--dm-text-secondary);"><strong style="color:var(--dm-text);">Live feedback · ' + label + '</strong><div>' + detail + '</div></div>' +
+    (stopped ? '' : '<button data-dm-action="stop-live-feedback" title="End feedback rounds. Commands already running in your agent may still finish." style="padding:6px 9px;border-radius:5px;border:1px solid var(--dm-btn-border);background:var(--dm-btn-bg);color:var(--dm-danger);font:inherit;font-size:11px;cursor:pointer;">Stop</button>') + '</div>';
+}
+
 function renderStickyBottom(): string {
   const hasChanges = styleChanges.length > 0 || textChanges.length > 0 || domChanges.length > 0 || comments.length > 0;
   const copyDis = previewingOriginal || !hasChanges;
   // Send-to-Agent stays clickable whenever there's something to send —
   // when no agent is connected yet, the click opens setup instructions
   // instead of sending. The tooltip previews which of the two it will be.
-  const sendDis = previewingOriginal || !hasChanges;
+  const implementing = mcpMode === 'local' && feedbackSession?.state === 'implementing';
+  const sendDis = previewingOriginal || !hasChanges || sendingFeedback || implementing;
   let sendTitle = 'Send these changes to your coding agent';
+  if (implementing) sendTitle = 'The agent is implementing this round. Wait before sending the next one.';
   if (previewingOriginal) sendTitle = 'Disable “Preview original” first.';
   else if (!hasChanges) sendTitle = 'No changes to send.';
   else if (mcpState === 'offline') sendTitle = 'MCP is not connected — click for setup instructions.';
@@ -6393,9 +6429,9 @@ function renderStickyBottom(): string {
   // works — the click handler is the gate, not CSS.
   const sendS = 'flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;' +
     (sendDis ? 'background:var(--dm-btn-bg-disabled);border:1px solid var(--dm-btn-border-disabled);color:var(--dm-text-dim);cursor:not-allowed;opacity:0.5;' : 'background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);color:var(--dm-accent);cursor:pointer;');
-  return '<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;bottom:0;z-index:10;">' +
+  return '<div style="border-top:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;bottom:0;z-index:10;">' + renderLiveFeedbackStatus() + '<div style="display:flex;gap:8px;padding:10px 12px;">' +
     '<button id="dm-copy-prompt-btn" data-dm-action="copy-prompt" title="' + escapeAttr(copyTitle) + '" style="' + copyS + '">' + icon('clipboard', 13) + ' Copy as Prompt</button>' +
-    '<button id="dm-send-agent-btn" data-dm-action="send-to-agent"' + (sendDis ? ' disabled aria-disabled="true"' : '') + ' title="' + escapeAttr(sendTitle) + '" style="' + sendS + '">' + icon('send', 13) + ' Send to Agent</button></div>';
+    '<button id="dm-send-agent-btn" data-dm-action="send-to-agent"' + (sendDis ? ' disabled aria-disabled="true"' : '') + ' title="' + escapeAttr(sendTitle) + '" style="' + sendS + '">' + icon('send', 13) + ' Send to Agent</button></div></div>';
 }
 
 // First-run guidance for "Send to Agent": shown when the button is clicked
@@ -8378,6 +8414,8 @@ function renderChangesTab(): string {
     if (!q) return true;
     const sel = (item.data as any).selector || '';
     if (sel.toLowerCase().includes(q)) return true;
+    const context = componentContexts[(item.data as any).elementId || sel];
+    if (context?.name?.toLowerCase().includes(q) || context?.file?.toLowerCase().includes(q)) return true;
     if (item.type === 'style') {
       const c = item.data;
       return c.property.toLowerCase().includes(q) ||
@@ -8471,6 +8509,9 @@ function renderChangesTab(): string {
     '<input type="text" class="dm-input" data-dm-changes-search value="' + escapeAttr(changesSearch) + '" placeholder="Search changes…" style="background:none;border:none;padding:5px 6px;flex:1;min-width:0;font-size:10px;"/>' +
     (changesSearch ? '<button data-dm-action="clear-changes-search" title="Clear search" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('x', 10) + '</button>' : '') +
     '</div>' +
+    '<select data-dm-changes-grouping aria-label="Group changes by" style="max-width:100px;background:var(--dm-input-bg);color:var(--dm-text-secondary);border:1px solid var(--dm-input-border);border-radius:4px;font:inherit;font-size:10px;padding:4px;">' +
+    '<option value="element"' + (changesGrouping === 'element' ? ' selected' : '') + '>Elements</option>' +
+    '<option value="component"' + (changesGrouping === 'component' ? ' selected' : '') + '>Components</option></select>' +
     expandIconBtn + sortIconBtn +
     '</div>';
 
@@ -8641,7 +8682,16 @@ function renderChangesTab(): string {
   // re-fetched after every action, so this is a reliable snapshot.
   const liveElementIds = new Set(domTree.map(n => n.id));
 
-  const groupHtml = Array.from(groups.entries()).map(([key, group]) => {
+  const componentGroups = groupByComponent([...groups.entries()], ([key, group]) =>
+    componentGroup(componentContexts[key], key, group.items.every(item => item.type === 'token')));
+  const orderedGroups = changesGrouping === 'component' ? componentGroups.flatMap(group => group.items) : [...groups.entries()];
+  const componentHeaders = new Map(componentGroups.map(group => [group.items[0][0], group]));
+  const groupHtml = orderedGroups.map(([key, group]) => {
+    const component = changesGrouping === 'component' ? componentHeaders.get(key) : undefined;
+    const componentHeader = component
+      ? '<h3 data-dm-component-group style="margin:0;padding:10px 12px 6px;font-size:11px;color:var(--dm-text);overflow-wrap:anywhere;">' + escapeAttr(component.label) +
+        (component.source && component.source !== component.label ? '<span style="display:block;font-size:9px;font-weight:400;color:var(--dm-text-dim);margin-top:3px;">' + escapeAttr(component.source) + '</span>' : '') + '</h3>'
+      : '';
     const isCollapsed = changesGroupCollapsed.has(key);
     const count = group.items.length;
     const chevIcon = isCollapsed ? 'chevronRight' : 'chevronDown';
@@ -8650,7 +8700,7 @@ function renderChangesTab(): string {
     // removed / re-rendered the host with a different selector).
     const isStale = !group.elementId || (domTree.length > 0 && !liveElementIds.has(group.elementId));
 
-    const header = '<div class="dm-change-group-header" data-dm-change-group="' + escapeAttr(key) + '"' + (isStale ? ' style="opacity:0.7;"' : '') + '>' +
+    const header = componentHeader + '<div class="dm-change-group-header" data-dm-change-group="' + escapeAttr(key) + '"' + (isStale ? ' style="opacity:0.7;"' : '') + '>' +
       '<span style="color:var(--dm-text-dim);display:flex;">' + icon(chevIcon as keyof typeof icons, 10) + '</span>' +
       '<span style="font-family:SF Mono,Monaco,monospace;font-size:10px;color:var(--dm-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;" title="' + escapeAttr(group.selector) + (isStale ? ' (element no longer reachable)' : '') + '">' + escapeAttr(group.label || group.selector) + '</span>' +
       (isStale ? '<span style="font-size:8px;padding:1px 6px;border-radius:9999px;background:rgba(0,0,0,0.06);color:var(--dm-text-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;flex-shrink:0;">stale</span>' : '') +
@@ -9729,6 +9779,15 @@ function setupDelegation() {
       switch (act) {
         case 'select-parent': selectParent(); break;
         case 'select-child': selectChild(); break;
+        case 'toggle-inspect': {
+          if (commentMode) break;
+          void send({ type: 'SP_SET_INSPECT', on: !inspecting }).then(res => {
+            if (typeof res.inspecting !== 'boolean') return;
+            inspecting = res.inspecting;
+            render();
+          });
+          break;
+        }
         case 'duplicate': domAction('duplicate'); break;
         case 'delete': domAction('delete'); break;
         case 'comment': startComment(); break;
@@ -9761,6 +9820,7 @@ function setupDelegation() {
         case 'hover-guide-proceed': hoverGuideProceeded = true; render(); break;
         case 'copy-prompt': copyPrompt(); break;
         case 'send-to-agent': sendToAgent(); break;
+        case 'stop-live-feedback': void stopLiveFeedback(); break;
         case 'send-agent-help-close': sendAgentHelpOpen = false; render(); break;
         case 'send-agent-help-mcp': sendAgentHelpOpen = false; helpOpen = false; contributeOpen = false; settingsOpen = false; mcpOpen = true; render(); break;
         case 'toggle-theme': toggleTheme(); break;
@@ -12057,7 +12117,13 @@ function setupDelegation() {
   // Change handler (selects)
   root.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
-
+    const groupingSelect = target.closest<HTMLSelectElement>('[data-dm-changes-grouping]');
+    if (groupingSelect) {
+      changesGrouping = groupingSelect.value === 'component' ? 'component' : 'element';
+      render();
+      if (changesGrouping === 'component') void refreshChanges();
+      return;
+    }
 
     // Declared tab — scope filter dropdown.
     const scopeFilterSel = target.closest<HTMLSelectElement>('[data-dm-token-scope-filter]');
@@ -12195,18 +12261,26 @@ function setupDelegation() {
     }
 
 
-    // W / H size-mode dropdown (Fixed / Hug / Fill). Switching to Fixed
-    // from Hug / Fill snapshots the current resolved px so the visual
-    // size doesn't jump. The snapshot is converted to rem when the
-    // Settings → Input unit preference is rem, so the Changes-tab
-    // entry reads in the unit the user picked.
+    // W / H size-mode dropdown (Fixed / Hug / Fill / Auto). Switching to
+    // Fixed snapshots the current resolved px so the visual size doesn't
+    // jump. The snapshot is converted to rem when the Settings → Input
+    // unit preference is rem, so the Changes-tab entry reads in the unit
+    // the user picked. Unknown is display-only (authored cascade missing).
     const sizeModeSel = target.closest<HTMLSelectElement>('[data-dm-size-mode]');
     if (sizeModeSel) {
       const prop = sizeModeSel.dataset.dmSizeMode!;
       const mode = sizeModeSel.value;
+      if (mode === 'unknown') return;
       if (mode === 'hug') applyStyle(prop, 'fit-content');
       else if (mode === 'fill') applyStyle(prop, '100%');
+      else if (mode === 'auto') applyStyle(prop, 'auto');
       else if (mode === 'fixed') {
+        const dim = prop === 'width' ? info?.authoredWidth : info?.authoredHeight;
+        const current = sizeFieldView({ dim, override: info ? lastStyleChangeFor(info.id, prop) : null, computed: info?.computedStyles?.[prop] || '' });
+        if (current.mode === 'fixed' && current.authoredText) {
+          applyStyle(prop, current.authoredText);
+          return;
+        }
         const resolved = (info?.computedStyles?.[prop] || '').trim();
         if (!resolved || resolved === 'auto') {
           applyStyle(prop, inputUnit === 'rem' ? (Math.round((100 / remRootPx) * 10000) / 10000) + 'rem' : '100px');
@@ -13882,5 +13956,19 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ── Init ── */
+for (const action of ['toggle-inspect', 'add-annotation', 'region-comment', 'freeze-animations', 'tab-layers', 'tab-design', 'tab-changes']) {
+  registerShortcut(action, () => {
+    if (action === 'toggle-inspect' && commentMode) return;
+    void send({ type: 'SP_TRIGGER_SHORTCUT', action });
+  });
+}
+registerShortcut('export-css', async () => {
+  try {
+    const res = await send({ type: 'SP_EXPORT', format: 'css' });
+    if (typeof res.output !== 'string') { showCaptureToast('error', 'Could not export CSS'); return; }
+    await navigator.clipboard.writeText(res.output);
+  } catch { showCaptureToast('error', 'Could not copy CSS'); }
+});
+void loadShortcuts().then(enableShortcuts);
 setupDelegation();
 render();
