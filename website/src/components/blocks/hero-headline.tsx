@@ -14,15 +14,15 @@ export function HeroHeadline() {
   return (
     <div className={styles.headline}>
       <h1 className="macro text-foreground">
-        <span className={styles.line}>The visual editor for</span>{" "}
-        <span className={styles.line}>
-          all your{" "}
+        <span className={styles.line}>The visual editor for</span>
+        <span className={`${styles.line} ${styles.agentLine}`}>
+          <span>all your</span>
           <span className={styles.logos} aria-hidden="true">
             {agents.map((agent, index) => (
               <span
                 key={agent.logo}
                 className={styles.logo}
-                style={{ animationDelay: `${index * 0.6}s` }}
+                style={{ animationDelay: `${index * 2}s` }}
               >
                 <span
                   className={styles.mark}
@@ -45,8 +45,8 @@ export function HeroHeadline() {
                 />
               </span>
             ))}
-          </span>{" "}
-          agent&apos;s work
+          </span>
+          <span>agent&apos;s work</span>
         </span>
       </h1>
     </div>

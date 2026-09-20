@@ -19,6 +19,15 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "2.3.1",
+    date: "2026-09-20",
+    headline: "A smoother homepage and clearer demo guidance.",
+    highlights: [
+      "Watch the coding-agent icons keep crossfading in a continuous loop while the hero title scales smoothly across screen sizes.",
+      "On mobile, the guided demo now directs you to the desktop extension experience instead of showing steps that cannot be completed there.",
+    ],
+  },
+  {
     version: "2.3.0",
     date: "2026-09-20",
     headline: "Keep design intent intact and iterate with your agent.",

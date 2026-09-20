@@ -16,7 +16,7 @@ import { runCliCommand } from '../setup.js';
 import { createProcessShutdown, watchStdinEof } from '../stdio-lifecycle.js';
 
 const DEFAULT_WS_PORT = 9960;
-const VERSION = '2.3.0';
+const VERSION = '2.3.1';
 
 const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
 const green = (s: string) => `\x1b[32m${s}\x1b[0m`;

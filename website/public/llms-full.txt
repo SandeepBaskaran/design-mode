@@ -1,6 +1,6 @@
 # Design Mode — verified product summary
 
-Last reviewed against the Design Mode 2.3.0 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 20 September 2026.
+Last reviewed against the Design Mode 2.3.1 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 20 September 2026.
 
 This file is a versioned agent-oriented summary of product mechanics, privacy and setup. It is not a dump of every marketing page and does not guarantee search or chat ranking.
 

@@ -58,7 +58,7 @@ export function Footer() {
   return (
     <footer className="border-t py-16 md:pt-24 md:pb-8">
       <div className="container grid max-w-[1200px] gap-16 lg:grid-cols-[1.5fr_3fr] lg:gap-x-16 lg:gap-y-16">
-        <div className="flex flex-col items-start">
+        <div className="flex flex-col items-center text-center md:items-start md:text-left">
           <Link
             href="/"
             className="focus-visible:outline-ring inline-flex items-center gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4"
@@ -116,7 +116,7 @@ export function Footer() {
             </div>
           ))}
         </nav>
-        <div className="text-muted-foreground col-span-full flex w-full flex-col items-center gap-2 text-center text-base sm:flex-row sm:justify-between sm:text-left">
+        <div className="text-muted-foreground col-span-full flex w-full flex-col items-center gap-2 text-center text-base">
           <p>© {new Date().getFullYear()} Design Mode</p>
           <p>
             Made by{" "}

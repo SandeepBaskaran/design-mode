@@ -99,7 +99,7 @@ export const PanelAnatomy = () => {
         <div className="mt-8 md:mt-12 lg:mt-20">
           <DashedLine
             orientation="horizontal"
-            className="container scale-x-105"
+            className="container md:scale-x-105"
           />
 
           {/* Top row - 2 cards */}
@@ -114,7 +114,7 @@ export const PanelAnatomy = () => {
           </div>
           <DashedLine
             orientation="horizontal"
-            className="container max-w-7xl scale-x-110"
+            className="container max-w-7xl md:scale-x-110"
           />
 
           {/* Bottom row - 3 cards */}
@@ -131,7 +131,7 @@ export const PanelAnatomy = () => {
         </div>
         <DashedLine
           orientation="horizontal"
-          className="container max-w-7xl scale-x-110"
+          className="container max-w-7xl md:scale-x-110"
         />
       </div>
     </section>

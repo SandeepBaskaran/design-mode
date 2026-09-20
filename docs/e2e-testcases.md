@@ -602,7 +602,7 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 |------|------|-------|----------|
 | 14.1 | Build clean | `npm run build:website` | No type errors |
 | 14.2 | Landing page | Visit `/` | Header (icon + "Design Mode" + GitHub button + browser-adaptive install button — "Add to Chrome" / "Add to Firefox"), divider, hero, then sections: How you use it, Three panels, Other features, Copy as Prompt, MCP, Install, Licensing |
-| 14.3 | Demo route | Visit `/demo` | Interactive demo loads with left nav and step targets |
+| 14.3 | Demo route | Visit `/demo` at widths below and above 768px | Mobile shows desktop-extension guidance after the hero and hides the walkthrough; desktop shows the interactive left nav and step targets; neither viewport has page-level horizontal overflow |
 | 14.4 | MCP route | Visit `/mcp` | MCP setup / docs page |
 | 14.5 | Anchor scroll | Click the install button ("Add to Chrome" / "Add to Firefox") | Page scrolls to `#install` |
 | 14.6 | GitHub button | Click GitHub icon | Opens repo in a new tab |

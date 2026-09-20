@@ -8,6 +8,21 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.1] — 2026-09-20
+
+### Changed
+
+- Refreshed patch-and-minor dependencies for Chrome types, Node.js types, and
+  the website icon library.
+
+### Fixed
+
+- The homepage coding-agent icons now crossfade continuously instead of
+  stopping on Antigravity, while the hero title scales fluidly above the
+  mobile breakpoint.
+- The mobile demo now explains that its guided extension walkthrough should be
+  opened in a desktop browser instead of presenting unusable desktop steps.
+
 ## [2.3.0] — 2026-09-20
 
 ### Added

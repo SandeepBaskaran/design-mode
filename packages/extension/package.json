@@ -1,6 +1,6 @@
 {
   "name": "@design-mode/extension",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "private": true,
   "description": "Design Mode — Visual DOM editor browser extension (Chrome + Firefox)",
   "scripts": {
@@ -14,7 +14,7 @@
     "webextension-polyfill": "^0.12.0"
   },
   "devDependencies": {
-    "@types/chrome": "^0.2.9",
+    "@types/chrome": "^0.3.0",
     "@types/webextension-polyfill": "^0.12.6",
     "typescript": "^5.7.0",
     "vite": "^6.4.3"
