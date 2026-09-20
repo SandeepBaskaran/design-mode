@@ -236,16 +236,16 @@ export default function McpPage() {
                 external tools and data. A &quot;tool&quot; is anything the
                 agent can read from or write to — a database, a filesystem, a
                 web service, or in this case, the design state of your live
-                page. Design Mode exposes eight session tools so your agent can
-                read every edit you made in the side panel, push patches back
-                to the page, grab screenshots, and mark your comments resolved
-                — all without copy-paste. MCP connection, mode, and token
-                management now live on their own dedicated page inside the
-                extension, opened from the header MCP chip. The current
-                repository&apos;s Local companion also registers{" "}
-                <code>wait_for_handoff</code> for opt-in live feedback rounds;
-                that tool is Local-only, current-repository / unreleased, and
-                not a guaranteed store-listing capability.
+                page. Design Mode exposes eight session tools in every mode so
+                your agent can read every edit you made in the side panel, push
+                patches back to the page, grab screenshots, and mark your
+                comments resolved — all without copy-paste. MCP connection,
+                mode, and token management now live on their own dedicated page
+                inside the extension, opened from the header MCP chip. Local
+                also registers <code>wait_for_handoff</code> for opt-in live
+                feedback rounds; each Send produces an immutable snapshot, and
+                Stop ends the loop without clearing edits. Cloud and Self-hosted
+                keep one-shot Send.
               </p>
               <p>
                 <strong className="text-foreground">
@@ -444,12 +444,10 @@ export default function McpPage() {
               Every mode exposes the same eight session tools — your agent can
               read the current page diff, push patches back, grab screenshots,
               track change status, and resolve your comments as it works. The
-              current repository&apos;s Local companion also registers{" "}
-              <code>wait_for_handoff</code> for opt-in live feedback rounds
-              (bounded waits, Local-only). That tool is current-repository /
-              unreleased and is not a guaranteed Chrome Web Store or Firefox
-              Add-ons listing capability. Cloud and Self-hosted keep one-shot
-              Send.
+              Local companion also registers <code>wait_for_handoff</code> for
+              opt-in feedback rounds with bounded waits, immutable per-Send
+              snapshots, and an explicit Stop. Cloud and Self-hosted keep
+              one-shot Send.
             </p>
 
             <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -531,7 +529,9 @@ export default function McpPage() {
 function Snippet({ label, children }: { label: string; children: string }) {
   return (
     <div>
-      <p className="text-muted-foreground mb-2 text-base font-medium">{label}</p>
+      <p className="text-muted-foreground mb-2 text-base font-medium">
+        {label}
+      </p>
       <pre className="bg-ink text-ink-foreground overflow-x-auto rounded-xl p-4 font-mono text-base leading-relaxed">
         <code>{children}</code>
       </pre>

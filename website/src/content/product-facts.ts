@@ -71,7 +71,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "What does the MCP server expose?",
         answer:
-          "Cloud, Local and Self-hosted expose eight session tools: get_changes, apply_changes, set_change_status, clear_changes, mark_comment_resolved, get_session_summary, export_changes and get_screenshot. The tools read the current browser session, preview changes in the page and keep the Changes tab in sync; they do not grant an agent repository access. The current repository's Local companion also registers wait_for_handoff for opt-in live feedback rounds. That tool is Local-only, current-repository / unreleased, and not a guaranteed Chrome Web Store or Firefox Add-ons listing capability.",
+          "Cloud, Local and Self-hosted expose eight session tools: get_changes, apply_changes, set_change_status, clear_changes, mark_comment_resolved, get_session_summary, export_changes and get_screenshot. Local also exposes wait_for_handoff for opt-in feedback rounds with immutable per-Send snapshots and an explicit Stop. The tools read the current browser session, preview changes in the page and keep the Changes tab in sync; they do not grant an agent repository access. Cloud and Self-hosted keep one-shot Send.",
       },
       {
         question: "Which agents are supported?",

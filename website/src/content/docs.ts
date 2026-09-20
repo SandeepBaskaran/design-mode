@@ -137,7 +137,7 @@ export const docs: DocPage[] = [
       "Cline MCP setup",
     ],
     intro:
-      "Choose Copy as Prompt when you do not need a live connection. For MCP, use the client-specific configuration below. These instructions were checked against first-party Claude Code and Cursor documentation on 15 August 2026; client behaviour may change after that date.",
+      "Choose Copy as Prompt when you do not need a live connection. For MCP, use the client-specific configuration below. These instructions were checked against first-party Claude Code and Cursor documentation on 20 September 2026; client behaviour may change after that date.",
     sections: [
       {
         heading: "1. Choose the hand-off and transport",
@@ -171,7 +171,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "6. Verify the connection",
-        body: "Open Design Mode on a supported page and make one harmless change. Confirm the client reports the eight session tools: get_changes, apply_changes, set_change_status, clear_changes, get_session_summary, export_changes, get_screenshot and mark_comment_resolved. The current repository's Local companion also registers wait_for_handoff for opt-in live feedback rounds; that tool is Local-only, current-repository / unreleased, and not a guaranteed Chrome Web Store or Firefox Add-ons listing capability. Cloud and Self-hosted keep one-shot Send. Call get_session_summary, then get_changes. A green MCP chip proves a client attached; it does not prove the agent updated source code correctly.",
+        body: "Open Design Mode on a supported page and make one harmless change. Confirm Cloud or Self-hosted reports the eight session tools: get_changes, apply_changes, set_change_status, clear_changes, get_session_summary, export_changes, get_screenshot and mark_comment_resolved. Local also exposes wait_for_handoff for opt-in feedback rounds with immutable per-Send snapshots and an explicit Stop. Call get_session_summary, then get_changes. A green MCP chip proves a client attached; it does not prove the agent updated source code correctly.",
       },
     ],
     related: ["install", "troubleshooting", "changes-tab"],
@@ -181,7 +181,7 @@ export const docs: DocPage[] = [
     title: "The Changes tab",
     metaTitle: "Changes tab — Searchable, exportable design change history",
     metaDescription:
-      "Every edit in Design Mode lands in the Changes tab — style, text, DOM, comments. Search, filter by kind, group by selector, resolve, revert, export as Markdown or JSON.",
+      "Every edit in Design Mode lands in the Changes tab — style, text, DOM, comments. Search, filter by kind, group by element or component context, resolve, revert, export as Markdown or JSON.",
     keywords: [
       "Design Mode Changes tab",
       "design change history",
@@ -197,7 +197,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Search, filter, group",
-        body: "Sticky header with search and filter chips at the top. Search by selector, property name, or value. Filter by kind (style / text / DOM / comment). Group by selector to see every change to a single element.",
+        body: "Sticky header with search and filter chips at the top. Search by selector, component/source hint, property name, or value. Filter by kind (style / text / DOM / comment). Keep the default element groups or add detected React/Vue component and source headings; selectors and per-element actions remain available, and missing metadata stays explicitly unattributed.",
       },
       {
         heading: "Resolve, reopen, edit, delete",

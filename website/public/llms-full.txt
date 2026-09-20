@@ -1,6 +1,6 @@
 # Design Mode — verified product summary
 
-Last reviewed against the Design Mode 2.2.1 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 20 September 2026.
+Last reviewed against the Design Mode 2.3.0 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 20 September 2026.
 
 This file is a versioned agent-oriented summary of product mechanics, privacy and setup. It is not a dump of every marketing page and does not guarantee search or chat ranking.
 
@@ -62,7 +62,7 @@ Cloud, Local and Self-hosted expose eight session tools:
 
 The tools operate on the browser session. They do not grant repository access.
 
-The current repository's Local companion also registers `wait_for_handoff` for opt-in live feedback rounds (bounded waits of at most 20 seconds, immutable per-Send snapshots). That tool is Local-only, current-repository / unreleased, and not a guaranteed store-listing capability. Cloud and Self-hosted keep one-shot Send.
+Local also registers `wait_for_handoff` for opt-in feedback rounds with bounded waits of at most 20 seconds, immutable per-Send snapshots and an explicit Stop. Cloud and Self-hosted keep one-shot Send.
 
 ### Copy as Prompt
 

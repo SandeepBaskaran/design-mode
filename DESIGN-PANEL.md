@@ -673,6 +673,21 @@ Single row split in half — 4 alignment buttons left, 3 list buttons right:
 | **Bulleted** | `list-style-type: disc` | Filled-disc bullets. | — |
 | **Numbered** | `list-style-type: decimal` | Decimal numbers. | — |
 
+## Text content and links
+
+The rich editor exposes safe text formatting but never mounts arbitrary page
+HTML in the privileged side panel. Images, SVG, class-based icons, CSS media,
+and attributed child spans appear as inert chips and are restored on the
+inspected page in their original position with their original attributes.
+Press Enter to commit and leave the editor; Shift+Enter inserts a line break.
+
+Links appear below the editor as Markdown-style `[label](URL)` rows. Direct
+anchor edits change only `href`; nested links use the sanitised rich-text path.
+Both preserve hidden accessibility text and icon/SVG descendants. Safe HTTP(S),
+fragment and relative destinations are allowed; active-content and
+protocol-relative URLs are rejected. URL changes participate in Changes,
+preview-original, undo/redo, Remove change and Clear changes.
+
 ## Advanced (chevron in section header)
 
 Mirrors the Position / Layout pattern — primary controls stay clean and Figma-style; deeper CSS is one click away. Each row writes its single CSS property unless noted.

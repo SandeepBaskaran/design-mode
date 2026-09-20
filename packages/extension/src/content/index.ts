@@ -18,8 +18,10 @@ import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOve
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
 import { initCustomCursor, applyBaseCursor, clearBaseCursor } from './custom-cursor';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff, getFeedbackSessionView, isLiveFeedbackSupported, stopFeedbackSessionFromUi } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, applyAttributeChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff, getFeedbackSessionView, isLiveFeedbackSupported, stopFeedbackSessionFromUi } from './change-tracker';
+import { isSafeRichTextHref } from '../rich-text-preservation';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
+import { orderDomDeletionTargets } from './dom-delete';
 import { captureElementScreenshot, captureViewportScreenshotClean } from './screenshots';
 import {
   detectScales, annotateDrift, findTokenUsages,
@@ -132,7 +134,7 @@ interface DomUndoEntry { kind: "dom"; action: string; elementId: string; html: s
 // `isHtml` distinguishes a rich-text (innerHTML) edit from a plain-text
 // (textContent) one, so undo/redo restore with the matching DOM property —
 // without it, old innerHTML was written into textContent and the tags showed.
-interface TextUndoEntry { kind: "text"; elementId: string; oldText: string; newText: string; isHtml?: boolean; }
+interface TextUndoEntry { kind: "text"; elementId: string; oldText: string; newText: string; isHtml?: boolean; attributeName?: string; }
 interface VisibilityUndoEntry { kind: "visibility"; elementId: string; wasHidden: boolean; oldDisplay: string; }
 interface TokenUndoEntry { kind: "token"; cssVar: string; scopeSelector: string; oldValue: string; newValue: string; original: string; }
 type UndoEntry = StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoEntry | TokenUndoEntry;
@@ -264,14 +266,17 @@ function getFullState() {
 function revertAllPageMutations() {
   // 1. Text changes: restore each tracked element's earliest oldText so
   //    multiple overlapping edits collapse to the original.
-  const firstTextOld = new Map<string, { elementId: string; oldText: string; isHtml?: boolean }>();
+  const firstTextOld = new Map<string, { elementId: string; oldText: string; isHtml?: boolean; attributeName?: string }>();
   for (const ch of getTextChanges()) {
-    if (!firstTextOld.has(ch.elementId)) firstTextOld.set(ch.elementId, ch);
+    const key = `${ch.elementId}\0${ch.attributeName || 'content'}`;
+    if (!firstTextOld.has(key)) firstTextOld.set(key, ch);
   }
   for (const [, ch] of firstTextOld) {
     const el = getElementById(ch.elementId);
     if (!el) continue;
-    if (ch.isHtml) el.innerHTML = ch.oldText;
+    if (ch.attributeName) {
+      if (ch.oldText) el.setAttribute(ch.attributeName, ch.oldText); else el.removeAttribute(ch.attributeName);
+    } else if (ch.isHtml) el.innerHTML = ch.oldText;
     else el.textContent = ch.oldText;
   }
 
@@ -1097,7 +1102,8 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           // Restore through the tracker so the correct DOM property is used
           // (innerHTML for rich text, textContent for plain) and the row is
           // dropped when text returns to its original.
-          if (entry.isHtml) applyHtmlChange(entry.elementId, entry.oldText);
+          if (entry.attributeName) applyAttributeChange(entry.elementId, entry.attributeName, entry.oldText);
+          else if (entry.isHtml) applyHtmlChange(entry.elementId, entry.oldText);
           else applyTextChange(entry.elementId, entry.oldText);
         } else if (entry.kind === 'visibility') {
           const el = getElementById(entry.elementId);
@@ -1145,7 +1151,8 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
             }
           }
         } else if (entry.kind === 'text') {
-          if (entry.isHtml) applyHtmlChange(entry.elementId, entry.newText);
+          if (entry.attributeName) applyAttributeChange(entry.elementId, entry.attributeName, entry.newText);
+          else if (entry.isHtml) applyHtmlChange(entry.elementId, entry.newText);
           else applyTextChange(entry.elementId, entry.newText);
         } else if (entry.kind === 'visibility') {
           const el = getElementById(entry.elementId);
@@ -1274,7 +1281,9 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         if (textChange) {
           const el = getElementById(textChange.elementId);
           if (el) {
-            if (textChange.isHtml) el.innerHTML = textChange.oldText;
+            if (textChange.attributeName) {
+              if (textChange.oldText) el.setAttribute(textChange.attributeName, textChange.oldText); else el.removeAttribute(textChange.attributeName);
+            } else if (textChange.isHtml) el.innerHTML = textChange.oldText;
             else el.textContent = textChange.oldText;
           }
           removeTextChange(msg.changeId);
@@ -1376,7 +1385,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     // Rich text save — sets innerHTML so bold/italic/lists/links survive.
     // The undoStack entry records the OLD innerHTML; revert via el.innerHTML.
     case 'SET_HTML': {
-      const sid = getSelectedElementId();
+      const sid = typeof msg.elementId === 'string' ? msg.elementId : '';
       if (sid && typeof msg.html === 'string') {
         const el = getElementById(sid);
         if (el) {
@@ -1385,6 +1394,26 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           const newHtml = el.innerHTML || '';
           if (oldHtml !== newHtml) {
             undoStack.push({ kind: 'text', elementId: sid, oldText: oldHtml, newText: newHtml, isHtml: true });
+            redoStack.length = 0;
+          }
+          const info = buildElementInfo(el);
+          onElementSelected(info);
+        }
+      }
+      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
+      return true;
+    }
+
+    case 'SET_ATTRIBUTE': {
+      const sid = typeof msg.elementId === 'string' ? msg.elementId : '';
+      const value = typeof msg.value === 'string' ? msg.value.trim() : '';
+      if (sid && msg.attributeName === 'href' && (!value || isSafeRichTextHref(value))) {
+        const el = getElementById(sid);
+        if (el?.tagName === 'A') {
+          const oldValue = el.getAttribute('href') || '';
+          applyAttributeChange(sid, 'href', value);
+          if (oldValue !== value) {
+            undoStack.push({ kind: 'text', elementId: sid, oldText: oldValue, newText: value, attributeName: 'href' });
             redoStack.length = 0;
           }
           const info = buildElementInfo(el);
@@ -1583,7 +1612,10 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
 
     case 'DOM_ACTION': {
       const sid = getSelectedElementId();
-      if (!sid && msg.action !== 'paste') { sendResponse({ error: 'No element selected' }); break; }
+      const requestedIds = Array.isArray(msg.elementIds)
+        ? msg.elementIds.filter((id: unknown): id is string => typeof id === 'string')
+        : [];
+      if (!sid && requestedIds.length === 0 && msg.action !== 'paste') { sendResponse({ error: 'No element selected' }); break; }
       let newInfo: any = null;
       switch (msg.action) {
         case 'cut': if (sid) { cutElement(sid); setSelectedElementId(null); hideSelect(); } break;
@@ -1604,17 +1636,28 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
             }
           }
         } break;
-        case 'delete': { const delTarget = msg.elementId || sid; if (delTarget) {
-          const delEl = getElementById(delTarget);
-          if (delEl) {
-            const parentId = delEl.parentElement ? getOrAssignId(delEl.parentElement as HTMLElement) : '';
-            const nextId = delEl.nextElementSibling ? getOrAssignId(delEl.nextElementSibling as HTMLElement) : null;
-            const html = delEl.outerHTML;
-            undoStack.push({ kind: 'dom', action: 'delete', elementId: delTarget, html, parentId, nextSiblingId: nextId });
-            redoStack.length = 0;
+        case 'delete': {
+          const ids = (requestedIds.length > 0 ? requestedIds : [msg.elementId || sid])
+            .filter((id): id is string => Boolean(id));
+          const targetIds = orderDomDeletionTargets(
+            ids,
+            (id: string) => getElementById(id) as HTMLElement | null,
+            (a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? 1 : -1,
+          );
+          const deletedIds = new Set<string>();
+          for (const { id, element } of targetIds) {
+            const parentId = element.parentElement ? getOrAssignId(element.parentElement as HTMLElement) : '';
+            const nextId = element.nextElementSibling ? getOrAssignId(element.nextElementSibling as HTMLElement) : null;
+            const html = element.outerHTML;
+            if (deleteElement(id)) {
+              undoStack.push({ kind: 'dom', action: 'delete', elementId: id, html, parentId, nextSiblingId: nextId });
+              deletedIds.add(id);
+            }
           }
-          deleteElement(delTarget); if (delTarget === sid) { setSelectedElementId(null); hideSelect(); }
-        }} break;
+          if (deletedIds.size > 0) redoStack.length = 0;
+          if (sid && deletedIds.has(sid)) { setSelectedElementId(null); hideSelect(); }
+          if (requestedIds.length > 0 && isMultiSelectActive()) disableMultiSelect();
+        } break;
         case 'move-up': if (sid) moveElement(sid, 'up'); break;
         case 'move-down': if (sid) moveElement(sid, 'down'); break;
       }
@@ -2161,16 +2204,23 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       // hand-rolling because they aren't stylesheet-based.
       setOverridesEnabled(false);
 
-      const savedTexts: Array<{ elementId: string; currentText: string }> = [];
-      const firstOldText = new Map<string, { elementId: string; oldText: string }>();
+      const savedTexts: Array<{ elementId: string; currentText: string; isHtml?: boolean; attributeName?: string }> = [];
+      const firstOldText = new Map<string, { elementId: string; oldText: string; isHtml?: boolean; attributeName?: string }>();
       for (const ch of getTextChanges()) {
-        if (!firstOldText.has(ch.elementId)) firstOldText.set(ch.elementId, ch);
+        const key = `${ch.elementId}\0${ch.attributeName || 'content'}`;
+        if (!firstOldText.has(key)) firstOldText.set(key, ch);
       }
       for (const [, ch] of firstOldText) {
         const el = getElementById(ch.elementId);
         if (el) {
-          savedTexts.push({ elementId: ch.elementId, currentText: el.textContent || '' });
-          el.textContent = ch.oldText;
+          const currentText = ch.attributeName
+            ? el.getAttribute(ch.attributeName) || ''
+            : ch.isHtml ? el.innerHTML : el.textContent || '';
+          savedTexts.push({ elementId: ch.elementId, currentText, isHtml: ch.isHtml, attributeName: ch.attributeName });
+          if (ch.attributeName) {
+            if (ch.oldText) el.setAttribute(ch.attributeName, ch.oldText); else el.removeAttribute(ch.attributeName);
+          } else if (ch.isHtml) el.innerHTML = ch.oldText;
+          else el.textContent = ch.oldText;
         }
       }
 
@@ -2207,12 +2257,16 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'RESTORE_CHANGES': {
       setOverridesEnabled(true);
       const saved = (window as any).__dmPreviewSaved as
-        | { savedTexts: Array<{ elementId: string; currentText: string }> }
+        | { savedTexts: Array<{ elementId: string; currentText: string; isHtml?: boolean; attributeName?: string }> }
         | undefined;
       if (saved) {
         for (const t of saved.savedTexts || []) {
           const el = getElementById(t.elementId);
-          if (el) el.textContent = t.currentText;
+          if (!el) continue;
+          if (t.attributeName) {
+            if (t.currentText) el.setAttribute(t.attributeName, t.currentText); else el.removeAttribute(t.attributeName);
+          } else if (t.isHtml) el.innerHTML = t.currentText;
+          else el.textContent = t.currentText;
         }
         delete (window as any).__dmPreviewSaved;
       }

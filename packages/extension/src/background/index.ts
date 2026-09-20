@@ -394,7 +394,7 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'SP_DOM_ACTION') {
-    forwardToPinnedTab({ type: 'DOM_ACTION', action: msg.action, elementId: msg.elementId }, sendResponse);
+    forwardToPinnedTab({ type: 'DOM_ACTION', action: msg.action, elementId: msg.elementId, elementIds: msg.elementIds }, sendResponse);
     return true;
   }
   if (msg.type === 'SP_SELECT_ELEMENT') {
@@ -422,6 +422,14 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'SP_SET_TEXT') { forwardToPinnedTab({ type: 'SET_TEXT', text: msg.text }, sendResponse); return true; }
+  if (msg.type === 'SP_SET_HTML') {
+    forwardToPinnedTab({ type: 'SET_HTML', elementId: msg.elementId, html: msg.html }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_SET_ATTRIBUTE') {
+    forwardToPinnedTab({ type: 'SET_ATTRIBUTE', elementId: msg.elementId, attributeName: msg.attributeName, value: msg.value }, sendResponse);
+    return true;
+  }
   if (msg.type === 'SP_ADD_COMMENT') {
     forwardToPinnedTab({ type: 'ADD_COMMENT', text: msg.text }, sendResponse);
     return true;

@@ -56,6 +56,19 @@
   .heading-mark {
     color: var(--brand); font-weight: 600;
   }
+  .fixture-icon {
+    display: inline-block; width: 12px; height: 12px; margin-right: 6px;
+    border-radius: 50%; background: currentColor;
+  }
+  .fixture-label {
+    letter-spacing: 0.02em;
+  }
+  .fixture-logo-rotator, .fixture-logo, .fixture-mark {
+    display: inline-block; width: 12px; height: 12px;
+  }
+  .fixture-mark {
+    background-image: linear-gradient(135deg, #20808d 0 45%, transparent 45% 55%, #20808d 55%);
+  }
 
   @keyframes site-pulse {
     0%, 100% { opacity: 1; }
@@ -85,6 +98,11 @@
   <div class="flex-row">
     <button class="btn-primary" id="primary-btn">Primary</button>
     <button class="btn-secondary" id="secondary-btn">Secondary</button>
+    <button class="btn-primary" id="class-icon-btn"><span class="fixture-icon" aria-hidden="true"></span>Class icon</button>
+    <button class="btn-secondary" id="svg-icon-btn"><span class="fixture-label"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12"><path d="M6 1 7.5 4.5 11 6 7.5 7.5 6 11 4.5 7.5 1 6 4.5 4.5Z" fill="currentColor"/></svg> SVG icon</span></button>
+    <button class="btn-secondary" id="css-media-btn">CSS <span class="fixture-logo-rotator" aria-hidden="true"><span class="fixture-logo" style="animation-delay:0s"><span class="fixture-mark"></span></span></span> media</button>
+    <span id="nested-text-layer" class="border-border">Parent text <span class="bg-primary">preserved child text</span></span>
+    <a id="rich-link" href="https://designmode.app/docs" target="_blank">Design Mode<span class="sr-only"> (opens in a new tab)</span><svg aria-hidden="true" width="12" height="12"><path d="M2 10 10 2M5 2h5v5"/></svg></a>
   </div>
 
   <h2>Card</h2>

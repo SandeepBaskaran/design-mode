@@ -8,6 +8,68 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-09-20
+
+### Added
+
+- **Local live feedback rounds.** The Local MCP companion adds
+  `wait_for_handoff`, immutable per-Send snapshots, bounded waits, and explicit
+  Waiting / Implementing / Stopped states with a user-controlled Stop action.
+  Cloud and Self-hosted retain their one-shot hand-off.
+- **Guided Local setup.** New `setup` and `doctor` commands preview and verify
+  project-local Claude Code or Cursor configuration before writing it, with
+  backups and repeat-run safety.
+- **Authored sizing inspection.** Width and height now distinguish the authored
+  CSS value from the computed pixel measurement instead of silently presenting
+  percentages, relative units, intrinsic sizes, expressions, or tokens as fixed
+  pixels.
+- **Component-grouped change review.** The Changes tab can group changed
+  elements by locally detected React or Vue component/source context while
+  retaining selectors, filters, sorting, and per-element actions.
+- **Editable link destinations.** Typography exposes safe Markdown-style
+  `[label](URL)` rows for selected or nested links. Direct anchor edits use
+  tracked `href` changes; nested edits use the sanitised rich-text path, and
+  both support preview, undo, redo, Remove change, and Clear changes.
+
+### Changed
+
+- Editor shortcuts work from the webpage or non-editable side-panel surfaces,
+  recover safely from malformed saved bindings, and better preserve macOS
+  Option, non-QWERTY, AltGr, and IME input behaviour.
+- Rich-text editing uses inert structural placeholders for attributed spans,
+  class-based icons, SVG, and CSS media so surrounding text can change without
+  exposing page-owned markup in the privileged panel.
+- The marketing and documentation site has refreshed product copy, navigation,
+  comparison discovery, browser guidance, machine-readable summaries, and
+  responsive presentation.
+
+### Fixed
+
+- Shift-selected Layers can be deleted together from either delete control;
+  each element receives its own ordered DOM change and remains reversible when
+  selected parents, children, or siblings overlap.
+- Parent rich-text edits preserve attributed child text spans, hidden
+  accessibility copy, icons, and media through save, preview, undo, and redo.
+- The Local MCP companion exits cleanly on stdin EOF, protects owner/attacher
+  lifecycle transitions, and lets a surviving client claim the loopback bridge.
+- Next.js is pinned past the 16.3.4 Turbopack Sass-resolution regression.
+
+### Security
+
+- Link creation and destination editing reject active-content and
+  protocol-relative URLs before privileged-panel insertion and again before
+  page mutation.
+- Component metadata inspection is bounded and read-only; guided setup writes
+  only the explicitly confirmed project files and warns that adjacent backups
+  may contain other tools' credentials.
+
+### Internal
+
+- Added regression coverage for authored sizing, shortcuts, guided setup,
+  stdio lifecycle, live hand-offs, structural rich text, link editing, and
+  ordered multi-delete behaviour.
+- Added website route/discovery integrity checks and refreshed dependency pins.
+
 ## [2.2.1] — 2026-09-05
 
 ### Fixed

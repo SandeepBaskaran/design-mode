@@ -19,6 +19,19 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "2.3.0",
+    date: "2026-09-20",
+    headline: "Keep design intent intact and iterate with your agent.",
+    highlights: [
+      "Run opt-in Local feedback rounds: Send each reviewed snapshot to the agent, see Waiting / Implementing state, and stop the loop without clearing your edits.",
+      "See authored width and height separately from computed pixels, so responsive units, intrinsic sizes, expressions, and tokens stay honest.",
+      "Group Changes by detected component/source context while keeping every selector and per-element action available.",
+      "Edit link destinations from a Markdown-style URL row while preserving hidden accessibility text, icons, media, and attributed child spans.",
+      "Delete a Shift-selected Layers set in one action, with one ordered, reversible Changes entry per layer.",
+      "Set up and diagnose the Local companion with guided, preview-first setup for Claude Code and Cursor.",
+    ],
+  },
+  {
     version: "2.2.1",
     date: "2026-09-05",
     headline: "Launch where you left off, even after Chrome sleeps.",

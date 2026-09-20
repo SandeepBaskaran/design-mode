@@ -266,7 +266,7 @@ describe('mcp-local guided setup', { concurrency: false, timeout: 15_000 }, () =
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
         identity: 'design-mode-mcp',
-        version: '2.2.1',
+        version: '2.3.0',
         pid: 4242,
         role: 'owner',
         extensionConnected: true,

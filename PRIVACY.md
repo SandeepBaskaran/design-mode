@@ -53,8 +53,13 @@ Configured Cloud or Self-hosted mode:
   self-hosted deployment URL you configure) authenticated with a bearer
   token stored in `chrome.storage.local`. The cloud server (open
   source at `packages/mcp-cloud`) acts as a relay between the
-  extension and a remote MCP agent — it doesn't store your edits;
-  messages flow through and are dropped when the connection closes.
+  extension and a remote MCP agent. Requests and responses are temporarily
+  queued in Redis with a requested 60-second expiry; responses are normally
+  deleted when consumed. Queue insertion and expiry are separate operations,
+  so the 60-second lifetime is best-effort rather than a guaranteed maximum.
+  The service retains the credential's SHA-256 hash, anonymous tenant ID, and
+  created/last-seen timestamps until revocation. Operational logs contain
+  bounded metadata, not selectors, screenshots, or payload bodies.
   Switch to Local mode on the MCP page to keep MCP traffic on your machine.
 
 When you're connected to a coding agent (via any of the modes above), the edit
@@ -72,16 +77,19 @@ addons.mozilla.org (AMO) for Firefox.
 
 The marketing/docs site is a separate concern from the extension. The site:
 
-- Loads **Google Fonts** (Manrope, Cascadia Code) from `fonts.googleapis.com`.
-  Visiting the site sends your IP to Google's CDN as part of the font fetch.
+- Uses Google Sans Flex fetched at build time and self-hosted by Next.js; a
+  visit to the deployed site does not request the font from Google Fonts.
 - Loads **Google Analytics (gtag.js)** if the deployment sets the
   `NEXT_PUBLIC_GA_ID` environment variable. The upstream production deploy
   does so; forks and self-hosts opt in by setting their own ID. If unset, no
   analytics script is rendered.
 
-GA collects standard pageview/session data per Google's policy. We don't
-configure custom user IDs, custom events, or PII. To opt out, use a tracker
-blocker — the site degrades gracefully without GA.
+When enabled, GA receives page views plus `cta_click`, `contact_click`, and
+`outbound_click` events. CTA events include the store/browser label; contact
+events include the clicked `mailto:` or `tel:` target; outbound events include
+the destination URL and link text. We do not configure a custom user ID or
+send extension edits or MCP payloads. A tracker blocker can stop the script;
+the site degrades gracefully without it.
 
 ## Permissions explained
 

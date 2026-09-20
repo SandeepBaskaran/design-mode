@@ -10,7 +10,14 @@ Each entry is bucketed:
 
 When CSS and Figma diverge, the section calls it out.
 
-Last updated: 2026-09-05 (release 2.2.0).
+Last updated: 2026-09-20 (release 2.3.0).
+
+Release 2.3.0 highlights: authored width/height stays separate from computed
+pixels; rich-text edits preserve attributed child spans, icons and media; link
+destinations are safely editable; Shift-selected Layers delete as one ordered,
+reversible action; and Changes can add component/source headings. These are
+shared extension behaviours. Chromium-only pop-out, Picture-in-Picture and
+EyeDropper limitations remain unchanged.
 
 Release 1.1.0 highlights: **In-panel Help view** added (Report an
 issue + Copy diagnostics), **Alt+1/2/3 tab shortcuts** wired,

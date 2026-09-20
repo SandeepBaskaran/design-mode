@@ -17,6 +17,7 @@ export interface StyleChange {
 export interface TextChange {
   id: string; elementId: string; selector: string;
   oldText: string; newText: string; timestamp: number;
+  attributeName?: string;
   status?: ChangeStatus;
 }
 
@@ -56,7 +57,7 @@ export interface ChangeSession {
     selector: string; property: string;
     oldValue: string; newValue: string; cssRule: string;
   }>;
-  textChanges: Array<{ selector: string; oldText: string; newText: string }>;
+  textChanges: Array<{ selector: string; oldText: string; newText: string; attributeName?: string }>;
   cssBlock: string;
 }
 
@@ -192,7 +193,12 @@ class DesignModeState {
       pageUrl: this.session?.pageUrl || 'unknown',
       pageTitle: this.session?.pageTitle || 'unknown',
       styleChanges: changes,
-      textChanges: this.textChanges.map(c => ({ selector: c.selector, oldText: c.oldText, newText: c.newText })),
+      textChanges: this.textChanges.map(c => ({
+        selector: c.selector,
+        oldText: c.oldText,
+        newText: c.newText,
+        ...(c.attributeName ? { attributeName: c.attributeName } : {}),
+      })),
       domChanges: this.domChanges.map(c => ({ selector: c.selector, action: c.action, tagName: c.tagName })),
       cssBlock: cssRules.join('\n\n'),
     };

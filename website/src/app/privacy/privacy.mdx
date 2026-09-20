@@ -81,6 +81,11 @@ pages or other surfaces where the browser blocks extension scripts. Do not use
 it to capture passwords, private form data, confidential screenshots or content
 you are not authorised to share.
 
+Component-grouped change review also performs a bounded, read-only probe for
+React or Vue component names and source-file hints attached to changed elements.
+These hints remain in the local review interface; production builds may omit
+them. The grouping choice is kept only in panel memory.
+
 ## When network traffic starts
 
 ### No MCP connection
@@ -99,6 +104,12 @@ Mode.
 Local mode connects the extension to the companion server on your machine over
 the token-authenticated `ws://127.0.0.1:9960` connection by default. Design Mode does not route that transport
 through its hosted relay.
+
+The optional guided Local setup previews project configuration before writing
+only the files you confirm. Backups stay beside those files and may contain
+credentials belonging to other tools, so they should not be committed. The
+`doctor` command probes only the configured localhost bridge. Local feedback
+round snapshots and session state stay in process memory.
 
 ### Cloud mode
 

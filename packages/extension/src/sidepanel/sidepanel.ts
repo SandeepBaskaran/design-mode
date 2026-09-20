@@ -26,6 +26,7 @@ import { componentGroup, groupByComponent, type ComponentContext } from '../comp
 import { parseFeedbackSession, type FeedbackSessionView } from './feedback-view';
 import { enableShortcuts, loadShortcuts, registerShortcut } from '../content/keyboard-shortcuts';
 import { diffWords } from './word-diff';
+import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
   isTransparent, resolveCategory, thresholdFor,
@@ -42,18 +43,11 @@ import {
    inside the side-panel context — handing a malicious site browser.tabs
    / browser.scripting / browser.storage. This sanitizer parses the input
    in a sandboxed DOMParser (which does NOT fire scripts or events on
-   parse) and walks the tree keeping only structural formatting tags
-   and explicitly allow-listed attributes. Media is represented by inert
-   placeholders so editing surrounding copy cannot delete it from the page. */
-const RICH_TEXT_ALLOWED_TAGS = new Set([
-  'B','I','U','STRONG','EM','A','BR','P','SPAN','UL','OL','LI','CODE','DIV','H1','H2','H3','H4','H5','H6','BLOCKQUOTE','PRE','SMALL','MARK','SUB','SUP',
-]);
-const RICH_TEXT_PRESERVED_TAGS = new Set([
-  'IMG','SVG','PICTURE','VIDEO','AUDIO','CANVAS','IFRAME','OBJECT','EMBED',
-]);
-const RICH_TEXT_ALLOWED_ATTRS_PER_TAG: Record<string, Set<string>> = {
-  A: new Set(['href', 'target', 'rel']),
-};
+   parse) and exposes only structural formatting tags with explicitly
+   allow-listed attributes. Other page-owned nodes are represented by inert
+   placeholders; stripped attributes on editable wrappers are restored only
+   in the inspected page. */
+
 /* ── Safe CSS-colour-value clamp ──
    Page-derived colour values (computed styles read off the inspected
    element, or layer.color stored from the picker) are interpolated
@@ -81,57 +75,7 @@ function safeCssColor(v: string): string {
   return '';
 }
 
-function sanitizeRichTextHtml(raw: string): string {
-  if (!raw) return '';
-  const doc = new DOMParser().parseFromString('<body><div id="r">' + raw + '</div></body>', 'text/html');
-  const root = doc.getElementById('r');
-  if (!root) return '';
-  const preservedNodes = Array.from(root.querySelectorAll('*')).filter((node) =>
-    RICH_TEXT_PRESERVED_TAGS.has(node.tagName)
-    && !node.parentElement?.closest([...RICH_TEXT_PRESERVED_TAGS].join(','))
-  );
-  const walk = (node: Element) => {
-    for (let i = node.children.length - 1; i >= 0; i--) {
-      const child = node.children[i] as HTMLElement;
-      const preservedIndex = preservedNodes.indexOf(child);
-      if (preservedIndex !== -1) {
-        const placeholder = doc.createElement('span');
-        placeholder.dataset.dmPreserveNode = String(preservedIndex);
-        placeholder.contentEditable = 'false';
-        placeholder.textContent = `[${child.tagName.toLowerCase()}]`;
-        node.replaceChild(placeholder, child);
-        continue;
-      }
-      if (!RICH_TEXT_ALLOWED_TAGS.has(child.tagName)) {
-        walk(child);
-        while (child.firstChild) node.insertBefore(child.firstChild, child);
-        child.remove();
-        continue;
-      }
-      const allowed = RICH_TEXT_ALLOWED_ATTRS_PER_TAG[child.tagName] || new Set<string>();
-      for (const attr of Array.from(child.attributes)) {
-        const name = attr.name.toLowerCase();
-        if (!allowed.has(name)) {
-          child.removeAttribute(attr.name);
-          continue;
-        }
-        if (name === 'href') {
-          // Only http(s) / fragments / relative paths survive — never
-          // javascript:, data:, vbscript:, blob:, filesystem:.
-          const v = attr.value.trim();
-          const safe = /^https?:\/\//i.test(v)
-            || v.startsWith('#')
-            || (v.startsWith('/') && !v.startsWith('//'))
-            || v.startsWith('.');
-          if (!safe) child.removeAttribute(attr.name);
-        }
-      }
-      walk(child);
-    }
-  };
-  walk(root);
-  return root.innerHTML;
-}
+
 import {
   ANIMATION_NAME_OPTIONS,
   ANIMATION_DIRECTION_OPTIONS,
@@ -195,7 +139,7 @@ interface StyleChange {
   groupLabel?: string;
   status?: ChangeStatus;
 }
-interface TextChange { id: string; elementId: string; selector: string; label?: string; oldText: string; newText: string; timestamp?: number; status?: ChangeStatus; viewportWidth?: number; breakpoint?: Breakpoint; }
+interface TextChange { id: string; elementId: string; selector: string; label?: string; oldText: string; newText: string; attributeName?: string; timestamp?: number; status?: ChangeStatus; viewportWidth?: number; breakpoint?: Breakpoint; }
 interface DomChange {
   id?: string; action: string; tagName: string; selector: string; label?: string;
   elementId?: string; timestamp?: number;
@@ -1652,8 +1596,27 @@ function applyStrokePosition(pos: StrokePos) {
   render();
 }
 async function applyText(text: string) { const res = await send({ type: 'SP_SET_TEXT', text }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
-async function applyHtml(html: string) { const res = await send({ type: 'SP_SET_HTML', html }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
-async function domAction(action: string) { const res = await send({ type: 'SP_DOM_ACTION', action }); if (res.info) info = res.info; else if (action === 'delete' || action === 'cut') info = null; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); await refreshDomTree(); await refreshChanges(); }
+async function applyHtml(elementId: string, html: string) { const res = await send({ type: 'SP_SET_HTML', elementId, html }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
+async function applyAttribute(elementId: string, attributeName: string, value: string) { const res = await send({ type: 'SP_SET_ATTRIBUTE', elementId, attributeName, value }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
+async function domAction(action: string) {
+  const elementIds = action === 'delete' && multiSelectIds.length > 0 ? [...multiSelectIds] : undefined;
+  const res = await send({ type: 'SP_DOM_ACTION', action, elementIds });
+  if (res.info) info = res.info;
+  else if (action === 'delete' || action === 'cut') info = null;
+  if (action === 'delete' && elementIds) {
+    multiSelectActive = false;
+    multiSelectIds = [];
+  }
+  if (res.styleChanges) styleChanges = res.styleChanges;
+  if (res.textChanges) textChanges = res.textChanges;
+  if (res.domChanges) domChanges = res.domChanges;
+  if (res.comments) comments = res.comments;
+  undoCount = res.undoCount ?? undoCount;
+  redoCount = res.redoCount ?? redoCount;
+  render();
+  await refreshDomTree();
+  await refreshChanges();
+}
 async function selectElement(elementId: string) {
   const res = await send({ type: 'SP_SELECT_ELEMENT', elementId });
   if (res.payload || res.info) info = res.payload || res.info;
@@ -6865,12 +6828,25 @@ function renderDesignTab(): string {
   // SECURITY: inspected pages are untrusted. The raw innerHTML they
   // produce can contain `<img onerror=...>`, `<svg onload=...>`, etc. —
   // executing inside the side-panel context would hand a malicious site
-  // browser.tabs / browser.scripting / browser.storage. Strip every tag
-  // outside the structural-formatting allow-list and every attribute
-  // that isn't explicitly safe (href is the only allowed one, and only
-  // when it points to http(s) / fragment / relative path).
+  // browser.tabs / browser.scripting / browser.storage. Only structural
+  // formatting tags enter the editor; page-owned nodes become inert
+  // placeholders and only explicitly safe attributes survive.
   const rawInner = (displayInfo as any).innerHTML;
   const richHtml = rawInner ? sanitizeRichTextHtml(rawInner) : escapeAttr(textVal);
+  const richLinks: Array<{ index: number | 'host'; label: string; href: string }> = tag === 'a'
+    ? [{ index: 'host', label: getRichTextLabel(richHtml) || 'Link', href: (displayInfo as any).attributes?.href || '' }]
+    : rawInner ? getRichTextLinks(richHtml) : [];
+  const richLinkSources = richLinks.length > 0
+    ? '<div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">' +
+      '<span style="font-size:9px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Links</span>' +
+      richLinks.map(link =>
+        '<label style="display:flex;align-items:center;min-width:0;font:10px/1.4 SFMono-Regular,Consolas,monospace;color:var(--dm-text-secondary);">' +
+        '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;">[' + escapeAttr(link.label) + '](</span>' +
+        '<input data-dm-rich-link-url="' + link.index + '" value="' + escapeAttr(link.href) + '" aria-label="URL for ' + escapeAttr(link.label) + '" class="dm-input" style="flex:1;min-width:80px;padding:3px 5px;font:10px/1.4 SFMono-Regular,Consolas,monospace;">' +
+        '<span>)</span></label>'
+      ).join('') +
+      '</div>'
+    : '';
   const tbBtn = (cmd: string, label: string, title: string) =>
     '<button data-dm-richtext-cmd="' + cmd + '" title="' + title + '" style="padding:3px 6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;min-width:22px;">' + label + '</button>';
   const richToolbar =
@@ -6891,6 +6867,7 @@ function renderDesignTab(): string {
       '<label style="font-size:9px;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.4px;">Text Content</label>' +
       richToolbar +
       '<div data-dm-richtext data-dm-element-id="' + escapeAttr(displayInfo.id || '') + '" contenteditable="true" class="dm-input" style="width:100%;min-height:88px;font-family:inherit;font-size:13px;line-height:1.5;padding:8px;box-sizing:border-box;outline:none;overflow-y:auto;max-height:280px;" spellcheck="false">' + richHtml + '</div>' +
+      richLinkSources +
       textWarning +
       '</div>'
     : '';
@@ -8423,7 +8400,8 @@ function renderChangesTab(): string {
         (c.newValue || '').toLowerCase().includes(q);
     }
     if (item.type === 'text') {
-      return (item.data.oldText || '').toLowerCase().includes(q) ||
+      return (item.data.attributeName || '').toLowerCase().includes(q) ||
+        (item.data.oldText || '').toLowerCase().includes(q) ||
         (item.data.newText || '').toLowerCase().includes(q);
     }
     if (item.type === 'dom') return item.data.action.toLowerCase().includes(q) || item.data.tagName.toLowerCase().includes(q);
@@ -8758,7 +8736,8 @@ function renderChangesTab(): string {
         const c = item.data;
         const cid = c.id;
         const diffHtml = renderWordDiff(c.oldText || '', c.newText || '');
-        const inner = '<div style="font-size:10px;line-height:1.5;font-family:SF Mono,Monaco,monospace;word-break:break-word;"><span style="color:var(--dm-text-muted);">text:</span> ' + diffHtml + '</div>';
+        const changeLabel = c.attributeName || 'text';
+        const inner = '<div style="font-size:10px;line-height:1.5;font-family:SF Mono,Monaco,monospace;word-break:break-word;"><span style="color:var(--dm-text-muted);">' + escapeAttr(changeLabel) + ':</span> ' + diffHtml + '</div>';
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;margin-top:2px;">' + icon('type', 10) + '</span>' +
@@ -10466,7 +10445,7 @@ function setupDelegation() {
       if (action === 'show-all') ids.forEach(id => { if (!domTree.find(n => n.id === id)?.isVisible) toggleLayerVisibility(id); });
       else if (action === 'hide-all') ids.forEach(id => { if (domTree.find(n => n.id === id)?.isVisible) toggleLayerVisibility(id); });
       else if (action === 'duplicate-all') ids.forEach(id => duplicateLayer(id));
-      else if (action === 'delete-all') ids.forEach(id => deleteLayer(id));
+      else if (action === 'delete-all') void domAction('delete');
       else if (action === 'clear-selection') { multiSelectIds.length = 0; multiSelectActive = false; tokenUsesActiveVar = null; render(); }
       return;
     }
@@ -12117,6 +12096,28 @@ function setupDelegation() {
   // Change handler (selects)
   root.addEventListener('change', (e) => {
     const target = e.target as HTMLElement;
+    const linkUrlInput = target.closest<HTMLInputElement>('[data-dm-rich-link-url]');
+    if (linkUrlInput) {
+      const editor = root.querySelector<HTMLElement>('[data-dm-richtext]');
+      const value = linkUrlInput.value.trim();
+      if (!editor || (value && !isSafeRichTextHref(value))) {
+        linkUrlInput.setCustomValidity('Use an http(s), relative, or fragment URL.');
+        linkUrlInput.reportValidity();
+        return;
+      }
+      const index = linkUrlInput.dataset.dmRichLinkUrl;
+      if (index === 'host') {
+        linkUrlInput.setCustomValidity('');
+        void applyAttribute(editor.dataset.dmElementId || '', 'href', value);
+        return;
+      }
+      const link = editor.querySelector<HTMLAnchorElement>(`a[${RICH_TEXT_LINK_NODE_ATTR}="${index}"]`);
+      if (!link) return;
+      linkUrlInput.setCustomValidity('');
+      if (value) link.setAttribute('href', value); else link.removeAttribute('href');
+      void applyHtml(editor.dataset.dmElementId || '', editor.innerHTML);
+      return;
+    }
     const groupingSelect = target.closest<HTMLSelectElement>('[data-dm-changes-grouping]');
     if (groupingSelect) {
       changesGrouping = groupingSelect.value === 'component' ? 'component' : 'element';
@@ -12874,15 +12875,40 @@ function setupDelegation() {
     const cmd = btn.dataset.dmRichtextCmd!;
     const editor = root.querySelector<HTMLElement>('[data-dm-richtext]');
     if (!editor) return;
+    if (cmd === 'createLink' && info?.tagName?.toLowerCase() === 'a') {
+      const currentUrl = (info as any).attributes?.href || '';
+      const url = window.prompt('Link URL:', currentUrl);
+      if (url && isSafeRichTextHref(url)) void applyAttribute(editor.dataset.dmElementId || '', 'href', url);
+      return;
+    }
     editor.focus();
     if (cmd === 'createLink') {
-      const url = window.prompt('Link URL:');
-      if (url) document.execCommand('createLink', false, url);
+      const selection = window.getSelection();
+      const selectionElement = selection?.anchorNode instanceof Element
+        ? selection.anchorNode
+        : selection?.anchorNode?.parentElement;
+      const selectedLink = selectionElement?.closest<HTMLAnchorElement>('a');
+      const url = window.prompt('Link URL:', selectedLink?.getAttribute('href') || '');
+      if (url && isSafeRichTextHref(url)) {
+        if (selectedLink && editor.contains(selectedLink)) selectedLink.setAttribute('href', url);
+        else document.execCommand('createLink', false, url);
+      }
     } else {
       document.execCommand(cmd, false);
     }
     // Save immediately so the change shows in the Changes tab + page.
-    applyHtml(editor.innerHTML);
+    applyHtml(editor.dataset.dmElementId || '', editor.innerHTML);
+  }, true);
+
+  const richTextEnterCommits = new WeakSet<HTMLElement>();
+  root.addEventListener('keydown', (e) => {
+    const editor = (e.target as HTMLElement).closest<HTMLElement>('[data-dm-richtext]');
+    if (!editor || !shouldCommitRichTextKey(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    richTextEnterCommits.add(editor);
+    void applyHtml(editor.dataset.dmElementId || '', editor.innerHTML);
+    editor.blur();
   }, true);
 
   // Auto-save on blur (when the user clicks outside the editor).
@@ -12892,9 +12918,10 @@ function setupDelegation() {
     // Defer one tick so a click landing on a toolbar button (which
     // re-focuses the editor) doesn't trigger a save mid-action.
     setTimeout(() => {
+      if (richTextEnterCommits.delete(editor)) return;
       const stillFocused = document.activeElement && (document.activeElement as HTMLElement).closest('[data-dm-richtext]');
       if (stillFocused) return;
-      applyHtml(editor.innerHTML);
+      applyHtml(editor.dataset.dmElementId || '', editor.innerHTML);
     }, 0);
   }, true);
 
@@ -12960,7 +12987,7 @@ function setupDelegation() {
     const offset = range.startOffset;
     const text = (node.textContent || '').slice(0, offset);
     const m = text.match(/\[([^\]\n]+)\]\(([^)\s]+)\)$/);
-    if (!m) return false;
+    if (!m || !isSafeRichTextHref(m[2])) return false;
     const [whole, label, url] = m;
     const start = offset - whole.length;
     const r = document.createRange();
@@ -13331,14 +13358,6 @@ function setupDelegation() {
       return;
     }
 
-    // Typography text-content editor: Enter commits through the existing
-    // focusout path; Shift+Enter inserts a line break.
-    const richEditor = target.closest<HTMLElement>('[data-dm-richtext]');
-    if (richEditor && e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      richEditor.blur();
-      return;
-    }
 
     // Color trigger: Enter applies typed value as custom color, Escape closes
     const colorTriggerKey = target.closest<HTMLInputElement>('[data-dm-color-trigger]');

@@ -28,12 +28,14 @@ export type Comparison = {
 export function isComparisonIndexable(comparison: Comparison): boolean {
   return Boolean(
     comparison.research?.checkedOn &&
-      comparison.research.methodology &&
-      comparison.research.sources.length,
+    comparison.research.methodology &&
+    comparison.research.sources.length,
   );
 }
 
-const baseFeatures = (competitorBlanks: Record<string, string>): ComparisonRow[] => [
+const baseFeatures = (
+  competitorBlanks: Record<string, string>,
+): ComparisonRow[] => [
   {
     feature: "Visual editing on a scriptable webpage",
     designMode:
@@ -43,7 +45,7 @@ const baseFeatures = (competitorBlanks: Record<string, string>): ComparisonRow[]
   {
     feature: "MCP (Model Context Protocol) handoff to AI agents",
     designMode:
-      "Yes — Cloud, Local, and Self-hosted modes; eight MCP tools",
+      "Yes — Cloud, Local, and Self-hosted modes; eight common session tools, plus Local feedback rounds",
     competitor: competitorBlanks.mcp ?? "Not yet verified",
   },
   {
@@ -385,7 +387,7 @@ export const comparisons: Comparison[] = [
       {
         feature: "Feedback rounds",
         designMode:
-          "Agent tools read changes, return browser previews and update statuses, including resolving or reopening comments.",
+          "Agent tools read changes, return browser previews and update statuses. Local mode also supports opt-in feedback rounds with immutable per-Send snapshots and an explicit Stop; Cloud and Self-hosted remain one-shot.",
         competitor:
           "The published MCP implementation continues a live feedback session across rounds, with a user-stop action and a grace period for brief extension disconnects.",
       },
@@ -628,8 +630,7 @@ export const comparisons: Comparison[] = [
     slug: "design-mode-vs-stagewise",
     competitor: "Stagewise",
     title: "Design Mode vs Stagewise",
-    metaTitle:
-      "Design Mode vs Stagewise — open-source visual editor with MCP",
+    metaTitle: "Design Mode vs Stagewise — open-source visual editor with MCP",
     metaDescription:
       "Honest comparison: Design Mode and Stagewise both ship visual edits to AI coding agents. Design Mode is MIT-licensed with a hosted Cloud relay, broader design controls, and built-in change history.",
     keywords: [
@@ -675,8 +676,7 @@ export const comparisons: Comparison[] = [
     slug: "design-mode-vs-pls-fix",
     competitor: "pls-fix",
     title: "Design Mode vs pls-fix",
-    metaTitle:
-      "Design Mode vs pls-fix — visual editor vs comment-pin bug tool",
+    metaTitle: "Design Mode vs pls-fix — visual editor vs comment-pin bug tool",
     metaDescription:
       "Comparison: pls-fix is a comment-pin tool for filing visual bugs. Design Mode covers comment pins plus full visual editing, MCP handoff, persistent change history, and exports.",
     keywords: [
@@ -748,7 +748,8 @@ export const comparisons: Comparison[] = [
       "Drawbridge's `/bridge` step/batch/yolo command already fits your team's habits.",
     ],
     table: baseFeatures({
-      editing: "Annotate only — comment pins + freeform rectangles, no live editing",
+      editing:
+        "Annotate only — comment pins + freeform rectangles, no live editing",
       mcp: "No — writes .moat/ task files via the File System Access API",
       history: "Task files (to do / doing / done) in the connected folder",
       os: "Check current licence",
@@ -811,8 +812,7 @@ export const comparisons: Comparison[] = [
     slug: "design-mode-vs-dialkit",
     competitor: "Dialkit",
     title: "Design Mode vs Dialkit",
-    metaTitle:
-      "Design Mode vs Dialkit — comparison for live website editing",
+    metaTitle: "Design Mode vs Dialkit — comparison for live website editing",
     metaDescription:
       "Comparison: Dialkit and Design Mode are both browser-based design tools. Design Mode adds MCP handoff to AI coding agents and a full Changes-tab history.",
     keywords: [
@@ -950,17 +950,14 @@ export const comparisons: Comparison[] = [
       "CSS inspector",
       "Chrome CSS extension",
     ],
-    oneLiner:
-      "CSSPeeper reads. Design Mode reads, edits, and ships.",
+    oneLiner: "CSSPeeper reads. Design Mode reads, edits, and ships.",
     positioning:
       "CSSPeeper is a beautiful read-only inspector. Design Mode covers the read use case and adds editing, persistence, exports, and MCP.",
     whenToPickDesignMode: [
       "You want to change values, not just read them.",
       "You want to ship structured edits to engineering or an AI agent.",
     ],
-    whenToPickCompetitor: [
-      "You purely want to learn how a page is built.",
-    ],
+    whenToPickCompetitor: ["You purely want to learn how a page is built."],
     table: baseFeatures({
       editing: "Read-only",
       mcp: "No",
@@ -992,16 +989,11 @@ export const comparisons: Comparison[] = [
       "live element inspector",
       "CSS hover tool",
     ],
-    oneLiner:
-      "Hover-only inspectors are a feature; Design Mode is a tool.",
+    oneLiner: "Hover-only inspectors are a feature; Design Mode is a tool.",
     positioning:
       "Hover-on-element info is one capability inside Design Mode (the inspector overlay). The broader product adds editing, exports, and MCP.",
-    whenToPickDesignMode: [
-      "You need to make changes, not just see info.",
-    ],
-    whenToPickCompetitor: [
-      "You only need a hover tooltip and nothing else.",
-    ],
+    whenToPickDesignMode: ["You need to make changes, not just see info."],
+    whenToPickCompetitor: ["You only need a hover tooltip and nothing else."],
     table: baseFeatures({
       editing: "Hover info only",
       mcp: "No",
@@ -1197,8 +1189,7 @@ export const comparisons: Comparison[] = [
     slug: "design-mode-vs-visbug",
     competitor: "VisBug",
     title: "Design Mode vs VisBug",
-    metaTitle:
-      "Design Mode vs VisBug — live page editor with AI agent handoff",
+    metaTitle: "Design Mode vs VisBug — live page editor with AI agent handoff",
     metaDescription:
       "Comparison: VisBug edits live pages with a small toolbar. Design Mode adds a full side panel, persistent Changes history, exports, and MCP handoff to AI coding agents.",
     keywords: [

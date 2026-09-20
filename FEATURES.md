@@ -153,8 +153,15 @@ hovered) element. Every field updates the page live.
   Strikethrough** toggles using Lucide icons.
 - Text color (color picker + design-token dropdown).
 - Text Transform (none / uppercase / lowercase / capitalize).
-- **Text Content** textarea — directly edits `textContent` for text-bearing
-  tags. Min 4 lines, drag to expand.
+- **Text Content** rich editor — keeps safe formatting editable while replacing
+  page-owned media, icons, SVG and attributed structural spans with inert chips.
+  Editing a parent therefore preserves its nested styled text/media structure;
+  select the child layer to edit that child's own text.
+- Descendant links and a selected host `<a>` expose Markdown-style
+  `[label](URL)` rows. Direct anchors use tracked `href` changes, while nested
+  links use the sanitised rich-text path. Both support preview, undo/redo,
+  Remove change and Clear changes; active-content and protocol-relative URLs
+  are rejected.
 
 ### 2.5 Background
 

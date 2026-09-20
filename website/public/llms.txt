@@ -8,7 +8,7 @@
 
 - Product: desktop browser extension for Chrome/Chromium and Firefox.
 - Licence: MIT.
-- Current repository version: 2.2.1. That is the version in this source tree as of 20 September 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
+- Current repository version: 2.3.0. That is the version in this source tree as of 20 September 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
 - Author: Sandeep Baskaran.
 - Source: https://github.com/SandeepBaskaran/design-mode
 - Website: https://designmode.app
@@ -39,7 +39,7 @@ Browser-internal pages, extension stores and other protected surfaces cannot be 
 
 Cloud, Local and Self-hosted expose eight session tools: `get_changes`, `apply_changes`, `set_change_status`, `clear_changes`, `mark_comment_resolved`, `get_session_summary`, `export_changes` and `get_screenshot`.
 
-The current repository's Local companion also registers `wait_for_handoff` for opt-in live feedback rounds (bounded waits, Local-only). That tool is current-repository / unreleased and is not a guaranteed store-listing capability. Cloud and Self-hosted keep one-shot Send.
+Local also registers `wait_for_handoff` for opt-in feedback rounds with bounded waits, immutable per-Send snapshots and an explicit Stop. Cloud and Self-hosted keep one-shot Send.
 
 MCP configuration is client- and version-specific. Claude Code uses `claude mcp` commands, project `.mcp.json`, or user/local entries in `~/.claude.json`; `.claude/settings.json` is not the server-definition file. Cursor uses project `.cursor/mcp.json` or global `~/.cursor/mcp.json`. See the version-stamped guide before adding a credential.
 

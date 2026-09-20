@@ -206,6 +206,7 @@ export interface TextChange {
   selector: string;
   oldText: string;
   newText: string;
+  attributeName?: string;
   timestamp: number;
   status?: ChangeStatus;
   viewportWidth?: number;

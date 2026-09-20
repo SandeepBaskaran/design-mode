@@ -53,7 +53,8 @@ Design Mode brings a coding agent inside the page through a small bridge called 
   box, layout / position / border / effects, transform components (translate, scale, rotate),
   pointer-events, user-select, outline, background-size/position/repeat, image & SVG download.
 - **Layers panel** — Searchable Figma-style DOM tree with drag-to-reorder, visibility toggle,
-  hover-to-highlight, and select-on-click that round-trips with viewport selection.
+  hover-to-highlight, select-on-click that round-trips with viewport selection, and ordered
+  multi-select deletion with one reversible Changes entry per layer.
 - **Persistence that survives reload** — Edits land as rules in a managed override stylesheet
   keyed by saved CSS selectors (think DevTools "Local Overrides"). Survives full page reloads,
   back/forward navigation, and SPA re-renders without inline-style stamping. Per-URL session
@@ -87,14 +88,17 @@ Design Mode brings a coding agent inside the page through a small bridge called 
   distance pills (gap + side offsets). The selection gets 8 drag
   handles (corners + edge midpoints) — resizing is live and lands in
   the Changes tab / export as `width`/`height`. Shift-click adds
-  elements and shows the pixel spacing between them.
+  elements and shows the pixel spacing between them. Width and height keep the authored CSS
+  value separate from the computed pixel measurement, so `%`, `rem`, intrinsic sizes,
+  expressions, and tokens are not silently rewritten as fixed pixels.
 - **Corner shape** — CSS `corner-shape` (Borders L4) from an icon dropdown in
   the Appearance row: round / squircle / square / bevel / scoop / notch — the
   CSS equivalent of Figma's corner smoothing (newest-Chromium-only, harmlessly
   inert elsewhere).
 - **Transition editor** — Per-property breakdown (property / duration / timing / delay) plus
   ▶ Preview that flashes a contrast value for the configured duration so you can see the curve.
-- **Changes log** — Every edit grouped by element. View Original / View Changes toggle,
+- **Changes log** — Every edit grouped by element or optional component/source context.
+  View Original / View Changes toggle,
   single-change revert (actually reverses the action), batch-apply to all matching elements
   with the zap icon showing `×N` match count, click any change to scroll-and-highlight the
   affected element on the page.
@@ -125,15 +129,16 @@ Design Mode brings a coding agent inside the page through a small bridge called 
   `## Tokens changed` section.
 - **Compact prompt format** — `Copy Prompt` produces an LLM-optimised, ~8× smaller markdown
   format with framework + styling-system detection, source-file hints, and grep-ready selectors.
-- **MCP server** — Real-time WebSocket bridge between extension and 8 MCP tools your agent
-  can call: `get_changes`, `apply_changes`, `set_change_status` (to-do / in-progress /
+- **MCP server** — Real-time bridge with eight session tools in every mode:
+  `get_changes`, `apply_changes`, `set_change_status` (to-do / in-progress /
   resolved), `clear_changes`, `get_session_summary`, `export_changes` (CSS / Tailwind /
   SCSS / JSX), `get_screenshot` (PNG of the viewport or a single element via a unique CSS
   path, returned as an MCP image block), and `mark_comment_resolved` (close the loop on a
   pinned comment once the agent acts on it). Spring +
   easing curves come through inside the underlying CSS values, so they ship in the regular
   change stream. `get_changes` and `get_session_summary` also expose a real `handoff`
-  field for agents that want a ready-made summary of what to do next.
+  field for agents that want a ready-made summary of what to do next. Local mode also adds
+  `wait_for_handoff` for opt-in feedback rounds with immutable snapshots and an explicit Stop.
 - **MCP page** — MCP configuration lives in its own full-panel page, opened from the MCP
   chip in the side panel header (its trailing icon is a chevron, not a re-ping button). Covers
   the Cloud / Local / Self-hosted mode picker, port, auto-connect, token/tenant, and Copy

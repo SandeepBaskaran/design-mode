@@ -118,7 +118,8 @@ const actionItems = [
   {
     icon: ArrowDown,
     title: "Duplicate / Delete",
-    description: "DOM mutations recorded as undoable changes.",
+    description:
+      "DOM mutations recorded as undoable changes. Deleting a multi-selection records and restores every layer in structural order.",
   },
   {
     icon: MessageCircle,
@@ -305,7 +306,9 @@ export default function FeaturesPage() {
                   hover, focus, and active states; force-preview them, or
                   overlay computed flex/grid tracks. Any field bound to a
                   design-system token shows a ◆ badge for swapping or editing
-                  it.
+                  it. Width and height show authored CSS separately from the
+                  computed measurement. Rich text preserves attributed spans,
+                  icons and media while exposing safe link destinations.
                 </p>
                 <ul className="mt-2 grid grid-cols-1 gap-2 text-base">
                   {designSections.map((s) => {
@@ -330,12 +333,14 @@ export default function FeaturesPage() {
                 <h3 className="text-2xl font-semibold">Changes</h3>
                 <p className="text-muted-foreground text-base leading-relaxed">
                   Every style, text, DOM, and comment edit collected in
-                  reverse-chronological order. Group by selector, filter by
-                  kind, search by value, resolve or revert anything.
+                  reverse-chronological order. Keep element groups or add
+                  detected component/source headings, filter by kind, search by
+                  value, resolve or revert anything.
                 </p>
                 <ul className="text-muted-foreground mt-2 space-y-2 text-base">
                   <li>• Sticky search + filter chips header</li>
                   <li>• Numbered pin badges match the page overlay</li>
+                  <li>• Elements / Components grouping selector</li>
                   <li>• Resolve / Reopen / Edit / Delete per row</li>
                   <li>• Export / Import as JSON for diff handoff</li>
                 </ul>
@@ -388,7 +393,8 @@ export default function FeaturesPage() {
                     connected agent retrieves the live changes and hand-off
                     marker through the MCP tools. Without an attached agent,
                     Design Mode opens setup guidance instead of claiming the
-                    hand-off succeeded.
+                    hand-off succeeded. Local mode can continue into explicit
+                    feedback rounds with immutable snapshots and a Stop action.
                   </p>
                 </CardContent>
               </Card>

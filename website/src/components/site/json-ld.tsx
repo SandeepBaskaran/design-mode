@@ -62,7 +62,7 @@ export const softwareApplicationSchema = {
   downloadUrl: [CHROME_URL, FIREFOX_URL],
   installUrl: [CHROME_URL, FIREFOX_URL],
   sameAs: [REPO_URL, CHROME_URL, FIREFOX_URL],
-  softwareVersion: "2.2.1",
+  softwareVersion: "2.3.0",
   license: "https://opensource.org/licenses/MIT",
   isPartOf: { "@id": IDS.website },
   offers: {

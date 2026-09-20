@@ -10,6 +10,7 @@ import { BUILTIN_KEYFRAMES } from './keyframes-library';
 import { captureElementScreenshot, captureViewportScreenshotClean, captureRegionScreenshot } from './screenshots';
 import { loadComments } from './comments';
 import { getTokenEdits } from './root-var-store';
+import { isSafeRichTextHref, restoreRichTextHtml } from '../rich-text-preservation';
 
 // Lifecycle a coding agent drives over MCP: untouched → working → done.
 // Absent ⇒ 'todo'. Mirrors @design-mode/shared ChangeStatus.
@@ -51,6 +52,7 @@ export interface TextChange {
   // When true, oldText/newText carry HTML (innerHTML); revert paths must
   // use el.innerHTML, not el.textContent. Set by applyHtmlChange.
   isHtml?: boolean;
+  attributeName?: string;
   status?: ChangeStatus;
   viewportWidth?: number;
   breakpoint?: Breakpoint;
@@ -569,7 +571,13 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
   // duplicate find the correct element. Falls back to the saved
   // user-friendly selector for changes on elements that never carried
   // a data-dm-id attribute on the saved page.
-  for (const c of saved.textChanges) {
+  const safeTextChanges = saved.textChanges.filter(c => {
+    if (!c.attributeName) return true;
+    return c.attributeName === 'href'
+      && (!c.oldText || isSafeRichTextHref(c.oldText))
+      && (!c.newText || isSafeRichTextHref(c.newText));
+  });
+  for (const c of safeTextChanges) {
     try {
       const el =
         (document.querySelector(`[${DATA_ATTR}="${c.elementId}"]`) as HTMLElement | null) ||
@@ -578,7 +586,9 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
       // Stamp the id so id-scoped rules below can bind, even if the
       // element didn't have data-dm-id before.
       if (!el.hasAttribute(DATA_ATTR)) el.setAttribute(DATA_ATTR, c.elementId);
-      if (c.isHtml) el.innerHTML = c.newText;
+      if (c.attributeName) {
+        if (c.newText) el.setAttribute(c.attributeName, c.newText); else el.removeAttribute(c.attributeName);
+      } else if (c.isHtml) el.innerHTML = c.newText;
       else el.textContent = c.newText;
     } catch {}
   }
@@ -612,11 +622,11 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
   rebuildStyleSheet();
 
   styleChanges.length = 0; styleChanges.push(...saved.styleChanges);
-  textChanges.length = 0; textChanges.push(...saved.textChanges);
+  textChanges.length = 0; textChanges.push(...safeTextChanges);
   domChanges.length = 0; domChanges.push(...saved.domChanges);
   reserveIdsAtLeast([
     ...saved.styleChanges.map(c => c.elementId),
-    ...saved.textChanges.map(c => c.elementId),
+    ...safeTextChanges.map(c => c.elementId),
     ...saved.domChanges.map(c => c.elementId),
   ]);
   persistSession();
@@ -943,7 +953,7 @@ export function applyTextChange(
   // element, preserving the ORIGINAL oldText. Returning to that original
   // drops the row — this is what makes undo step cleanly back to plain
   // text (and keeps the Changes tab in lockstep with the page).
-  const existingIdx = textChanges.findIndex(c => c.elementId === elementId);
+  const existingIdx = textChanges.findIndex(c => c.elementId === elementId && !c.attributeName);
   if (existingIdx !== -1) {
     const existing = textChanges[existingIdx];
     if (text === existing.oldText) {
@@ -980,40 +990,20 @@ export function applyTextChange(
 export function applyHtmlChange(
   elementId: string, html: string,
   refreshPanel?: () => void,
-  preserveMedia = false,
+  preserveStructure = false,
 ): TextChange | null {
   const el = getElementById(elementId);
   if (!el) return null;
   const priorHtml = el.innerHTML || '';
   let nextHtml = html;
-  if (preserveMedia) {
-    const preservedSelector = 'img,svg,picture,video,audio,canvas,iframe,object,embed';
-    const preservedNodes = Array.from(el.querySelectorAll<HTMLElement>(preservedSelector)).filter(
-      node => !node.parentElement?.closest(preservedSelector),
-    );
-    const template = document.createElement('template');
-    template.innerHTML = html;
-    const restoredIndexes = new Set<number>();
-    for (const placeholder of template.content.querySelectorAll<HTMLElement>('[data-dm-preserve-node]')) {
-      const index = Number(placeholder.dataset.dmPreserveNode);
-      const preserved = Number.isInteger(index) ? preservedNodes[index] : undefined;
-      if (!preserved || restoredIndexes.has(index)) {
-        placeholder.remove();
-        continue;
-      }
-      restoredIndexes.add(index);
-      placeholder.replaceWith(preserved.cloneNode(true));
-    }
-    for (let i = 0; i < preservedNodes.length; i++) {
-      if (!restoredIndexes.has(i)) template.content.appendChild(preservedNodes[i].cloneNode(true));
-    }
-    nextHtml = template.innerHTML;
+  if (preserveStructure) {
+    nextHtml = restoreRichTextHtml(el, html);
   }
   if (priorHtml === nextHtml) return null;
   el.innerHTML = nextHtml;
   // Dedup per element, same as applyTextChange — one row, original oldText
   // preserved, dropped when the HTML returns to its original.
-  const existingIdx = textChanges.findIndex(c => c.elementId === elementId);
+  const existingIdx = textChanges.findIndex(c => c.elementId === elementId && !c.attributeName);
   if (existingIdx !== -1) {
     const existing = textChanges[existingIdx];
     if (nextHtml === existing.oldText) {
@@ -1033,6 +1023,47 @@ export function applyHtmlChange(
     id: crypto.randomUUID(), elementId, selector: generateSelector(el),
     label: describeElement(el),
     oldText: priorHtml, newText: nextHtml, timestamp: Date.now(), isHtml: true,
+    ...bpMeta(),
+  };
+  textChanges.push(change);
+  syncTextChange(change);
+  persistSession();
+  if (refreshPanel) refreshPanel();
+  return change;
+}
+
+export function applyAttributeChange(
+  elementId: string,
+  attributeName: string,
+  value: string,
+  refreshPanel?: () => void,
+): TextChange | null {
+  if (attributeName !== 'href' || (value && !isSafeRichTextHref(value))) return null;
+  const el = getElementById(elementId);
+  if (!el) return null;
+  const priorValue = el.getAttribute(attributeName) || '';
+  if (priorValue === value) return null;
+  if (value) el.setAttribute(attributeName, value); else el.removeAttribute(attributeName);
+  const existingIdx = textChanges.findIndex(c => c.elementId === elementId && c.attributeName === attributeName);
+  if (existingIdx !== -1) {
+    const existing = textChanges[existingIdx];
+    if (value === existing.oldText) {
+      textChanges.splice(existingIdx, 1);
+      persistSession();
+      if (refreshPanel) refreshPanel();
+      return null;
+    }
+    const merged: TextChange = { ...existing, newText: value, timestamp: Date.now(), ...bpMeta() };
+    textChanges[existingIdx] = merged;
+    syncTextChange(merged);
+    persistSession();
+    if (refreshPanel) refreshPanel();
+    return merged;
+  }
+  const change: TextChange = {
+    id: crypto.randomUUID(), elementId, selector: generateSelector(el),
+    label: describeElement(el), attributeName,
+    oldText: priorValue, newText: value, timestamp: Date.now(),
     ...bpMeta(),
   };
   textChanges.push(change);
@@ -1206,7 +1237,7 @@ export function getChangeReport() {
       id: c.id, status: c.status || 'todo',
       elementId: c.elementId, timestamp: c.timestamp,
       selector: liveSelector(c.elementId, c.selector), label: c.label,
-      oldText: c.oldText, newText: c.newText,
+      oldText: c.oldText, newText: c.newText, attributeName: c.attributeName,
     })),
     domChanges: domChanges.map(c => {
       // Moves carry both ends: origin's parent selector re-resolved via
