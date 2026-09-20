@@ -132,7 +132,8 @@ describe('stdio lifecycle helper', () => {
   test('shutdown completes when its timer is the only remaining event-loop handle', () => {
     const moduleUrl = new URL('../src/stdio-lifecycle.ts', import.meta.url).href;
     const script = `
-      import { createProcessShutdown } from ${JSON.stringify(moduleUrl)};
+      const lifecycle = await import(${JSON.stringify(moduleUrl)});
+      const createProcessShutdown = lifecycle.createProcessShutdown ?? lifecycle.default?.createProcessShutdown;
       await createProcessShutdown({
         getBridge: () => ({ close: () => new Promise(() => {}) }),
         graceMs: 30,
