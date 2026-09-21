@@ -3,6 +3,7 @@
 // ============================================================
 
 import { Z_INDEX } from '../shared';
+import { COMMENT_STORE_ERROR, type CommentOperation, type CommentResult } from '../background/comment-store';
 import { getElementById, getElementRect, generateSelector, escapeAttr } from './helpers';
 
 export interface CommentData {
@@ -23,19 +24,28 @@ export interface CommentData {
   region?: { x: number; y: number; w: number; h: number };
 }
 
-const STORAGE_KEY = 'dm-comments';
+async function commentRequest(operation: CommentOperation): Promise<CommentResult> {
+  const response = await browser.runtime.sendMessage({ type: 'COMMENT_STORE', pageUrl: window.location.href, operation });
+  if (!response?.ok) throw new Error(response?.error || COMMENT_STORE_ERROR);
+  return response;
+}
 const pinElements = new Map<string, HTMLDivElement>();
 const regionBoxes = new Map<string, HTMLDivElement>();
 
-export async function loadComments(): Promise<CommentData[]> {
-  try {
-    const data = await browser.storage.local.get(STORAGE_KEY);
-    return (data[STORAGE_KEY] as CommentData[] | undefined) || [];
-  } catch { return []; }
+// Pair with the import DOM journal: retain the original pin identities and
+// restore their indexes after an unsuccessful replacement.
+export function captureCommentPinsRollback(): () => void {
+  const pins = new Map(pinElements), regions = new Map(regionBoxes);
+  return () => {
+    pinElements.forEach(p => p.remove()); regionBoxes.forEach(p => p.remove());
+    pinElements.clear(); regionBoxes.clear();
+    for (const [id, pin] of pins) pinElements.set(id, pin);
+    for (const [id, box] of regions) regionBoxes.set(id, box);
+  };
 }
 
-export async function saveComments(comments: CommentData[]) {
-  try { await browser.storage.local.set({ [STORAGE_KEY]: comments }); } catch {}
+export async function loadComments(): Promise<CommentData[]> {
+  return (await commentRequest({ kind: 'read' })).comments;
 }
 
 export async function addComment(elementId: string, selector: string, text: string): Promise<CommentData> {
@@ -43,10 +53,8 @@ export async function addComment(elementId: string, selector: string, text: stri
     id: crypto.randomUUID(), elementId, selector, text,
     timestamp: Date.now(), updatedAt: Date.now(), pageUrl: window.location.href,
   };
-  const all = await loadComments();
-  all.push(comment);
-  await saveComments(all);
-  showCommentPin(comment);
+  const { comments: all } = await commentRequest({ kind: 'add', comment });
+  showCommentPin(comment, getPinOrdinal(comment.id, all));
   return comment;
 }
 
@@ -55,31 +63,20 @@ export async function addRegionComment(region: { x: number; y: number; w: number
     id: crypto.randomUUID(), elementId: '', selector, text, region,
     timestamp: Date.now(), updatedAt: Date.now(), pageUrl: window.location.href,
   };
-  const all = await loadComments();
-  all.push(comment);
-  await saveComments(all);
+  const { comments: all } = await commentRequest({ kind: 'add', comment });
   showCommentPin(comment, getPinOrdinal(comment.id, all));
   return comment;
 }
 
 export async function updateComment(id: string, text: string): Promise<CommentData | null> {
-  const all = await loadComments();
-  const c = all.find(x => x.id === id);
-  if (!c) return null;
-  c.text = text; c.updatedAt = Date.now();
-  await saveComments(all);
-  return c;
+  return (await commentRequest({ kind: 'update', id, text })).comment;
 }
 
 // Toggle / set the resolved flag. Updates `updatedAt` so the side panel can
 // show an "edited" hint if the user wants that.
 export async function setCommentResolved(id: string, resolved: boolean): Promise<CommentData | null> {
-  const all = await loadComments();
-  const c = all.find(x => x.id === id);
+  const { comments: all, comment: c } = await commentRequest({ kind: 'resolve', id, resolved });
   if (!c) return null;
-  c.resolved = resolved;
-  c.updatedAt = Date.now();
-  await saveComments(all);
   // Re-render the pin so its visual state matches.
   showCommentPin(c, getPinOrdinal(c.id, all));
   return c;
@@ -87,12 +84,7 @@ export async function setCommentResolved(id: string, resolved: boolean): Promise
 
 // Persist a manually-dragged pin offset.
 export async function setCommentPinOffset(id: string, offset: { x: number; y: number } | null): Promise<CommentData | null> {
-  const all = await loadComments();
-  const c = all.find(x => x.id === id);
-  if (!c) return null;
-  if (offset) c.pinOffset = offset; else delete (c as any).pinOffset;
-  await saveComments(all);
-  return c;
+  return (await commentRequest({ kind: 'offset', id, offset })).comment;
 }
 
 // Pin numbering — 1-based, matches the order comments were created in this
@@ -106,8 +98,7 @@ function getPinOrdinal(commentId: string, all: CommentData[]): number {
 }
 
 export async function deleteComment(id: string) {
-  const all = await loadComments();
-  await saveComments(all.filter(x => x.id !== id));
+  await commentRequest({ kind: 'delete', id });
   const pin = pinElements.get(id);
   if (pin) { pin.remove(); pinElements.delete(id); }
   const box = regionBoxes.get(id);
@@ -293,13 +284,20 @@ export async function getPageComments(): Promise<CommentData[]> {
 // imported comment, fall back to its saved selector and stamp the
 // recorded elementId onto the matching element so subsequent lookups,
 // and the pin render, all succeed.
-export async function replacePageComments(incoming: CommentData[]): Promise<void> {
-  const all = await loadComments();
-  const others = all.filter(c => c.pageUrl !== window.location.href);
+export async function persistPageComments(incoming: CommentData[]): Promise<CommentData[]> {
+  const comments = incoming
+    .map(c => ({ ...c, pageUrl: window.location.href }))
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const result = await commentRequest({ kind: 'replacePage', comments });
+  return result.comments;
+}
+
+export function renderPageComments(incoming: CommentData[]): void {
   const dataAttr = 'data-dm-id';
   const stamped = incoming
     .map(c => ({ ...c, pageUrl: window.location.href }))
     .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
   for (const c of stamped) {
     if (!c.elementId) continue;
     const byId = document.querySelector('[' + dataAttr + '="' + c.elementId + '"]');
@@ -310,12 +308,11 @@ export async function replacePageComments(incoming: CommentData[]): Promise<void
       if (bySel) bySel.setAttribute(dataAttr, c.elementId);
     } catch { /* invalid selector — skip rather than throw */ }
   }
-  await saveComments([...others, ...stamped]);
   pinElements.forEach(p => p.remove());
   pinElements.clear();
   regionBoxes.forEach(b => b.remove());
   regionBoxes.clear();
-  if (pinsActive) await showAllPins();
+  if (pinsActive) stamped.forEach((c, i) => showCommentPin(c, i + 1));
 }
 
 // Reposition pins on scroll/resize. The `pinsActive` gate prevents these

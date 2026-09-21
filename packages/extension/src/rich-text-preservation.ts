@@ -43,6 +43,8 @@ export function editableRichTextAttributes(tagName: string): ReadonlySet<string>
 
 export function isSafeRichTextHref(value: string): boolean {
   const trimmed = value.trim();
+  // URL parsing drops controls and treats backslashes as slashes on web pages.
+  if (/[\u0000-\u001f\u007f\\]/.test(trimmed)) return false;
   // Keep active protocols and protocol-relative URLs out of the privileged editor.
   return /^https?:\/\//i.test(trimmed)
     || trimmed.startsWith('#')

@@ -57,6 +57,9 @@ function rebuildOverrides(): void {
 }
 
 export function setTokenEdit(cssVar: string, value: string, scopeSelector = ':root'): void {
+  // A token scope is a selector, never an at-rule or declaration block.
+  document.createDocumentFragment().querySelector(scopeSelector);
+  if (!/^--[\w-]+$/.test(cssVar)) throw new Error('Invalid CSS variable');
   const k = editKey(scopeSelector, cssVar);
   let edit = edits.get(k);
   if (!edit) {
@@ -91,8 +94,13 @@ export function clearAllTokenEdits(): void {
   rebuildOverrides();
 }
 
-// One entry per token the user has edited this session. Edits whose
-// current value equals the original (reverted by hand) are omitted.
+// Import rollback retains even no-op entries and their original values.
+export function captureTokenRollback(): () => void {
+  const saved = new Map(Array.from(edits, ([key, edit]) => [key, { ...edit }]));
+  return () => { edits.clear(); for (const [key, edit] of saved) edits.set(key, edit); rebuildOverrides(); };
+}
+
+// One entry per token edited this session; omit edits reverted by hand.
 export function getTokenEdits(): TokenEdit[] {
   const out: TokenEdit[] = [];
   for (const e of edits.values()) {

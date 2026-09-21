@@ -6,6 +6,11 @@
 // ============================================================
 
 import '../platform/polyfill';
+import { validateImportPayload } from './import-validation';
+import { captureImportDomRollback } from './import-transaction';
+import { captureTrackerRollback, persistImportedSession, requestStopFeedback } from './change-tracker';
+import { captureTokenRollback } from './root-var-store';
+import { captureCommentPinsRollback } from './comments';
 import { DEFAULT_WS_PORT } from '@shared/constants';
 import { getElementById, getOrAssignId, generateSelector, reserveIdsAtLeast } from './helpers';
 import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLayoutGuidesFor } from './layout-guides';
@@ -32,7 +37,7 @@ import { getTokenIndex, invalidateTokenIndex, authoredTokenValueFor } from './to
 import { setTokenEdit, resetTokenEdit, clearAllTokenEdits, getTokenEdits, peekTokenEdit } from './root-var-store';
 import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
 import { buildDomTree, isPageContentSealed } from './dom-tree';
-import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments, restoreCommentPins } from './comments';
+import { updateComment, addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, persistPageComments, renderPageComments, restoreCommentPins } from './comments';
 import { buildCloudSessionSummary, buildMcpItems } from './mcp-items';
 import { startRegionDraw, cancelRegionDraw, clearPendingRegionBox, type Region } from './region-annotate';
 import { getChangeComponentContexts } from './change-context';
@@ -141,6 +146,7 @@ type UndoEntry = StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoE
 const pageSessionStartedAt = Date.now();
 const undoStack: UndoEntry[] = [];
 const redoStack: UndoEntry[] = [];
+let importInProgress = false;
 
 function applyTokenUndoValue(cssVar: string, scopeSelector: string, value: string, original: string) {
   if (value === original) resetTokenEdit(cssVar, scopeSelector);
@@ -177,7 +183,7 @@ setResizeCommitHandler((id, width, height) => {
   redoStack.length = 0;
   const updated = getElementById(id);
   if (updated) onElementSelected(buildElementInfo(updated));
-  getChangesPayload().then(p => notifyPanel('CHANGES_UPDATE', p));
+  getChangesPayload().then(p => notifyPanel('CHANGES_UPDATE', p)).catch(error => notifyPanel('COMMENT_ERROR', { error: String(error) }));
 });
 
 // Live (uncommitted) dimensions while a resize handle is dragged — the panel
@@ -215,7 +221,7 @@ setMoveCommitHandler((entries) => {
   const focusId = getSelectedElementId();
   const focusEl = focusId ? getElementById(focusId) : null;
   if (focusEl) onElementSelected(buildElementInfo(focusEl));
-  getChangesPayload().then(p => notifyPanel('CHANGES_UPDATE', p));
+  getChangesPayload().then(p => notifyPanel('CHANGES_UPDATE', p)).catch(error => notifyPanel('COMMENT_ERROR', { error: String(error) }));
 });
 
 // Live (uncommitted) position while a body drag is in flight — the panel
@@ -407,8 +413,8 @@ function revertAllPageMutations() {
   });
 }
 
-async function getChangesPayload() {
-  const pageComments = await getPageComments();
+async function getChangesPayload(savedComments?: Awaited<ReturnType<typeof getPageComments>>) {
+  const pageComments = savedComments ?? await getPageComments();
   // Decorate style changes with the number of elements currently matching
   // their saved selector — drives the "applies to N elements" badge in the
   // panel's Changes tab so the user knows what a Zap-Apply will hit.
@@ -529,19 +535,15 @@ function onElementSelected(info: ElementInfo) {
 // (both transports). Reverts every page mutation, deletes comment pins,
 // clears the trackers, and resets the undo stacks.
 async function performFullClear() {
+  const comments = await persistPageComments([]);
   // Make sure the override stylesheet is enabled before we clear it,
   // otherwise the page would still be showing `disabled` overrides.
   setOverridesEnabled(true);
   if ((window as any).__dmPreviewSaved) delete (window as any).__dmPreviewSaved;
 
-  // Page DOM revert — text / DOM mutations / inline-style sweep /
-  // preview markers — runs synchronously so the state-flip is immediate.
   revertAllPageMutations();
 
-  // Comments live in browser.storage.local (separate from the change
-  // arrays), so they need their own async cleanup.
-  const pageComments = await getPageComments();
-  for (const c of pageComments) await deleteComment(c.id);
+  renderPageComments(comments);
   clearAllChanges();
   clearAllTokenEdits();
   clearAllLayoutGuides();
@@ -564,16 +566,19 @@ function dispatchCloudMessage(msg: any) {
         return;
       }
       const ids: string[] | undefined = Array.isArray(msg.payload?.ids) ? msg.payload.ids : undefined;
-      let count = setChangesStatus(status, ids);
-      try {
-        const pageComments = await getPageComments();
-        for (const c of pageComments) {
-          if (!ids || ids.includes(c.id)) { await setCommentResolved(c.id, status === 'resolved'); count++; }
-        }
-      } catch { /* comment store unavailable — changes still updated */ }
-      try { notifyPanel('CHANGES_UPDATE', await getChangesPayload()); } catch { /* panel closed */ }
+      const pageComments = await getPageComments();
+      let count = 0;
+      for (const c of pageComments) {
+        if (!ids || ids.includes(c.id)) { await setCommentResolved(c.id, status === 'resolved'); count++; }
+      }
+      count += setChangesStatus(status, ids);
+      notifyPanel('CHANGES_UPDATE', await getChangesPayload());
       if (msg.requestId) sendRelayResponse(msg.requestId, { ok: true, count });
-    })();
+    })().catch(error => {
+      const response = { ok: false, error: String(error) };
+      if (msg.requestId) sendRelayResponse(msg.requestId, response);
+      else notifyPanel('COMMENT_ERROR', response);
+    });
     return;
   }
   if (!msg?.requestId) return;
@@ -596,17 +601,16 @@ function dispatchCloudMessage(msg: any) {
             domChanges: getDomChanges(),
             comments: pageComments,
           });
-        } catch {
-          report.comments = [];
-          report.items = buildMcpItems({
-            styleChanges: getStyleChanges(),
-            textChanges: getTextChanges(),
-            domChanges: getDomChanges(),
-            comments: [],
-          });
+        } catch (error) {
+          sendRelayResponse(msg.requestId, { ok: false, error: String(error) });
+          return;
         }
         sendRelayResponse(msg.requestId, report);
-      })();
+      })().catch(error => {
+        const response = { ok: false, error: String(error) };
+        if (msg.requestId) sendRelayResponse(msg.requestId, response);
+        else notifyPanel('COMMENT_ERROR', response);
+      });
       return;
     case 'CLOUD_APPLY_CHANGES': {
       // Same shape as the local APPLY_CHANGES but the cloud expects an
@@ -633,14 +637,17 @@ function dispatchCloudMessage(msg: any) {
     case 'CLOUD_CLEAR_CHANGES':
       (async () => {
         await performFullClear();
-        try { notifyPanel('CHANGES_UPDATE', await getChangesPayload()); } catch { /* panel closed */ }
+        notifyPanel('CHANGES_UPDATE', await getChangesPayload([]));
         sendRelayResponse(msg.requestId, { ok: true });
-      })();
+      })().catch(error => {
+        const response = { ok: false, error: String(error) };
+        if (msg.requestId) sendRelayResponse(msg.requestId, response);
+        else notifyPanel('COMMENT_ERROR', response);
+      });
       return;
     case 'CLOUD_GET_SESSION_SUMMARY':
       (async () => {
-        let totalComments = 0;
-        try { totalComments = (await getPageComments()).length; } catch { totalComments = 0; }
+        const totalComments = (await getPageComments()).length;
         sendRelayResponse(msg.requestId, buildCloudSessionSummary({
           pageUrl: location.href,
           pageTitle: document.title,
@@ -652,7 +659,11 @@ function dispatchCloudMessage(msg: any) {
           totalComments,
           pendingHandoff: (getChangeReport() as { handoff?: object }).handoff ?? null,
         }));
-      })();
+      })().catch(error => {
+        const response = { ok: false, error: String(error) };
+        if (msg.requestId) sendRelayResponse(msg.requestId, response);
+        else notifyPanel('COMMENT_ERROR', response);
+      });
       return;
     case 'CLOUD_EXPORT_CHANGES':
       sendRelayResponse(msg.requestId, { text: renderExportText(msg.payload?.format || 'css') });
@@ -669,7 +680,7 @@ function dispatchCloudMessage(msg: any) {
       setCommentResolved(commentId, resolved).then(c => {
         if (c) { void showCommentPins(); syncCommentChange(c); notifyPanel('CHANGES_UPDATE', {}); }
         sendRelayResponse(msg.requestId, { ok: !!c });
-      });
+      }).catch(error => sendRelayResponse(msg.requestId, { ok: false, error: String(error) }));
       return;
     }
   }
@@ -913,7 +924,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       sendResponse({ ok: true });
       break;
     }
-    case 'GET_CHANGES': { getChangesPayload().then(p => sendResponse(p)); return true; }
+    case 'GET_CHANGES': { getChangesPayload().then(p => sendResponse(p)).catch(error => sendResponse({ ok: false, error: String(error) })); return true; }
 
     // New: DOM tree for Layers panel
     case 'GET_DOM_TREE': {
@@ -1123,7 +1134,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         info: el ? { ...buildElementInfo(el), element: undefined } : null,
         undoCount: undoStack.length,
         redoCount: redoStack.length,
-      }));
+      })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
       break;
     }
@@ -1172,12 +1183,20 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         info: el ? { ...buildElementInfo(el), element: undefined } : null,
         undoCount: undoStack.length,
         redoCount: redoStack.length,
-      }));
+      })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
       break;
     }
 
     // New: Add comment on selected element
+    case 'UPDATE_COMMENT': {
+      updateComment(msg.commentId, msg.text).then(comment => {
+        if (comment) syncCommentChange(comment);
+        sendResponse({ comment });
+      }).catch(error => sendResponse({ ok: false, error: String(error) }));
+      return true;
+    }
+
     case 'ADD_COMMENT': {
       const sid = getSelectedElementId();
       if (sid && msg.text) {
@@ -1186,7 +1205,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         addComment(sid, selector, msg.text).then(comment => {
           syncCommentChange(comment);
           sendResponse({ comment });
-        });
+        }).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       }
       sendResponse({ error: 'No element selected or no text' });
@@ -1214,17 +1233,17 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'ADD_REGION_COMMENT': {
       if (pendingRegion && msg.text) {
         const region = pendingRegion;
-        pendingRegion = null;
         const cx = region.x - window.scrollX + region.w / 2;
         const cy = region.y - window.scrollY + region.h / 2;
         const hit = document.elementFromPoint(cx, cy) as HTMLElement | null;
         const selector = hit && !isOverlayLike(hit) ? generateSelector(hit) : 'region';
         addRegionComment(region, selector, msg.text).then(comment => {
+          pendingRegion = null;
           syncCommentChange(comment);
           clearPendingRegionBox(); // committed box (showCommentPins) replaces the pending one
           void showCommentPins();
           sendResponse({ comment });
-        });
+        }).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       }
       sendResponse({ error: 'No region drawn or no text' });
@@ -1242,7 +1261,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           void showCommentPins();
           if (c) syncCommentChange(c);
           sendResponse({ ok: true });
-        });
+        }).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       }
       sendResponse({ ok: false });
@@ -1257,7 +1276,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         setCommentPinOffset(cid, offset || null).then(() => {
           void showCommentPins();
           sendResponse({ ok: true });
-        });
+        }).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       }
       sendResponse({ ok: false });
@@ -1268,7 +1287,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     case 'REMOVE_CHANGE': {
       if (msg.changeId?.startsWith('comment-')) {
         const commentId = msg.changeId.replace('comment-', '');
-        deleteComment(commentId).then(async () => { syncCommentDeleted(commentId); const p = await getChangesPayload(); sendResponse({ ok: true, ...p }); });
+        deleteComment(commentId).then(async () => { syncCommentDeleted(commentId); const p = await getChangesPayload(); sendResponse({ ok: true, ...p }); }).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       }
       const styleChange = getStyleChanges().find(c => c.id === msg.changeId);
@@ -1360,7 +1379,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           }
         }
       }
-      getChangesPayload().then(p => sendResponse({ ok: true, ...p })); return true;
+      getChangesPayload().then(p => sendResponse({ ok: true, ...p })).catch(error => sendResponse({ ok: false, error: String(error) })); return true;
     }
 
     case 'SET_TEXT': {
@@ -1378,7 +1397,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           onElementSelected(info);
         }
       }
-      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
+      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
 
@@ -1400,7 +1419,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           onElementSelected(info);
         }
       }
-      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
+      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
 
@@ -1420,7 +1439,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           onElementSelected(info);
         }
       }
-      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
+      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
 
@@ -1488,7 +1507,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           undoCount: undoStack.length,
           redoCount: redoStack.length,
           appliedTo: targetIds.length,
-        }));
+        })).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       } else sendResponse({ error: 'No element selected' });
       break;
@@ -1580,7 +1599,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         ...p,
         undoCount: undoStack.length,
         redoCount: redoStack.length,
-      }));
+      })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
 
@@ -1603,7 +1622,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           ...p,
           undoCount: undoStack.length,
           redoCount: redoStack.length,
-        }));
+        })).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       }
       sendResponse({ error: 'No parent' });
@@ -1661,15 +1680,15 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         case 'move-up': if (sid) moveElement(sid, 'up'); break;
         case 'move-down': if (sid) moveElement(sid, 'down'); break;
       }
-      getChangesPayload().then(p => sendResponse({ info: newInfo ? { ...newInfo, element: undefined } : null, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
+      getChangesPayload().then(p => sendResponse({ info: newInfo ? { ...newInfo, element: undefined } : null, ...p, undoCount: undoStack.length, redoCount: redoStack.length })).catch(error => sendResponse({ ok: false, error: String(error) }));
       break;
     }
 
     case 'CLEAR_CHANGES': {
-      performFullClear().then(() => sendResponse({ ok: true }));
+      performFullClear().then(() => sendResponse({ ok: true })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
-    case 'REORDER_CHANGE': if (typeof msg.from === 'number' && typeof msg.to === 'number') reorderChange(msg.from, msg.to); getChangesPayload().then(p => sendResponse(p)); return true; break;
+    case 'REORDER_CHANGE': if (typeof msg.from === 'number' && typeof msg.to === 'number') reorderChange(msg.from, msg.to); getChangesPayload().then(p => sendResponse(p)).catch(error => sendResponse({ ok: false, error: String(error) })); return true; break;
 
     case 'GET_DESIGN_SYSTEM': {
       // Single round-trip the panel uses to populate the Tokens view:
@@ -1699,7 +1718,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           newValue: msg.value,
           original,
         });
-        getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
+        getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length })).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       }
       sendResponse({ ok: false }); break;
@@ -1719,7 +1738,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           });
         }
         resetTokenEdit(msg.cssVar, scope);
-        getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
+        getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length })).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       }
       sendResponse({ ok: false }); break;
@@ -1781,7 +1800,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       getChangesPayload().then(p => sendResponse({
         ok: true, touched, groupId, ...p,
         undoCount: undoStack.length, redoCount: redoStack.length,
-      }));
+      })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
     case 'GET_PRESETS': {
@@ -1844,38 +1863,62 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         groupId,
         undoCount: undoStack.length,
         redoCount: redoStack.length,
-      }));
+      })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
     case 'IMPORT_CHANGES': {
-      // Replace every change on the page with the imported payload. Revert
-      // current-session DOM mutations FIRST so a fresh import always
-      // starts from a clean slate — otherwise residue from prior edits
-      // (duplicates, moves, hidden elements) would silently layer with
-      // whatever the imported JSON adds. Then clear in-memory arrays and
-      // replay via the same path session-restore uses. Comments are
-      // scoped to the current pageUrl.
+      if (importInProgress) { sendResponse({ ok: false, error: 'An import is already in progress.' }); return false; }
+      importInProgress = true;
       (async () => {
         try {
-          const payload = msg.payload || {};
-          const styleChanges = Array.isArray(payload.styleChanges) ? payload.styleChanges : [];
-          const textChanges = Array.isArray(payload.textChanges) ? payload.textChanges : [];
-          const domChanges = Array.isArray(payload.domChanges) ? payload.domChanges : [];
-          const comments = Array.isArray(payload.comments) ? payload.comments : [];
-          revertAllPageMutations();
-          // Drop any current-page comments before we replace them with
-          // the imported set; otherwise pins from a prior session would
-          // remain on the page and mix with the imported pins.
-          const existingComments = await getPageComments();
-          for (const c of existingComments) await deleteComment(c.id);
-          clearAllChanges();
-          applyChangesPayload({ styleChanges, textChanges, domChanges });
-          await replacePageComments(comments);
-          const p = await getChangesPayload();
-          sendResponse({ ok: true, ...p });
+          const incoming = validateImportPayload(msg.payload);
+          const previousComments = await getPageComments();
+          const previous = { styleChanges: getStyleChanges(), textChanges: getTextChanges(), domChanges: getDomChanges() };
+          const restoreDom = captureImportDomRollback();
+          const restoreTracker = captureTrackerRollback();
+          const restoreTokens = captureTokenRollback();
+          const restorePins = captureCommentPinsRollback();
+          const preview = (window as any).__dmPreviewSaved;
+          let commentsWritten = false, sessionWritten = false, mutated = false;
+          try {
+            const savedComments = await persistPageComments(incoming.comments);
+            commentsWritten = true;
+            await persistImportedSession(incoming);
+            sessionWritten = true;
+            mutated = true;
+            setOverridesEnabled(true);
+            delete (window as any).__dmPreviewSaved;
+            revertAllPageMutations();
+            clearAllChanges(false);
+            applyChangesPayload(incoming);
+            clearAllTokenEdits();
+            renderPageComments(savedComments);
+            const p = await getChangesPayload(savedComments);
+            clearAllLayoutGuides();
+            undoStack.length = 0;
+            redoStack.length = 0;
+            requestStopFeedback();
+            sendResponse({ ok: true, ...p, undoCount: 0, redoCount: 0 });
+          } catch (error) {
+            const rollbackErrors: string[] = [];
+            if (mutated) {
+              for (const restore of [restorePins, restoreTracker, restoreTokens, restoreDom]) {
+                try { restore(); } catch (e) { rollbackErrors.push(String(e)); }
+              }
+              (window as any).__dmPreviewSaved = preview;
+            }
+            if (sessionWritten || mutated) {
+              try { await persistImportedSession(previous); } catch (e) { rollbackErrors.push(String(e)); }
+            }
+            if (commentsWritten) {
+              try { await persistPageComments(previousComments); } catch (e) { rollbackErrors.push(String(e)); }
+            }
+            if (rollbackErrors.length) throw Error(`${String(error)}; rollback failed: ${rollbackErrors.join('; ')}`);
+            throw error;
+          }
         } catch (err) {
           sendResponse({ ok: false, error: String(err) });
-        }
+        } finally { importInProgress = false; }
       })();
       return true;
     }
@@ -1963,7 +2006,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       else if (msg.format === 'scss') output = exportSCSS(ch);
       else if (msg.format === 'jsx') output = exportJSX(ch);
       else if (msg.format === 'github') { sendResponse({ body: generateGitHubIssueBody(ch, window.location.href, document.title) }); break; }
-      else if (msg.format === 'markdown') { getPageComments().then(pc => sendResponse({ output: exportMarkdown(pc) })); return true; }
+      else if (msg.format === 'markdown') { getPageComments().then(pc => sendResponse({ output: exportMarkdown(pc) })).catch(error => sendResponse({ ok: false, error: String(error) })); return true; }
       else if (msg.format === 'enhanced-github') { sendResponse({ body: exportEnhancedGitHubIssue() }); break; }
       sendResponse({ output }); break;
     }
@@ -2295,7 +2338,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           }
         } catch {}
       }
-      getChangesPayload().then(p => sendResponse({ ok: true, ...p })); return true;
+      getChangesPayload().then(p => sendResponse({ ok: true, ...p })).catch(error => sendResponse({ ok: false, error: String(error) })); return true;
       break;
     }
 
@@ -2332,7 +2375,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           });
         }
       }
-      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length }));
+      getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
       break;
     }
@@ -2397,7 +2440,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const info = buildElementInfo(source);
         onElementSelected(info);
       }
-      getChangesPayload().then(p => sendResponse({ ok: true, ...p }));
+      getChangesPayload().then(p => sendResponse({ ok: true, ...p })).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
       break;
     }
@@ -2484,6 +2527,9 @@ window.addEventListener('dm-comment-pin-dragged', (e: any) => {
   if (!detail?.commentId || !detail?.offset) return;
   setCommentPinOffset(detail.commentId, detail.offset).then(() => {
     notifyPanel('CHANGES_UPDATE', {});
+  }).catch(error => {
+    notifyPanel('COMMENT_ERROR', { error: String(error) });
+    void showCommentPins().catch(() => {});
   });
 });
 

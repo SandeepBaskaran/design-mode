@@ -5,6 +5,7 @@
 // Auto-activates design mode (with inspect) on open.
 // ============================================================
 import '../platform/polyfill';
+import { createCommentStore, COMMENT_STORE_ERROR, COMMENT_PAGE_ERROR } from './comment-store';
 import { IS_FIREFOX } from '../platform/target';
 import { readPageComponentContexts } from '../content/page-component-context';
 import { openPanel, setActionOpensPanel } from '../platform/panel';
@@ -15,6 +16,7 @@ import {
   type LaunchSurface,
 } from '../platform/launch-surface';
 
+const commentStore = createCommentStore(browser.storage.local);
 const tabStates = new Map<number, { enabled: boolean; connected: boolean }>();
 let pinnedTabId: number | null = null;
 let pinnedTabUrl: string | null = null;
@@ -265,12 +267,26 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Read synchronously here and again at the top of forwardToPinnedTab.
   currentTargetTab = (typeof msg?.targetTabId === 'number') ? msg.targetTabId : null;
 
+  if (msg.type === 'COMMENT_STORE') {
+    if (sender.id !== browser.runtime.id || !sender.tab || typeof msg.pageUrl !== 'string' || !msg.operation) {
+      sendResponse({ ok: false, error: COMMENT_STORE_ERROR });
+      return false;
+    }
+    commentStore(msg.pageUrl, msg.operation)
+      .then(result => sendResponse({ ok: true, ...result }))
+      .catch(error => sendResponse({
+        ok: false,
+        error: error instanceof Error && error.message === COMMENT_PAGE_ERROR ? COMMENT_PAGE_ERROR : COMMENT_STORE_ERROR,
+      }));
+    return true;
+  }
+
   // Messages FROM content script — just let them propagate to side panel
   if (msg.type === 'ELEMENT_SELECTED' || msg.type === 'STATE_UPDATE' ||
       msg.type === 'CHANGES_UPDATE' || msg.type === 'STYLE_APPLIED' ||
       msg.type === 'ANIMATION_STATE' ||
       msg.type === 'PROMPT_ANNOTATION' || msg.type === 'ELEMENT_HOVERED_INFO' ||
-      msg.type === 'COMMENT_BUBBLE_CLICKED' || msg.type === 'OPEN_COMMENT_FOR_SELECTED' ||
+      msg.type === 'COMMENT_BUBBLE_CLICKED' || msg.type === 'OPEN_COMMENT_FOR_SELECTED' || msg.type === 'COMMENT_ERROR' ||
       msg.type === 'AGENT_PRESENCE_UPDATE') {
     return false;
   }
@@ -428,6 +444,10 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'SP_SET_ATTRIBUTE') {
     forwardToPinnedTab({ type: 'SET_ATTRIBUTE', elementId: msg.elementId, attributeName: msg.attributeName, value: msg.value }, sendResponse);
+    return true;
+  }
+  if (msg.type === 'SP_UPDATE_COMMENT') {
+    forwardToPinnedTab({ type: 'UPDATE_COMMENT', commentId: msg.commentId, text: msg.text }, sendResponse);
     return true;
   }
   if (msg.type === 'SP_ADD_COMMENT') {

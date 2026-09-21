@@ -91,6 +91,15 @@ describe('rich-text structural preservation', () => {
     assert.equal(isSafeRichTextHref('//host.example/path'), false);
   });
 
+  it('rejects browser-normalized protocol-relative links and active scheme variants', () => {
+    for (const value of ['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'java\tscript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)', '//host.test', '/\\host.test', '/\n/host.test']) {
+      assert.equal(isSafeRichTextHref(value), false, JSON.stringify(value));
+    }
+    for (const value of ['https://designmode.app/a?x=1&y=2', 'HTTP://example.test', '/docs', './docs', '../docs', '#details']) {
+      assert.equal(isSafeRichTextHref(value), true, value);
+    }
+  });
+
   it('treats custom and unknown elements as opaque page-owned subtrees', () => {
     assert.equal(shouldPreserveRichTextNode(node('product-icon', { text: 'star' })), true);
     assert.equal(shouldPreserveRichTextNode(node('script', { text: 'unsafe()' })), true);

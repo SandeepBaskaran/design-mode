@@ -843,7 +843,7 @@ async function refreshFeedbackSession() {
   feedbackSession = res?.supported ? parseFeedbackSession(res.session) : null;
 }
 async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; if (typeof res.hoverAvailable === 'boolean') applyHoverAvailable(res.hoverAvailable); undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
-async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; componentContexts = res.componentContexts || {}; render(); }
+async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); if (res.error || !Array.isArray(res.comments)) { showCaptureToast('error', res.error || 'Comments could not be loaded. Please retry.'); return; } styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; componentContexts = res.componentContexts || {}; render(); }
 async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
@@ -1771,12 +1771,21 @@ async function takeScreenshot() {
   else if (downloadOk && wantDownload) showCaptureToast('success', 'Saved as ' + filename);
   else showCaptureToast('error', 'Capture failed');
 }
+let commentSubmitting = false;
 async function submitComment() {
-  const text = commentText.trim(); if (!text) return;
-  if (editingCommentId) { await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + editingCommentId }); editingCommentId = null; }
-  if (regionCommentPending) { await send({ type: 'SP_ADD_REGION_COMMENT', text }); regionCommentPending = false; }
-  else await send({ type: 'SP_ADD_COMMENT', text });
-  commentMode = false; commentText = ''; await refreshChanges();
+  const text = commentText.trim(); if (!text || commentSubmitting) return;
+  commentSubmitting = true;
+  try {
+    const response = await send(editingCommentId
+      ? { type: 'SP_UPDATE_COMMENT', commentId: editingCommentId, text }
+      : { type: regionCommentPending ? 'SP_ADD_REGION_COMMENT' : 'SP_ADD_COMMENT', text });
+    if (!response.comment || response.error) {
+      showCaptureToast('error', response.error || 'Comment was not saved. Please retry.');
+      return;
+    }
+    editingCommentId = null; regionCommentPending = false;
+    commentMode = false; commentText = ''; await refreshChanges();
+  } finally { commentSubmitting = false; }
 }
 function cancelComment() {
   // If we're composing for a freshly-drawn region, drop it on the content side.
@@ -1795,17 +1804,18 @@ function startRegionComment() {
 }
 function editComment(comment: CommentEntry) { commentMode = true; commentText = comment.text; editingCommentId = comment.id; viewingCommentId = null; commentDirty = false; render(); }
 async function deleteCommentEntry(commentId: string) {
-  // Optimistic removal for instant feedback, then reconcile against the
-  // content script's stored comments so the row can't silently reappear
-  // (mirrors removeChange / submitComment — the other mutating ops).
+  const response = await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + commentId });
+  if (!response.ok || response.error) {
+    showCaptureToast('error', response.error || 'Comment was not deleted. Please retry.');
+    return;
+  }
   comments = comments.filter(c => c.id !== commentId);
   viewingCommentId = viewingCommentId === commentId ? null : viewingCommentId;
   render();
-  await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + commentId });
   await refreshChanges();
 }
 async function removeChange(changeId: string) { styleChanges = styleChanges.filter(c => (c.id || 'style-' + styleChanges.indexOf(c)) !== changeId); textChanges = textChanges.filter(c => c.id !== changeId); domChanges = domChanges.filter(c => (c.id || 'dom-' + c.action) !== changeId); batchAppliedChanges.delete(changeId); render(); await send({ type: 'SP_REMOVE_CHANGE', changeId }); await refreshChanges(); await refreshDomTree(); await refreshState(); }
-async function clearAllChanges() { await send({ type: 'SP_CLEAR_CHANGES' }); styleChanges = []; textChanges = []; domChanges = []; comments = []; tokenChanges = []; editedTokens.clear(); batchAppliedChanges.clear(); render(); }
+async function clearAllChanges() { const res = await send({ type: 'SP_CLEAR_CHANGES' }); if (!res.ok || res.error) { showCaptureToast('error', res.error || 'Changes could not be cleared. Please retry.'); return; } styleChanges = []; textChanges = []; domChanges = []; comments = []; tokenChanges = []; editedTokens.clear(); batchAppliedChanges.clear(); render(); }
 
 // Tiny markdown-ish renderer for comment bodies. Supports inline code,
 // bold (`**text**`), italic (`*text*`), links (`[text](url)`), and
@@ -2118,6 +2128,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     pageForcedState = null;
     info = null; hoverInfo = null; render();
   }
+  if (msg.type === 'COMMENT_ERROR') showCaptureToast('error', msg.error || 'Comment was not saved. Please retry.');
   if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; componentContexts = msg.componentContexts || {}; render(); }
   if (msg.type === 'AGENT_PRESENCE_UPDATE') {
     // Transport state is implicit from current mcpState — if we were
@@ -10504,10 +10515,14 @@ function setupDelegation() {
       const c = comments.find(cc => cc.id === cid);
       if (c) {
         const next = !c.resolved;
-        c.resolved = next; // Optimistic local update
         send({ type: 'SP_SET_COMMENT_RESOLVED', commentId: cid, resolved: next })
-          .then(() => refreshChanges());
-        render();
+          .then(response => {
+            if (!response.ok || response.error) {
+              showCaptureToast('error', response.error || 'Comment was not saved. Please retry.');
+              return;
+            }
+            return refreshChanges();
+          });
       }
       return;
     }
@@ -12230,6 +12245,7 @@ function setupDelegation() {
     const importChangesInput = target.closest<HTMLInputElement>('[data-dm-import-changes]');
     if (importChangesInput && importChangesInput.files?.[0]) {
       const file = importChangesInput.files[0];
+      if (file.size > 5 * 1024 * 1024) { showCaptureToast('error', 'Import exceeds 5 MiB limit.'); importChangesInput.value = ''; return; }
       const reader = new FileReader();
       reader.onload = (ev) => {
         importChangesInput.value = '';
@@ -12241,10 +12257,10 @@ function setupDelegation() {
           return;
         }
         const payload = {
-          styleChanges: Array.isArray(parsed.styleChanges) ? parsed.styleChanges : [],
-          textChanges: Array.isArray(parsed.textChanges) ? parsed.textChanges : [],
-          domChanges: Array.isArray(parsed.domChanges) ? parsed.domChanges : [],
-          comments: Array.isArray(parsed.comments) ? parsed.comments : [],
+          styleChanges: parsed.styleChanges,
+          textChanges: parsed.textChanges,
+          domChanges: parsed.domChanges,
+          comments: parsed.comments,
         };
         send({ type: 'SP_IMPORT_CHANGES', payload }).then(r => {
           if (!r?.ok) { showCaptureToast('error', r?.error || 'Import failed.'); return; }
@@ -12252,8 +12268,15 @@ function setupDelegation() {
           if (r.textChanges) textChanges = r.textChanges;
           if (r.domChanges) domChanges = r.domChanges;
           if (r.comments) comments = r.comments;
+          // Version 1 exports do not include tokens; replacement resets the
+          // content session and its panel caches rather than keeping old edits.
+          tokenChanges = r.tokenChanges || [];
+          editedTokens.clear();
+          batchAppliedChanges.clear();
+          componentContexts = r.componentContexts || {};
+          changesSelected.clear();
           render();
-          const total = payload.styleChanges.length + payload.textChanges.length + payload.domChanges.length + payload.comments.length;
+          const total = payload.styleChanges.length + payload.textChanges.length + payload.domChanges.length + (payload.comments?.length || 0);
           showCaptureToast('success', `Imported ${total} change${total === 1 ? '' : 's'}.`);
         });
       };

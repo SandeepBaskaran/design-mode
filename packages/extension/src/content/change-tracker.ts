@@ -11,6 +11,7 @@ import { captureElementScreenshot, captureViewportScreenshotClean, captureRegion
 import { loadComments } from './comments';
 import { getTokenEdits } from './root-var-store';
 import { isSafeRichTextHref, restoreRichTextHtml } from '../rich-text-preservation';
+import { IMPORT_STATES, validateImportPayload } from './import-validation';
 
 // Lifecycle a coding agent drives over MCP: untouched → working → done.
 // Absent ⇒ 'todo'. Mirrors @design-mode/shared ChangeStatus.
@@ -106,8 +107,8 @@ export function getAllChanges(): Array<StyleChange | TextChange | DomChange> {
   return [...styleChanges, ...textChanges, ...domChanges].sort((a, b) => a.timestamp - b.timestamp);
 }
 
-export function clearAllChanges() {
-  requestStopFeedback();
+export function clearAllChanges(stopFeedback = true) {
+  if (stopFeedback) requestStopFeedback();
   styleChanges.length = 0;
   textChanges.length = 0;
   domChanges.length = 0;
@@ -136,22 +137,6 @@ const appliedRules = new Map<string, Map<string, string>>(); // elementId -> pro
 const appliedVariants = new Map<string, Map<string, Map<string, string>>>();
 const injectedKeyframes = new Set<string>();
 let appliedStyleEl: HTMLStyleElement | null = null;
-
-// Build the CSS block for one state-variant. '@starting' wraps the rule in
-// a @starting-style at-rule (animate-on-appear); every other state is a
-// pseudo-class suffix on the element-scoped selector. The `.dm-force-*`
-// mirror class lets the panel's Preview button force the state on demand.
-function buildVariantBlock(elementId: string, state: string, props: Map<string, string>): string {
-  const decls: string[] = [];
-  for (const [prop, val] of props) decls.push(`  ${kebab(prop)}: ${val} !important;`);
-  if (!decls.length) return '';
-  const base = `[data-dm-id="${elementId}"][data-dm-id]`;
-  if (state === '@starting') {
-    return `@starting-style {\n${base} {\n${decls.join('\n')}\n}\n}`;
-  }
-  const forceClass = '.dm-force-' + state.replace(/[^a-z-]/gi, '');
-  return `${base}${state}, ${base}${forceClass} {\n${decls.join('\n')}\n}`;
-}
 
 // CSS properties that inherit by default. Writing one of these on a
 // container visually cascades to every text-bearing descendant, which
@@ -324,67 +309,51 @@ function ensureStyleEl(): HTMLStyleElement {
 }
 
 function rebuildStyleSheet() {
-  // The override sheet drives attribution, so any rebuild invalidates the
-  // authored-vars memo in token-engine.
   bumpStyleGen();
   const el = ensureStyleEl();
-  const blocks: string[] = [];
+  el.textContent = '';
+  const sheet = el.sheet;
+  if (!sheet) return;
+  const addRule = (selector: string, props: Map<string, string>, priority = 'important', starting = false) => {
+    try {
+      const index = sheet.insertRule(starting ? `@starting-style { ${selector} {} }` : `${selector} {}`, sheet.cssRules.length);
+      const rule = starting ? (sheet.cssRules[index] as CSSGroupingRule).cssRules[0] : sheet.cssRules[index];
+      for (const [prop, value] of props) {
+        if (prop !== '__effect_overlay') (rule as CSSStyleRule).style.setProperty(kebab(prop), value, priority);
+      }
+    } catch { /* Unsupported browser rules/properties are inert, never raw CSS. */ }
+  };
   for (const name of injectedKeyframes) {
     const kf = BUILTIN_KEYFRAMES[name];
-    if (kf) blocks.push(kf);
+    if (kf) { try { sheet.insertRule(kf, sheet.cssRules.length); } catch {} }
   }
   for (const [elementId, props] of appliedRules) {
-    if (props.size === 0) continue;
-    const decls: string[] = [];
-    // !important + duplicated attribute selector (specificity 0,2,0) so the
-    // override sheet beats page CSS that uses chained classes or its own
-    // !important (Tailwind, BEM, design-system layers). The override sheet
-    // is "user intent expressed after the page has rendered" — by definition
-    // it should win over the page's authored styles.
-    for (const [prop, val] of props) {
-      // __effect_overlay is a synthetic prop translated into a
-      // ::after pseudo-element overlay below; skip the primary decl
-      // emission so we don't write `--effect-overlay: <json>` onto
-      // the host element.
-      if (prop === '__effect_overlay') continue;
-      decls.push(`  ${kebab(prop)}: ${val} !important;`);
-    }
-    if (decls.length) {
-      blocks.push(`[data-dm-id="${elementId}"][data-dm-id] {\n${decls.join('\n')}\n}`);
-    }
-    // For inherited typography props, stop the cascade at any descendant
-    // the panel has stamped. The user only "wrote" the value on the
-    // selected element; siblings/children with their own data-dm-id keep
-    // their natural value via `revert`. Specificity (0,2,0 ancestor +
-    // 0,1,0 descendant) means the reset only wins on actual descendants
-    // — the original block still applies to the target itself.
-    const inheritedDecls: string[] = [];
-    for (const [prop] of props) {
-      if (INHERITED_TYPOGRAPHY_PROPS.has(prop)) {
-        inheritedDecls.push(`  ${kebab(prop)}: revert;`);
-      }
-    }
-    if (inheritedDecls.length) {
-      blocks.push(`[data-dm-id="${elementId}"] [data-dm-id] {\n${inheritedDecls.join('\n')}\n}`);
-    }
-    // Overlay effects (Noise / Texture) — translate `__effect_overlay`
-    // into a `::after` block with chained SVG-data-URI background-images.
-    const overlayVal = props.get('__effect_overlay');
-    if (overlayVal && overlayVal !== 'none') {
-      const css = buildOverlayCss(elementId, overlayVal);
-      if (css) blocks.push(css);
+    const escaped = CSS.escape(elementId);
+    const base = `[data-dm-id="${escaped}"][data-dm-id]`;
+    addRule(base, props);
+    const inherited = new Map<string, string>();
+    for (const [prop] of props) if (INHERITED_TYPOGRAPHY_PROPS.has(prop)) inherited.set(prop, 'revert');
+    if (inherited.size) addRule(`[data-dm-id="${escaped}"] [data-dm-id]`, inherited, '');
+    const overlay = props.get('__effect_overlay');
+    if (overlay && overlay !== 'none') {
+      // Only locally generated rules: IDs escaped, SVG parameters numeric and
+      // colours converted to numeric RGB. No imported declaration interpolation.
+      const generated = new CSSStyleSheet();
+      try {
+        generated.replaceSync(buildOverlayCss(escaped, overlay));
+        for (const rule of generated.cssRules) sheet.insertRule(rule.cssText, sheet.cssRules.length);
+      } catch {}
     }
   }
-  // State-variant blocks (Motion interactions) — emitted after every base
-  // rule so they win on equal specificity when the state is active.
   for (const [elementId, states] of appliedVariants) {
+    const base = `[data-dm-id="${CSS.escape(elementId)}"][data-dm-id]`;
     for (const [state, props] of states) {
-      if (props.size === 0) continue;
-      const css = buildVariantBlock(elementId, state, props);
-      if (css) blocks.push(css);
+      if (!(IMPORT_STATES as readonly string[]).includes(state)) continue;
+      const selector = state === '@starting' ? base
+        : `${base}${state}, ${base}.dm-force-${state.replace(/[^a-z-]/gi, '')}`;
+      addRule(selector, props, 'important', state === '@starting');
     }
   }
-  el.textContent = blocks.join('\n\n');
 }
 
 function upsertRule(elementId: string, property: string, value: string, state = '') {
@@ -462,6 +431,40 @@ export function persistSession() {
   }, 100);
 }
 
+// Import uses an acknowledged write, unlike ordinary debounced editing.
+export function persistImportedSession(payload: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }): Promise<void> {
+  if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+  return new Promise((resolve, reject) => {
+    try {
+      const storage: any = (browser.storage as any).session || browser.storage.local;
+      storage.set({ [sessionKey()]: { styleChanges: payload.styleChanges, textChanges: payload.textChanges, domChanges: payload.domChanges, savedAt: Date.now() } }, () => {
+        const error = browser.runtime.lastError;
+        if (error) { persistSession(); reject(new Error(error.message || 'Could not save imported session')); }
+        else resolve();
+      });
+    } catch (error) { persistSession(); reject(error); }
+  });
+}
+
+export function captureTrackerRollback(): () => void {
+  const styles = [...styleChanges], texts = [...textChanges], dom = [...domChanges];
+  const handoff = pendingHandoff;
+  const rules = new Map(Array.from(appliedRules, ([id, props]) => [id, new Map(props)]));
+  const variants = new Map(Array.from(appliedVariants, ([id, states]) => [id,
+    new Map(Array.from(states, ([state, props]) => [state, new Map(props)]))]));
+  const keyframes = [...injectedKeyframes];
+  return () => {
+    styleChanges.splice(0, styleChanges.length, ...styles);
+    textChanges.splice(0, textChanges.length, ...texts);
+    domChanges.splice(0, domChanges.length, ...dom);
+    pendingHandoff = handoff;
+    appliedRules.clear(); for (const [id, props] of rules) appliedRules.set(id, props);
+    appliedVariants.clear(); for (const [id, states] of variants) appliedVariants.set(id, states);
+    injectedKeyframes.clear(); for (const name of keyframes) injectedKeyframes.add(name);
+    rebuildStyleSheet();
+  };
+}
+
 export function loadSession(): Promise<{ styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] } | null> {
   return new Promise((resolve) => {
     try {
@@ -483,7 +486,8 @@ export function loadSession(): Promise<{ styleChanges: StyleChange[]; textChange
 // Replays a payload of changes onto the current DOM and replaces the in-
 // memory arrays so the side panel reflects them. Used by both
 // replaySession (storage-backed) and the IMPORT_CHANGES message handler.
-export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }) {
+export function applyChangesPayload(input: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }) {
+  const saved = validateImportPayload(input);
   // Order matters here. DOM mutations run FIRST (so duplicates / inserts
   // exist with their stamped data-dm-id before anything else binds to
   // them). Then text changes (which can now find duplicates by id).
@@ -635,8 +639,7 @@ export function applyChangesPayload(saved: { styleChanges: StyleChange[]; textCh
 export async function replaySession(): Promise<boolean> {
   const saved = await loadSession();
   if (!saved) return false;
-  applyChangesPayload(saved);
-  return true;
+  try { applyChangesPayload(saved); return true; } catch { return false; }
 }
 
 // Reorder changes by moving an item from one index to another
@@ -791,6 +794,8 @@ export function applyWithCompanions(
   meta?: StyleChangeMeta,
   state = '',
 ): StyleChange | null {
+  if (!/^dm-\d+$/.test(elementId) || !/^(?:--[\w-]+|-?[a-zA-Z][\w-]*|__effect_overlay)$/.test(property)
+    || typeof value !== 'string' || !(IMPORT_STATES as readonly string[]).includes(state)) return null;
   const el = getElementById(elementId);
   if (!el) return applyStyleChange(elementId, property, value, refreshPanel, meta, state);
   // Companion auto-fixes patch the BASE rule (e.g. border-style so a
@@ -828,6 +833,8 @@ export function applyStyleChange(
   meta?: StyleChangeMeta,
   state = '',
 ): StyleChange | null {
+  if (!/^dm-\d+$/.test(elementId) || !/^(?:--[\w-]+|-?[a-zA-Z][\w-]*|__effect_overlay)$/.test(property)
+    || typeof value !== 'string' || !(IMPORT_STATES as readonly string[]).includes(state)) return null;
   const el = getElementById(elementId);
   if (!el) return null;
   const k = kebab(property);
@@ -1433,7 +1440,7 @@ export async function stopFeedbackSessionFromUi(): Promise<{
   }
 }
 
-function requestStopFeedback() {
+export function requestStopFeedback() {
   if (!isLiveFeedbackSupported() || !feedbackSession || feedbackSession.state === 'stopped') return;
   transportSend({ type: 'STOP_FEEDBACK', payload: { sessionId: feedbackSession.sessionId } });
 }
