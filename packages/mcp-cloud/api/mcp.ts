@@ -186,7 +186,7 @@ async function handleToolCall(tenantId: string, name: string, args: any): Promis
   const built = tool.buildRequest(args || {});
   await publishInbound(tenantId, { type: built.type, requestId, payload: built.payload });
   try {
-    const reply = await awaitResponse(requestId, TOOL_TIMEOUT_MS);
+    const reply = await awaitResponse(tenantId, requestId, TOOL_TIMEOUT_MS);
     return { content: tool.toContent(reply.payload, args || {}) };
   } catch {
     return {

@@ -2,7 +2,7 @@
 // Design Mode Cloud — relay store.
 //
 // One Redis instance holds everything: tokens, per-tenant inbound
-// queue, per-requestId outbound responses, and the daily quota counter.
+// queue, per-tenant/requestId outbound responses, and the daily quota counter.
 // Provisioned via the Vercel Marketplace Redis integration, which
 // auto-injects REDIS_URL.
 //
@@ -12,7 +12,7 @@
 //   LPOP up to N at a time on the SSE handler's poll cycle
 //
 // Outbound (extension → cloud, request/response):
-//   SET resp:{requestId}  the JSON reply, EX 60 s
+//   SET resp:{tenantId}:{requestId}  the JSON reply, EX 60 s
 //   The MCP route GETs that key in a poll loop, deletes on hit
 // ============================================================
 
@@ -23,7 +23,7 @@ export const STREAM_TTL_S = 60;
 export const POLL_INTERVAL_MS = 250;
 
 export function inboundKey(tenantId: string): string { return `inbound:${tenantId}`; }
-export function responseKey(requestId: string): string { return `resp:${requestId}`; }
+export function responseKey(tenantId: string, requestId: string): string { return `resp:${tenantId}:${requestId}`; }
 
 export interface RelayMessage {
   type: string;
@@ -39,9 +39,9 @@ export async function publishInbound(tenantId: string, msg: RelayMessage): Promi
   try { await c.expire(key, STREAM_TTL_S); } catch { /* non-fatal */ }
 }
 
-export async function publishResponse(requestId: string, msg: RelayMessage): Promise<void> {
+export async function publishResponse(tenantId: string, requestId: string, msg: RelayMessage): Promise<void> {
   const c = await kv();
-  await c.set(responseKey(requestId), JSON.stringify(msg), { EX: STREAM_TTL_S });
+  await c.set(responseKey(tenantId, requestId), JSON.stringify(msg), { EX: STREAM_TTL_S });
 }
 
 export async function* readInbound(opts: {
@@ -63,7 +63,7 @@ export async function* readInbound(opts: {
       for (const item of items) {
         if (typeof item !== 'string') continue;
         try { yield JSON.parse(item) as RelayMessage; }
-        catch { logEvent('relay.inbound.malformed', { tenantId: opts.tenantId, byteCount: item.length }); }
+        catch { logEvent('relay.inbound.malformed', { tenantId: opts.tenantId, byteCount: Buffer.byteLength(item, 'utf8') }); }
       }
       drained = items.length === 0;
     } catch {
@@ -73,9 +73,9 @@ export async function* readInbound(opts: {
   }
 }
 
-export async function awaitResponse(requestId: string, timeoutMs: number): Promise<RelayMessage> {
+export async function awaitResponse(tenantId: string, requestId: string, timeoutMs: number): Promise<RelayMessage> {
   const c = await kv();
-  const key = responseKey(requestId);
+  const key = responseKey(tenantId, requestId);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const raw = await c.get(key);

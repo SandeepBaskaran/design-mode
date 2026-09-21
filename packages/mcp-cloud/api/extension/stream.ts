@@ -82,7 +82,7 @@ export async function GET(req: Request): Promise<Response> {
           send('relay', JSON.stringify(msg));
           logEvent('stream.forward', {
             tenantId, type: msg.type,
-            byteCount: typeof msg.payload === 'string' ? msg.payload.length : 0,
+            byteCount: typeof msg.payload === 'string' ? Buffer.byteLength(msg.payload, 'utf8') : 0,
           });
         }
       } catch (err: any) {

@@ -12,7 +12,7 @@ agent ── HTTPS ──▶ /mcp (Streamable HTTP)
                        ▼
                   Vercel KV
                   inbound:{tenantId}    list   (cloud → extension)
-                  resp:{requestId}      key    (extension → cloud reply)
+                  resp:{tenantId}:{requestId}      key    (extension → cloud reply)
                   tok:{tokenHash}       key    (anonymous device tokens)
                   quota:{tenantId}:{ymd}  counter (per-day quota)
                        ▲
@@ -25,8 +25,16 @@ The extension keeps an SSE GET open to `/extension/stream`. When an agent calls
 a tool, `/mcp` writes the request to `inbound:{tenantId}` (Redis-style list);
 the SSE handler short-polls the list and forwards each entry as an SSE event.
 The extension replies via POST to `/extension/inbox`, which writes the JSON
-under `resp:{requestId}` with a 60 s TTL; the awaiting MCP route polls that
-key until it appears.
+under `resp:{tenantId}:{requestId}` with a 60 s TTL; the awaiting MCP route polls that
+key until it appears. Both routes derive the tenant from the authenticated token,
+not from the message body. Legacy global `resp:{requestId}` keys are never read:
+in-flight calls spanning this key-format upgrade may time out and need a retry;
+old response keys expire after 60 seconds.
+
+Run `npm test --workspace @design-mode/mcp-cloud` and
+`npm run typecheck --workspace @design-mode/mcp-cloud` from the repository root.
+Security tests exercise the actual authentication, MCP, inbox and relay modules
+with an isolated in-memory Redis double; they do not contact a deployed relay.
 
 Polling cadence: ~250 ms. Sub-second end-to-end tool-call latency.
 

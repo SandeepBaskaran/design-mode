@@ -27,8 +27,9 @@ export async function POST(req: Request): Promise<Response> {
   let parsed: any;
   try {
     const raw = await req.text();
-    if (raw.length > MAX_BODY_BYTES) {
-      logEvent('inbox.tooLarge', { tenantId: row.tenantId, byteCount: raw.length, status: 413 });
+    const byteCount = Buffer.byteLength(raw, 'utf8');
+    if (byteCount > MAX_BODY_BYTES) {
+      logEvent('inbox.tooLarge', { tenantId: row.tenantId, byteCount, status: 413 });
       return new Response(JSON.stringify({ error: 'payload too large' }), {
         status: 413, headers: { 'Content-Type': 'application/json', ...corsHeaders() },
       });
@@ -52,7 +53,7 @@ export async function POST(req: Request): Promise<Response> {
     payload: parsed.payload,
   };
   if (msg.responseTo) {
-    await publishResponse(msg.responseTo, msg);
+    await publishResponse(row.tenantId, msg.responseTo, msg);
   }
   logEvent('inbox.publish', {
     tenantId: row.tenantId, type: msg.type,
