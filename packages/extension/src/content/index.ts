@@ -7,7 +7,7 @@
 
 import '../platform/polyfill';
 import { DEFAULT_WS_PORT } from '@shared/constants';
-import { getElementById, getOrAssignId, generateSelector, reserveIdsAtLeast } from './helpers';
+import { getElementById, getOrAssignId, generateSelector, commentSelector, reserveIdsAtLeast } from './helpers';
 import { setLayoutGuides as setLayoutGuidesOverlay, clearAllLayoutGuides, getLayoutGuidesFor } from './layout-guides';
 import {
   inspectElementStates, buildForceStateCss, setPageStateForceCss,
@@ -1182,7 +1182,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       const sid = getSelectedElementId();
       if (sid && msg.text) {
         const el = getElementById(sid);
-        const selector = el ? generateSelector(el) : sid;
+        const selector = commentSelector(el, sid);
         addComment(sid, selector, msg.text).then(comment => {
           syncCommentChange(comment);
           sendResponse({ comment });
