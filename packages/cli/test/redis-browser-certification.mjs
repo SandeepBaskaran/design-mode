@@ -7,6 +7,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
+import { createRedisFixtureServer } from './redis-fixture-server.mjs';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -35,25 +36,7 @@ try {
   const stream = await import('../../mcp-cloud/api/extension/stream.ts');
   const inbox = await import('../../mcp-cloud/api/extension/inbox.ts');
   record('real Redis ready', { version: execFileSync(redisBin, ['--version'], { encoding: 'utf8' }).trim() });
-  server = createServer(async (req, res) => {
-    if (req.url === '/fixture') { res.setHeader('content-type', 'text/html'); res.end('<!doctype html><title>Redis transport fixture</title><h1 id="heading">Synthetic release fixture</h1>'); return; }
-    const ctrl = new AbortController(); res.on('close', () => ctrl.abort());
-    try {
-      const chunks = []; for await (const c of req) chunks.push(c);
-      const body = Buffer.concat(chunks).toString();
-      const rpc = body ? JSON.parse(body) : {};
-      if (req.url === '/api/mcp' && rpc.method === 'tools/call' && fault === 'disconnect') { req.socket.destroy(); return; }
-      if (req.url === '/api/mcp' && rpc.method === 'tools/call' && fault === 'timeout') return;
-      const request = new Request(`http://127.0.0.1:${server.address().port}${req.url}`, { method: req.method, headers: req.headers, ...(body ? { body } : {}), signal: ctrl.signal });
-      const route = req.url === '/api/mcp' ? mcp : req.url === '/api/extension/stream' ? stream : req.url === '/api/extension/inbox' ? inbox : null;
-      if (!route) { res.writeHead(404); res.end(); return; }
-      const response = await route[req.method](request);
-      res.writeHead(response.status, Object.fromEntries(response.headers)); res.flushHeaders();
-      if (req.url === '/api/extension/stream') { activeStreams.add(res); res.on('close', () => activeStreams.delete(res)); }
-      if (response.body) for await (const chunk of response.body) { if (res.destroyed) break; res.write(chunk); }
-      res.end();
-    } catch (e) { if (!res.destroyed) { res.writeHead(500); res.end(String(e)); } }
-  });
+  server = createRedisFixtureServer({ mcp, stream, inbox, activeStreams, getFault: () => fault });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
   const [pack] = JSON.parse(execFileSync('npm', ['pack', '--json', '--ignore-scripts', '--pack-destination', scratch], { cwd: resolve(root, 'packages/cli'), encoding: 'utf8' }));
