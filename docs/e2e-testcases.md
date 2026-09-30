@@ -324,6 +324,8 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 6.11 | Region comment — cancel removes box | Drop a box → click Cancel in the composer | The pending yellow box disappears; no comment created. (Pressing `Esc` mid-drag, before release, also exits with no box) |
 | 6.12 | Inspect suspended while composing | Turn Inspect on → select an element → open the comment composer (add), then hover/click other elements on the page | Inspect is off while the composer is open (no hover outlines, clicks don't reselect); on Add/Cancel inspect returns to its prior on state. Same for **editing** a comment and for **region** compose |
 | 6.13 | Inspect stays off if it was off | With Inspect off, open a composer then close it | Inspect remains off throughout (prior state restored, not force-enabled) |
+| 6.14 | Comment on a classed, id-less element keeps its class | Fixture → select the second `.card` ("Second column") → add a comment | Changes-tab row label reads `div.grid-2:nth-of-type(4) > div.card:nth-of-type(2)`, not bare `div` |
+| 6.15 | Similar siblings re-anchor to the right element | After 6.14, reload the page | The pin returns to "Second column", not "First column" |
 
 ---
 
