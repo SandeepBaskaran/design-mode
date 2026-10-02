@@ -71,7 +71,7 @@ tool), these rules are read automatically at session start.
   (hidden on FF), the eyedropper "Pick" button (hidden on FF — no
   EyeDropper API), the side-panel open adapter (`platform/panel.ts`),
   the keyboard-shortcut open path (`background/index.ts`), the
-  file-access settings button (`about:addons` vs `chrome://extensions`),
+  file-access guidance (type `about:addons` manually on Firefox; settings button opens `chrome://extensions` on Chrome),
   and the Contribute panel's "Review" link + share text (AMO vs Chrome
   Web Store). New browser-specific behaviour goes through this flag.
 - **Build the website:** `npm run build` from `website/`.
@@ -95,10 +95,10 @@ tool), these rules are read automatically at session start.
   store gets a recognisably-named file. Replace the existing zips;
   never produce per-version copies like `design-mode-v1.0.2.zip`.
   `npm run lint:extension` builds + runs `web-ext lint`.
-- **TypeScript typecheck has a known pre-existing failure** because
-  `packages/shared` lacks `composite: true`. `npm run verify` does
-  NOT run `tsc` on shared, so CI is fine. Don't "fix" this
-  incidentally.
+- **Typecheck the extension:** `npm run typecheck:extension` from the
+  repo root (or `npm run typecheck` in `packages/extension`). This builds
+  the shared composite project's declarations before checking the extension
+  without emitting its JavaScript. `npm run verify` runs the same gate.
 
 ## Code conventions
 

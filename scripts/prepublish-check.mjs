@@ -57,6 +57,22 @@ function assertFile(path, label = path) {
 
 console.log(`\n${BOLD}◆ Design Mode — pre-publish check${RESET}\n`);
 
+step('Typecheck extension and shared project references', () => {
+  run('npm run typecheck:extension', { stdio: 'pipe' });
+});
+
+step('Analytics build configuration tests', () => {
+  run('npm run test:analytics-build', { stdio: 'pipe' });
+});
+
+step('CLI typecheck', () => {
+  run('npm run typecheck --workspace @designmode-app/cli', { stdio: 'pipe' });
+});
+
+step('CLI build and regression tests', () => {
+  run('npm test --workspace @designmode-app/cli', { stdio: 'pipe' });
+});
+
 // ── 1. Build the extension ────────────────────────────────────────────────
 step('Build extension', () => {
   run('npm run build:extension', { stdio: 'pipe' });
@@ -120,6 +136,14 @@ step('web-ext lint (0 errors)', () => {
 
 step('Focused extension logic tests', () => {
   run('npm run test:extension', { stdio: 'pipe' });
+});
+
+step('Cloud MCP security regression tests', () => {
+  run('npm test --workspace @design-mode/mcp-cloud', { stdio: 'pipe' });
+});
+
+step('Cloud MCP typecheck', () => {
+  run('npm run typecheck --workspace @design-mode/mcp-cloud', { stdio: 'pipe' });
 });
 
 // ── 4. MCP tool count check (catch accidental tool deletions) ─────────────
