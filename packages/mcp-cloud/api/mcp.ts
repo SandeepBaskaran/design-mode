@@ -46,10 +46,11 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'apply_changes',
-    description: 'Push CSS changes back to the browser for live preview. Pass an array of element changes — single edits use a one-element array.',
+    description: 'Push CSS changes back to the browser for live preview on one route. Pass its exact routeKey from get_changes and an array of element changes. Navigate to that route first; inactive routes are not mutated.',
     inputSchema: {
       type: 'object',
       properties: {
+        routeKey: { type: 'string', description: 'Exact routeKey from get_changes for the route being edited' },
         changes: {
           type: 'array',
           description: 'Array of element changes (single edit = single-element array)',
@@ -63,9 +64,14 @@ const TOOLS: ToolDef[] = [
           },
         },
       },
-      required: ['changes'],
+      required: ['routeKey', 'changes'],
     },
-    buildRequest: (args) => ({ type: 'CLOUD_APPLY_CHANGES', payload: { changes: args.changes } }),
+    buildRequest: (args) => {
+      if (typeof args.routeKey !== 'string' || !args.routeKey.trim()) throw new Error('routeKey from get_changes is required');
+      const url = new URL(args.routeKey);
+      if (!['http:', 'https:', 'file:'].includes(url.protocol)) throw new Error('Unsupported routeKey protocol');
+      return { type: 'CLOUD_APPLY_CHANGES', payload: { routeKey: args.routeKey, changes: args.changes } };
+    },
     toContent: (reply, args) => {
       const totalProps = (args.changes || []).reduce((n: number, c: any) => n + Object.keys(c.styles || {}).length, 0);
       const count = (args.changes || []).length;
@@ -183,7 +189,11 @@ async function handleToolCall(tenantId: string, name: string, args: any): Promis
     return { content: [{ type: 'text', text: `Unknown tool '${name}'.` }], isError: true };
   }
   const requestId = `req-${Date.now()}-${randomBytes(3).toString('hex')}`;
-  const built = tool.buildRequest(args || {});
+  let built;
+  try { built = tool.buildRequest(args || {}); }
+  catch (error) {
+    return { content: [{ type: 'text', text: `Invalid tool arguments: ${error instanceof Error ? error.message : String(error)}` }], isError: true };
+  }
   await publishInbound(tenantId, { type: built.type, requestId, payload: built.payload });
   try {
     const reply = await awaitResponse(tenantId, requestId, TOOL_TIMEOUT_MS);

@@ -16,16 +16,16 @@ it('content mutations and reads propagate storage rejection without fake success
   await assert.rejects(updateComment('one', 'edited'), /Storage unavailable/);
   await assert.rejects(loadComments(), /Storage unavailable/);
   await assert.rejects(deleteComment('one'), /Storage unavailable/);
-  assert.deepEqual(messages.map(m => m.operation.kind), ['add', 'add', 'update', 'read', 'delete']);
-  assert.ok(messages.every(m => m.type === 'COMMENT_STORE' && m.pageUrl === 'https://example.test/page'));
+  assert.deepEqual(messages.map(m => m.operation.action), ['add', 'add', 'update', 'read', 'delete']);
+  assert.ok(messages.every(m => m.type === 'DM_COMMENT_STORE' && m.operation.href === 'https://example.test/page'));
 });
 
 it('page persistence does not render pins or access the DOM before acknowledgement', async () => {
   const { persistPageComments } = await comments;
   reply = { ok: false, error: 'Storage unavailable; retry' };
   await assert.rejects(persistPageComments([]), /Storage unavailable/);
-  reply = { ok: true, comments: [{ id: 'committed' }], comment: null };
-  assert.deepEqual(await persistPageComments([]), [{ id: 'committed' }]);
+  reply = { ok: true, comments: [{ id: 'committed', pageUrl: 'https://example.test/page' }], comment: null };
+  assert.deepEqual(await persistPageComments([]), [{ id: 'committed', pageUrl: 'https://example.test/page' }]);
 });
 
 it('allows a caller to retry after storage recovers', async () => {

@@ -31,7 +31,7 @@ import { componentGroup, groupByComponent, type ComponentContext } from '../comp
 import { parseFeedbackSession, type FeedbackSessionView } from './feedback-view';
 import { enableShortcuts, loadShortcuts, registerShortcut } from '../content/keyboard-shortcuts';
 import { diffWords } from './word-diff';
-import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, sanitizeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
+import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, sanitizeRichTextHref, normalizeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
   isTransparent, resolveCategory, thresholdFor,
@@ -224,6 +224,52 @@ let inspectSuspendedForComment = false;
 let inspectWasOnBeforeComment = false;
 let mcpState: McpState = 'offline';
 let pinnedDomain = '';
+let changesPageUrl = '';
+let activeRouteKey = '';
+type RouteChanges = { routeKey: string; url: string; styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[]; comments: CommentEntry[] };
+let routeGroups: RouteChanges[] = [];
+
+let deletingRouteKey: string | null = null;
+let changesRequest = 0;
+
+function panelRouteKey(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.origin + u.pathname + u.search + (/^#!?\//.test(u.hash) ? u.hash : '');
+  } catch { return url; }
+}
+
+function resetChangesRoute(url: string) {
+  const key = panelRouteKey(url);
+  if (key === activeRouteKey) { changesPageUrl = url; return; }
+  changesRequest++;
+  changesPageUrl = url;
+  activeRouteKey = key;
+  routeGroups = [];
+
+  deletingRouteKey = null;
+  clearAllConfirming = false;
+  changesSelected.clear();
+  changesGroupCollapsed.clear();
+  styleChanges = []; textChanges = []; domChanges = []; comments = []; tokenChanges = [];
+  previewingOriginal = false;
+}
+
+function currentRouteGroups(): RouteChanges[] {
+  const active = { routeKey: activeRouteKey, url: changesPageUrl || activeRouteKey, styleChanges, textChanges, domChanges, comments };
+  return [active, ...routeGroups.filter(group => group.routeKey !== activeRouteKey)];
+}
+
+function routeChangeCount(group: RouteChanges): number {
+  return group.styleChanges.length + group.textChanges.length + group.domChanges.length + group.comments.length;
+}
+
+function siteChangeCount(): number { return currentRouteGroups().reduce((count, group) => count + routeChangeCount(group), 0); }
+let routeEditingBlocked = false;
+
+function siteChangesExport() {
+  return { version: 2, kind: 'design-mode-changes', exportedAt: Date.now(), url: changesPageUrl, routeGroups: currentRouteGroups(), styleChanges, textChanges, domChanges, comments };
+}
 let info: ElementInfo | null = null;
 let hoverInfo: ElementInfo | null = null;
 let styleChanges: StyleChange[] = [];
@@ -784,7 +830,10 @@ port.onMessage.addListener((msg) => {
     pageNavigating = false;
     pageUnavailable = !!msg.pageUnavailable;
     enabled = msg.enabled ?? false; inspecting = msg.inspecting ?? true;
+    changesRequest++;
+    if (typeof msg.tabId === 'number' && msg.tabId !== myTabId) { activeRouteKey = ''; resetChangesRoute(msg.pinnedUrl || ''); }
     if (typeof msg.tabId === 'number') myTabId = msg.tabId;
+    if (msg.pinnedUrl) resetChangesRoute(msg.pinnedUrl);
     mcpState = !msg.connected ? 'offline' : msg.agentConnected ? 'connected' : 'running';
     if (msg.pinnedUrl) { pinnedDomain = domainLabel(msg.pinnedUrl); }
     fileAccessBlocked = !!msg.fileAccessBlocked;
@@ -902,7 +951,24 @@ async function refreshFeedbackSession() {
   feedbackSession = res?.supported ? parseFeedbackSession(res.session) : null;
 }
 async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; if (typeof res.hoverAvailable === 'boolean') applyHoverAvailable(res.hoverAvailable); undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
-async function refreshChanges() { const generation = pageGeneration; if (pageUnavailable || pageNavigating) return; const res = await send({ type: 'SP_GET_CHANGES' }); if (generation !== pageGeneration) return; if (res.error || !Array.isArray(res.comments)) { showCaptureToast('error', res.error || 'Comments could not be loaded. Please retry.'); return; } styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; componentContexts = res.componentContexts || {}; render(); }
+async function refreshChanges() {
+  const generation = pageGeneration;
+  if (pageUnavailable || pageNavigating) return;
+  const request = ++changesRequest;
+  const targetTabId = myTabId;
+  const route = activeRouteKey;
+  const res = await send({ type: 'SP_GET_CHANGES' });
+  if (generation !== pageGeneration || request !== changesRequest || targetTabId !== myTabId || route !== activeRouteKey) return;
+  if (res.error || !Array.isArray(res.styleChanges) || !Array.isArray(res.comments)) { showCaptureToast('error', res.error || 'Comments could not be loaded. Please retry.'); return; }
+  const url = res.url || res.pageUrl || changesPageUrl;
+  if (url && panelRouteKey(url) !== activeRouteKey) resetChangesRoute(url);
+  if (res.activeRouteKey || res.routeKey) activeRouteKey = res.activeRouteKey || res.routeKey;
+  styleChanges = res.styleChanges; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || [];
+  tokenChanges = res.tokenChanges || []; componentContexts = res.componentContexts || {};
+  routeGroups = res.routeGroups || [];
+  routeEditingBlocked = !!res.routeEditingBlocked;
+  render();
+}
 async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
@@ -1894,7 +1960,14 @@ async function deleteCommentEntry(commentId: string) {
   await refreshChanges();
 }
 async function removeChange(changeId: string) { styleChanges = styleChanges.filter(c => (c.id || 'style-' + styleChanges.indexOf(c)) !== changeId); textChanges = textChanges.filter(c => c.id !== changeId); domChanges = domChanges.filter(c => (c.id || 'dom-' + c.action) !== changeId); batchAppliedChanges.delete(changeId); render(); await send({ type: 'SP_REMOVE_CHANGE', changeId }); await refreshChanges(); await refreshDomTree(); await refreshState(); }
-async function clearAllChanges() { const res = await send({ type: 'SP_CLEAR_CHANGES' }); if (!res.ok || res.error) { showCaptureToast('error', res.error || 'Changes could not be cleared. Please retry.'); return; } styleChanges = []; textChanges = []; domChanges = []; comments = []; tokenChanges = []; editedTokens.clear(); batchAppliedChanges.clear(); render(); }
+async function clearAllChanges() {
+  const target = myTabId, route = activeRouteKey;
+  const res = await send({ type: 'SP_CLEAR_SITE_CHANGES' });
+  if (target !== myTabId || route !== activeRouteKey) return;
+  if (!res.ok && !res.success) { showCaptureToast('error', res.error || 'Could not clear site changes.'); return; }
+  editedTokens.clear(); batchAppliedChanges.clear();
+  await refreshChanges(); await refreshDomTree(); await refreshState();
+}
 
 // Tiny markdown-ish renderer for comment bodies. Supports inline code,
 // bold (`**text**`), italic (`*text*`), links (`[text](url)`), and
@@ -1944,7 +2017,7 @@ async function revertGroup(groupKey: string) {
   await refreshState();
 }
 
-async function copyPrompt() { const res = await send({ type: 'SP_EXPORT', format: 'markdown' }); const output = res.output || res.markdown || ''; if (output) { await navigator.clipboard.writeText(output); const btn = root.querySelector('#dm-copy-prompt-btn'); if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); } } }
+async function copyPrompt() { const res = await send({ type: 'SP_EXPORT', format: 'markdown', scope: 'site' }); const output = res.output || res.markdown || ''; if (output) { await navigator.clipboard.writeText(output); const btn = root.querySelector('#dm-copy-prompt-btn'); if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); } } }
 async function sendToAgent() {
   if (sendingFeedback || previewingOriginal) return;
   sendingFeedback = true;
@@ -1952,7 +2025,7 @@ async function sendToAgent() {
   await refreshMcpStatus();
   if (mcpState !== 'connected') { trackFeature({ feature: 'send_to_agent', outcome: 'failure', reason: mcpState === 'offline' ? 'offline' : 'waiting_for_agent', mode: mcpMode }); sendAgentHelpOpen = true; render(); return; }
   if (feedbackSession?.state === 'implementing') return;
-  const res = await send({ type: 'SP_SEND_TO_AGENT' });
+  const res = await send({ type: 'SP_SEND_TO_AGENT', scope: 'site' });
   if (res?.ok) {
     feedbackSession = res.supported ? parseFeedbackSession(res.session) : null;
     feedbackSentUntil = Date.now() + 1500;
@@ -2051,6 +2124,12 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   // can be open at once). Messages without `_dmTab` (or before we know our
   // tab) pass through.
   if (msg && msg._dmTab != null && myTabId != null && msg._dmTab !== myTabId) return;
+  if (sender.tab?.id != null && myTabId != null && sender.tab.id !== myTabId) return;
+  if (msg.type === 'CHANGES_UPDATE' || msg.type === 'STATE_UPDATE') {
+    const url = msg.url || msg.pageUrl || sender.url;
+    if (url && !url.startsWith('chrome-extension:') && !url.startsWith('moz-extension:')) resetChangesRoute(url);
+    changesRequest++;
+  }
   if (msg.type === 'FEEDBACK_SESSION_UPDATE') {
     if (sender.tab?.id != null && myTabId != null && sender.tab.id !== myTabId) return;
     feedbackSession = mcpMode === 'local' && msg.supported ? parseFeedbackSession(msg.session) : null;
@@ -2187,6 +2266,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     // Re-sync the layers tree + pageSealed after a reload / SPA nav so the
     // sealed-frame notice appears (or clears) for the page now in the tab.
     void refreshDomTree();
+    void refreshChanges();
   }
   if (msg.type === 'MULTI_SELECT_UPDATE') {
     multiSelectIds = msg.payload?.ids || [];
@@ -2212,7 +2292,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   }
   if (msg.type === 'STYLE_OVERRIDE_ERROR') showCaptureToast('error', msg.error);
   if (msg.type === 'COMMENT_ERROR') showCaptureToast('error', msg.error || 'Comment was not saved. Please retry.');
-  if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; componentContexts = msg.componentContexts || {}; render(); }
+  if (msg.type === 'CHANGES_UPDATE') { if (typeof msg.routeEditingBlocked === 'boolean') routeEditingBlocked = msg.routeEditingBlocked; styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; componentContexts = msg.componentContexts || {}; if (msg.routeGroups) routeGroups = msg.routeGroups; render(); if (!msg.routeGroups) void refreshChanges(); }
   if (msg.type === 'AGENT_PRESENCE_UPDATE') {
     // Presence may arrive after INIT_STATE observed a still-opening transport.
     void refreshMcpStatus();
@@ -6565,7 +6645,7 @@ function renderTabs(): string {
   const tabs: { key: Tab; label: string; iconName: keyof typeof icons; badge?: number }[] = [
     { key: 'layers', label: 'Layers', iconName: 'layers' },
     { key: 'design', label: 'Design', iconName: 'sliders' },
-    { key: 'changes', label: 'Changes', iconName: 'sparkles', badge: styleChanges.length + textChanges.length + domChanges.length + comments.length },
+    { key: 'changes', label: 'Changes', iconName: 'sparkles', badge: siteChangeCount() },
   ];
   return '<div style="display:flex;padding:4px 12px;gap:2px;border-bottom:1px solid var(--dm-separator);flex-shrink:0;">' +
     tabs.map(tt => {
@@ -6586,20 +6666,20 @@ function renderLiveFeedbackStatus(): string {
 }
 
 function renderStickyBottom(): string {
-  const hasChanges = styleChanges.length > 0 || textChanges.length > 0 || domChanges.length > 0 || comments.length > 0;
+  const hasChanges = siteChangeCount() > 0;
   const copyDis = previewingOriginal || !hasChanges;
   // Send-to-Agent stays clickable whenever there's something to send —
   // when no agent is connected yet, the click opens setup instructions
   // instead of sending. The tooltip previews which of the two it will be.
   const implementing = mcpMode === 'local' && feedbackSession?.state === 'implementing';
   const sendDis = previewingOriginal || !hasChanges || sendingFeedback || implementing;
-  let sendTitle = 'Send these changes to your coding agent';
+  let sendTitle = 'Send changes from every route on this site to your coding agent';
   if (implementing) sendTitle = 'The agent is implementing this round. Wait before sending the next one.';
   if (previewingOriginal) sendTitle = 'Disable “Preview original” first.';
   else if (!hasChanges) sendTitle = 'No changes to send.';
   else if (mcpState === 'offline') sendTitle = 'MCP is not connected — click for setup instructions.';
   else if (mcpState === 'running') sendTitle = 'No coding agent connected yet — click for instructions.';
-  const copyTitle = previewingOriginal ? 'Disable “Preview original” first.' : !hasChanges ? 'No changes to copy.' : 'Copy as prompt to clipboard';
+  const copyTitle = previewingOriginal ? 'Disable “Preview original” first.' : !hasChanges ? 'No changes to copy.' : 'Copy changes from every route on this site, including collapsed groups';
   const copyS = 'flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;' +
     (copyDis ? 'background:var(--dm-btn-bg-disabled);border:1px solid var(--dm-btn-border-disabled);color:var(--dm-text-dim);cursor:default;opacity:0.5;pointer-events:none;' : 'background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text-secondary);cursor:pointer;');
   // pointer-events:auto on the disabled send button so hover/title still
@@ -7554,11 +7634,11 @@ function renderDesignTab(): string {
     layoutModeRow(s) + sp() +
     // W (5) + aspect (2) + H (5). The standalone "resize to content"
     // button is gone \u2014 Hug mode in each size input owns that intent now.
-    grid12([
-      { span: 5, content: sizeInput('W', 'width', s.width || 'auto', info?.id || '') },
-      { span: 2, content: '<div class="dm-field"><label style="font-size:10px;color:var(--dm-text-muted);visibility:hidden;">\u00b7</label>' + aspectBtn + '</div>' },
-      { span: 5, content: sizeInput('H', 'height', s.height || 'auto', info?.id || '') },
-    ]) + sp() +
+    '<div class="dm-grid-12 dm-size-row">' +
+      '<div class="dm-cell dm-cell-5">' + sizeInput('W', 'width', s.width || 'auto', info?.id || '') + '</div>' +
+      '<div class="dm-cell dm-cell-2"><div class="dm-field"><label class="dm-field-label dm-field-label-hidden">&middot;</label>' + aspectBtn + '</div></div>' +
+      '<div class="dm-cell dm-cell-5">' + sizeInput('H', 'height', s.height || 'auto', info?.id || '') + '</div>' +
+    '</div>' + sp() +
     // Min W (3) + Max W (3) + Min H (3) + Max H (3)
     grid12([
       { span: 3, content: inp('Min W', 'minWidth', s.minWidth || '0') },
@@ -8536,6 +8616,26 @@ function renderDesignTab(): string {
 }
 
 /* ── Phase 4: Changes Tab (Grouped) ── */
+function renderRouteGroups(activeHtml: string): string {
+  return currentRouteGroups().map((group, index) => {
+    const active = index === 0;
+
+    const key = escapeAttr(group.routeKey);
+    const count = routeChangeCount(group) + (active ? tokenChanges.length : 0);
+    let label = group.url || 'Current route';
+    try { const url = new URL(group.url); label = url.pathname + url.search + (/^#!?\//.test(url.hash) ? url.hash : ''); } catch {}
+    const buttonStyle = 'background:none;border:1px solid var(--dm-separator);border-radius:4px;padding:5px 7px;color:inherit;cursor:pointer;font:inherit;font-size:10px;';
+    const confirm = deletingRouteKey === group.routeKey
+      ? '<div role="group" aria-label="Confirm route deletion" style="padding:10px 12px;background:var(--dm-danger-bg);color:var(--dm-text);font-size:11px;line-height:1.5;">Delete all changes for this route? This cannot be undone.<div style="display:flex;gap:8px;margin-top:8px;"><button data-dm-action="cancel-delete-route" style="' + buttonStyle + '">Cancel</button><button data-dm-action="confirm-delete-route" data-dm-route-key="' + key + '" style="' + buttonStyle + 'color:var(--dm-danger);">Delete route changes</button></div></div>' : '';
+    return '<section data-dm-route-group="' + key + '" data-dm-route-active="' + active + '" style="border-bottom:1px solid var(--dm-separator-strong);color:' + (active ? 'var(--dm-text)' : 'var(--dm-text-secondary)') + ';background:' + (active ? 'var(--dm-bg)' : 'var(--dm-bg-secondary)') + ';">' +
+      '<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;"><span style="flex:1;min-width:0;overflow-wrap:anywhere;font-size:12px;font-weight:600;">' + escapeAttr(label) + '</span>' +
+      '<span aria-label="' + count + ' changes" style="flex-shrink:0;font-size:10px;padding:2px 6px;border-radius:8px;background:var(--dm-btn-bg);">' + count + '</span>' +
+      (active ? '<span class="dm-route-action dm-route-current" aria-current="page">Current</span>' : '<button class="dm-route-action" data-dm-action="open-route" data-dm-route-key="' + key + '">Open route</button>') +
+      '<button data-dm-action="delete-route" data-dm-route-key="' + key + '" aria-label="Delete changes for ' + escapeAttr(label) + '" title="Delete this route’s changes" style="' + buttonStyle + 'color:var(--dm-danger);">' + icon('trash', 12) + '</button></div>' +
+      confirm + (active ? activeHtml : '') + '</section>';
+  }).join('');
+}
+
 function renderChangesTab(): string {
   type ChangeItem =
     | { type: 'style'; data: StyleChange; idx: number }
@@ -8577,7 +8677,7 @@ function renderChangesTab(): string {
   };
   const allItems = [...allItemsRaw].sort(sortItems);
 
-  if (allItems.length === 0) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;">' +
+  if (allItems.length === 0 && siteChangeCount() === 0) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;">' +
       '<div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('sparkles', 32) + '</div>' +
       '<div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">No changes yet</div>' +
       '<div style="font-size:11px;margin-top:6px;color:var(--dm-text-dim);max-width:260px;line-height:1.5;">Edits you make on the page show up here, ready to copy as a prompt or send straight to your agent. Picking up where you left off? Import a previously exported JSON.</div>' +
@@ -8705,9 +8805,9 @@ function renderChangesTab(): string {
     '<input type="text" class="dm-input" data-dm-changes-search value="' + escapeAttr(changesSearch) + '" placeholder="Search changes…" style="background:none;border:none;padding:5px 6px;flex:1;min-width:0;font-size:10px;"/>' +
     (changesSearch ? '<button data-dm-action="clear-changes-search" title="Clear search" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('x', 10) + '</button>' : '') +
     '</div>' +
-    '<select data-dm-changes-grouping aria-label="Group changes by" style="max-width:100px;background:var(--dm-input-bg);color:var(--dm-text-secondary);border:1px solid var(--dm-input-border);border-radius:4px;font:inherit;font-size:10px;padding:4px;">' +
+    '<div class="dm-changes-grouping"><select data-dm-changes-grouping aria-label="Group changes by">' +
     '<option value="element"' + (changesGrouping === 'element' ? ' selected' : '') + '>Elements</option>' +
-    '<option value="component"' + (changesGrouping === 'component' ? ' selected' : '') + '>Components</option></select>' +
+    '<option value="component"' + (changesGrouping === 'component' ? ' selected' : '') + '>Components</option></select><span aria-hidden="true">' + icon('chevronDown', 12) + '</span></div>' +
     expandIconBtn + sortIconBtn +
     '</div>';
 
@@ -8731,7 +8831,7 @@ function renderChangesTab(): string {
       label + ' <span style="opacity:0.6;">' + n + '</span></button>';
   };
   const filterChipsRow = '<div style="display:flex;gap:4px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--dm-separator);flex-wrap:wrap;">' +
-    fchip('all', 'All') + fchip('style', 'Styles') + fchip('text', 'Text') + fchip('dom', 'DOM') + fchip('comment', 'Comments') + fchip('token', 'Tokens') +
+    fchip('all', 'All') + fchip('style', 'Appearance') + fchip('text', 'Text') + fchip('dom', 'DOM') + fchip('comment', 'Comments') + fchip('token', 'Tokens') +
     '</div>';
 
   // Comments sub-filter — only renders when the kind filter is 'all' (and
@@ -8800,7 +8900,7 @@ function renderChangesTab(): string {
     ? '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
       '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:250px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
       '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;">Clear all changes?</div>' +
-      '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;line-height:1.5;">Removes every tracked style, text, DOM, and comment change. Resets the undo stack. This can\'t be undone.</div>' +
+      '<div style="font-size:10px;color:var(--dm-text-secondary);margin-bottom:14px;line-height:1.5;">Removes every tracked style, text, DOM, and comment change on every route of this site. Resets the undo stack. This can\'t be undone.</div>' +
       '<div style="display:flex;gap:6px;">' +
       '<button data-dm-action="cancel-clear-all" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Cancel</button>' +
       '<button data-dm-action="confirm-clear-all" style="flex:1;padding:6px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:6px;color:var(--dm-danger);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Clear all</button>' +
@@ -9130,7 +9230,7 @@ function renderChangesTab(): string {
     ? '<div style="text-align:center;padding:28px 16px;color:var(--dm-text-dim);font-size:11px;line-height:1.7;">No changes match this filter / search.<br/><a data-dm-action="reset-changes-filter" style="color:var(--dm-accent);cursor:pointer;text-decoration:underline;">Clear filter</a></div>'
     : '';
 
-  return '<div style="position:relative;">' + headerHtml + (filteredEmpty ? filteredEmptyHtml : groupHtml) + clearAllOverlay + deleteCommentOverlay + revertGroupOverlay + '</div>';
+  return '<div style="position:relative;">' + headerHtml + renderRouteGroups(allItems.length === 0 ? '<div style="padding:16px 12px;font-size:11px;color:var(--dm-text-muted);">No changes on this route.</div>' : filteredEmpty ? filteredEmptyHtml : groupHtml) + clearAllOverlay + deleteCommentOverlay + revertGroupOverlay + '</div>';
 }
 
 /* ── Settings View ── */
@@ -9768,6 +9868,7 @@ function render() {
     if (tab === 'layers') tabContent = renderLayersTab();
     else if (tab === 'design') tabContent = renderDesignTab();
     else if (tab === 'changes') tabContent = renderChangesTab();
+    if (routeEditingBlocked) tabContent = '<div role="status" style="padding:12px;color:var(--dm-text);font-size:12px;">Waiting for the destination page. Editing is paused to protect saved changes. If this persists, reload the page; review and export remain available.</div>' + tabContent;
 
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative;">' +
       renderHeader() + renderActionRow() + renderCommentCard() + renderTabs() +
@@ -10054,6 +10155,28 @@ function setupDelegation() {
         case 'submit-comment': submitComment(); break;
         case 'cancel-comment': cancelComment(); break;
         case 'close-viewing-comment': viewingCommentId = null; render(); break;
+
+        case 'open-route': {
+          const group = currentRouteGroups().find(group => group.routeKey === actionBtn.dataset.dmRouteKey);
+          if (!group || group.routeKey === activeRouteKey) break;
+          const res = await send({ type: 'SP_OPEN_ROUTE', routeKey: group.routeKey, url: group.url });
+          if (!res.ok && !res.success) showCaptureToast('error', res.error || 'Could not open this route.');
+          break;
+        }
+        case 'delete-route': deletingRouteKey = actionBtn.dataset.dmRouteKey!; render(); break;
+        case 'cancel-delete-route': deletingRouteKey = null; render(); break;
+        case 'confirm-delete-route': {
+          const key = actionBtn.dataset.dmRouteKey;
+          if (!key || key !== deletingRouteKey) break;
+          deletingRouteKey = null;
+          const target = myTabId, route = activeRouteKey;
+          const res = await send({ type: 'SP_CLEAR_ROUTE_CHANGES', routeKey: key });
+          if (target !== myTabId || route !== activeRouteKey) break;
+          if (!res.ok && !res.success) { showCaptureToast('error', res.error || 'Could not delete route changes.'); render(); break; }
+          await refreshChanges();
+          if (key === activeRouteKey) { await refreshDomTree(); await refreshState(); }
+          break;
+        }
         case 'clear-all-changes': clearAllConfirming = true; render(); break;
         case 'cancel-clear-all': clearAllConfirming = false; render(); break;
         case 'confirm-clear-all': clearAllConfirming = false; clearAllChanges(); break;
@@ -10127,20 +10250,14 @@ function setupDelegation() {
           break;
         }
         case 'export-changes': {
+          const target = myTabId, route = activeRouteKey;
+          await refreshChanges();
+          if (target !== myTabId || route !== activeRouteKey) break;
           // Build a portable JSON payload from the in-memory state. The
           // shape mirrors content/change-tracker's session payload plus a
           // comments array, with a version + url + timestamp envelope so
           // future imports can detect format changes.
-          const payload = {
-            version: 1,
-            kind: 'design-mode-changes',
-            exportedAt: Date.now(),
-            url: pinnedDomain || '',
-            styleChanges,
-            textChanges,
-            domChanges,
-            comments,
-          };
+          const payload = siteChangesExport();
           const json = JSON.stringify(payload, null, 2);
           const blob = new Blob([json], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -10150,7 +10267,7 @@ function setupDelegation() {
           a.download = `design-mode-changes-${stamp}.json`;
           a.click();
           setTimeout(() => URL.revokeObjectURL(url), 1000);
-          showCaptureToast('success', `Exported ${styleChanges.length + textChanges.length + domChanges.length + comments.length} change${(styleChanges.length + textChanges.length + domChanges.length + comments.length) === 1 ? '' : 's'}.`);
+          showCaptureToast('success', `Exported ${siteChangeCount()} change${siteChangeCount() === 1 ? '' : 's'} across all routes.`);
           break;
         }
         case 'revert-selected-changes': {
@@ -12383,8 +12500,7 @@ function setupDelegation() {
     const linkUrlInput = target.closest<HTMLInputElement>('[data-dm-rich-link-url]');
     if (linkUrlInput) {
       const editor = root.querySelector<HTMLElement>('[data-dm-richtext]');
-      const rawValue = linkUrlInput.value.trim();
-      const value = rawValue === '' ? '' : sanitizeRichTextHref(rawValue);
+      const value = normalizeRichTextHref(linkUrlInput.value);
       if (!editor || value === null) {
         linkUrlInput.setCustomValidity('Use an http(s), relative, or fragment URL.');
         linkUrlInput.reportValidity();
@@ -12530,7 +12646,7 @@ function setupDelegation() {
           showCaptureToast('error', 'Not a Design Mode changes file.');
           return;
         }
-        const payload = {
+        const payload = Array.isArray(parsed.routeGroups) ? parsed : {
           styleChanges: parsed.styleChanges,
           textChanges: parsed.textChanges,
           domChanges: parsed.domChanges,
@@ -12549,8 +12665,10 @@ function setupDelegation() {
           batchAppliedChanges.clear();
           componentContexts = r.componentContexts || {};
           changesSelected.clear();
+          void refreshChanges();
           render();
-          const total = payload.styleChanges.length + payload.textChanges.length + payload.domChanges.length + (payload.comments?.length || 0);
+          const groups = Array.isArray(payload.routeGroups) ? payload.routeGroups : [payload];
+          const total = groups.reduce((count: number, group: any) => count + group.styleChanges.length + group.textChanges.length + group.domChanges.length + group.comments.length, 0);
           showCaptureToast('success', `Imported ${total} change${total === 1 ? '' : 's'}.`);
         });
       };
@@ -13159,8 +13277,9 @@ function setupDelegation() {
     if (!editor) return;
     if (cmd === 'createLink' && info?.tagName?.toLowerCase() === 'a') {
       const currentUrl = (info as any).attributes?.href || '';
-      const url = window.prompt('Link URL:', currentUrl);
-      if (url && isSafeRichTextHref(url)) void applyAttribute(editor.dataset.dmElementId || '', 'href', url);
+      const input = window.prompt('Link URL:', currentUrl);
+      const url = input === null ? null : normalizeRichTextHref(input);
+      if (url !== null) void applyAttribute(editor.dataset.dmElementId || '', 'href', url);
       return;
     }
     editor.focus();

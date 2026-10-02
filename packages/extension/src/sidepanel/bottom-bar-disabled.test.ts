@@ -14,6 +14,7 @@ for (const [name, hasChanges, preview, disabled] of [
   ['preview original', true, true, true],
 ] as const) test(`Copy as Prompt exposes native disabled state: ${name}`, () => {
   const context: any = {
+    siteChangeCount: () => hasChanges ? 1 : 0,
     styleChanges: hasChanges ? [{}] : [], textChanges: [], domChanges: [], comments: [],
     previewingOriginal: preview, mcpMode: 'cloud', feedbackSession: null,
     sendingFeedback: false, feedbackSentUntil: 0, mcpState: 'offline', renderLiveFeedbackStatus: () => '',
@@ -28,6 +29,7 @@ for (const [name, hasChanges, preview, disabled] of [
 test('Send confirmation survives rerenders until its deadline', () => {
   let now = 1000;
   const context: any = {
+    siteChangeCount: () => 1,
     styleChanges: [{}], textChanges: [], domChanges: [], comments: [],
     previewingOriginal: false, mcpMode: 'local', feedbackSession: null,
     sendingFeedback: false, feedbackSentUntil: 2500, mcpState: 'connected',

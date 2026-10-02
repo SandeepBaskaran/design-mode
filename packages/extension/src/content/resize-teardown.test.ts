@@ -17,6 +17,7 @@ for (const paintBeforeTeardown of [false, true]) {
     const node = (): any => ({ style: {}, children: [], appendChild() {}, replaceChildren() {}, remove() {} });
     const dependencies: Record<string, unknown> = {
       '../shared': { Z_INDEX: {} },
+      './route-edit-guard': { canEditRoute: () => true },
       './authored-sizing': { inspectAuthoredSizing: () => ({ width: { authored: '100px' }, height: { authored: '100px' } }) },
       './user-styles': { setUserStylePreview: (css: string) => previews.push(css), whenUserStylesPainted: () => painted, userOverrideScope: () => '' },
       './helpers': { getElementRect: () => rect },

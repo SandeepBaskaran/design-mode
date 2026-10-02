@@ -97,6 +97,10 @@ export function generateSelector(el: HTMLElement): string {
   return parts.join(' > ');
 }
 
+export function commentSelector(el: HTMLElement | null, fallbackId: string): string {
+  return el ? generateSelector(el) : fallbackId;
+}
+
 // Human-readable layer label. generateSelector covers *targeting*; this
 // covers *recognition* — on class-less markup (hand-written local HTML) a
 // bare `div` identifies nothing, so fall back to the element's own text,

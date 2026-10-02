@@ -308,6 +308,13 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
   // oversized edit falls back to the new text alone.
   for (const c of textChanges) {
     const ctx = ensureCtx(c.elementId, c.selector);
+    if (c.attributeName) {
+      entries.push({
+        t: c.timestamp,
+        line: `- ${label(ctx)}${sourcePointer(ctx)} ${c.attributeName}: ${JSON.stringify(c.oldText)} → ${JSON.stringify(c.newText)}` + breakpointTag([c]),
+      });
+      continue;
+    }
     const oldText = (c.oldText || '').trim();
     const newText = (c.newText || '').trim();
     const head = `${label(ctx)}${sourcePointer(ctx)}`;
@@ -368,7 +375,7 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     entries.sort((a, b) => a.t - b.t);
     lines.push('');
     lines.push('## Changes');
-    if (textChanges.length > 0) {
+    if (textChanges.some(c => !c.attributeName)) {
       lines.push('> Text edits use git word-diff notation: `[-…-]` = removed, `{+…+}` = added, unmarked words are unchanged, and `…` marks unchanged text omitted for brevity. Apply the edit to the element — do not write the markers into the text.');
     }
     const hasBreakpoints = [...styleChanges, ...textChanges, ...domChanges]

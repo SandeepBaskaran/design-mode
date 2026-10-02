@@ -9,8 +9,10 @@ import { DEFAULT_WS_PORT, DATA_ATTR, classifyBreakpoint, type Breakpoint } from 
 import { BUILTIN_KEYFRAMES } from './keyframes-library';
 import { captureElementScreenshot, captureViewportScreenshotClean, captureRegionScreenshot } from './screenshots';
 import { loadComments } from './comments';
+import { canEditRoute } from './route-edit-guard';
+import { RouteSessionStore, routeIdentity, groupSiteChanges, SITE_CLEAR_PREFIX, type RouteGroup, type RouteWriteOwnership } from './route-storage';
 import { getTokenEdits } from './root-var-store';
-import { isSafeRichTextHref, replaceRichTextHtml, restoreRichTextHtml } from '../rich-text-preservation';
+import { isSafeRichTextHref, normalizeRichTextHref, replaceRichTextHtml, restoreRichTextHtml } from '../rich-text-preservation';
 import { IMPORT_STATES, validateImportPayload } from './import-validation';
 import { restoreSavedDomLocations } from './saved-session';
 import { userOverrideScope, setUserOverridesEnabled, syncUserStyles } from './user-styles';
@@ -127,8 +129,22 @@ export function getAllChanges(): Array<StyleChange | TextChange | DomChange> {
   return [...styleChanges, ...textChanges, ...domChanges].sort((a, b) => a.timestamp - b.timestamp);
 }
 
+export function discardActiveChanges() {
+  activeRouteLoaded = true;
+  routeGeneration += 1;
+  routeTextTargets.clear();
+  routeDomTargets.clear();
+  styleChanges.length = 0;
+  textChanges.length = 0;
+  domChanges.length = 0;
+  pendingHandoff = null;
+  clearAllRules();
+}
+
 export function clearAllChanges(stopFeedback = true) {
   if (stopFeedback) requestStopFeedback();
+  routeTextTargets.clear();
+  routeDomTargets.clear();
   styleChanges.length = 0;
   textChanges.length = 0;
   domChanges.length = 0;
@@ -484,30 +500,61 @@ export function scheduleRestamp() {
 // so DOM/style/text edits survive page reloads and back/forward navigation
 // within the same browser session.
 
-function sessionKey(): string {
-  return 'dm_session:' + location.origin + location.pathname + location.search;
-}
+let activeRouteUrl = routeIdentity(location.href).url;
+let activeRouteLoaded = false;
+let routeGeneration = 0;
+const routeTextTargets = new Map<string, { element: HTMLElement; change: TextChange }>();
+const routeDomTargets = new Map<string, { element: HTMLElement | null; parent: HTMLElement | null; siblings: Element[]; change: DomChange }>();
+export const routeStore = new RouteSessionStore(() => ({
+  // Firefox content scripts cannot access the background's session storage area.
+  get: async () => {
+    const response = await browser.runtime.sendMessage({ type: 'DM_SESSION_STORE', operation: { action: 'read', href: location.href } });
+    if (!response?.ok || !response.applied || typeof response.applied !== 'object') throw Error('Session could not be read. Please retry.');
+    return response.applied;
+  },
+  set: async () => { throw Error('Session writes require the background broker'); },
+  remove: async () => { throw Error('Session clears require the background broker'); },
+}), 100, async operation => {
+  const response = await browser.runtime.sendMessage({ type: 'DM_SESSION_STORE', operation });
+  if (!response?.ok) throw Error(response?.error || 'Session could not be saved. Please retry.');
+  return response.applied === true;
+});
+let routeClearedHandler: (() => void) | null = null;
+export function setRouteClearedHandler(handler: () => void) { routeClearedHandler = handler; }
 
-let persistTimer: ReturnType<typeof setTimeout> | null = null;
+export function getActiveRouteUrl(): string { return activeRouteUrl; }
+export function getRouteGeneration(): number { return routeGeneration; }
+
 export function persistSession() {
-  if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = setTimeout(async () => {
-    persistTimer = null;
-    try {
-      const payload = { styleChanges, textChanges, domChanges, savedAt: Date.now() };
-      const storage: any = (browser.storage as any).session || browser.storage.local;
-      await storage.set({ [sessionKey()]: payload });
-    } catch {}
-  }, 100);
+  activeRouteLoaded = true;
+  const textKeys = new Set(textChanges.map(c => c.elementId + '\0' + (c.attributeName || 'content')));
+  for (const key of routeTextTargets.keys()) if (!textKeys.has(key)) routeTextTargets.delete(key);
+  const domIds = new Set(domChanges.map(c => c.id));
+  for (const key of routeDomTargets.keys()) if (!domIds.has(key)) routeDomTargets.delete(key);
+  for (const change of domChanges) {
+    if (routeDomTargets.has(change.id)) continue;
+    let parent: HTMLElement | null = null;
+    if (change.origin?.parentId) parent = getElementById(change.origin.parentId);
+    if (!parent && change.origin) {
+      try { parent = change.origin.parentSelector ? document.querySelector(change.origin.parentSelector) : document.body; } catch {}
+    }
+    const element = getElementById(change.elementId);
+    routeDomTargets.set(change.id, { element, parent, siblings: parent ? Array.from(parent.children).filter(child => change.action !== 'delete' || child !== element) : [], change: structuredClone(change) });
+  }
+  for (const change of textChanges) {
+    const key = change.elementId + '\0' + (change.attributeName || 'content');
+    const element = getElementById(change.elementId);
+    if (element) routeTextTargets.set(key, { element, change: { ...change } });
+  }
+  routeGeneration += 1;
+  routeStore.schedule(activeRouteUrl, { styleChanges, textChanges, domChanges });
 }
 
 // Import uses an acknowledged write, unlike ordinary debounced editing.
-export async function persistImportedSession(payload: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }): Promise<void> {
-  if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
-  try {
-    const storage = browser.storage.session || browser.storage.local;
-    await storage.set({ [sessionKey()]: { styleChanges: payload.styleChanges, textChanges: payload.textChanges, domChanges: payload.domChanges, savedAt: Date.now() } });
-  } catch (error) { persistSession(); throw error; }
+export async function persistImportedSession(payload: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }, href = activeRouteUrl, ownership?: RouteWriteOwnership, rollback = false): Promise<void> {
+  if (ownership) { await routeStore.writeOwned(ownership, payload, rollback); return; }
+  routeStore.schedule(href, payload);
+  await routeStore.flush();
 }
 
 export function captureTrackerRollback(): () => void {
@@ -531,19 +578,95 @@ export function captureTrackerRollback(): () => void {
   };
 }
 
-export async function loadSession(): Promise<{ styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] } | null> {
-  try {
-    const storage = browser.storage.session || browser.storage.local;
-    const data = await storage.get(sessionKey());
-    const payload = data?.[sessionKey()] as { styleChanges?: StyleChange[]; textChanges?: TextChange[]; domChanges?: DomChange[] } | undefined;
-    if (!payload) return null;
-    return {
-      styleChanges: payload.styleChanges || [],
-      textChanges: payload.textChanges || [],
-      domChanges: restoreSavedDomLocations(payload.domChanges || []),
-    };
-  } catch { return null; }
+export async function loadSession() {
+  const saved = await routeStore.load(activeRouteUrl);
+  return saved ? { ...saved, domChanges: restoreSavedDomLocations(saved.domChanges) } : null;
 }
+
+export async function getSiteRouteGroups(): Promise<RouteGroup[]> {
+  if (routeIdentity(location.href).url !== activeRouteUrl) throw new Error('Page route changed');
+  const url = activeRouteUrl;
+  const generation = routeGeneration;
+  const [records, comments] = await Promise.all([routeStore.readAll(), loadComments()]);
+  if (url !== activeRouteUrl || generation !== routeGeneration) return getSiteRouteGroups();
+  return groupSiteChanges(url, records, comments, activeRouteLoaded ? { styleChanges: getStyleChanges(), textChanges: getTextChanges(), domChanges: getDomChanges() } : undefined);
+}
+
+export async function clearSavedRoute(routeKey: string): Promise<void> {
+  const target = routeIdentity(new URL(routeKey, activeRouteUrl).href);
+  const current = routeIdentity(activeRouteUrl);
+  if (target.origin !== current.origin || target.routeKey !== routeKey) throw new Error('Invalid route key');
+  routeGeneration += 1;
+  await routeStore.clearRoute(target.url);
+}
+
+export async function clearSavedSite(): Promise<void> {
+  routeGeneration += 1;
+  await routeStore.clearSite(activeRouteUrl);
+}
+
+export function switchActiveRoute(): boolean {
+  const next = routeIdentity(location.href).url;
+  if (next === activeRouteUrl) return false;
+  // Do not resolve old selectors against the new route, even for cleanup.
+  void routeStore.flush().catch(() => {});
+  clearAllRules();
+  for (const { element, change } of routeDomTargets.values()) {
+    if ((change.action === 'duplicate' || change.action === 'insert') && element?.isConnected) element.remove();
+  }
+  for (const { element, parent, siblings, change } of [...routeDomTargets.values()].reverse()) {
+    if (!parent?.isConnected || !change.origin) continue;
+    if (change.action === 'move' && element?.isConnected) {
+      const before = parent.children[change.origin.index];
+      if (before !== element) parent.insertBefore(element, before || null);
+    } else if (change.action === 'delete' && change.outerHTML) {
+      // A router that replaced siblings owns the new subtree; never reconstruct into it.
+      if (parent.children.length !== siblings.length || siblings.some((child, i) => parent.children[i] !== child)) continue;
+      if (element?.isConnected) continue;
+      const template = document.createElement('template');
+      if (!element) template.innerHTML = change.outerHTML;
+      const restored = element || template.content.firstElementChild;
+      if (restored) parent.insertBefore(restored, parent.children[change.origin.index] || null);
+    }
+  }
+  for (const { element, change } of routeTextTargets.values()) {
+    if (!element.isConnected) continue;
+    if (change.attributeName) {
+      if (element.getAttribute(change.attributeName) !== change.newText) continue;
+      if (change.oldText) element.setAttribute(change.attributeName, change.oldText);
+      else element.removeAttribute(change.attributeName);
+    } else if (change.isHtml) {
+      if (element.innerHTML === change.newText) element.innerHTML = restoreRichTextHtml(element, change.oldText);
+    } else if (element.textContent === change.newText) element.textContent = change.oldText;
+  }
+  routeTextTargets.clear();
+  routeDomTargets.clear();
+  styleChanges.length = 0;
+  textChanges.length = 0;
+  domChanges.length = 0;
+  pendingHandoff = null;
+  routeGeneration += 1;
+  activeRouteUrl = next;
+  activeRouteLoaded = false;
+  return true;
+}
+
+window.addEventListener('pagehide', () => { void routeStore.flush().catch(() => {}); });
+browser.storage.onChanged.addListener((changes, area) => {
+  const storageArea = (browser.storage as any).session ? 'session' : 'local';
+  if (area !== storageArea) return;
+  const value = changes[SITE_CLEAR_PREFIX + routeIdentity(activeRouteUrl).origin]?.newValue;
+  if (!value || typeof value !== 'object') return;
+  const marker = value as { id?: unknown; writerId?: unknown; routeKey?: unknown };
+  if (typeof marker.id !== 'string' || marker.writerId === routeStore.writerId) return;
+  const target = typeof marker.routeKey === 'string' ? marker.routeKey : activeRouteUrl;
+  try { if (routeIdentity(target).origin !== routeIdentity(activeRouteUrl).origin) return; } catch { return; }
+  routeStore.invalidate(target, !marker.routeKey);
+  routeGeneration += 1;
+  if (!marker.routeKey || target === activeRouteUrl) {
+    routeClearedHandler?.();
+  }
+});
 
 // Replays a payload of changes onto the current DOM and replaces the in-
 // memory arrays so the side panel reflects them. Used by both
@@ -577,6 +700,7 @@ export function applyChangesPayload(input: { styleChanges: StyleChange[]; textCh
   // element doesn't vanish entirely.
   const resolveParent = (loc: { parentSelector: string; index: number; parentId?: string } | undefined): HTMLElement | null => {
     if (!loc) return null;
+    if (!loc.parentSelector && !loc.parentId) return document.body;
     if (loc.parentId) {
       const byId = document.querySelector(`[${DATA_ATTR}="${loc.parentId}"]`) as HTMLElement | null;
       if (byId) return byId;
@@ -699,7 +823,10 @@ export function applyChangesPayload(input: { styleChanges: StyleChange[]; textCh
 }
 
 export async function replaySession(isCurrent = () => true): Promise<boolean> {
+  const url = activeRouteUrl;
+  const generation = routeGeneration;
   const saved = await loadSession();
+  if (url !== activeRouteUrl || routeIdentity(location.href).url !== url || generation !== routeGeneration) return false;
   if (!saved || !isCurrent()) return false;
   try { applyChangesPayload(saved); return true; } catch { return false; }
 }
@@ -901,6 +1028,7 @@ export function applyStyleChange(
 ): StyleChange | null {
   if (!/^dm-\d+$/.test(elementId) || !/^(?:--[\w-]+|-?[a-zA-Z][\w-]*|__effect_overlay|__effect_hidden)$/.test(property)
     || typeof value !== 'string' || !(IMPORT_STATES as readonly string[]).includes(state)) return null;
+  if (!canEditRoute()) return null;
   const el = getElementById(elementId);
   if (!el) return null;
   const k = kebab(property);
@@ -1019,6 +1147,7 @@ export function applyTextChange(
   elementId: string, text: string,
   refreshPanel?: () => void
 ): TextChange | null {
+  if (!canEditRoute()) return null;
   const el = getElementById(elementId);
   if (!el) return null;
   const priorText = el.textContent || '';
@@ -1066,6 +1195,7 @@ export function applyHtmlChange(
   refreshPanel?: () => void,
   preserveStructure = false,
 ): TextChange | null {
+  if (!canEditRoute()) return null;
   const el = getElementById(elementId);
   if (!el) return null;
   const priorHtml = el.innerHTML || '';
@@ -1112,7 +1242,11 @@ export function applyAttributeChange(
   value: string,
   refreshPanel?: () => void,
 ): TextChange | null {
-  if (attributeName !== 'href' || (value && !isSafeRichTextHref(value))) return null;
+  if (attributeName !== 'href') return null;
+  if (!canEditRoute()) return null;
+  const href = normalizeRichTextHref(value);
+  if (href === null) return null;
+  value = href;
   const el = getElementById(elementId);
   if (!el) return null;
   const priorValue = el.getAttribute(attributeName) || '';
@@ -1349,6 +1483,21 @@ export function getChangeReport() {
   };
 }
 
+export async function getSiteChangeReport() {
+  const routeGroups = await getSiteRouteGroups();
+  const active = getChangeReport();
+  const withRoute = <T extends object>(items: T[], group: RouteGroup) => items.map(item => ({ ...item, pageUrl: group.url, routeKey: group.routeKey }));
+  return {
+    ...active,
+    routeGroups,
+    styleChanges: routeGroups.flatMap((group, i) => withRoute(i === 0 && activeRouteLoaded ? active.styleChanges : group.styleChanges, group)),
+    textChanges: routeGroups.flatMap((group, i) => withRoute(i === 0 && activeRouteLoaded ? active.textChanges : group.textChanges, group)),
+    domChanges: routeGroups.flatMap((group, i) => withRoute(i === 0 && activeRouteLoaded ? active.domChanges : group.domChanges, group)),
+    comments: routeGroups.flatMap(group => withRoute(group.comments, group)),
+    cssBlock: routeGroups.map(group => `/* Route: ${group.url.replace(/\*\//g, '* /')} */\n` + group.styleChanges.map(c => `${c.selector} { ${kebab(c.property)}: ${c.newValue}; }`).join('\n')).join('\n\n'),
+  };
+}
+
 // User clicked "Send to Agent". Stash the marker locally (cloud tools read
 // the page live via getChangeReport) and push it to the local server's
 // state (local get_changes reads server-side). Waits for the live-session
@@ -1359,6 +1508,9 @@ export async function stageAgentHandoff(): Promise<{
   handoff?: AgentHandoff;
   session: FeedbackSessionView | null;
 }> {
+  const report = await getSiteChangeReport();
+  transportSend({ type: 'SESSION_UPDATE', payload: report });
+  for (const comment of report.comments) syncCommentChange(comment);
   pendingHandoff = { requestedAt: Date.now(), pageUrl: location.href, pageTitle: document.title };
   if (!isLiveFeedbackSupported()) {
     transportSend({ type: 'HANDOFF', payload: pendingHandoff });
@@ -1547,6 +1699,15 @@ function dispatchIncoming(msg: any) {
       return;
     }
     if (msg.type === 'APPLY_CHANGES' && msg.payload) {
+      if (!canEditRoute()) {
+        if (msg.requestId) sendRelayResponse(msg.requestId, { ok: false, error: 'Reload the destination route before editing' });
+        return;
+      }
+      const requestedUrl = msg.payload.routeKey || msg.payload.pageUrl;
+      if (routeIdentity(location.href).url !== activeRouteUrl || (requestedUrl && routeIdentity(requestedUrl).url !== activeRouteUrl)) {
+        if (msg.requestId) sendRelayResponse(msg.requestId, { error: 'Navigate to the requested route before applying changes' });
+        return;
+      }
       // Cloud may send `{ changes: [...] }` (ack-expected) or a single
       // `{ elementId, styles }` (legacy). Handle both shapes.
       const items: Array<{ elementId: string; styles: Record<string, string> }> =
@@ -1876,8 +2037,7 @@ function syncDomChange(change: DomChange) {
 }
 
 export function syncAllChanges() {
-  const report = getChangeReport();
-  transportSend({ type: 'SESSION_UPDATE', payload: transportMode === 'local' ? { ...report, documentId: feedbackDocumentId } : report });
+  void getSiteChangeReport().then(report => transportSend({ type: 'SESSION_UPDATE', payload: transportMode === 'local' ? { ...report, documentId: feedbackDocumentId } : report })).catch(() => {});
 }
 
 // Comments live in content/comments.ts, not in this module's change report,

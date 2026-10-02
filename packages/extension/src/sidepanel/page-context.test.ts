@@ -12,9 +12,10 @@ it('Changes ignores old URLs, child frames, other tabs and navigating documents'
   assert.ok(statement);
   let handler: any;
   const state = vm.createContext({ myTabId: 7, boundPageUrl: 'https://page.test/a?q=1#one',
-    pageNavigating: false, pageUnavailable: false,
+    pageNavigating: false, pageUnavailable: false, changesRequest: 0, routeEditingBlocked: false,
+    resetChangesRoute: (url: string) => { assert.equal(url, 'https://page.test/a?q=1#one'); },
     styleChanges: [], textChanges: [], domChanges: [], comments: [], tokenChanges: [], componentContexts: {},
-    render() {}, browser: { runtime: { onMessage: { addListener: (fn: any) => { handler = fn; } } } },
+    refreshChanges: async () => {}, render() {}, browser: { runtime: { onMessage: { addListener: (fn: any) => { handler = fn; } } } },
   });
   vm.runInContext(ts.transpile(statement.getText(ast), { target: ts.ScriptTarget.ES2022 }), state);
   const message = { type: 'CHANGES_UPDATE', comments: [{ text: 'stale' }] };
@@ -34,14 +35,30 @@ it('content cannot label a delayed old-page comment read as the new URL', async 
   const ast = ts.createSourceFile('content.ts', source, ts.ScriptTarget.Latest, true);
   const fn = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'getChangesPayload');
   assert.ok(fn);
-  let finish: (comments: unknown[]) => void = () => {};
+  const reads: Array<{ url: string; finish: (groups: unknown[]) => void }> = [];
   const location = { href: 'https://page.test/a' };
-  const context = vm.createContext({ location, getPageComments: () => new Promise(resolve => { finish = resolve; }),
+  let active = location.href;
+  let generation = 0;
+  const context = vm.createContext({
+    location, pendingRouteReplay: null,
+    ensureActiveRoute: async () => { if (active !== location.href) { active = location.href; generation++; } },
+    getActiveRouteUrl: () => active, getRouteGeneration: () => generation,
+    routeIdentity: (url: string) => ({ url, routeKey: url }), canEditRoute: () => true,
+    getSiteRouteGroups: () => new Promise(finish => { reads.push({ url: active, finish }); }),
     buildChangesPayload: (comments: unknown[]) => ({ comments, styleChanges: [], textChanges: [], domChanges: [] }),
+    getChangeComponentContexts: () => ({}), getTokenEdits: () => [],
   });
   vm.runInContext(ts.transpile(fn.getText(ast), { target: ts.ScriptTarget.ES2022 }), context);
   const pending = context.getChangesPayload();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads[0].url, 'https://page.test/a');
   location.href = 'https://page.test/b';
-  finish([{ text: 'Only page A', elementId: '' }]);
-  await assert.rejects(pending, /Page changed/);
+  reads[0].finish([{ comments: [{ text: 'Only page A', elementId: '' }], styleChanges: [], textChanges: [], domChanges: [] }]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads.length, 2);
+  assert.equal(reads[1].url, 'https://page.test/b');
+  reads[1].finish([{ comments: [{ text: 'Only page B', elementId: '' }], styleChanges: [], textChanges: [], domChanges: [] }]);
+  const payload = await pending;
+  assert.equal(payload.url, 'https://page.test/b');
+  assert.deepEqual(payload.comments.map((comment: any) => comment.text), ['Only page B']);
 });

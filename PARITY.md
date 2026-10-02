@@ -736,7 +736,7 @@ Filter row:
 | Control | What |
 |---|---|
 | **Search** | Live, case-insensitive, matches selector / property / old + new value / DOM action / tag name / comment text. `×` button clears the box. |
-| **Filter chips** | All / Styles / Text / DOM / Comments. Each chip shows a count badge. Empty result swaps the list for a "No matches" notice + Clear-filter link. |
+| **Filter chips** | All / Appearance / Text / DOM / Comments. Each chip shows a count badge. Empty result swaps the list for a "No matches" notice + Clear-filter link. |
 | **Sort dropdown** | Oldest first (default) / Newest first / By element. By-element keeps each group's items together while preserving relative age across groups. |
 | **Multi-select + bulk revert** | Per-row checkbox column. When 2+ rows are checked, a toolbar appears with **Revert selected** (drives every selected change-id through the per-change revert path) and **Clear** (deselect all). |
 | **Keyboard escape** | Esc dismisses the Clear All confirmation overlay. |

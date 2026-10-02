@@ -22,7 +22,8 @@ function fixture(parsed: unknown, ok = true, size = 100) {
     FileReader: class { onload: any; readAsText() { read = true; this.onload({ target: { result: JSON.stringify(parsed) } }); } },
     styleChanges: ['old'], textChanges: ['old'], domChanges: ['old'], comments: ['old'], tokenChanges: ['old-token'],
     editedTokens: new Map([['old', true]]), batchAppliedChanges: new Set(['old']), changesSelected: new Set(['old']),
-    componentContexts: { old: true }, render: () => {},
+    componentContexts: { old: true }, render: () => {}, refreshes: 0,
+    refreshChanges: async () => { context.refreshes++; },
     send: async (message: any) => {
       sent.push(message);
       return ok ? { ok: true, styleChanges: [], textChanges: [], domChanges: [], comments: [], tokenChanges: [] } : { ok: false, error: 'Rejected' };
@@ -46,10 +47,12 @@ it('failed file import retains token caches, selections and tracked work', async
   const f = fixture(valid, false); await f.run();
   assert.equal(f.context.tokenChanges[0], 'old-token'); assert.equal(f.context.editedTokens.size, 1);
   assert.equal(f.context.batchAppliedChanges.size, 1); assert.equal(f.context.changesSelected.size, 1);
+  assert.equal(f.context.refreshes, 0);
 });
 it('successful file replacement clears obsolete panel token caches and selections', async () => {
   const f = fixture(valid); await f.run();
   assert.equal(f.context.tokenChanges.length, 0); assert.equal(f.context.editedTokens.size, 0);
   assert.equal(f.context.batchAppliedChanges.size, 0); assert.equal(f.context.changesSelected.size, 0);
   assert.equal(f.context.styleChanges.length, 0);
+  assert.equal(f.context.refreshes, 1);
 });

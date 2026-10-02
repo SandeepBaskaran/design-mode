@@ -324,6 +324,8 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 6.11 | Region comment — cancel removes box | Drop a box → click Cancel in the composer | The pending yellow box disappears; no comment created. (Pressing `Esc` mid-drag, before release, also exits with no box) |
 | 6.12 | Inspect suspended while composing | Turn Inspect on → select an element → open the comment composer (add), then hover/click other elements on the page | Inspect is off while the composer is open (no hover outlines, clicks don't reselect); on Add/Cancel inspect returns to its prior on state. Same for **editing** a comment and for **region** compose |
 | 6.13 | Inspect stays off if it was off | With Inspect off, open a composer then close it | Inspect remains off throughout (prior state restored, not force-enabled) |
+| 6.14 | Comment on a classed, id-less element keeps its class | Fixture → select the second `.card` ("Second column") → add a comment | Changes-tab row label reads `div.grid-2:nth-of-type(4) > div.card:nth-of-type(2)`, not bare `div` |
+| 6.15 | Similar siblings re-anchor to the right element | After 6.14, reload the page | The pin returns to "Second column", not "First column" |
 
 ---
 
@@ -665,6 +667,28 @@ everything not listed here must behave exactly as on Chrome.
 | 18.10 Other MCP modes | Select Cloud/Self-hosted and Send. | Existing one-shot handoff remains usable; Local-only feedback controls do not imply cloud support. |
 | 18.11 Guided setup | Run setup against disposable JSON/JSONC agent-config fixtures; inspect preview; decline then approve; repeat. | No writes on decline; approved writes preserve unrelated config and environment settings, warn before normalising comments, back up original files and are idempotent. |
 | 18.12 Setup safety | Use invalid JSON, conflicting entries, symlink targets, unsupported client and unavailable server. | Actionable errors; no destructive overwrite; diagnostic checks do not leak credentials. |
+
+## Phase 19 — Site-wide route review
+
+Use disposable HTTP(S) fixtures on two routes of one origin and a second
+origin (including a different port). Do not use personal browsing data.
+
+| Test | Action | Expected |
+|---|---|---|
+| 19.1 Route isolation | Edit the same selector differently on `/a` and `/b`; revisit and reload each. | Both routes appear in Changes; each page replays only its own edits. |
+| 19.2 Inactive route | View `/b` with saved `/a` changes, then Open route. | Inactive routes show only path/count/open/delete, without expansion or URL subrows. Current route stays expanded with a blue badge in the Open route position. Open route navigates the bound tab to `/a`. |
+| 19.3 Origin boundary | Record edits on another scheme, subdomain or port; return to the original origin. | Foreign-origin changes are absent from review, copy, send and clear operations. |
+| 19.4 Navigation validation | Send `SP_OPEN_ROUTE` with a foreign-origin URL, `javascript:`, a malformed URL, credentials or a page/content-script sender. | Error response; no tab update. Same-origin absolute HTTP(S) URLs preserve path, query and hash. |
+| 19.5 Route deletion | Delete `/a` while viewing `/b`; revisit `/a`. | Only `/a` records disappear and do not replay; `/b` remains unchanged. |
+| 19.6 Clear origin | Clear all with edits on both routes and another origin. | All current-origin route records clear; other-origin records survive. |
+| 19.7 All-route handoff | Filter to one route/type, then Copy as Prompt and Send to Agent with a disposable configured agent. | Both outputs include all saved current-origin routes with route URLs; filters do not truncate the payload. |
+| 19.8 Empty current route | Visit an unedited route on an origin with saved changes elsewhere. | Saved routes remain reviewable and copy/send remain available. |
+| 19.9 Multiple surfaces | Open panels bound to separate fixture tabs; Open route in each concurrently. | Each navigation stays in its own target tab and exact origin. |
+| 19.10 Session lifetime | Reload and revisit edited routes, then exercise the existing session-storage expiry. | Route edits survive revisit/reload but grouping does not extend their previous storage lifetime. |
+| 19.11 Delayed SPA render | Change the route URL before replacing its DOM; attempt panel, gesture and agent edits. | Mutations are blocked without overwriting saved destination edits. Replay resumes only on confirmed new targets; reused targets require reload with a visible notice. |
+| 19.12 Comment concurrency | Interleave another-origin comment write with a site clear, including an in-flight storage write. | Cleared comments stay removed and unrelated comments survive; Firefox clear/import replies succeed. |
+| 19.13 JSON round trip | Export multiple routes including comments, clear, then import through the file picker. | All routes restore; only current-route changes touch the active DOM. Invalid foreign-origin input is rejected. |
+| 19.14 Agent route identity | Send two routes with the same selector/property but different values through Local and Cloud report paths. | Both values retain their route identity in detailed arrays, items and route groups; CSS is not merged across routes. |
 
 ## Sign-off
 

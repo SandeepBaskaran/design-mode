@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, type StyleChange } from './state.js';
 import { requestFromExtension, isExtensionConnected } from './websocket-server.js';
 import { stopFeedbackSession, waitForHandoff, type ToolExtra } from './feedback-session.js';
 
@@ -20,29 +20,29 @@ export type ToolResult = {
 export type { ToolExtra } from './feedback-session.js';
 export type ToolDispatch = (name: string, args?: Record<string, unknown>, extra?: ToolExtra) => Promise<ToolResult>;
 
-function groupBySelector(): Map<string, Map<string, string>> {
+function groupBySelector(changes: StyleChange[]): Map<string, Map<string, string>> {
   const bySelector = new Map<string, Map<string, string>>();
-  for (const c of state.getStyleChanges()) {
+  for (const c of changes) {
     if (!bySelector.has(c.selector)) bySelector.set(c.selector, new Map());
     bySelector.get(c.selector)!.set(c.property, c.newValue);
   }
   return bySelector;
 }
 
-function renderCss(): string {
+function renderCss(changes: StyleChange[]): string {
   const rules: string[] = [];
-  for (const [sel, props] of groupBySelector()) {
+  for (const [sel, props] of groupBySelector(changes)) {
     const decls = Array.from(props).map(([k, v]) => `  ${toKebab(k)}: ${v};`).join('\n');
     rules.push(`${sel} {\n${decls}\n}`);
   }
   return rules.join('\n\n');
 }
 
-function renderScss(): string {
-  return `// Design Mode SCSS export\n\n${renderCss()}`;
+function renderScss(changes: StyleChange[]): string {
+  return `// Design Mode SCSS export\n\n${renderCss(changes)}`;
 }
 
-function renderTailwind(): string {
+function renderTailwind(changes: StyleChange[]): string {
   const cssToTw: Record<string, (v: string) => string> = {
     'display': v => ({ block: 'block', flex: 'flex', grid: 'grid', 'inline-block': 'inline-block', none: 'hidden' })[v] || '',
     'font-weight': v => ({ '400': 'font-normal', '500': 'font-medium', '600': 'font-semibold', '700': 'font-bold' })[v] || '',
@@ -52,7 +52,7 @@ function renderTailwind(): string {
     'cursor': v => `cursor-${v}`,
   };
   const lines: string[] = [];
-  for (const [sel, props] of groupBySelector()) {
+  for (const [sel, props] of groupBySelector(changes)) {
     const classes: string[] = [];
     for (const [prop, val] of props) {
       const kebab = toKebab(prop);
@@ -65,9 +65,9 @@ function renderTailwind(): string {
   return lines.join('\n\n');
 }
 
-function renderJsx(): string {
+function renderJsx(changes: StyleChange[]): string {
   const blocks: string[] = [];
-  for (const [sel, props] of groupBySelector()) {
+  for (const [sel, props] of groupBySelector(changes)) {
     const entries = Array.from(props).map(([k, v]) => {
       const isNum = /^\d+(\.\d+)?$/.test(v);
       return `  ${k}: ${isNum ? v : `'${v}'`}`;
@@ -78,12 +78,17 @@ function renderJsx(): string {
 }
 
 function renderExport(format: ExportFormat): string {
-  switch (format) {
-    case 'css': return renderCss();
-    case 'tailwind': return renderTailwind();
-    case 'scss': return renderScss();
-    case 'jsx': return renderJsx();
+  const render = { css: renderCss, tailwind: renderTailwind, scss: renderScss, jsx: renderJsx }[format];
+  const routes = new Map<string, StyleChange[]>();
+  for (const change of state.getStyleChanges()) {
+    const route = change.routeKey ?? change.pageUrl ?? '';
+    if (!routes.has(route)) routes.set(route, []);
+    routes.get(route)!.push(change);
   }
+  return Array.from(routes, ([route, changes]) => {
+    const label = route.replace(/\*\//g, '* /').replace(/[\r\n\u2028\u2029]/g, ' ');
+    return `${route ? `/* Route: ${label} */\n` : ''}${render(changes)}`;
+  }).join('\n\n');
 }
 
 async function getChanges(): Promise<ToolResult> {

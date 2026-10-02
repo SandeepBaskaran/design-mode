@@ -41,3 +41,24 @@ describe('buildCloudSessionSummary', () => {
     assert.ok(summary.pendingHandoff);
   });
 });
+
+it('retains route identity for every cloud item kind without collapsing equal selectors', () => {
+  const routes = ['https://example.test/a', 'https://example.test/b'];
+  const input = {
+    styleChanges: routes.map((pageUrl, i) => ({ id: `s${i}`, selector: 'h1', property: 'color', pageUrl, routeKey: pageUrl })),
+    textChanges: routes.map((pageUrl, i) => ({ id: `t${i}`, selector: 'h1', pageUrl, routeKey: pageUrl })),
+    domChanges: routes.map((pageUrl, i) => ({ id: `d${i}`, selector: 'h1', action: 'delete', pageUrl, routeKey: pageUrl })),
+    comments: routes.map((pageUrl, i) => ({ id: `c${i}`, selector: 'h1', resolved: true, pageUrl, routeKey: pageUrl })),
+  };
+  const items = buildMcpItems(input);
+  assert.equal(items.length, 8);
+  for (const kind of ['style', 'text', 'dom', 'comment']) {
+    assert.deepEqual(items.filter(c => c.kind === kind).map(c => [c.pageUrl, c.routeKey]), routes.map(url => [url, url]));
+  }
+});
+
+it('preserves partial route metadata without inventing missing fields', () => {
+  const items = buildMcpItems({ comments: [{ id: 'c', selector: 'h1', pageUrl: 'https://example.test/a' }] });
+  assert.equal(items[0].pageUrl, 'https://example.test/a');
+  assert.equal('routeKey' in items[0], false);
+});

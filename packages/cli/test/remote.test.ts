@@ -113,7 +113,10 @@ test('Cloud defaults to canonical MCP; both remote modes exercise actual route a
       assert.equal(status.code, 0);
       assert.equal(status.json().extensionConnected, null);
       assert.equal(status.json().authenticated, true);
-      const call = await f.cli(['call', 'apply_changes', '--stdin'], env, '{"changes":[{"elementId":"test","styles":{"color":"red"}}]}');
+      const unscoped = await f.cli(['call', 'apply_changes', '--stdin'], env, '{"changes":[{"elementId":"test","styles":{"color":"red"}}]}');
+      assert.equal(unscoped.code, 1);
+      assert.match(unscoped.json().result.content[0].text, /routeKey/);
+      const call = await f.cli(['call', 'apply_changes', '--stdin'], env, '{"routeKey":"https://example.test/page","changes":[{"elementId":"test","styles":{"color":"red"}}]}');
       assert.equal(call.code, 0, call.stdout);
       assert.match(call.json().result.content[0].text, /Applied 1 style change/);
       assert.equal((await f.cli(['schema', 'not-on-server'], env)).code, 2);

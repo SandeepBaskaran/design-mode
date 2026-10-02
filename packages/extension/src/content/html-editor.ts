@@ -6,10 +6,12 @@
 
 import { getOrAssignId, getElementById, generateSelector } from './helpers';
 import { recordDomChange } from './change-tracker';
+import { canEditRoute } from './route-edit-guard';
 
 let clipboard: { html: string; tagName: string; styles: string } | null = null;
 
 export function cutElement(elementId: string): boolean {
+  if (!canEditRoute()) return false;
   const el = getElementById(elementId);
   if (!el || isDmElement(el)) return false;
   clipboard = { html: el.outerHTML, tagName: el.tagName, styles: el.getAttribute('style') || '' };
@@ -43,6 +45,7 @@ export function copyElement(elementId: string): boolean {
 }
 
 export function pasteElement(targetId: string, position: 'before' | 'after' | 'inside' = 'after'): string | null {
+  if (!canEditRoute()) return null;
   if (!clipboard) return null;
   const target = getElementById(targetId);
   if (!target || isDmElement(target)) return null;
@@ -81,6 +84,7 @@ export function pasteElement(targetId: string, position: 'before' | 'after' | 'i
 }
 
 export function duplicateElement(elementId: string): string | null {
+  if (!canEditRoute()) return null;
   const el = getElementById(elementId);
   if (!el || isDmElement(el)) return null;
   const clone = el.cloneNode(true) as HTMLElement;
@@ -110,6 +114,7 @@ export function duplicateElement(elementId: string): string | null {
 }
 
 export function deleteElement(elementId: string): boolean {
+  if (!canEditRoute()) return false;
   const el = getElementById(elementId);
   if (!el || isDmElement(el)) return false;
   const selector = generateSelector(el);
@@ -132,6 +137,7 @@ export function deleteElement(elementId: string): boolean {
 }
 
 export function moveElement(elementId: string, direction: 'up' | 'down'): boolean {
+  if (!canEditRoute()) return false;
   const el = getElementById(elementId);
   if (!el || isDmElement(el) || !el.parentElement) return false;
   const parent = el.parentElement;

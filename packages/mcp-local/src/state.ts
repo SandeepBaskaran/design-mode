@@ -19,21 +19,26 @@ function viewportContext(change: ViewportContext): ViewportContext {
   };
 }
 
-export interface StyleChange extends ViewportContext {
+export interface RouteMetadata {
+  pageUrl?: string;
+  routeKey?: string;
+}
+
+export interface StyleChange extends RouteMetadata, ViewportContext {
   id: string; elementId: string; selector: string;
   property: string; oldValue: string; newValue: string;
   timestamp: number;
   status?: ChangeStatus;
 }
 
-export interface TextChange extends ViewportContext {
+export interface TextChange extends RouteMetadata, ViewportContext {
   id: string; elementId: string; selector: string;
   oldText: string; newText: string; timestamp: number;
   attributeName?: string;
   status?: ChangeStatus;
 }
 
-export interface DomChange extends ViewportContext {
+export interface DomChange extends RouteMetadata, ViewportContext {
   id: string; elementId: string; selector: string;
   action: 'delete' | 'duplicate' | 'move' | 'insert';
   origin?: { parentSelector: string; index: number; parentId?: string };
@@ -43,7 +48,7 @@ export interface DomChange extends ViewportContext {
   status?: ChangeStatus;
 }
 
-export interface Comment {
+export interface Comment extends RouteMetadata {
   id: string; elementId: string; selector: string;
   text: string; timestamp: number; updatedAt: number;
   pageUrl: string; resolved?: boolean;
@@ -57,7 +62,19 @@ export interface AgentHandoff {
   pageTitle: string;
 }
 
+export interface RouteGroup {
+  routeKey: string;
+  url: string;
+  styleChanges: StyleChange[];
+  textChanges: TextChange[];
+  domChanges: DomChange[];
+  comments: Comment[];
+}
+
 export interface ChangeSession {
+  routeGroups?: RouteGroup[];
+  domChanges?: DomChange[];
+  comments?: Comment[];
   pageUrl: string;
   pageTitle: string;
   // Design tokens the user redefined. `scopeSelector` is the selector the
@@ -67,11 +84,11 @@ export interface ChangeSession {
     oldValue: string; newValue: string; system?: string; cssRule: string;
   }>;
   tokenGuidance?: string;
-  styleChanges: Array<{
+  styleChanges: Array<RouteMetadata & {
     selector: string; property: string;
     oldValue: string; newValue: string; cssRule: string;
   }>;
-  textChanges: Array<{ selector: string; oldText: string; newText: string; attributeName?: string }>;
+  textChanges: Array<RouteMetadata & { selector: string; oldText: string; newText: string; attributeName?: string }>;
   cssBlock: string;
 }
 
@@ -100,9 +117,10 @@ class DesignModeState {
 
   // Upsert by id — the extension re-syncs a change every time the user
   // tweaks the same property, so appends would accumulate duplicates.
-  private upsert<T extends { id: string }>(list: T[], change: T) {
+  private upsert<T extends { id: string } & RouteMetadata>(list: T[], change: T) {
     const i = list.findIndex(c => c.id === change.id);
-    if (i >= 0) list[i] = change; else list.push(change);
+    // Incremental events can omit the metadata added by a site snapshot.
+    if (i >= 0) list[i] = { ...this.routeMetadata(list[i]), ...change }; else list.push(change);
     this.updateSessionActivity();
   }
 
@@ -112,7 +130,7 @@ class DesignModeState {
 
   addComment(comment: Comment) {
     const existing = this.comments.findIndex(c => c.id === comment.id);
-    if (existing >= 0) this.comments[existing] = comment;
+    if (existing >= 0) this.comments[existing] = { ...this.routeMetadata(this.comments[existing]), ...comment };
     else this.comments.push(comment);
   }
 
@@ -162,15 +180,17 @@ class DesignModeState {
   // SESSION_UPDATE carries the page's complete current arrays — replace
   // wholesale so the server converges on page truth (covers edits made
   // before the server started and entries the page has since dropped).
-  replaceChanges(report: { styleChanges?: StyleChange[]; textChanges?: TextChange[]; domChanges?: DomChange[] }) {
+  replaceChanges(report: { styleChanges?: StyleChange[]; textChanges?: TextChange[]; domChanges?: DomChange[]; comments?: Comment[] }) {
     const valid = <T extends { id: string }>(list: T[] | undefined) =>
       Array.isArray(list) ? list.filter(c => c && typeof c.id === 'string') : null;
     const styles = valid(report.styleChanges);
     const texts = valid(report.textChanges);
     const doms = valid(report.domChanges);
+    const comments = valid(report.comments);
     if (styles) this.styleChanges = styles;
     if (texts) this.textChanges = texts;
     if (doms) this.domChanges = doms;
+    if (comments) this.comments = comments;
   }
   setHandoff(handoff: AgentHandoff | null) { this.handoff = handoff; }
   getHandoff(): AgentHandoff | null { return this.handoff; }
@@ -183,39 +203,70 @@ class DesignModeState {
   }
   getSession(): ChangeSession | null { return this.session; }
 
-  // Built from the live event-fed arrays — the stored session snapshot only
-  // contributes page metadata. Returning the snapshot itself would freeze
-  // get_changes at connect time.
+  // Keep legacy single-page output sparse; never infer that an explicitly
+  // routed change belongs to whichever page happens to be active now.
+  private routeMetadata(change: RouteMetadata): RouteMetadata {
+    return {
+      ...(change.pageUrl !== undefined ? { pageUrl: change.pageUrl } : {}),
+      ...(change.routeKey !== undefined ? { routeKey: change.routeKey } : {}),
+    };
+  }
+
+  private routeKey(change: RouteMetadata): string {
+    return change.routeKey ?? change.pageUrl ?? this.session?.pageUrl ?? 'unknown';
+  }
+
+  // Built from live arrays, not the SESSION_UPDATE snapshot: incremental
+  // events and status changes must also be reflected in each route group.
   getChangeReport(): object {
-    const bySelector = new Map<string, Map<string, StyleChange>>();
+    const byRouteSelector = new Map<string, Map<string, StyleChange>>();
     for (const c of this.styleChanges) {
-      if (!bySelector.has(c.selector)) bySelector.set(c.selector, new Map());
-      bySelector.get(c.selector)!.set(c.property, c);
+      const key = JSON.stringify([this.routeKey(c), c.selector]);
+      if (!byRouteSelector.has(key)) byRouteSelector.set(key, new Map());
+      byRouteSelector.get(key)!.set(c.property, c);
     }
-    const changes: Array<{ selector: string; property: string; oldValue: string; newValue: string; cssRule: string }> = [];
-    const cssRules: string[] = [];
-    for (const [sel, props] of bySelector) {
+    const changes: Array<RouteMetadata & { selector: string; property: string; oldValue: string; newValue: string; cssRule: string }> = [];
+    const cssByRoute = new Map<string, { pageUrl?: string; rules: string[] }>();
+    for (const props of byRouteSelector.values()) {
+      const first = props.values().next().value!;
       const decls: string[] = [];
-      for (const [prop, vals] of props) {
-        const kebab = toKebab(prop);
-        changes.push({ selector: sel, property: prop, oldValue: vals.oldValue, newValue: vals.newValue, cssRule: `${sel} { ${kebab}: ${vals.newValue}; }`, ...viewportContext(vals) });
-        decls.push(`  ${kebab}: ${vals.newValue};`);
+      for (const c of props.values()) {
+        const kebab = toKebab(c.property);
+        changes.push({ ...this.routeMetadata(c), ...viewportContext(c), selector: c.selector, property: c.property, oldValue: c.oldValue, newValue: c.newValue, cssRule: `${c.selector} { ${kebab}: ${c.newValue}; }` });
+        decls.push(`  ${kebab}: ${c.newValue};`);
       }
-      cssRules.push(`${sel} {\n${decls.join('\n')}\n}`);
+      const key = this.routeKey(first);
+      if (!cssByRoute.has(key)) cssByRoute.set(key, { pageUrl: first.pageUrl ?? first.routeKey, rules: [] });
+      cssByRoute.get(key)!.rules.push(`${first.selector} {\n${decls.join('\n')}\n}`);
     }
+    const routeGroups = this.session?.routeGroups?.map(group => {
+      const belongs = (c: RouteMetadata) => this.routeKey(c) === group.routeKey;
+      return {
+        ...group,
+        styleChanges: this.styleChanges.filter(belongs).map(c => ({ ...c })),
+        textChanges: this.textChanges.filter(belongs).map(c => ({ ...c })),
+        domChanges: this.domChanges.filter(belongs).map(c => ({ ...c })),
+        comments: this.comments.filter(belongs).map(c => ({ ...c })),
+        cssBlock: cssByRoute.get(group.routeKey)?.rules.join('\n\n') ?? '',
+      };
+    });
     return {
       pageUrl: this.session?.pageUrl || 'unknown',
       pageTitle: this.session?.pageTitle || 'unknown',
+      ...(routeGroups ? { routeGroups } : {}),
       styleChanges: changes,
       textChanges: this.textChanges.map(c => ({
+        ...this.routeMetadata(c),
         selector: c.selector,
         oldText: c.oldText,
         newText: c.newText,
         ...(c.attributeName ? { attributeName: c.attributeName } : {}),
         ...viewportContext(c),
       })),
-      domChanges: this.domChanges.map(c => ({ selector: c.selector, action: c.action, tagName: c.tagName, origin: c.origin, destination: c.destination, ...viewportContext(c) })),
-      cssBlock: cssRules.join('\n\n'),
+      domChanges: this.domChanges.map(c => ({ ...this.routeMetadata(c), selector: c.selector, action: c.action, tagName: c.tagName, origin: c.origin, destination: c.destination, ...viewportContext(c) })),
+      cssBlock: [...cssByRoute.values()].map(({ pageUrl, rules }) =>
+        (pageUrl ? `/* Route: ${pageUrl.replace(/\*\//g, '* /')} */\n` : '') + rules.join('\n\n')
+      ).join('\n\n'),
     };
   }
 
@@ -224,6 +275,7 @@ class DesignModeState {
     if (this.session?.tokenChanges) report.tokenChanges = this.session.tokenChanges.map(t => ({ ...t }));
     if (this.session?.tokenGuidance) report.tokenGuidance = this.session.tokenGuidance;
     report.comments = this.getComments().map(c => ({
+      ...this.routeMetadata(c),
       id: c.id,
       selector: c.selector,
       text: c.text,
@@ -234,10 +286,10 @@ class DesignModeState {
       screenshot: `get_screenshot({ commentId: "${c.id}" })`,
     }));
     report.items = [
-      ...this.styleChanges.map(c => ({ id: c.id, kind: 'style', selector: c.selector, property: c.property, status: c.status || 'todo' })),
-      ...this.textChanges.map(c => ({ id: c.id, kind: 'text', selector: c.selector, status: c.status || 'todo' })),
-      ...this.domChanges.map(c => ({ id: c.id, kind: 'dom', selector: c.selector, action: c.action, status: c.status || 'todo' })),
-      ...this.getComments().map(c => ({ id: c.id, kind: 'comment', selector: c.selector, status: c.resolved ? 'resolved' : 'todo' })),
+      ...this.styleChanges.map(c => ({ ...this.routeMetadata(c), id: c.id, kind: 'style', selector: c.selector, property: c.property, status: c.status || 'todo' })),
+      ...this.textChanges.map(c => ({ ...this.routeMetadata(c), id: c.id, kind: 'text', selector: c.selector, status: c.status || 'todo' })),
+      ...this.domChanges.map(c => ({ ...this.routeMetadata(c), id: c.id, kind: 'dom', selector: c.selector, action: c.action, status: c.status || 'todo' })),
+      ...this.getComments().map(c => ({ ...this.routeMetadata(c), id: c.id, kind: 'comment', selector: c.selector, status: c.resolved ? 'resolved' : 'todo' })),
     ];
     if (this.handoff) {
       report.handoff = { ...this.handoff, requestedAt: new Date(this.handoff.requestedAt).toISOString() };

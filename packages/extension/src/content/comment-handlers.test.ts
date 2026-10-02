@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { routeIdentity } from './route-storage';
 import { validateImportPayload } from './import-validation';
 
 const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('index.ts', source, ts.ScriptTarget.Latest, true);
-const functions = ['handleContentMessage', 'performFullClear', 'dispatchCloudMessage', 'buildChangesPayload', 'getChangesPayload'].map(name => {
+const functions = ['handleContentMessage', 'performFullClear', 'performSiteClear', 'dispatchCloudMessage', 'buildChangesPayload', 'getChangesPayload'].map(name => {
   const node = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === name);
   assert.ok(node, name);
   return node.getText(ast);
@@ -25,7 +26,10 @@ function fixture() {
   let failRead = false, failWrite = false;
   let durable: any[] = [];
   const context = vm.createContext({
-    window: { __dmPreviewSaved: 'preview' }, location: { href: 'https://example.test' }, document: { title: 'Test' },
+    structuredClone, routeIdentity, canEditRoute: () => true, ensureActiveRoute: async () => {},
+    navigationEpoch: 0, pendingRouteReplay: null, cancelRouteReplay: null,
+    getActiveRouteUrl: () => 'https://example.test/', getRouteGeneration: () => 0,
+    window: { __dmPreviewSaved: 'preview' }, location: { href: 'https://example.test/' }, document: { title: 'Test' },
     dmIsActiveInstance: () => true,
     validateImportPayload,
     restoreOriginalPreview: () => { delete context.window.__dmPreviewSaved; },
@@ -33,6 +37,7 @@ function fixture() {
     captureTrackerRollback: () => () => {},
     captureTokenRollback: () => () => {},
     captureCommentPinsRollback: () => () => {},
+    routeStore: { captureOwnership: async () => ({ siteGeneration: null, routeGeneration: null }), assertOwnership: async () => {}, withoutScheduling: (_href: string, work: () => void) => work() },
     persistImportedSession: async () => events.push('session'),
     browser: { runtime: { onMessage: { addListener: (fn: any) => { handler = fn; } } } },
     undoStack: [], redoStack: [], pageSessionStartedAt: 1, importInProgress: false,
@@ -62,6 +67,12 @@ function fixture() {
     sendRelayResponse: (id: string, data: any) => relays.push({ id, ...data }),
     buildMcpItems: () => [], buildCloudSessionSummary: (data: any) => data,
   });
+  context.getSiteRouteGroups = async () => [{ url: context.location.href, styleChanges: [], textChanges: [], domChanges: [], comments: await context.getPageComments() }];
+  context.getSiteChangeReport = async () => ({ comments: await context.getPageComments() });
+  context.renderSiteExportText = async () => { await context.getPageComments(); return 'markdown'; };
+  context.clearRouteComments = context.clearSiteComments = async () => context.persistPageComments([]);
+  context.clearSavedRoute = context.clearSavedSite = async () => {};
+  context.hideCommentPins = () => {};
   vm.runInContext(code, context);
   return {
     context, events, relays, durable: () => durable,
@@ -99,7 +110,7 @@ for (const type of ['CLEAR_CHANGES', 'IMPORT_CHANGES']) {
     f.failWrite();
     const msg = { type, payload: { styleChanges: [], textChanges: [], domChanges: [], comments: [] } };
     assert.match((await f.request(msg)).error, /write failed/);
-    assert.deepEqual(f.events, ['persist']);
+    assert.deepEqual(f.events, type === 'IMPORT_CHANGES' ? ['persist', 'persist'] : ['persist']);
     assert.equal(f.context.window.__dmPreviewSaved, 'preview');
     assert.equal(f.context.undoStack[0], 'undo');
     assert.equal(f.context.redoStack[0], 'redo');

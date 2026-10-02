@@ -154,7 +154,7 @@ test('browser failures remain MCP errors instead of success-shaped clear or scre
     const mcp = f.load('api/mcp.ts');
     const inbox = f.load('api/extension/inbox.ts');
     const pending = mcp.POST(request('dm_test_A', {
-      jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} },
+      jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: name === 'apply_changes' ? { routeKey: 'https://fixture.test/a', changes: [] } : {} },
     }));
     await until(() => f.inbound.some(({ message }) => message.requestId));
     const { requestId } = f.inbound.find(({ message }) => message.requestId).message;
