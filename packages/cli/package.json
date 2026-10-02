@@ -1,16 +1,34 @@
 {
-  "name": "@designmode/cli",
+  "name": "@designmode-app/cli",
   "version": "0.1.0",
   "private": true,
-  "description": "Thin local agent CLI for Design Mode's existing MCP bridge",
+  "description": "Cloud-first agent CLI for Design Mode MCP: Cloud, Local and Self-hosted",
   "license": "MIT",
-  "bin": { "design-mode": "dist/cli.cjs" },
-  "files": ["dist/cli.cjs", "dist/THIRD-PARTY-NOTICES.txt", "README.md", "LICENSE"],
-  "engines": { "node": ">=18" },
+  "bin": {
+    "designmode-app": "dist/cli.cjs"
+  },
+  "files": [
+    "dist/cli.cjs",
+    "dist/THIRD-PARTY-NOTICES.txt",
+    "README.md",
+    "PUBLISHING.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
     "prepack": "npm run build",
     "test": "npm run build && tsx --test --test-concurrency=1 test/*.test.ts"
   },
-  "devDependencies": { "esbuild": "0.28.2", "tsx": "^4.23.13" }
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "tsx": "^4.23.13",
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

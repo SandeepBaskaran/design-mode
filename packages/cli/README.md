@@ -1,76 +1,151 @@
-# Design Mode local agent CLI
+# Design Mode agent CLI
 
-Proposed package name: `@designmode/cli`. The scope is not confirmed. This
-package is private to prevent accidental publication; `npm pack` works locally.
+Package: **`@designmode-app/cli`**. Executable: **`designmode-app`**.
+Cloud is the default; Local and Self-hosted use the same existing MCP contracts.
+The package remains `private: true` to prevent accidental publication. It is
+not yet a published-install promise. See [PUBLISHING.md](./PUBLISHING.md) for the
+approved naming and manual release procedure.
 
-## Build and try
+## Build and try locally
 
-From the repository root, after installing workspace dependencies:
+From the repository root with workspace dependencies installed:
 
 ```sh
-npm run build --workspace @designmode/cli
+npm run build --workspace @designmode-app/cli
 node packages/cli/dist/cli.cjs --help
-node packages/cli/dist/cli.cjs tools
-node packages/cli/dist/cli.cjs schema apply_changes
-node packages/cli/dist/cli.cjs status
-node packages/cli/dist/cli.cjs call get_session_summary
-printf '%s' '{"format":"css"}' | node packages/cli/dist/cli.cjs call export_changes --stdin
-npm pack --workspace @designmode/cli
+node packages/cli/dist/cli.cjs --mode local tools
+npm pack --workspace @designmode-app/cli
 ```
 
-Install the resulting local tarball with `npm install /path/to/designmode-cli-0.1.0.tgz`
-then use `design-mode`. No registry publication or global install is needed.
-The tarball bundles the existing local MCP engine and SDK; it has no runtime
-workspace dependencies. Build from the monorepo, not from an unpacked tarball.
+Install the resulting tarball with `npm install /path/to/designmode-app-cli-0.1.0.tgz`
+and use `designmode-app`. The executable bundles its dependencies and existing
+Local MCP engine; it does not import a workspace at runtime. Build from the
+monorepo, not from an unpacked tarball. Node 18 or newer is required.
 
-## Connection and safety
+After an explicitly approved publication, one-off usage will be
+`npx @designmode-app/cli@latest status`, or install with
+`npm install -g @designmode-app/cli`. Pin a tested version for durable setups.
+`npx` may download/install the package into npm's cache.
 
-Discovery and schemas work offline. Invocation attaches to the **existing**
-loopback owner bridge, default port 9960 (`DM_PORT` overrides it). Start
-`design-mode-mcp` through your MCP client as before, open the Design Mode
-extension and select **Local** mode. The CLI does not start a temporary bridge,
-spawn a browser, replace an owner, switch extension settings, or support Cloud.
-The existing MCP stdio entry and setup/doctor commands are unchanged.
+## Select a mode and configure credentials
 
-`status` reports only allowlisted fields, never the bridge authentication token.
-Only `get_session_summary` is callable when the bridge is running but the
-extension is offline. Other calls fail without dispatch rather than returning
-empty local state or pretending a browser operation succeeded. Tools can mutate
-the page/session: inspect `schema` first. The CLI performs no automatic retries.
-A timeout does not imply rollback; inspect state before retrying a mutation.
+Mode precedence: leading `--mode` → `DM_MODE` → config `mode` → **Cloud**.
+Commands do not change extension settings. Select the corresponding mode in
+the browser extension and use the bearer token for that same relay/tenant.
 
-Supply arguments only through `--stdin` (a JSON object, maximum 1 MB), not argv.
-Avoid logging sensitive tool input/output. Tool results preserve MCP content
-blocks, including base64 image content. Errors do not echo malformed input.
+| Mode | Transport and configuration |
+| --- | --- |
+| **Cloud** (default) | SDK Streamable HTTP at `https://mcp.designmode.app/api/mcp`; credential in `DM_CLOUD_TOKEN` or config `cloud.token`. The endpoint cannot be overridden. |
+| **Local** | Existing loopback owner bridge, `DM_PORT` (default `9960`). Start `design-mode-mcp` through your MCP client. This CLI never starts or replaces the owner. No remote token is needed. |
+| **Self-hosted** | SDK Streamable HTTP at the full `/api/mcp` URL in `DM_ENDPOINT` or config `selfHosted.endpoint`; credential in `DM_SELF_HOSTED_TOKEN` or config `selfHosted.token`. |
 
-## JSON and exit codes
+Self-hosted requires HTTPS for remote servers. HTTP is allowed only for literal
+`localhost`, `127.0.0.1` and `[::1]`, for a relay running on your own machine.
+Do not use untrusted local relays. URL credentials, query strings, fragments
+and all redirects are rejected. `DM_ENDPOINT` is rejected outside Self-hosted
+mode so it cannot silently change the destination of a Cloud credential.
+Cloud and Self-hosted credentials are separate and never fall back to each other.
 
-Help is plain text. Every other command emits one JSON object on stdout:
-`{ok, tools}`, `{ok, tool}`, `{ok, tool, result}`, a status object, or
-`{ok:false,error:{code,message}}`. `result` is the unmodified MCP tool result.
-MCP schema validation failures use `result.isError` and a nonzero exit status.
+**Never pass tokens as command-line arguments or paste them into shell history.**
+Supply them through your environment/secret manager, or use a protected config
+file. The CLI does not read a default credential file: explicitly set `DM_CONFIG`
+to your file's path. The file must be owned by the current user, be a regular
+non-symlink file with permissions **0600**, and contain at most 64 KiB of JSON.
+Create it in a private directory outside the repo using a trusted editor; set
+`chmod 600 /path/to/config.json` before using it. Shape (placeholders, not tokens):
 
-- `0`: success (for status, both bridge and extension connected)
-- `1`: MCP/tool/transport failure
-- `2`: usage, invalid JSON/port, or unknown tool
-- `3`: bridge unavailable or not a recognised Design Mode owner
-- `4`: extension offline
+```json
+{
+  "mode": "cloud",
+  "cloud": { "token": "REPLACE_IN_PRIVATE_FILE" },
+  "selfHosted": {
+    "endpoint": "https://your-relay.example/api/mcp",
+    "token": "REPLACE_IN_PRIVATE_FILE"
+  }
+}
+```
 
-Tool calls have a 30-second deadline. No new external network endpoint is used.
-Schemas and validation come from `createMcpServer` over the SDK's in-memory
-client/server transport; execution delegates to `proxyToolCall`. There is no
-second tool registry or implementation.
+Omit unused profiles. Environment variables override the corresponding profile.
+The CLI reads configuration but never creates, rewrites or prints credentials.
+Unknown config fields are errors; `--help` reads no config and makes no network
+requests, even with a broken config. No-argument invocation also prints help.
 
-## Verification
+## Commands
+
+Once the selected mode is configured:
 
 ```sh
-npm test --workspace @designmode/cli
-npm run typecheck --workspace @design-mode/mcp-local
+designmode-app tools
+designmode-app schema apply_changes
+designmode-app status
+designmode-app call get_session_summary
+printf '%s' '{"format":"css"}' | designmode-app call export_changes --stdin
+designmode-app --mode local status
+```
+
+- `tools` / `schema`: Cloud and Self-hosted connect and discover schemas from
+  **that server**, including paginated tool lists. Local discovery is offline
+  through the existing MCP registry. Tool sets can differ between modes.
+- `status`: remote modes verify authenticated relay initialization and discovery,
+  **not browser connectivity** (`extensionConnected: null`). Request browser
+  state with `call get_session_summary`; this consumes a relay tool call/quota.
+  Local status reports the existing bridge and extension connection state.
+- `call`: invokes a discovered tool once. Optional `--stdin` reads a JSON object,
+  maximum 1 MB; absent stdin uses `{}`. Tool definitions and execution remain in
+  the existing server, not a second CLI tool engine. Remote argument validation
+  is the server's responsibility; discovery alone is not validation.
+
+Remote commands require credentials even for discovery. They can update relay
+agent presence/last-seen metadata. Help is offline; it never silently contacts
+Cloud. Local allows only `get_session_summary` when the owner is running but
+the extension is offline; other calls fail before dispatch.
+
+## Safety, output and deadlines
+
+Tool calls may mutate the page/session. Inspect schemas first. There are **no
+automatic retries**, OAuth/login flows, redirect following, browser launches,
+or production account changes. Remote commands have a total 30-second deadline
+across initialization, discovery and invocation. Set `DM_TIMEOUT_MS` from `100`
+to `120000` to change it. Local tool calls retain their 30-second deadline.
+The deadline begins after stdin is read. A timeout/disconnection does **not**
+mean rollback: a mutation may already have happened. Inspect state before retrying.
+
+All commands except help emit one JSON object. Tool results preserve MCP content
+blocks, including images; occurrences of the selected remote credential are
+redacted. Transport/config errors do not echo raw exceptions, response bodies,
+endpoints or malformed input. Tool output can still contain sensitive page data;
+do not log it indiscriminately. No telemetry is added.
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Success; remote status means relay reachable, not browser attached |
+| `1` | MCP/tool/transport/auth failure or remote timeout |
+| `2` | Usage/config/input error or unknown tool |
+| `3` | Local bridge unavailable / unrecognized owner |
+| `4` | Local extension offline |
+
+## Verification and limits
+
+```sh
+npm test --workspace @designmode-app/cli
+npm run typecheck --workspace @designmode-app/cli
 npm run build --workspace @design-mode/mcp-local
+npm run typecheck --workspace @design-mode/mcp-local
 npm test --workspace @design-mode/mcp-local
 ```
 
-The CLI tests exercise the built entry, real local bridge, disconnected states,
-MCP schema validation, and an unpacked npm tarball outside workspace resolution.
-They do not claim real-browser acceptance. The root workspace lockfile must be
-updated by the integrator for this new package and esbuild build dependency.
+Tests run the built executable and exact unpacked npm tarball in all modes.
+They exercise the real Local owner bridge and the actual Cloud MCP/auth handlers
+with an in-memory Redis fixture and synthetic browser replies. A test-only fetch
+preload redirects the fixed Cloud URL to the local fixture and blocks every
+other destination; the production CLI has no Cloud-endpoint override. Failures
+cover invalid auth, malformed responses, redirect rejection, disconnects,
+timeouts, bad config/permissions, schema discovery and secret redaction.
+These tests are not production-relay, real-Redis or real-browser certification.
+
+## Publishing later
+
+Keep `private: true` until the maintainer explicitly approves release. Validate
+the exact tarball and version, authenticate in the maintainer's terminal with
+`npm login`, then **only with approval** run `npm publish --access public` from
+this package. No publication or login is part of building/testing this CLI.

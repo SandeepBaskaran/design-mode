@@ -23,8 +23,8 @@ async function freePort() {
 }
 
 async function cli(args: string[], port: number | string, input = '', executable = entry, extraEnv = {}) {
-  const child = spawn(process.execPath, [executable, ...args], {
-    cwd: root, env: { ...process.env, DM_PORT: String(port), ...extraEnv }, stdio: 'pipe',
+  const child = spawn(process.env.DM_TEST_NODE ?? process.execPath, [executable, ...args], {
+    cwd: root, env: { PATH: process.env.PATH, HOME: process.env.HOME, DM_MODE: 'local', DM_PORT: String(port), ...extraEnv }, stdio: 'pipe',
   });
   let stdout = '';
   let stderr = '';
@@ -147,7 +147,7 @@ test('npm tarball has an executable standalone entry without workspace imports',
     const packed = JSON.parse(execFileSync('npm', ['pack', '--json', '--ignore-scripts', '--pack-destination', dir], {
       cwd: root, encoding: 'utf8',
     }));
-    assert.equal(packed[0].name, '@designmode/cli');
+    assert.equal(packed[0].name, '@designmode-app/cli');
     assert.ok(packed[0].files.some((file: { path: string; mode: number }) => file.path === 'dist/cli.cjs' && (file.mode & 0o111) !== 0));
     assert.ok(packed[0].files.some((file: { path: string }) => file.path === 'LICENSE'));
     assert.ok(packed[0].files.some((file: { path: string }) => file.path === 'dist/THIRD-PARTY-NOTICES.txt'));
@@ -158,7 +158,7 @@ test('npm tarball has an executable standalone entry without workspace imports',
 const path = require('node:path');
 const original = Module._resolveFilename;
 Module._resolveFilename = function(request, ...args) {
-  if (!Module.isBuiltin(request) && !path.isAbsolute(request)) throw new Error('External dependency forbidden');
+  if (!Module.builtinModules.includes(request.replace(/^node:/, '')) && !path.isAbsolute(request)) throw new Error('External dependency forbidden');
   return original.call(this, request, ...args);
 };\n`);
     const result = await cli(['tools'], await freePort(), '', resolve(dir, 'package/dist/cli.cjs'), {
@@ -166,6 +166,13 @@ Module._resolveFilename = function(request, ...args) {
     });
     assert.equal(result.code, 0, result.stderr);
     assert.equal(result.json().tools.length, 9);
+    const port = await freePort();
+    const owner = await claimOrAttach(port);
+    try {
+      const summary = await cli(['call', 'get_session_summary'], port, '', resolve(dir, 'package/dist/cli.cjs'), { NODE_OPTIONS: `--require=${guard}` });
+      assert.equal(summary.code, 0, summary.stderr);
+      assert.equal(JSON.parse(summary.json().result.content[0].text).extensionConnected, false);
+    } finally { await owner.close(); }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

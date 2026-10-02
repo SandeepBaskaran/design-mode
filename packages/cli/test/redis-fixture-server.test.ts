@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { test } from 'node:test';
+import { test, type TestContext } from 'node:test';
+import type { ServerResponse } from 'node:http';
 import { createRedisFixtureServer } from './redis-fixture-server.mjs';
 
-async function fixture(t, route = {}, getFault = () => '') {
-  const activeStreams = new Set();
+type Route = Partial<Record<'GET' | 'POST', (request: Request) => Response | Promise<Response>>>;
+
+async function fixture(t: TestContext, route: Route = {}, getFault = () => '') {
+  const activeStreams = new Set<ServerResponse>();
   const server = createRedisFixtureServer({ mcp: route, stream: route, inbox: route, activeStreams, getFault });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -12,7 +15,9 @@ async function fixture(t, route = {}, getFault = () => '') {
     server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
   });
-  return { base: `http://127.0.0.1:${server.address().port}`, activeStreams };
+  const address = server.address();
+  assert.ok(address && typeof address === 'object');
+  return { base: `http://127.0.0.1:${address.port}`, activeStreams };
 }
 
 test('malformed JSON returns a generic error without reflecting request content', async t => {
