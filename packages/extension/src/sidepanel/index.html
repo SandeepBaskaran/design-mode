@@ -1261,6 +1261,49 @@
       gap: 6px;
       align-items: end;
     }
+    .dm-route-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      min-width: 70px;
+      padding: 5px 7px;
+      background: none;
+      border: 1px solid var(--dm-separator);
+      border-radius: 4px;
+      color: inherit;
+      font: inherit;
+      font-size: 10px;
+      cursor: pointer;
+    }
+    .dm-route-current {
+      background: var(--dm-accent-bg);
+      border-color: var(--dm-accent-border);
+      color: var(--dm-accent);
+      cursor: default;
+    }
+    .dm-changes-grouping { position: relative; flex-shrink: 0; }
+    .dm-changes-grouping select {
+      appearance: none;
+      max-width: 110px;
+      background: var(--dm-input-bg);
+      color: var(--dm-text-secondary);
+      border: 1px solid var(--dm-input-border);
+      border-radius: 4px;
+      font: inherit;
+      font-size: 10px;
+      padding: 4px 26px 4px 8px;
+    }
+    .dm-changes-grouping > span {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      color: var(--dm-text-secondary);
+      pointer-events: none;
+    }
+    .dm-grid-12.dm-size-row { align-items: start; }
     .dm-grid-12 > .dm-cell { min-width: 0; }
     .dm-grid-12 > .dm-cell-1 { grid-column: span 1; }
     .dm-grid-12 > .dm-cell-2 { grid-column: span 2; }

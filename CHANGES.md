@@ -24,6 +24,36 @@ The badge on the **Changes** tab in the tab strip shows the total count: `style 
 
 ---
 
+## Routes and site scope
+
+Changes are reviewed across saved routes on the **current exact origin** (scheme,
+host and port). Each route keeps its own style, text, DOM and comment records;
+matching selectors on another route do not make an edit site-wide.
+
+The current route stays expanded and editable, with a blue **Current** badge.
+Inactive routes show only their path, change count, **Open route** and delete
+controls; they do not expand or display a full-URL subrow. Use **Open route**
+to navigate the bound tab there. Route deletion requires confirmation.
+Navigation is limited to the
+current tab's exact HTTP(S) origin; another subdomain, port or protocol is a
+different site for this purpose.
+
+**Delete route** removes only that route's saved changes. **Clear all** removes
+all saved route changes for the current origin, not other origins. Copy as
+Prompt and Send to Agent include all saved routes on that origin regardless
+of the visible route/filter, with route URLs identifying each group. Navigation
+and reload do not change the existing session-storage lifetime.
+
+JSON export includes every saved route. Import validates that every route
+belongs to the current origin, replaces the included routes, and stores
+inactive routes without applying them to the current document. Legacy
+single-route files remain supported.
+
+During client-side navigation, saved edits replay only after their targets
+are replaced by new DOM nodes. If the router reuses those nodes or render
+readiness cannot be established, reload the destination page to replay its
+edits. The saved records remain available for review and export.
+
 ## Action header (top of tab)
 
 Three rows pinned ("position: sticky") at the top of the Changes body whenever there's at least one change. The pinned region stays visible while the list scrolls beneath it, so the user can keep filtering / toggling-original / clearing while reading rows further down.
@@ -35,7 +65,7 @@ Split into two clusters: primary actions on the left, file-IO on the right.
 | Cluster | Button | What | When useful |
 |---|---|---|---|
 | Left | **Changes toggle** (`eye` / `eye-off` icon) | Single toggle replacing the old View Original / View Changes pair. Active (accent-tinted, `eye`) when your edits are visible — the default state. Click flips to previewing the original (muted, `eye-off`). Click again restores. | Comparing your design to the original; sanity-checking what actually shipped vs what you've added. |
-| Left | **Clear all** (`trash` icon, danger-coloured) | Opens a confirmation dialog (overlay) before wiping every tracked change — styles, text edits, DOM operations, and comments. **Esc** dismisses the dialog. | One-shot reset to ship-state. |
+| Left | **Clear all** (`trash` icon, danger-coloured) | Opens a confirmation dialog (overlay) before wiping every tracked change on every saved route of the current origin — styles, text edits, DOM operations, and comments. **Esc** dismisses the dialog. | One-shot reset to ship-state. |
 | Right | **Export** (`download` icon) | Downloads every tracked change as a JSON file. | Stashing a session before clearing it, or shipping a snapshot to a teammate. |
 | Right | **Import** (`upload` icon) | Replaces every change with an imported JSON file. | Picking up where you left off, or applying a teammate's saved session. |
 

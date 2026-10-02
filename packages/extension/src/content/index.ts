@@ -20,6 +20,12 @@ import type { ElementInfo } from './inspector';
 import { initCustomCursor, applyBaseCursor, clearBaseCursor } from './custom-cursor';
 import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, applyAttributeChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff, getFeedbackSessionView, isLiveFeedbackSupported, stopFeedbackSessionFromUi } from './change-tracker';
 import { isSafeRichTextHref } from '../rich-text-preservation';
+import { routeStore, loadSession, setRouteClearedHandler, discardActiveChanges, getSiteChangeReport, getSiteRouteGroups as getStoredSiteRouteGroups, getActiveRouteUrl, getRouteGeneration, switchActiveRoute, clearSavedRoute, clearSavedSite } from './change-tracker';
+import { importSiteChanges } from './site-import';
+import { routeIdentity } from './route-storage';
+import { canEditRoute, setRouteEditGuard } from './route-edit-guard';
+import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } from './enhanced-export';
+import { replaceRouteComments, clearRouteComments, clearSiteComments } from './comments';
 import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
 import { orderDomDeletionTargets } from './dom-delete';
 import { captureElementScreenshot, captureViewportScreenshotClean } from './screenshots';
@@ -30,9 +36,9 @@ import {
 } from './presets';
 import { getTokenIndex, invalidateTokenIndex, authoredTokenValueFor } from './token-engine';
 import { setTokenEdit, resetTokenEdit, clearAllTokenEdits, getTokenEdits, peekTokenEdit } from './root-var-store';
-import { exportCSS, exportTailwind, exportSCSS, exportJSX, generateGitHubIssueBody, copyToClipboard } from './export';
+import { exportCSS, exportTailwind, exportSCSS, exportJSX, copyToClipboard } from './export';
 import { buildDomTree, isPageContentSealed } from './dom-tree';
-import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, replacePageComments, restoreCommentPins } from './comments';
+import { addComment, addRegionComment, getPageComments, deleteComment, hideAllPins as hideCommentPins, showAllPins as showCommentPins, setCommentResolved, setCommentPinOffset, restoreCommentPins } from './comments';
 import { buildCloudSessionSummary, buildMcpItems } from './mcp-items';
 import { startRegionDraw, cancelRegionDraw, clearPendingRegionBox, type Region } from './region-annotate';
 import { getChangeComponentContexts } from './change-context';
@@ -53,8 +59,6 @@ import {
 import { getComponentsByCategory, placeComponent } from './design-mode';
 // Measurement guides — axis lines, distance pills, resize handles
 import { setResizeCommitHandler, setResizePreviewHandler, setMoveCommitHandler, setMovePreviewHandler, teardownMeasureGuides, resetMeasureTeardown, showResizeDots, repositionResizeDots, hideResizeDots } from './measure-guides';
-// Enhanced export — markdown for Copy Prompt
-import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } from './enhanced-export';
 // Keyboard shortcuts
 import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts, triggerShortcut } from './keyboard-shortcuts';
 
@@ -92,6 +96,7 @@ function isOverlayLike(el: HTMLElement): boolean {
 // Enter region draw mode; on release stash the region and tell the panel to
 // open its comment composer (shared by the SP message and the shortcut).
 function beginRegionDraw() {
+  if (!canEditRoute()) return;
   clearPendingRegionBox(); // drop any leftover box from a prior, uncommitted draw
   startRegionDraw((region) => {
     if (region) { pendingRegion = region; notifyPanel('REGION_DRAWN', {}); }
@@ -165,6 +170,7 @@ function pushTokenUndo(entry: TokenUndoEntry) {
 // dimension, and refreshes the panel — same path the side panel's APPLY_STYLE
 // would take, just initiated from the page.
 setResizeCommitHandler((id, width, height) => {
+  if (!canEditRoute()) return;
   const el = getElementById(id);
   if (!el) return;
   const meta = { groupId: `resize-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, groupLabel: 'Resize' };
@@ -191,6 +197,7 @@ setResizePreviewHandler((id, width, height) => {
 // entries share one groupId so the multi-select drag is one undo step in
 // the Changes tab.
 setMoveCommitHandler((entries) => {
+  if (!canEditRoute()) return;
   if (!entries.length) return;
   const meta = { groupId: `move-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, groupLabel: 'Move' };
   for (const entry of entries) {
@@ -407,19 +414,25 @@ function revertAllPageMutations() {
   });
 }
 
-async function getChangesPayload() {
-  const pageComments = await getPageComments();
+async function getChangesPayload(): Promise<any> {
+  await ensureActiveRoute();
+  const url = getActiveRouteUrl();
+  const generation = getRouteGeneration();
+  const routeGroups = await getSiteRouteGroups();
+  const pageComments = routeGroups[0].comments;
   // Decorate style changes with the number of elements currently matching
   // their saved selector — drives the "applies to N elements" badge in the
   // panel's Changes tab so the user knows what a Zap-Apply will hit.
-  const decorated = getStyleChanges().map(c => {
+  const replayPending = pendingRouteReplay?.url === url;
+  const decorated = routeGroups[0].styleChanges.map(c => {
+    if (replayPending) return c;
     let matchCount = 1;
     try { matchCount = Math.max(1, document.querySelectorAll(c.selector).length); } catch {}
     return { ...c, matchCount };
   });
-  const contextChanges = [...decorated, ...getTextChanges(), ...getDomChanges(), ...pageComments];
-  const componentContexts = getChangeComponentContexts(contextChanges);
-  const elementIds = [...new Set(contextChanges.map(c => c.elementId).filter(Boolean))];
+  const contextChanges = [...decorated, ...routeGroups[0].textChanges, ...routeGroups[0].domChanges, ...pageComments];
+  const componentContexts = replayPending ? {} : getChangeComponentContexts(contextChanges);
+  const elementIds = replayPending ? [] : [...new Set(contextChanges.map(c => c.elementId).filter(Boolean))];
   if (elementIds.length) {
     try {
       const pageContexts = await browser.runtime.sendMessage({ type: 'GET_CHANGE_COMPONENT_CONTEXTS', elementIds });
@@ -428,11 +441,19 @@ async function getChangesPayload() {
       }
     } catch { /* Source metadata is optional on restricted pages. */ }
   }
+  if (url !== routeIdentity(location.href).url || generation !== getRouteGeneration()) return getChangesPayload();
+  routeGroups[0].styleChanges = decorated;
   return {
+    routeGroups,
+    activeRouteKey: routeIdentity(url).routeKey,
+    routeKey: routeIdentity(url).routeKey,
+    url,
+    pageUrl: url,
     styleChanges: decorated,
-    textChanges: getTextChanges(),
+    routeEditingBlocked: !canEditRoute(),
+    textChanges: routeGroups[0].textChanges,
     comments: pageComments,
-    domChanges: getDomChanges(),
+    domChanges: routeGroups[0].domChanges,
     tokenChanges: getTokenEdits(),
     componentContexts,
   };
@@ -491,6 +512,7 @@ function selectAndNotify(el: HTMLElement) {
 }
 
 function onElementSelected(info: ElementInfo) {
+  if (!canEditRoute()) return;
   const el = getElementById(info.id);
   const extra: any = {};
   if (el) {
@@ -529,6 +551,8 @@ function onElementSelected(info: ElementInfo) {
 // (both transports). Reverts every page mutation, deletes comment pins,
 // clears the trackers, and resets the undo stacks.
 async function performFullClear() {
+  cancelRouteReplay?.();
+  pendingRouteReplay = null;
   // Make sure the override stylesheet is enabled before we clear it,
   // otherwise the page would still be showing `disabled` overrides.
   setOverridesEnabled(true);
@@ -538,21 +562,168 @@ async function performFullClear() {
   // preview markers — runs synchronously so the state-flip is immediate.
   revertAllPageMutations();
 
-  // Comments live in browser.storage.local (separate from the change
-  // arrays), so they need their own async cleanup.
-  const pageComments = await getPageComments();
-  for (const c of pageComments) await deleteComment(c.id);
+  const url = getActiveRouteUrl();
   clearAllChanges();
+  hideCommentPins();
+  const commentsCleared = clearRouteComments(url);
   clearAllTokenEdits();
   clearAllLayoutGuides();
   undoStack.length = 0;
   redoStack.length = 0;
+  await Promise.all([commentsCleared, clearSavedRoute(routeIdentity(url).routeKey)]);
 }
+
+async function performSiteClear() {
+  const url = getActiveRouteUrl();
+  const activeCleared = performFullClear();
+  await Promise.all([activeCleared, clearSavedSite(), clearSiteComments(url)]);
+}
+
+let routeTransition: Promise<void> = Promise.resolve();
+let navigationEpoch = 0;
+type SavedRouteChanges = NonNullable<Awaited<ReturnType<typeof loadSession>>>;
+let pendingRouteReplay: { url: string; generation: number; saved: SavedRouteChanges | null } | null = null;
+let cancelRouteReplay: (() => void) | null = null;
+let routeDomReady = true;
+setRouteEditGuard(() => routeDomReady && routeIdentity(location.href).url === getActiveRouteUrl());
+
+function resumeRouteEditing() {
+  routeDomReady = true;
+  if (!on) return;
+  resetMeasureTeardown();
+  enableInspect((i: ElementInfo) => onElementSelected(i));
+  enableShortcuts();
+}
+
+async function getSiteRouteGroups() {
+  const groups = await getStoredSiteRouteGroups();
+  if (pendingRouteReplay && pendingRouteReplay.generation !== getRouteGeneration()) {
+    cancelRouteReplay?.();
+    pendingRouteReplay = null;
+  }
+  if (pendingRouteReplay?.url === groups[0]?.url && pendingRouteReplay.saved) {
+    Object.assign(groups[0], pendingRouteReplay.saved);
+  }
+  return groups;
+}
+
+function routeTargetsAreFresh(saved: SavedRouteChanges, outgoing: WeakSet<Element>): boolean {
+  const changes = [...saved.styleChanges, ...saved.textChanges, ...saved.domChanges];
+  const ids = new Set(changes.map(c => c.elementId));
+  for (const c of saved.domChanges) if (c.destination?.parentId) ids.add(c.destination.parentId);
+  for (const el of document.querySelectorAll('[data-dm-id]')) {
+    if (ids.has(el.getAttribute('data-dm-id') || '') && outgoing.has(el)) return false;
+  }
+  const selectors = [...saved.styleChanges, ...saved.textChanges].map(c => c.selector);
+  for (const c of saved.domChanges) {
+    if (c.action !== 'insert' && c.action !== 'duplicate') selectors.push(c.selector);
+    if (c.destination) selectors.push(c.destination.parentSelector);
+    else if (c.action === 'insert' || c.action === 'duplicate') return false;
+  }
+  // A quiet page or unrelated mutation is not evidence of a router commit.
+  return selectors.length > 0 && selectors.every(selector => {
+    try {
+      const targets = Array.from(document.querySelectorAll(selector));
+      return targets.length > 0 && targets.every(el => !outgoing.has(el));
+    } catch { return false; }
+  });
+}
+
+function ensureActiveRoute(): Promise<void> {
+  if (routeIdentity(location.href).url === getActiveRouteUrl()) return routeTransition;
+  const outgoing = new WeakSet<Element>(document.querySelectorAll('*'));
+  if (!switchActiveRoute()) return routeTransition;
+  routeDomReady = false;
+  disableInspect();
+  disableMultiSelect();
+  disableShortcuts();
+  teardownMeasureGuides();
+  cancelRegionDraw();
+  for (const el of document.querySelectorAll('*')) outgoing.add(el);
+  cancelRouteReplay?.();
+  navigationEpoch += 1;
+  hideCommentPins();
+  clearSelectionToHover();
+  clearAllTokenEdits();
+  clearAllLayoutGuides();
+  undoStack.length = 0;
+  redoStack.length = 0;
+  if ((window as any).__dmPreviewSaved) delete (window as any).__dmPreviewSaved;
+  const url = getActiveRouteUrl();
+  const generation = getRouteGeneration();
+  const pending = { url, generation, saved: null as SavedRouteChanges | null };
+  pendingRouteReplay = pending;
+  let stopped = false;
+  const stop = () => {
+    stopped = true;
+    observer.disconnect();
+    clearTimeout(timeout);
+    if (cancelRouteReplay === stop) cancelRouteReplay = null;
+  };
+  const attempt = () => {
+    if (stopped) return;
+    if (!dmIsActiveInstance() || url !== routeIdentity(location.href).url || generation !== getRouteGeneration()) {
+      stop();
+      if (pendingRouteReplay === pending) pendingRouteReplay = null;
+      return;
+    }
+    if (!pending.saved) return;
+    const hasEdits = pending.saved.styleChanges.length || pending.saved.textChanges.length || pending.saved.domChanges.length;
+    const fresh = hasEdits ? routeTargetsAreFresh(pending.saved, outgoing)
+      : Array.from(document.body.querySelectorAll('*')).some(el => !outgoing.has(el) && !el.closest('[id^="dm-"]'));
+    if (!fresh) return;
+    stop();
+    // No await between checking node identities and the destructive replay.
+    resumeRouteEditing();
+    applyChangesPayload(pending.saved);
+    pendingRouteReplay = null;
+    if (on) void restoreCommentPins();
+    void getChangesPayload().then(payload => notifyPanel('CHANGES_UPDATE', payload));
+  };
+  const observer = new MutationObserver(attempt);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  // Timeout abandons replay, never treats the outgoing DOM as ready.
+  const timeout = setTimeout(stop, 30_000);
+  cancelRouteReplay = stop;
+  routeTransition = (async () => {
+    pending.saved = await loadSession() || { styleChanges: [], textChanges: [], domChanges: [] };
+    attempt();
+  })();
+  return routeTransition;
+}
+
+function checkRouteNavigation() {
+  if (!dmIsActiveInstance() || routeIdentity(location.href).url === getActiveRouteUrl()) return;
+  void ensureActiveRoute().then(async () => {
+    notifyPanel('CHANGES_UPDATE', await getChangesPayload());
+    notifyPanel('STATE_UPDATE', getFullState());
+  }).catch(() => {});
+}
+setRouteClearedHandler(() => {
+  if (!dmIsActiveInstance()) return;
+  cancelRouteReplay?.();
+  pendingRouteReplay = null;
+  if (routeIdentity(location.href).url === getActiveRouteUrl()) revertAllPageMutations();
+  discardActiveChanges();
+  hideCommentPins();
+  undoStack.length = 0;
+  redoStack.length = 0;
+  void getChangesPayload().then(payload => notifyPanel('CHANGES_UPDATE', payload)).catch(() => {});
+});
+window.addEventListener('popstate', checkRouteNavigation);
+window.addEventListener('hashchange', checkRouteNavigation);
+(window as any).navigation?.addEventListener('currententrychange', checkRouteNavigation);
+// pushState in a page's main world cannot be monkey-patched from an isolated content script.
+setInterval(checkRouteNavigation, 100);
 
 // Cloud-tools dispatcher. Mirrors the local server's MCP handlers but runs
 // here in the content script because cloud has no server-side state — we
 // answer queries straight from the live page.
 function dispatchCloudMessage(msg: any) {
+  if (!canEditRoute() && !/^(CLOUD_)?(GET_|EXPORT_|CLEAR_)/.test(msg?.type || '')) {
+    if (msg?.requestId) sendRelayResponse(msg.requestId, { ok: false, error: 'Reload the destination route before editing' });
+    return;
+  }
   // Status round-trip. Arrives with a requestId from the cloud relay
   // (CLOUD_SET_CHANGE_STATUS) or fire-and-forget from the local server
   // (SET_CHANGE_STATUS) — handle both before the requestId guard.
@@ -579,34 +750,9 @@ function dispatchCloudMessage(msg: any) {
   if (!msg?.requestId) return;
   switch (msg.type) {
     case 'CLOUD_GET_CHANGES':
-      (async () => {
-        const report: any = getChangeReport();
-        try {
-          const pageComments = await getPageComments();
-          report.comments = pageComments.map(c => ({
-            id: c.id, selector: c.selector, text: c.text,
-            region: (c as any).region,
-            timestamp: new Date(c.timestamp).toISOString(),
-            pageUrl: (c as any).pageUrl, resolved: !!(c as any).resolved,
-            screenshot: `get_screenshot({ commentId: "${c.id}" })`,
-          }));
-          report.items = buildMcpItems({
-            styleChanges: getStyleChanges(),
-            textChanges: getTextChanges(),
-            domChanges: getDomChanges(),
-            comments: pageComments,
-          });
-        } catch {
-          report.comments = [];
-          report.items = buildMcpItems({
-            styleChanges: getStyleChanges(),
-            textChanges: getTextChanges(),
-            domChanges: getDomChanges(),
-            comments: [],
-          });
-        }
-        sendRelayResponse(msg.requestId, report);
-      })();
+      void ensureActiveRoute().then(() => getSiteChangeReport()).then(report => {
+        sendRelayResponse(msg.requestId, { ...report, items: buildMcpItems(report) });
+      }).catch(error => sendRelayResponse(msg.requestId, { error: String(error) }));
       return;
     case 'CLOUD_APPLY_CHANGES': {
       // Same shape as the local APPLY_CHANGES but the cloud expects an
@@ -632,7 +778,7 @@ function dispatchCloudMessage(msg: any) {
     case 'CLEAR_CHANGES':
     case 'CLOUD_CLEAR_CHANGES':
       (async () => {
-        await performFullClear();
+        await performSiteClear();
         try { notifyPanel('CHANGES_UPDATE', await getChangesPayload()); } catch { /* panel closed */ }
         sendRelayResponse(msg.requestId, { ok: true });
       })();
@@ -655,7 +801,7 @@ function dispatchCloudMessage(msg: any) {
       })();
       return;
     case 'CLOUD_EXPORT_CHANGES':
-      sendRelayResponse(msg.requestId, { text: renderExportText(msg.payload?.format || 'css') });
+      void renderSiteExportText(msg.payload?.format || 'css').then(text => sendRelayResponse(msg.requestId, { text }), error => sendRelayResponse(msg.requestId, { error: String(error) }));
       return;
     // Agent marks a comment resolved/open. Local (MARK_COMMENT_RESOLVED) and
     // cloud (CLOUD_MARK_COMMENT_RESOLVED) converge on the same UI-driven path,
@@ -678,40 +824,61 @@ function dispatchCloudMessage(msg: any) {
 // Lightweight format renderers — kept here so the content script doesn't
 // have to ship the local server's full export module. Only the four
 // formats the agent can request via export_changes.
-function renderExportText(format: 'css' | 'tailwind' | 'scss' | 'jsx'): string {
-  const styles = getStyleChanges();
-  if (styles.length === 0) return 'No changes to export.';
-  const bySelector = new Map<string, Map<string, string>>();
-  for (const c of styles) {
-    if (!bySelector.has(c.selector)) bySelector.set(c.selector, new Map());
-    bySelector.get(c.selector)!.set(c.property, c.newValue);
+function renderStoredRouteMarkdown(group: Awaited<ReturnType<typeof getStoredSiteRouteGroups>>[number]): string {
+  const lines = [`## Route: ${group.url}`, ''];
+  const responsive = (c: { breakpoint?: string; viewportWidth?: number }) =>
+    c.breakpoint || c.viewportWidth !== undefined
+      ? ` _(${c.breakpoint || 'unspecified breakpoint'}${c.viewportWidth !== undefined ? ` · ${c.viewportWidth}px` : ''})_` : '';
+  const position = (loc: { parentSelector: string; index: number }) => `${loc.parentSelector}[${loc.index}]`;
+  const entries = [
+    ...group.styleChanges.map(c => ({ c, line: `- ${c.selector}: ${c.property} ${c.oldValue} → ${c.newValue}${c.state ? ` (${c.state})` : ''}` })),
+    ...group.textChanges.map(c => ({ c, line: `- ${c.selector} ${c.attributeName || (c.isHtml ? 'HTML' : 'text')}: ${JSON.stringify(c.oldText)} → ${JSON.stringify(c.newText)}` })),
+    ...group.domChanges.map(c => ({ c, line: `- ${c.selector} ${c.action}${c.origin ? ` from ${position(c.origin)}` : ''}${c.destination ? ` → ${position(c.destination)}` : ''}${c.origin || c.destination ? ' (parent[child-index])' : ''}` })),
+  ].sort((a, b) => a.c.timestamp - b.c.timestamp);
+  if (entries.length) {
+    lines.push('### Changes');
+    for (const { c, line } of entries) lines.push(line + responsive(c));
   }
-  const kebab = (s: string) => s.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
-  if (format === 'css' || format === 'scss') {
-    const out: string[] = [];
-    for (const [sel, props] of bySelector) {
-      out.push(`${sel} {\n${Array.from(props).map(([k, v]) => `  ${kebab(k)}: ${v};`).join('\n')}\n}`);
-    }
-    return (format === 'scss' ? '// Design Mode SCSS export\n\n' : '') + out.join('\n\n');
+  if (group.comments.length) {
+    lines.push('', '### Comments');
+    for (const c of group.comments) lines.push(`- on ${c.selector || 'Region'}: ${c.text}`);
   }
-  if (format === 'tailwind') {
-    const out: string[] = [];
-    for (const [sel, props] of bySelector) {
-      const classes = Array.from(props).map(([prop, val]) => `[${kebab(prop)}:${val.replace(/\s+/g, '_')}]`);
-      out.push(`/* ${sel} */\nclass="${classes.join(' ')}"`);
-    }
-    return out.join('\n\n');
-  }
-  // jsx
-  const blocks: string[] = [];
-  for (const [sel, props] of bySelector) {
-    const entries = Array.from(props).map(([k, v]) => `  ${k}: '${v}'`).join(',\n');
-    blocks.push(`// ${sel}\nconst styles = {\n${entries}\n};`);
-  }
-  return blocks.join('\n\n');
+  // Retain all persisted context without resolving another route's selectors.
+  const stored = JSON.stringify({ styleChanges: group.styleChanges, textChanges: group.textChanges, domChanges: group.domChanges, comments: group.comments }, null, 2);
+  const fence = '`'.repeat(Math.max(3, ...Array.from(stored.matchAll(/`+/g), match => match[0].length + 1)));
+  lines.push('', '### Saved change details', `${fence}json`, stored, fence);
+  return lines.join('\n');
 }
 
-setUnhandledMessageHandler(dispatchCloudMessage);
+async function renderSiteExportText(format: string): Promise<string> {
+  const groups = await getSiteRouteGroups();
+  return groups.map((group, index) => {
+    if (['css', 'tailwind', 'scss', 'jsx'].includes(format)) {
+      const render = format === 'tailwind' ? exportTailwind : format === 'scss' ? exportSCSS : format === 'jsx' ? exportJSX : exportCSS;
+      return `/* Route: ${group.url.replace(/\*\//g, '* /')} */\n${render(group.styleChanges)}`;
+    }
+    if (index === 0 && !pendingRouteReplay) return `## Route: ${group.url}\n\n` + (format === 'enhanced-github' ? exportEnhancedGitHubIssue() : exportMarkdown(group.comments));
+    return renderStoredRouteMarkdown(group);
+  }).join('\n\n');
+}
+
+setUnhandledMessageHandler(msg => {
+  const ready = ensureActiveRoute();
+  const url = getActiveRouteUrl();
+  const epoch = navigationEpoch;
+  void ready.then(() => {
+    if (msg.type === 'CLOUD_APPLY_CHANGES' && (typeof msg.payload?.routeKey !== 'string' || !msg.payload.routeKey.trim())) {
+      if (msg.requestId) sendRelayResponse(msg.requestId, { error: 'routeKey from get_changes is required' });
+      return;
+    }
+    const requestedUrl = msg.payload?.routeKey || msg.payload?.pageUrl;
+    if (epoch !== navigationEpoch || url !== routeIdentity(location.href).url || (requestedUrl && routeIdentity(requestedUrl).url !== url)) {
+      if (msg.requestId) sendRelayResponse(msg.requestId, { error: 'Navigate to the requested route first' });
+      return;
+    }
+    dispatchCloudMessage(msg);
+  }).catch(error => { if (msg.requestId) sendRelayResponse(msg.requestId, { error: String(error) }); });
+});
 
 // Reads the user's chosen MCP transport mode + cloud creds from storage,
 // then opens the appropriate transport. Falls back to local on any error.
@@ -755,13 +922,9 @@ function enable() {
   // Replay any changes saved in this session for this URL — survives reloads
   // and back/forward navigation. Always notify so the side panel resets
   // its state to match the new page (even if it's empty).
-  replaySession().finally(() => {
-    notifyPanel('CHANGES_UPDATE', {
-      styleChanges: getStyleChanges(),
-      textChanges: getTextChanges(),
-      domChanges: getDomChanges(),
-    });
-  });
+  void (pendingRouteReplay ? routeTransition : replaySession()).then(() => getChangesPayload()).then(payload => {
+    notifyPanel('CHANGES_UPDATE', payload);
+  }).catch(() => {});
   setTimeout(() => notifyPanel('STATE_UPDATE', getFullState()), 1000);
 }
 
@@ -835,9 +998,7 @@ function registerAllShortcuts() {
     if (sid) { deleteElement(sid); setSelectedElementId(null); hideSelect(); }
   });
   registerShortcut('export-css', () => {
-    const ch = getStyleChanges();
-    const css = exportCSS(ch);
-    copyToClipboard(css);
+    void ensureActiveRoute().then(() => renderSiteExportText('css')).then(css => copyToClipboard(css));
   });
   // Alt+A — fast path to add a comment on the focused element. Reuses the
   // existing comment infrastructure (pin + side-panel add field); no-op if
@@ -870,11 +1031,31 @@ function registerAllShortcuts() {
 
 /* —— Message handler —— */
 
-browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
+browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!dmIsActiveInstance()) return;
+  const ready = ensureActiveRoute();
+  const epoch = navigationEpoch;
+  const url = getActiveRouteUrl();
+  const respond = (payload: any) => {
+    if (epoch !== navigationEpoch || url !== routeIdentity(location.href).url) sendResponse({ ok: false, stale: true, error: 'Page route changed' });
+    else sendResponse(payload);
+  };
+  ready.then(() => {
+    if (epoch !== navigationEpoch || url !== routeIdentity(location.href).url) return respond({ stale: true });
+    handleContentMessage(msg, sender, respond);
+  }, error => respond({ ok: false, error: String(error) }));
+  return true;
+});
+
+function handleContentMessage(msg: any, _: any, sendResponse: (payload: any) => void) {
   // Decline if a newer injection has superseded this instance (see the
   // re-injection guard at the top). Exactly one instance answers each
   // message, so the panel's round-trips can't be corrupted by duplicates.
   if (!dmIsActiveInstance()) return;
+  if (!canEditRoute() && !/^(GET_|EXPORT_)/.test(msg.type) && !['PING', 'CLEAR_SITE_CHANGES', 'CLEAR_ROUTE_CHANGES', 'CLEAR_CHANGES', 'SEND_TO_AGENT', 'STOP_FEEDBACK_SESSION', 'DEACTIVATE_DESIGN_MODE'].includes(msg.type)) {
+    sendResponse({ ok: false, error: 'Route rendering is not confirmed. Wait for the page or reload it before editing.' });
+    return;
+  }
   switch (msg.type) {
     // Ping for checking if content script is injected
     case 'PING': sendResponse({ ok: true }); break;
@@ -913,7 +1094,8 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       sendResponse({ ok: true });
       break;
     }
-    case 'GET_CHANGES': { getChangesPayload().then(p => sendResponse(p)); return true; }
+    case 'GET_SITE_CHANGES':
+    case 'GET_CHANGES': { getChangesPayload().then(p => sendResponse(p), error => sendResponse({ error: String(error) })); return true; }
 
     // New: DOM tree for Layers panel
     case 'GET_DOM_TREE': {
@@ -1638,7 +1820,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         } break;
         case 'delete': {
           const ids = (requestedIds.length > 0 ? requestedIds : [msg.elementId || sid])
-            .filter((id): id is string => Boolean(id));
+            .filter((id: unknown): id is string => typeof id === 'string' && Boolean(id));
           const targetIds = orderDomDeletionTargets(
             ids,
             (id: string) => getElementById(id) as HTMLElement | null,
@@ -1665,8 +1847,22 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
+    case 'CLEAR_ROUTE_CHANGES': {
+      const current = routeIdentity(getActiveRouteUrl());
+      let target;
+      try { target = routeIdentity(new URL(msg.routeKey, current.url).href); } catch { sendResponse({ ok: false, error: 'Invalid route key' }); break; }
+      if (typeof msg.routeKey !== 'string' || target.origin !== current.origin || target.routeKey !== msg.routeKey) {
+        sendResponse({ ok: false, error: 'Invalid route key' }); break;
+      }
+      const cleared = target.routeKey === current.routeKey
+        ? performFullClear()
+        : Promise.all([clearSavedRoute(target.routeKey), clearRouteComments(target.url)]);
+      cleared.then(() => getChangesPayload()).then(p => sendResponse({ ok: true, ...p }), error => sendResponse({ ok: false, error: String(error) }));
+      return true;
+    }
+    case 'CLEAR_SITE_CHANGES':
     case 'CLEAR_CHANGES': {
-      performFullClear().then(() => sendResponse({ ok: true }));
+      performSiteClear().then(() => getChangesPayload()).then(p => sendResponse({ ok: true, ...p }), error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
     case 'REORDER_CHANGE': if (typeof msg.from === 'number' && typeof msg.to === 'number') reorderChange(msg.from, msg.to); getChangesPayload().then(p => sendResponse(p)); return true; break;
@@ -1857,20 +2053,34 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       // scoped to the current pageUrl.
       (async () => {
         try {
-          const payload = msg.payload || {};
+          const url = getActiveRouteUrl();
+          const generation = getRouteGeneration();
+          const assertCurrent = () => {
+            if (url !== getActiveRouteUrl() || url !== routeIdentity(location.href).url || generation !== getRouteGeneration()) {
+              throw new Error('Page route changed during import');
+            }
+          };
+          let payload = msg.payload || {};
+          if (payload.routeGroups !== undefined || payload.version === 2) {
+            const result = await importSiteChanges(payload, url, { routeStore, assertCurrent, replaceRouteComments });
+            assertCurrent();
+            if (!result.activePayload) {
+              sendResponse({ ok: true, ...await getChangesPayload() });
+              return;
+            }
+            payload = result.activePayload;
+          }
           const styleChanges = Array.isArray(payload.styleChanges) ? payload.styleChanges : [];
           const textChanges = Array.isArray(payload.textChanges) ? payload.textChanges : [];
           const domChanges = Array.isArray(payload.domChanges) ? payload.domChanges : [];
           const comments = Array.isArray(payload.comments) ? payload.comments : [];
+          assertCurrent();
+          if (pendingRouteReplay) throw new Error('Route rendering is not confirmed; reload the page before importing active-route changes');
+          await replaceRouteComments(url, comments, assertCurrent);
+          assertCurrent();
           revertAllPageMutations();
-          // Drop any current-page comments before we replace them with
-          // the imported set; otherwise pins from a prior session would
-          // remain on the page and mix with the imported pins.
-          const existingComments = await getPageComments();
-          for (const c of existingComments) await deleteComment(c.id);
           clearAllChanges();
           applyChangesPayload({ styleChanges, textChanges, domChanges });
-          await replacePageComments(comments);
           const p = await getChangesPayload();
           sendResponse({ ok: true, ...p });
         } catch (err) {
@@ -1956,16 +2166,10 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
 
     case 'EXPORT': {
-      const ch = getStyleChanges();
-      let output = '';
-      if (msg.format === 'css') output = exportCSS(ch);
-      else if (msg.format === 'tailwind') output = exportTailwind(ch);
-      else if (msg.format === 'scss') output = exportSCSS(ch);
-      else if (msg.format === 'jsx') output = exportJSX(ch);
-      else if (msg.format === 'github') { sendResponse({ body: generateGitHubIssueBody(ch, window.location.href, document.title) }); break; }
-      else if (msg.format === 'markdown') { getPageComments().then(pc => sendResponse({ output: exportMarkdown(pc) })); return true; }
-      else if (msg.format === 'enhanced-github') { sendResponse({ body: exportEnhancedGitHubIssue() }); break; }
-      sendResponse({ output }); break;
+      renderSiteExportText(msg.format).then(output => {
+        sendResponse(msg.format === 'github' || msg.format === 'enhanced-github' ? { body: output } : { output });
+      }, error => sendResponse({ error: String(error) }));
+      return true;
     }
 
     // "Send to Agent" — stage the handoff marker and push it to the MCP
@@ -2405,7 +2609,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     default: return false;
   }
   return true;
-});
+}
 
 // Build the list of fonts to surface in the Typography → Font dropdown.
 // Two sources, deduped + sorted: every `font-family` declared in the page's

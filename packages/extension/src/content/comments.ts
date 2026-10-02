@@ -2,7 +2,10 @@
 // Design Mode — Comments System
 // ============================================================
 
+import type { CommentOperation } from '../background/comment-store';
 import { Z_INDEX } from '../shared';
+import { routeIdentity, sameRoute } from './route-storage';
+import { canEditRoute } from './route-edit-guard';
 import { getElementById, getElementRect, generateSelector, escapeAttr } from './helpers';
 
 export interface CommentData {
@@ -23,91 +26,104 @@ export interface CommentData {
   region?: { x: number; y: number; w: number; h: number };
 }
 
-const STORAGE_KEY = 'dm-comments';
 const pinElements = new Map<string, HTMLDivElement>();
 const regionBoxes = new Map<string, HTMLDivElement>();
 
-export async function loadComments(): Promise<CommentData[]> {
-  try {
-    const data = await browser.storage.local.get(STORAGE_KEY);
-    return (data[STORAGE_KEY] as CommentData[] | undefined) || [];
-  } catch { return []; }
+// This local tail preserves call order and import guards, but does NOT own
+// storage. The background is the single writer for all tabs and origins.
+let commentWrites: Promise<unknown> = Promise.resolve();
+function requestComments(operation: CommentOperation, assertCurrent?: () => void): Promise<CommentData[]> {
+  const assertEditable = () => {
+    if (['add', 'update', 'resolve', 'offset', 'delete'].includes(operation.action) && !canEditRoute()) {
+      throw new Error('Route rendering is not confirmed; reload the destination page before editing comments');
+    }
+  };
+  // Check again after pending local requests, not just when the UI was clicked.
+  try { assertEditable(); } catch (error) { return Promise.reject(error); }
+  const next = commentWrites.then(async () => {
+    assertEditable();
+    assertCurrent?.();
+    const response = await browser.runtime.sendMessage({ type: 'DM_COMMENT_STORE', operation });
+    if (!response?.ok) throw new Error(response?.error || 'Comment storage request failed');
+    assertEditable();
+    assertCurrent?.();
+    return response.comments as CommentData[];
+  });
+  commentWrites = next.catch(() => {});
+  return next;
 }
 
-export async function saveComments(comments: CommentData[]) {
-  try { await browser.storage.local.set({ [STORAGE_KEY]: comments }); } catch {}
+export function loadComments(): Promise<CommentData[]> {
+  return requestComments({ action: 'read', href: window.location.href });
+}
+
+export async function replaceRouteComments(href: string, comments: CommentData[], assertCurrent: () => void): Promise<void> {
+  await requestComments({ action: 'replace-route', href, comments }, assertCurrent);
+}
+
+export async function clearRouteComments(href: string): Promise<void> {
+  await requestComments({ action: 'clear-route', href });
+}
+
+export async function clearSiteComments(href: string): Promise<void> {
+  await requestComments({ action: 'clear-site', href });
 }
 
 export async function addComment(elementId: string, selector: string, text: string): Promise<CommentData> {
   const comment: CommentData = {
     id: crypto.randomUUID(), elementId, selector, text,
-    timestamp: Date.now(), updatedAt: Date.now(), pageUrl: window.location.href,
+    timestamp: Date.now(), updatedAt: Date.now(), pageUrl: routeIdentity(window.location.href).url,
   };
-  const all = await loadComments();
-  all.push(comment);
-  await saveComments(all);
-  showCommentPin(comment);
+  const all = await requestComments({ action: 'add', href: comment.pageUrl, comment });
+  const ordinal = getPinOrdinal(comment.id, all);
+  showCommentPin(comment, ordinal);
   return comment;
 }
 
 export async function addRegionComment(region: { x: number; y: number; w: number; h: number }, selector: string, text: string): Promise<CommentData> {
   const comment: CommentData = {
     id: crypto.randomUUID(), elementId: '', selector, text, region,
-    timestamp: Date.now(), updatedAt: Date.now(), pageUrl: window.location.href,
+    timestamp: Date.now(), updatedAt: Date.now(), pageUrl: routeIdentity(window.location.href).url,
   };
-  const all = await loadComments();
-  all.push(comment);
-  await saveComments(all);
-  showCommentPin(comment, getPinOrdinal(comment.id, all));
+  const all = await requestComments({ action: 'add', href: comment.pageUrl, comment });
+  const ordinal = getPinOrdinal(comment.id, all);
+  showCommentPin(comment, ordinal);
   return comment;
 }
 
 export async function updateComment(id: string, text: string): Promise<CommentData | null> {
-  const all = await loadComments();
-  const c = all.find(x => x.id === id);
-  if (!c) return null;
-  c.text = text; c.updatedAt = Date.now();
-  await saveComments(all);
-  return c;
+  const href = window.location.href;
+  const all = await requestComments({ action: 'update', href, id, text });
+  return all.find(c => c.id === id && sameRoute(c.pageUrl, href)) ?? null;
 }
 
-// Toggle / set the resolved flag. Updates `updatedAt` so the side panel can
-// show an "edited" hint if the user wants that.
 export async function setCommentResolved(id: string, resolved: boolean): Promise<CommentData | null> {
-  const all = await loadComments();
-  const c = all.find(x => x.id === id);
-  if (!c) return null;
-  c.resolved = resolved;
-  c.updatedAt = Date.now();
-  await saveComments(all);
-  // Re-render the pin so its visual state matches.
-  showCommentPin(c, getPinOrdinal(c.id, all));
+  const href = window.location.href;
+  const all = await requestComments({ action: 'resolve', href, id, resolved });
+  const c = all.find(c => c.id === id && sameRoute(c.pageUrl, href)) ?? null;
+  if (c) showCommentPin(c, getPinOrdinal(c.id, all));
   return c;
 }
 
-// Persist a manually-dragged pin offset.
 export async function setCommentPinOffset(id: string, offset: { x: number; y: number } | null): Promise<CommentData | null> {
-  const all = await loadComments();
-  const c = all.find(x => x.id === id);
-  if (!c) return null;
-  if (offset) c.pinOffset = offset; else delete (c as any).pinOffset;
-  await saveComments(all);
-  return c;
+  const href = window.location.href;
+  const all = await requestComments({ action: 'offset', href, id, offset });
+  return all.find(c => c.id === id && sameRoute(c.pageUrl, href)) ?? null;
 }
 
 // Pin numbering — 1-based, matches the order comments were created in this
 // browser-tab session. Cheap to recompute on every render.
 function getPinOrdinal(commentId: string, all: CommentData[]): number {
   const sameUrl = all
-    .filter(c => c.pageUrl === window.location.href)
+    .filter(c => sameRoute(c.pageUrl, window.location.href))
     .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   const idx = sameUrl.findIndex(c => c.id === commentId);
   return idx >= 0 ? idx + 1 : 1;
 }
 
 export async function deleteComment(id: string) {
-  const all = await loadComments();
-  await saveComments(all.filter(x => x.id !== id));
+  const url = window.location.href;
+  await requestComments({ action: 'delete', href: url, id });
   const pin = pinElements.get(id);
   if (pin) { pin.remove(); pinElements.delete(id); }
   const box = regionBoxes.get(id);
@@ -127,7 +143,7 @@ function commentAnchorRect(comment: CommentData): DOMRect | null {
 }
 
 export function showCommentPin(comment: CommentData, ordinal?: number) {
-  if (!pinsActive) return;
+  if (!pinsActive || !sameRoute(comment.pageUrl, window.location.href)) return;
   const rect0 = commentAnchorRect(comment);
   if (!rect0) return;
   const PIN_SIZE = 28;
@@ -254,7 +270,7 @@ export async function showAllPins() {
   pinsActive = true;
   const all = await loadComments();
   const pageComments = all
-    .filter(c => c.pageUrl === window.location.href)
+    .filter(c => sameRoute(c.pageUrl, window.location.href))
     .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   pageComments.forEach((c, i) => showCommentPin(c, i + 1));
 }
@@ -278,7 +294,7 @@ export async function getPageComments(): Promise<CommentData[]> {
   // array — sorting once at the read site keeps all three consistent and
   // means an import doesn't have to worry about the on-disk order.
   return all
-    .filter(c => c.pageUrl === window.location.href)
+    .filter(c => sameRoute(c.pageUrl, window.location.href))
     .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
 }
 
@@ -294,11 +310,10 @@ export async function getPageComments(): Promise<CommentData[]> {
 // recorded elementId onto the matching element so subsequent lookups,
 // and the pin render, all succeed.
 export async function replacePageComments(incoming: CommentData[]): Promise<void> {
-  const all = await loadComments();
-  const others = all.filter(c => c.pageUrl !== window.location.href);
+  const url = routeIdentity(window.location.href).url;
   const dataAttr = 'data-dm-id';
   const stamped = incoming
-    .map(c => ({ ...c, pageUrl: window.location.href }))
+    .map(c => ({ ...c, pageUrl: url }))
     .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   for (const c of stamped) {
     if (!c.elementId) continue;
@@ -310,7 +325,8 @@ export async function replacePageComments(incoming: CommentData[]): Promise<void
       if (bySel) bySel.setAttribute(dataAttr, c.elementId);
     } catch { /* invalid selector — skip rather than throw */ }
   }
-  await saveComments([...others, ...stamped]);
+  await requestComments({ action: 'replace-route', href: url, comments: stamped });
+  if (!sameRoute(url, window.location.href)) return;
   pinElements.forEach(p => p.remove());
   pinElements.clear();
   regionBoxes.forEach(b => b.remove());
@@ -324,7 +340,7 @@ async function repositionAll() {
   if (!pinsActive) return;
   const all = await loadComments();
   const pageComments = all
-    .filter(c => c.pageUrl === window.location.href)
+    .filter(c => sameRoute(c.pageUrl, window.location.href))
     .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   pageComments.forEach((c, i) => showCommentPin(c, i + 1));
 }

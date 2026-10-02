@@ -5,6 +5,8 @@
 // Auto-activates design mode (with inspect) on open.
 // ============================================================
 import '../platform/polyfill';
+import { createCommentStore } from './comment-store';
+import type { OpenRouteResponse } from '@shared/messages';
 import { IS_FIREFOX } from '../platform/target';
 import { readPageComponentContexts } from '../content/page-component-context';
 import { openPanel, setActionOpensPanel } from '../platform/panel';
@@ -14,6 +16,8 @@ import {
   parseLaunchSurface,
   type LaunchSurface,
 } from '../platform/launch-surface';
+
+const commentStore = createCommentStore(browser.storage.local);
 
 const tabStates = new Map<number, { enabled: boolean; connected: boolean }>();
 let pinnedTabId: number | null = null;
@@ -259,8 +263,43 @@ async function forwardToPinnedTab(message: any, sendResponse: (response?: any) =
   }
 }
 
+async function openRoute(tabId: number | null, url: unknown): Promise<OpenRouteResponse> {
+  try {
+    if (tabId == null || !Number.isInteger(tabId) || tabId < 0) throw new Error('No target tab');
+    if (typeof url !== 'string') throw new Error('Invalid route URL');
+    const destination = new URL(url);
+    const tab = await browser.tabs.get(tabId);
+    const current = new URL(tab.url || '');
+    if (!['http:', 'https:'].includes(current.protocol) ||
+        destination.origin !== current.origin ||
+        !['http:', 'https:'].includes(destination.protocol) ||
+        destination.username || destination.password) {
+      throw new Error('Routes must use the current tab’s exact HTTP(S) origin');
+    }
+    if (tab.pendingUrl && new URL(tab.pendingUrl).origin !== current.origin) {
+      throw new Error('The tab is navigating to another origin');
+    }
+    await browser.tabs.update(tabId, { url: destination.href });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 // Message handling — relay between content script and side panel
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === 'DM_COMMENT_STORE') {
+    if (sender.id !== browser.runtime.id || sender.tab?.id == null) {
+      sendResponse({ ok: false, error: 'Comments require a content-script sender' });
+      return true;
+    }
+    commentStore(msg.operation, sender.url).then(
+      comments => sendResponse({ ok: true, comments }),
+      error => sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) }),
+    );
+    return true; // Keep the message alive until the persistent write completes.
+  }
+
   // Resolve which tab this panel message targets (panel stamps every SP_*).
   // Read synchronously here and again at the top of forwardToPinnedTab.
   currentTargetTab = (typeof msg?.targetTabId === 'number') ? msg.targetTabId : null;
@@ -342,6 +381,24 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'SP_OPEN_ROUTE') {
+    if (sender.id !== browser.runtime.id || !sender.url?.startsWith(browser.runtime.getURL(''))) {
+      sendResponse({ ok: false, error: 'Only extension pages can open routes' });
+      return true;
+    }
+    openRoute(currentTargetTab ?? pinnedTabId, msg.url).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'SP_CLEAR_ROUTE_CHANGES') {
+    if (typeof msg.routeKey !== 'string' || !msg.routeKey) {
+      sendResponse({ ok: false, error: 'Invalid route key' });
+      return true;
+    }
+    forwardToPinnedTab({ type: 'CLEAR_ROUTE_CHANGES', routeKey: msg.routeKey }, sendResponse);
+    return true;
+  }
+
   // Side panel → content script forwards
   const forwardTypes: Record<string, any> = {
     'SP_ACTIVATE': { type: 'ACTIVATE_DESIGN_MODE' },
@@ -349,6 +406,8 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     'SP_TOGGLE_INSPECT': { type: 'TOGGLE_INSPECT' },
     'SP_GET_STATE': { type: 'GET_STATE' },
     'SP_GET_CHANGES': { type: 'GET_CHANGES' },
+    'SP_GET_SITE_CHANGES': { type: 'GET_SITE_CHANGES' },
+    'SP_CLEAR_SITE_CHANGES': { type: 'CLEAR_SITE_CHANGES' },
     'SP_CLEAR_CHANGES': { type: 'CLEAR_CHANGES' },
     'SP_GET_DOM_TREE': { type: 'GET_DOM_TREE' },
     'SP_GET_PAGE_URL': { type: 'GET_PAGE_URL' },

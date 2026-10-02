@@ -40,7 +40,24 @@ export type PanelMessage =
 
 // --- Extension <-> Background Service Worker Messages ---
 
+export type SiteChangesContentMessage =
+  | { type: 'GET_CHANGES' }
+  | { type: 'GET_SITE_CHANGES' }
+  | { type: 'CLEAR_ROUTE_CHANGES'; routeKey: string }
+  | { type: 'CLEAR_SITE_CHANGES' };
+
+export type SidePanelSiteChangesMessage = (
+  | { type: 'SP_GET_CHANGES' }
+  | { type: 'SP_GET_SITE_CHANGES' }
+  | { type: 'SP_CLEAR_ROUTE_CHANGES'; routeKey: string }
+  | { type: 'SP_CLEAR_SITE_CHANGES' }
+  | { type: 'SP_OPEN_ROUTE'; url: string }
+) & { targetTabId?: number };
+
+export type OpenRouteResponse = { ok: true } | { ok: false; error: string };
+
 export type BackgroundMessage =
+  | SidePanelSiteChangesMessage
   | { type: 'TOGGLE_DESIGN_MODE'; tabId?: number }
   | { type: 'DESIGN_MODE_TOGGLED'; enabled: boolean }
   | { type: 'GET_STATE' }

@@ -13,6 +13,26 @@ All extension data lives on **your machine**, in the browser's extension storage
 | `chrome.storage.sync`     | User-saved presets you opt to sync across devices                                   | Synced via your browser's sync account (Chrome Sync / Firefox Sync) |
 | `chrome.storage.session`  | Per-page edit sessions (style/text/DOM changes), keyed by `origin + path + search`  | Until tab/browser closes       |
 
+Site-wide change review reads saved routes only for the current exact origin
+(scheme, host and port). Edits remain route-specific, and route grouping uses
+existing session storage without extending its lifetime. Delete route removes
+that route's saved records; Clear all removes the current origin's saved
+records. Copy as Prompt and Send to Agent include all saved routes for that
+origin, including route URLs and their recorded changes, not just the visible
+route or filter. Send uses the already-configured MCP transport; route review
+adds no service, permission or automatic upload. Open route is restricted to
+the bound tab's current exact HTTP(S) origin.
+
+Session storage also holds `dm_site_clear:`, `dm_site_generation:` and
+`dm_route_generation:` markers to invalidate saves already in flight when a
+route or site is cleared. These contain route/origin identifiers and random
+generation values, not copies of cleared edits; they share session lifetime.
+
+Comment reads and mutations use the extension background's serial queue to
+prevent concurrent tabs from overwriting or resurrecting each other's records.
+They remain in the existing local `dm-comments` storage; this adds no upload
+or retention change.
+
 The extension never reads password values or framework props/state. It reads
 CSS, geometry and DOM structure for elements you inspect. For component-grouped
 change review, a bounded read-only probe also reads React/Vue component names

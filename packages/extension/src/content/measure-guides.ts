@@ -7,6 +7,7 @@
 // ============================================================
 
 import { Z_INDEX } from '../shared';
+import { canEditRoute } from './route-edit-guard';
 import { getElementRect, getElementById, type Rect } from './helpers';
 import { showSelect, setOverlayTransitions } from './overlays';
 
@@ -401,6 +402,7 @@ function startResize(el: HTMLElement, dir: string, e: MouseEvent) {
   setOverlayTransitions(false); // track the cursor without the 80ms ease lag
 
   const onMove = (ev: MouseEvent) => {
+    if (!canEditRoute()) return;
     const dx = ev.clientX - startX;
     const dy = ev.clientY - startY;
     let w = startRect.width;
@@ -463,6 +465,7 @@ export function armMoveDrag(anchor: HTMLElement, members: HTMLElement[], preview
   let driver: ReturnType<typeof startMove> | null = null;
 
   const onMove = (ev: MouseEvent) => {
+    if (!canEditRoute()) return;
     if (!started) {
       if (Math.abs(ev.clientX - startX) < DRAG_THRESHOLD_PX && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD_PX) return;
       started = true;

@@ -41,13 +41,24 @@ export function editableRichTextAttributes(tagName: string): ReadonlySet<string>
   return EDITABLE_ATTRIBUTES[tagName.toUpperCase()] ?? EMPTY_ATTRIBUTES;
 }
 
-export function isSafeRichTextHref(value: string): boolean {
+export function normalizeRichTextHref(value: string): string | null {
+  if (/[\u0000-\u001f\u007f\\]/.test(value)) return null;
   const trimmed = value.trim();
-  // Keep active protocols and protocol-relative URLs out of the privileged editor.
-  return /^https?:\/\//i.test(trimmed)
-    || trimmed.startsWith('#')
-    || (trimmed.startsWith('/') && !trimmed.startsWith('//'))
-    || trimmed.startsWith('.');
+  if (!trimmed) return '';
+  if (trimmed.startsWith('//')) return null;
+  if (trimmed.startsWith('#') || trimmed.startsWith('/') || trimmed.startsWith('.')) return trimmed;
+  if (!/^https?:\/\//i.test(trimmed)) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isSafeRichTextHref(value: string): boolean {
+  const href = normalizeRichTextHref(value);
+  return href !== null && href !== '';
 }
 
 export function sanitizeRichTextHtml(raw: string): string {
@@ -76,8 +87,9 @@ export function sanitizeRichTextHtml(raw: string): string {
         const name = attr.name.toLowerCase();
         if (!allowed.has(name)) {
           child.removeAttribute(attr.name);
-        } else if (name === 'href' && !isSafeRichTextHref(attr.value)) {
-          child.removeAttribute(attr.name);
+        } else if (name === 'href') {
+          const href = normalizeRichTextHref(attr.value);
+          if (href) child.setAttribute(attr.name, href); else child.removeAttribute(attr.name);
         }
       }
       child.setAttribute(RICH_TEXT_STRUCTURE_NODE_ATTR, String(editableNodes.indexOf(child)));
@@ -124,8 +136,8 @@ export function restoreRichTextHtml(root: Element, html: string): string {
   }
   for (const link of template.content.querySelectorAll<HTMLAnchorElement>('a')) {
     link.removeAttribute(RICH_TEXT_LINK_NODE_ATTR);
-    const href = link.getAttribute('href');
-    if (href && !isSafeRichTextHref(href)) link.removeAttribute('href');
+    const href = normalizeRichTextHref(link.getAttribute('href') || '');
+    if (href) link.setAttribute('href', href); else link.removeAttribute('href');
   }
   return template.innerHTML;
 }

@@ -3,7 +3,16 @@
 
 export type McpItemKind = 'style' | 'text' | 'dom' | 'comment';
 
-export type McpItem = {
+type RouteMetadata = { pageUrl?: string; routeKey?: string };
+
+function routeMetadata(change: RouteMetadata): RouteMetadata {
+  return {
+    ...(change.pageUrl !== undefined ? { pageUrl: change.pageUrl } : {}),
+    ...(change.routeKey !== undefined ? { routeKey: change.routeKey } : {}),
+  };
+}
+
+export type McpItem = RouteMetadata & {
   id: string;
   kind: McpItemKind;
   selector: string;
@@ -13,23 +22,23 @@ export type McpItem = {
 };
 
 export function buildMcpItems(input: {
-  styleChanges?: Array<{ id: string; selector: string; property: string; status?: string }>;
-  textChanges?: Array<{ id: string; selector: string; status?: string }>;
-  domChanges?: Array<{ id: string; selector: string; action: string; status?: string }>;
-  comments?: Array<{ id: string; selector: string; resolved?: boolean }>;
+  styleChanges?: Array<RouteMetadata & { id: string; selector: string; property: string; status?: string }>;
+  textChanges?: Array<RouteMetadata & { id: string; selector: string; status?: string }>;
+  domChanges?: Array<RouteMetadata & { id: string; selector: string; action: string; status?: string }>;
+  comments?: Array<RouteMetadata & { id: string; selector: string; resolved?: boolean }>;
 }): McpItem[] {
   return [
     ...(input.styleChanges || []).map(c => ({
-      id: c.id, kind: 'style' as const, selector: c.selector, property: c.property, status: c.status || 'todo',
+      ...routeMetadata(c), id: c.id, kind: 'style' as const, selector: c.selector, property: c.property, status: c.status || 'todo',
     })),
     ...(input.textChanges || []).map(c => ({
-      id: c.id, kind: 'text' as const, selector: c.selector, status: c.status || 'todo',
+      ...routeMetadata(c), id: c.id, kind: 'text' as const, selector: c.selector, status: c.status || 'todo',
     })),
     ...(input.domChanges || []).map(c => ({
-      id: c.id, kind: 'dom' as const, selector: c.selector, action: c.action, status: c.status || 'todo',
+      ...routeMetadata(c), id: c.id, kind: 'dom' as const, selector: c.selector, action: c.action, status: c.status || 'todo',
     })),
     ...(input.comments || []).map(c => ({
-      id: c.id, kind: 'comment' as const, selector: c.selector, status: c.resolved ? 'resolved' : 'todo',
+      ...routeMetadata(c), id: c.id, kind: 'comment' as const, selector: c.selector, status: c.resolved ? 'resolved' : 'todo',
     })),
   ];
 }
