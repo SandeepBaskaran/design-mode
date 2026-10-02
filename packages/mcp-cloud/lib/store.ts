@@ -35,8 +35,10 @@ export interface RelayMessage {
 export async function publishInbound(tenantId: string, msg: RelayMessage): Promise<void> {
   const c = await kv();
   const key = inboundKey(tenantId);
-  await c.rPush(key, JSON.stringify(msg));
-  try { await c.expire(key, STREAM_TTL_S); } catch { /* non-fatal */ }
+  await c.multi()
+    .rPush(key, JSON.stringify(msg))
+    .expire(key, STREAM_TTL_S)
+    .exec();
 }
 
 export async function publishResponse(tenantId: string, requestId: string, msg: RelayMessage): Promise<void> {
@@ -48,11 +50,14 @@ export async function* readInbound(opts: {
   tenantId: string;
   signal?: AbortSignal;
   pollMs?: number;
+  isAuthorized?: () => Promise<boolean>;
 }): AsyncGenerator<RelayMessage, void, void> {
   const c = await kv();
   const key = inboundKey(opts.tenantId);
   const pollMs = opts.pollMs ?? POLL_INTERVAL_MS;
   while (!opts.signal?.aborted) {
+    if (opts.isAuthorized && !(await opts.isAuthorized())) return;
+    if (opts.signal?.aborted) return;
     let drained = false;
     try {
       // node-redis v4: typed lPop only takes a key. The Redis ≥6.2 LPOP

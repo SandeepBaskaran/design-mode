@@ -120,8 +120,8 @@ function handleMessage(msg: any) {
             pageUrl: msg.payload.handoff.pageUrl,
             pageTitle: msg.payload.handoff.pageTitle,
           });
-        }
-        onSessionPage(msg.payload.pageUrl);
+        } else state.setHandoff(null);
+        onSessionPage(msg.payload.pageUrl, msg.payload.documentId);
       }
       break;
     case 'COMMENT_ADDED': if (msg.payload) state.addComment(msg.payload); break;

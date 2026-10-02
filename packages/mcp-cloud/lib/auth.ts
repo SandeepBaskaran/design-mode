@@ -61,10 +61,17 @@ export async function verifyToken(token: string | null | undefined): Promise<Tok
   let row: TokenRow;
   try { row = JSON.parse(raw) as TokenRow; }
   catch { return null; }
-  // Best-effort lastSeenAt bump; ignore failures.
   row.lastSeenAt = Date.now();
-  try { await c.set(rowKey(tokenHash), JSON.stringify(row)); } catch {}
+  // XX makes the best-effort bump atomic with respect to revocation's DEL.
+  try {
+    if (await c.set(rowKey(tokenHash), JSON.stringify(row), { XX: true }) === null) return null;
+  } catch {}
   return row;
+}
+
+export async function isTokenActive(row: TokenRow): Promise<boolean> {
+  const c = await kv();
+  return (await c.exists(rowKey(row.tokenHash))) === 1;
 }
 
 // Authentication middleware-style helper. Throws a Response on failure

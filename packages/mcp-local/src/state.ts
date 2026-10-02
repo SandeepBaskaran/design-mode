@@ -7,23 +7,37 @@
 // ChangeStatus. Absent ⇒ 'todo'.
 export type ChangeStatus = 'todo' | 'in_progress' | 'resolved';
 
-export interface StyleChange {
+interface ViewportContext {
+  viewportWidth?: number;
+  breakpoint?: 'mobile' | 'tablet' | 'desktop';
+}
+
+function viewportContext(change: ViewportContext): ViewportContext {
+  return {
+    ...(change.viewportWidth !== undefined ? { viewportWidth: change.viewportWidth } : {}),
+    ...(change.breakpoint !== undefined ? { breakpoint: change.breakpoint } : {}),
+  };
+}
+
+export interface StyleChange extends ViewportContext {
   id: string; elementId: string; selector: string;
   property: string; oldValue: string; newValue: string;
   timestamp: number;
   status?: ChangeStatus;
 }
 
-export interface TextChange {
+export interface TextChange extends ViewportContext {
   id: string; elementId: string; selector: string;
   oldText: string; newText: string; timestamp: number;
   attributeName?: string;
   status?: ChangeStatus;
 }
 
-export interface DomChange {
+export interface DomChange extends ViewportContext {
   id: string; elementId: string; selector: string;
   action: 'delete' | 'duplicate' | 'move' | 'insert';
+  origin?: { parentSelector: string; index: number; parentId?: string };
+  destination?: { parentSelector: string; index: number; parentId?: string };
   tagName: string;
   timestamp: number;
   status?: ChangeStatus;
@@ -158,7 +172,7 @@ class DesignModeState {
     if (texts) this.textChanges = texts;
     if (doms) this.domChanges = doms;
   }
-  setHandoff(handoff: AgentHandoff) { this.handoff = handoff; }
+  setHandoff(handoff: AgentHandoff | null) { this.handoff = handoff; }
   getHandoff(): AgentHandoff | null { return this.handoff; }
   getStyleChanges(): StyleChange[] { return this.styleChanges; }
   getTextChanges(): TextChange[] { return this.textChanges; }
@@ -173,10 +187,10 @@ class DesignModeState {
   // contributes page metadata. Returning the snapshot itself would freeze
   // get_changes at connect time.
   getChangeReport(): object {
-    const bySelector = new Map<string, Map<string, { old: string; new_: string }>>();
+    const bySelector = new Map<string, Map<string, StyleChange>>();
     for (const c of this.styleChanges) {
       if (!bySelector.has(c.selector)) bySelector.set(c.selector, new Map());
-      bySelector.get(c.selector)!.set(c.property, { old: c.oldValue, new_: c.newValue });
+      bySelector.get(c.selector)!.set(c.property, c);
     }
     const changes: Array<{ selector: string; property: string; oldValue: string; newValue: string; cssRule: string }> = [];
     const cssRules: string[] = [];
@@ -184,8 +198,8 @@ class DesignModeState {
       const decls: string[] = [];
       for (const [prop, vals] of props) {
         const kebab = toKebab(prop);
-        changes.push({ selector: sel, property: prop, oldValue: vals.old, newValue: vals.new_, cssRule: `${sel} { ${kebab}: ${vals.new_}; }` });
-        decls.push(`  ${kebab}: ${vals.new_};`);
+        changes.push({ selector: sel, property: prop, oldValue: vals.oldValue, newValue: vals.newValue, cssRule: `${sel} { ${kebab}: ${vals.newValue}; }`, ...viewportContext(vals) });
+        decls.push(`  ${kebab}: ${vals.newValue};`);
       }
       cssRules.push(`${sel} {\n${decls.join('\n')}\n}`);
     }
@@ -198,8 +212,9 @@ class DesignModeState {
         oldText: c.oldText,
         newText: c.newText,
         ...(c.attributeName ? { attributeName: c.attributeName } : {}),
+        ...viewportContext(c),
       })),
-      domChanges: this.domChanges.map(c => ({ selector: c.selector, action: c.action, tagName: c.tagName })),
+      domChanges: this.domChanges.map(c => ({ selector: c.selector, action: c.action, tagName: c.tagName, origin: c.origin, destination: c.destination, ...viewportContext(c) })),
       cssBlock: cssRules.join('\n\n'),
     };
   }

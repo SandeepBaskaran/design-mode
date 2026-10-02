@@ -14,7 +14,11 @@ function fixture() {
   const logs = [];
   const redis = {
     async get(key) { reads.push(key); return values.get(key) ?? null; },
-    async set(key, value, options) { writes.push({ key, options }); values.set(key, value); return 'OK'; },
+    async set(key, value, options) {
+      writes.push({ key, options });
+      if (options?.XX && !values.has(key)) return null;
+      values.set(key, value); return 'OK';
+    },
     async del(key) { return Number(values.delete(key)); },
     async exists(key) { return Number(values.has(key)); },
     async expire() { return true; },
@@ -24,6 +28,14 @@ function fixture() {
       return value;
     },
     async rPush(key, raw) { inbound.push({ key, message: JSON.parse(raw) }); return inbound.length; },
+    multi() {
+      const commands = [];
+      return {
+        rPush(...args) { commands.push(() => redis.rPush(...args)); return this; },
+        expire(...args) { commands.push(() => redis.expire(...args)); return this; },
+        async exec() { return Promise.all(commands.map(command => command())); },
+      };
+    },
   };
   const root = resolve(__dirname, '..');
   const modules = new Map([
@@ -47,8 +59,33 @@ function fixture() {
     mod._compile(compiled, filename);
     return mod.exports;
   }
-  return { load, values, writes, reads, inbound, logs };
+  return { load, values, writes, reads, inbound, logs, redis };
 }
+
+test('a lastSeen write cannot resurrect a concurrently revoked token', async () => {
+  const f = fixture();
+  const auth = f.load('lib/auth.ts');
+  await auth.storeToken('dm_race', 't_race');
+  const get = f.redis.get;
+  let release;
+  let read;
+  const reached = new Promise(resolve => { read = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  f.redis.get = async key => {
+    const value = await get(key);
+    read();
+    await gate;
+    return value;
+  };
+  const pending = auth.verifyToken('dm_race');
+  await reached;
+  assert.equal(await auth.revokeToken('dm_race'), true);
+  release();
+  await pending;
+  f.redis.get = get;
+  assert.equal(f.values.size, 0);
+  assert.equal(await auth.verifyToken('dm_race'), null);
+});
 
 function request(token, body, headers = {}) {
   return new Request('https://relay.test/api', {
@@ -108,6 +145,29 @@ test('an authenticated tenant cannot satisfy another tenant tool call with a kno
   assert.equal((await store.awaitResponse('t_B', requestId, 100)).payload.source, 'attacker');
   assert.equal(f.values.has(keyB), false);
   assert.deepEqual(f.writes.find(write => write.key === keyA).options, { EX: 60 });
+});
+
+test('browser failures remain MCP errors instead of success-shaped clear or screenshot results', async () => {
+  for (const name of ['clear_changes', 'get_changes', 'apply_changes', 'get_screenshot']) {
+    const f = fixture();
+    await tenants(f);
+    const mcp = f.load('api/mcp.ts');
+    const inbox = f.load('api/extension/inbox.ts');
+    const pending = mcp.POST(request('dm_test_A', {
+      jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} },
+    }));
+    await until(() => f.inbound.some(({ message }) => message.requestId));
+    const { requestId } = f.inbound.find(({ message }) => message.requestId).message;
+    await inbox.POST(request('dm_test_A', {
+      type: 'RELAY_RESPONSE', responseTo: requestId,
+      payload: { error: 'Synthetic browser failure', candidates: [{ path: '#heading', label: 'Heading' }] },
+    }));
+    const result = (await (await pending).json()).result;
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /Synthetic browser failure/);
+    assert.doesNotMatch(result.content[0].text, /All changes cleared/);
+    if (name === 'get_screenshot') assert.match(result.content[0].text, /#heading/);
+  }
 });
 
 test('response polling ignores legacy global response keys and times out without an owned reply', async () => {

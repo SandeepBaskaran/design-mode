@@ -280,12 +280,12 @@ export function resolveInsideProject(root: string, relativePath: string): string
 }
 
 export function assertWritablePath(root: string, absPath: string): void {
-  if (fs.existsSync(absPath) && fs.lstatSync(absPath).isSymbolicLink()) {
+  if (fs.lstatSync(absPath, { throwIfNoEntry: false })?.isSymbolicLink()) {
     throw new Error(`Refusing to write through symlink: ${absPath}`);
   }
   let current = path.dirname(absPath);
   while (true) {
-    if (fs.existsSync(current) && fs.lstatSync(current).isSymbolicLink()) {
+    if (fs.lstatSync(current, { throwIfNoEntry: false })?.isSymbolicLink()) {
       throw new Error(`Refusing to write through symlink directory: ${current}`);
     }
     if (current === root) break;
@@ -501,7 +501,8 @@ function atomicWrite(absPath: string, content: string): void {
   const dir = path.dirname(absPath);
   fs.mkdirSync(dir, { recursive: true });
   const tmp = path.join(dir, `.design-mode-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`);
-  fs.writeFileSync(tmp, content, { encoding: 'utf8', mode: 0o644, flag: 'wx' });
+  const mode = fs.statSync(absPath, { throwIfNoEntry: false })?.mode;
+  fs.writeFileSync(tmp, content, { encoding: 'utf8', mode: mode === undefined ? 0o644 : mode & 0o777, flag: 'wx' });
   try {
     fs.renameSync(tmp, absPath);
   } catch (err) {

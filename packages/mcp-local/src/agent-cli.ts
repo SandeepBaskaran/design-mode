@@ -6,12 +6,12 @@ import { probeOwnerHealth, proxyToolCall } from './owner-bridge.js';
 const HELP = `Design Mode local agent CLI
 
 Usage:
-  design-mode tools                 List MCP tools and input schemas (offline)
-  design-mode schema <tool>         Show one MCP tool's schema (offline)
-  design-mode call <tool>           Invoke with an empty argument object
-  design-mode call <tool> --stdin   Read a JSON argument object from stdin
-  design-mode status                Check the existing local bridge
-  design-mode --help
+  designmode-app --mode local tools                 List MCP tools and input schemas (offline)
+  designmode-app --mode local schema <tool>         Show one MCP tool's schema (offline)
+  designmode-app --mode local call <tool>           Invoke with an empty argument object
+  designmode-app --mode local call <tool> --stdin   Read a JSON argument object from stdin
+  designmode-app --mode local status                Check the existing local bridge
+  designmode-app --help
 
 DM_PORT selects the loopback bridge port (default 9960).
 Start the existing design-mode-mcp server in your MCP client, then select
@@ -23,13 +23,13 @@ may already have happened; inspect state before trying again.
 Pass potentially sensitive arguments via stdin, never command-line arguments.
 `;
 
-class CliError extends Error {
+export class CliError extends Error {
   constructor(readonly code: string, message: string, readonly exitCode: number) {
     super(message);
   }
 }
 
-async function readArguments(input: AsyncIterable<string | Buffer>): Promise<Record<string, unknown>> {
+export async function readArguments(input: AsyncIterable<string | Buffer>): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of input) {
@@ -94,7 +94,7 @@ export async function runAgentCli(
       if (dispatchError) throw dispatchError;
       return proxyToolCall(port, tool, args, extra);
     });
-    client = new Client({ name: 'design-mode-cli', version: '0.1.0' });
+    client = new Client({ name: 'designmode-app', version: '0.1.0' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
@@ -104,7 +104,7 @@ export async function runAgentCli(
       return 0;
     }
     const tool = tools.find(tool => tool.name === name);
-    if (!tool) throw new CliError('UNKNOWN_TOOL', 'Unknown tool. Use design-mode tools to discover supported names.', 2);
+    if (!tool) throw new CliError('UNKNOWN_TOOL', 'Unknown tool. Use designmode-app --mode local tools to discover supported names.', 2);
     if (command === 'schema') {
       emit({ ok: true, tool });
       return 0;

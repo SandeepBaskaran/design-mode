@@ -7,7 +7,7 @@
 // (extension just opens a new stream on close).
 // ============================================================
 
-import { authenticate } from '../../lib/auth.js';
+import { authenticate, isTokenActive } from '../../lib/auth.js';
 import { readInbound } from '../../lib/store.js';
 import { logEvent } from '../../lib/log.js';
 import { getPresence } from '../../lib/presence.js';
@@ -25,31 +25,46 @@ export async function GET(req: Request): Promise<Response> {
   const ctrl = new AbortController();
   // Tie our long read to the underlying request lifetime — when the
   // browser closes the SSE, AbortSignal fires and the loop exits.
-  req.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
+  const onAbort = () => ctrl.abort();
+  req.signal.addEventListener('abort', onAbort, { once: true });
+  if (req.signal.aborted) ctrl.abort();
+
+  const isAuthorized = async () => {
+    if (ctrl.signal.aborted) return false;
+    try {
+      if (await isTokenActive(row)) return !ctrl.signal.aborted;
+    } catch { /* Authorization failures close the stream rather than retrying delivery. */ }
+    ctrl.abort();
+    return false;
+  };
 
   const encoder = new TextEncoder();
   const heartbeatMs = 25_000;
 
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (event: string, data: string) => {
+      const send = async (event: string, data: string) => {
+        if (!(await isAuthorized())) return false;
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`));
+        return true;
       };
-      send('hello', JSON.stringify({ tenantId, version: '2.3.1' }));
+      await send('hello', JSON.stringify({ tenantId, version: '2.3.1' }));
 
       // Initial presence snapshot so the side panel doesn't wait
       // up to 30s for the first poll tick.
       let lastPresence = false;
       try {
         lastPresence = await getPresence(tenantId);
-        send('relay', JSON.stringify({
+        await send('relay', JSON.stringify({
           type: 'AGENT_PRESENCE',
           payload: { connected: lastPresence },
         }));
       } catch { /* fall through; the poll tick will retry */ }
 
-      const heartbeat = setInterval(() => {
-        try { controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`)); }
+      const heartbeat = setInterval(async () => {
+        try {
+          if (await isAuthorized()) controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
+        }
         catch { /* stream already closed */ }
       }, heartbeatMs);
       heartbeat.unref?.();
@@ -64,7 +79,7 @@ export async function GET(req: Request): Promise<Response> {
       const presenceTimer = setInterval(async () => {
         try {
           const now = await getPresence(tenantId);
-          if (now !== lastPoll) {
+          if (now !== lastPoll && await isAuthorized()) {
             lastPoll = now;
             controller.enqueue(encoder.encode(
               `event: relay\ndata: ${JSON.stringify({
@@ -78,8 +93,8 @@ export async function GET(req: Request): Promise<Response> {
       presenceTimer.unref?.();
 
       try {
-        for await (const msg of readInbound({ tenantId, signal: ctrl.signal })) {
-          send('relay', JSON.stringify(msg));
+        for await (const msg of readInbound({ tenantId, signal: ctrl.signal, isAuthorized })) {
+          if (!(await send('relay', JSON.stringify(msg)))) break;
           logEvent('stream.forward', {
             tenantId, type: msg.type,
             byteCount: typeof msg.payload === 'string' ? Buffer.byteLength(msg.payload, 'utf8') : 0,
@@ -88,6 +103,8 @@ export async function GET(req: Request): Promise<Response> {
       } catch (err: any) {
         logEvent('stream.error', { tenantId, error: err?.code || 'unknown' });
       } finally {
+        ctrl.abort();
+        req.signal.removeEventListener('abort', onAbort);
         clearInterval(heartbeat);
         clearInterval(presenceTimer);
         try { controller.close(); } catch {}

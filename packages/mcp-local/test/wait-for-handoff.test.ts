@@ -288,6 +288,28 @@ describe('wait_for_handoff websocket disconnect', () => {
     assert.equal(result.status, 'stopped');
   });
 
+  test('complete session update without handoff clears a prior request', async () => {
+    const health = await probeOwnerHealth(owner!.port);
+    assert.ok(health?.webSocketToken);
+    const ws = new WebSocket(`ws://127.0.0.1:${owner!.port}/?token=${encodeURIComponent(health.webSocketToken)}`);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        ws.once('open', resolve);
+        ws.once('error', reject);
+      });
+      state.setHandoff({ requestedAt: Date.now(), pageUrl: PAGE, pageTitle: 'Synthetic handoff' });
+      ws.send(JSON.stringify({ type: 'SESSION_UPDATE', payload: {
+        pageUrl: PAGE, pageTitle: 'Synthetic handoff', styleChanges: [], textChanges: [], domChanges: [],
+      } }));
+      for (let attempt = 0; attempt < 50 && state.getHandoff(); attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.equal(state.getHandoff(), null);
+    } finally {
+      ws.close();
+    }
+  });
+
   test('owner proxy keeps waiting after the HTTP request body is consumed', async () => {
     resetFeedbackSessionForTests();
     let settled = false;

@@ -52,6 +52,7 @@ let lastStopped: FeedbackSessionView | null = null;
 let notifyUi: ((view: FeedbackSessionView | null) => void) | null = null;
 let disconnectTimer: NodeJS.Timeout | null = null;
 let disconnectGraceMs = DEFAULT_DISCONNECT_GRACE_MS;
+let sessionDocumentId: string | null = null;
 
 export function setFeedbackSessionNotifier(fn: ((view: FeedbackSessionView | null) => void) | null) {
   notifyUi = fn;
@@ -72,6 +73,7 @@ export function resetFeedbackSessionForTests() {
   }
   live = null;
   lastStopped = null;
+  sessionDocumentId = null;
 }
 
 export function getFeedbackSessionView(): FeedbackSessionView | null {
@@ -309,9 +311,13 @@ export function stopFeedbackSession(sessionId?: string): FeedbackSessionView | n
   return lastStopped;
 }
 
-export function onSessionPage(pageUrl?: string) {
+export function onSessionPage(pageUrl?: string, documentId?: string) {
+  const nextDocumentId = typeof documentId === 'string' && documentId.length > 0 && documentId.length <= 128 ? documentId : null;
+  const documentChanged = nextDocumentId !== null && sessionDocumentId !== null && nextDocumentId !== sessionDocumentId;
+  if (nextDocumentId !== null) sessionDocumentId = nextDocumentId;
   if (!live || live.state === 'stopped') return;
-  if (typeof pageUrl !== 'string' || !pageUrl || pageUrl === live.pageUrl) return;
+  // Unload-time WebSocket sends can be lost; a new document must not resume the old round.
+  if (!documentChanged && (typeof pageUrl !== 'string' || !pageUrl || pageUrl === live.pageUrl)) return;
   stopFeedbackSession();
 }
 

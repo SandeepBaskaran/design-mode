@@ -255,6 +255,38 @@ describe('mcp-local guided setup', { concurrency: false, timeout: 15_000 }, () =
     assert.throws(() => applyPlan(plan, { dryRun: false }), /symlink/);
   });
 
+  test('updates preserve private config permissions and private backups', () => {
+    const isolated = tmpDir();
+    try {
+      const config = path.join(isolated, '.mcp.json');
+      const original = '{"mcpServers":{"other":{"env":{"TOKEN":"disposable-secret"}}}}';
+      fs.writeFileSync(config, original, { mode: 0o600 });
+      const plan = planSetup({ projectRoot: isolated, agents: ['claude-code'], cliPath, nodePath, force: false, homeDir: home });
+      const result = applyPlan(plan, { dryRun: false });
+      assert.equal(fs.statSync(config).mode & 0o777, 0o600);
+      assert.equal(fs.statSync(result.backups[0]).mode & 0o777, 0o600);
+      assert.equal(fs.readFileSync(result.backups[0], 'utf8'), original);
+    } finally {
+      fs.rmSync(isolated, { recursive: true, force: true });
+    }
+  });
+
+  test('dangling config symlinks are blocked without replacing the link', () => {
+    const isolated = tmpDir();
+    try {
+      const config = path.join(isolated, '.mcp.json');
+      const missing = path.join(isolated, 'missing.json');
+      fs.symlinkSync(missing, config);
+      const plan = planSetup({ projectRoot: isolated, agents: ['claude-code'], cliPath, nodePath, force: false, homeDir: home });
+      assert.ok(plan.errors.some(error => /symlink/.test(error)));
+      assert.throws(() => applyPlan(plan, { dryRun: false }), /symlink/);
+      assert.ok(fs.lstatSync(config).isSymbolicLink());
+      assert.equal(fs.existsSync(missing), false);
+    } finally {
+      fs.rmSync(isolated, { recursive: true, force: true });
+    }
+  });
+
   test('doctor reports missing owner, then connectivity when health is up', async () => {
     const port = await getFreePort();
     const disconnected = await runDoctor({ cliPath, port }, { log() {} });
