@@ -5,6 +5,9 @@
 // Auto-activates design mode (with inspect) on open.
 // ============================================================
 import '../platform/polyfill';
+import { replaceUserStyles } from './user-styles';
+import { ANALYTICS_CONSENT_KEY, consentMatches, createAnalytics, isAnalyticsSender, persistAnalyticsDisabled, type DataPermissions } from '../platform/analytics';
+import { analyticsConfig } from '../platform/analytics-config';
 import { createCommentStore, COMMENT_STORE_ERROR, COMMENT_PAGE_ERROR } from './comment-store';
 import { IS_FIREFOX } from '../platform/target';
 import { readPageComponentContexts } from '../content/page-component-context';
@@ -16,6 +19,20 @@ import {
   type LaunchSurface,
 } from '../platform/launch-surface';
 
+const analytics = createAnalytics(analyticsConfig, {
+  readConsent: async () => (await browser.storage.local.get(ANALYTICS_CONSENT_KEY))[ANALYTICS_CONSENT_KEY],
+  permissions: () => IS_FIREFOX ? browser.permissions.getAll() as Promise<DataPermissions> : Promise.resolve({}),
+  firefox: IS_FIREFOX, manifest: browser.runtime.getManifest(), fetch: (...args) => fetch(...args),
+});
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes[ANALYTICS_CONSENT_KEY]) {
+    if (consentMatches(changes[ANALYTICS_CONSENT_KEY].newValue, analyticsConfig)) analytics.refresh(); else analytics.stop();
+  }
+});
+browser.permissions.onRemoved.addListener(() => {
+  analytics.stop();
+  void persistAnalyticsDisabled(browser.storage.local).catch(() => {});
+});
 const commentStore = createCommentStore(browser.storage.local);
 const tabStates = new Map<number, { enabled: boolean; connected: boolean }>();
 let pinnedTabId: number | null = null;
@@ -136,10 +153,14 @@ async function isFileAccessBlocked(url: string | undefined | null): Promise<bool
 // the current window). A popped-out floating window connects as
 // `sidepanel:<tabId>` (binds to the tab it was popped out from).
 browser.runtime.onConnect.addListener((port) => {
-  if (port.name !== 'sidepanel' && !port.name.startsWith('sidepanel:')) return;
+  if (!port.sender || !isAnalyticsSender(port.sender, browser.runtime)
+    || !/^sidepanel(?::\d+(?::(?:pip|popout))?)?$/.test(port.name)) return;
 
+  let disconnected = false;
+  let activationTimer: ReturnType<typeof setTimeout> | undefined;
   const [, explicitTabValue, explicitSurface] = port.name.split(':');
-  const explicitTab = explicitTabValue ? parseInt(explicitTabValue, 10) : NaN;
+  const explicitTab = explicitTabValue ? Number(explicitTabValue) : NaN;
+  if (explicitTabValue && !Number.isSafeInteger(explicitTab)) return;
   const panelSurface: PanelSurface = explicitSurface === 'pip'
     ? 'pip'
     : Number.isInteger(explicitTab) ? 'popout' : 'panel';
@@ -150,11 +171,13 @@ browser.runtime.onConnect.addListener((port) => {
     if (tabId != null) {
       try { tabUrl = (await browser.tabs.get(tabId)).url || null; } catch { tabId = null; }
     }
+    if (disconnected) return;
     if (tabId == null) {
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       tabId = tab?.id ?? null;
       tabUrl = tab?.url ?? null;
     }
+    if (disconnected) return;
     if (tabId == null) {
       try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false }); } catch {}
       return;
@@ -166,18 +189,23 @@ browser.runtime.onConnect.addListener((port) => {
     pinnedTabId = tabId; pinnedTabUrl = tabUrl; // legacy fallback for forward routing
 
     if (!isScriptableUrl(tabUrl)) {
-      try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: tabUrl, tabId }); } catch {}
+      try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, pinnedUrl: tabUrl, tabId, pageUnavailable: true }); } catch {}
       return;
     }
     if (await isFileAccessBlocked(tabUrl)) {
       try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, fileAccessBlocked: true, pinnedUrl: tabUrl, tabId }); } catch {}
       return;
     }
+    if (disconnected) return;
     try { await injectContentScript(tabId); } catch {}
-    setTimeout(async () => {
+    if (disconnected) return;
+    activationTimer = setTimeout(async () => {
+      if (disconnected) return;
       try {
         await browser.tabs.sendMessage(tabId!, { type: 'ACTIVATE_DESIGN_MODE' });
+        if (disconnected) return;
         const state = await browser.tabs.sendMessage(tabId!, { type: 'GET_STATE' });
+        if (disconnected) return;
         try { port.postMessage({ type: 'INIT_STATE', ...state, pinnedUrl: tabUrl, tabId }); } catch {}
       } catch (err) {
         const m = String((err as any)?.message || err);
@@ -188,12 +216,14 @@ browser.runtime.onConnect.addListener((port) => {
         // injection — the file-access toggle is off, whatever the
         // isAllowedFileSchemeAccess pre-check said.
         const blocked = !!tabUrl?.startsWith('file:');
-        try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, fileAccessBlocked: blocked, pinnedUrl: tabUrl, tabId }); } catch {}
+        try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, fileAccessBlocked: blocked, pageUnavailable: !blocked, pinnedUrl: tabUrl, tabId }); } catch {}
       }
     }, 300);
   })().catch(() => { /* tab query racing SW teardown — no point logging */ });
 
   port.onDisconnect.addListener(() => {
+    disconnected = true;
+    clearTimeout(activationTimer);
     const tabId = panelPorts.get(port);
     panelPorts.delete(port);
     panelSurfaces.delete(port);
@@ -263,12 +293,39 @@ async function forwardToPinnedTab(message: any, sendResponse: (response?: any) =
 
 // Message handling — relay between content script and side panel
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || typeof msg.type !== 'string' || sender.id !== browser.runtime.id) {
+    sendResponse({ ok: false }); return false;
+  }
+  if (msg.type.startsWith('SP_') && (!isAnalyticsSender(sender, browser.runtime)
+    || (msg.targetTabId !== undefined && (!Number.isSafeInteger(msg.targetTabId) || msg.targetTabId < 0)))) {
+    sendResponse({ ok: false }); return false;
+  }
+  if (msg.type === 'GET_STATE' || msg.type === 'TOGGLE_DESIGN_MODE') {
+    const panel = isAnalyticsSender(sender, browser.runtime);
+    if ((!panel && (!sender.tab || (msg.tabId !== undefined && msg.tabId !== sender.tab.id)))
+      || (msg.tabId !== undefined && (!Number.isSafeInteger(msg.tabId) || msg.tabId < 0))) {
+      sendResponse({ ok: false }); return false;
+    }
+  }
+  if (msg?.type === 'DM_REPLACE_USER_STYLES') {
+    void replaceUserStyles(msg, sender).then(sendResponse);
+    return true;
+  }
+  if (msg?.type === 'STYLE_OVERRIDE_ERROR') return false;
+  if (msg?.type === 'DM_ANALYTICS_EVENT' || msg?.type === 'DM_ANALYTICS_STOP') {
+    if (!isAnalyticsSender(sender, browser.runtime)) {
+      sendResponse({ ok: false }); return false;
+    }
+    if (msg.type === 'DM_ANALYTICS_STOP') analytics.stop();
+    else void analytics.capture(msg.event);
+    sendResponse({ ok: true }); return false;
+  }
   // Resolve which tab this panel message targets (panel stamps every SP_*).
   // Read synchronously here and again at the top of forwardToPinnedTab.
   currentTargetTab = (typeof msg?.targetTabId === 'number') ? msg.targetTabId : null;
 
   if (msg.type === 'COMMENT_STORE') {
-    if (sender.id !== browser.runtime.id || !sender.tab || typeof msg.pageUrl !== 'string' || !msg.operation) {
+    if (!sender.tab || !sender.url || msg.pageUrl !== sender.url || !msg.operation) {
       sendResponse({ ok: false, error: COMMENT_STORE_ERROR });
       return false;
     }
@@ -324,6 +381,7 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     fetch(`http://127.0.0.1:${port}/.design-mode/health`, {
       headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(2000),
     }).then(async (response) => {
       if (!response.ok) return null;
       const health = await response.json();
@@ -592,7 +650,7 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // handler, which stages the handoff and pushes it over the MCP transport.
   // SP_GET_FEEDBACK_SESSION / SP_STOP_FEEDBACK_SESSION likewise fall through
   // to GET_FEEDBACK_SESSION / STOP_FEEDBACK_SESSION. Do not add rows here.
-  if (msg.type === 'SP_GET_MCP_STATUS') { forwardToPinnedTab({ type: 'GET_MCP_STATUS' }, sendResponse); return true; }
+  if (msg.type === 'SP_GET_MCP_STATUS') { forwardToPinnedTab({ type: 'GET_MCP_STATUS', reping: msg.reping === true }, sendResponse); return true; }
   if (msg.type === 'SP_GET_DESIGN_TOKENS') { forwardToPinnedTab({ type: 'GET_DESIGN_TOKENS' }, sendResponse); return true; }
   if (msg.type === 'SP_GET_COMPUTED_CSS') { forwardToPinnedTab({ type: 'GET_COMPUTED_CSS', elementId: msg.elementId }, sendResponse); return true; }
   if (msg.type === 'SP_PREVIEW_ORIGINAL') { forwardToPinnedTab({ type: 'PREVIEW_ORIGINAL' }, sendResponse); return true; }
@@ -764,6 +822,7 @@ async function injectContentScript(tabId: number) {
 }
 
 browser.tabs.onRemoved.addListener((tabId) => {
+  navigationGenerations.delete(tabId);
   tabStates.delete(tabId);
   if (tabId === pinnedTabId) {
     pinnedTabId = null;
@@ -774,24 +833,40 @@ browser.tabs.onRemoved.addListener((tabId) => {
 // Re-activate design mode when the pinned tab navigates / reloads —
 // the content script is reinjected on each navigation, so we need to
 // turn inspect back on (replay of session changes happens inside the content script).
+const navigationGenerations = new Map<number, number>();
 browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (tabId !== pinnedTabId) return;
-  if (changeInfo.status !== 'complete') return;
-  pinnedTabUrl = tab.url || pinnedTabUrl;
-  if (!isScriptableUrl(tab.url)) return;
-  if (await isFileAccessBlocked(tab.url)) {
+  if (panelsForTab(tabId) === 0) return;
+  if (!changeInfo.url && !changeInfo.status) return;
+  const generation = (navigationGenerations.get(tabId) || 0) + 1;
+  navigationGenerations.set(tabId, generation);
+  const current = () => navigationGenerations.get(tabId) === generation && panelsForTab(tabId) > 0;
+  const post = (message: object) => {
+    if (!current()) return;
     for (const [port, boundTab] of panelPorts) {
-      if (boundTab !== tabId) continue;
-      try { port.postMessage({ type: 'INIT_STATE', enabled: false, connected: false, fileAccessBlocked: true, pinnedUrl: tab.url, tabId }); } catch {}
+      if (boundTab === tabId) { try { port.postMessage({ ...message, pinnedUrl: tab.url, tabId }); } catch {} }
     }
+  };
+  if (tabId === pinnedTabId) pinnedTabUrl = tab.url || pinnedTabUrl;
+  if (changeInfo.status === 'loading' || changeInfo.url) post({ type: 'PAGE_NAVIGATING' });
+  if (!isScriptableUrl(tab.url)) {
+    post({ type: 'INIT_STATE', enabled: false, connected: false, pageUnavailable: true });
     return;
   }
+  if (await isFileAccessBlocked(tab.url)) {
+    post({ type: 'INIT_STATE', enabled: false, connected: false, fileAccessBlocked: true });
+    return;
+  }
+  if (!current() || changeInfo.status === 'loading') return;
   try {
     await injectContentScript(tabId);
-    setTimeout(async () => {
-      try { await browser.tabs.sendMessage(tabId, { type: 'ACTIVATE_DESIGN_MODE' }); } catch {}
-    }, 200);
-  } catch {}
+    if (!current()) return;
+    await browser.tabs.sendMessage(tabId, { type: 'ACTIVATE_DESIGN_MODE' }, { frameId: 0 });
+    await browser.tabs.sendMessage(tabId, { type: 'REFRESH_PAGE_CONTEXT' }, { frameId: 0 });
+    const state = await browser.tabs.sendMessage(tabId, { type: 'GET_STATE' }, { frameId: 0 });
+    post({ type: 'INIT_STATE', ...state });
+  } catch {
+    post({ type: 'INIT_STATE', enabled: false, connected: false, pageUnavailable: true });
+  }
 });
 
 console.log('[Design Mode] Background service worker loaded.');

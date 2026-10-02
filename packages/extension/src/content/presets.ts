@@ -16,8 +16,10 @@
 // Empty by default; the user adds entries manually from the panel.
 // ============================================================
 
-import { getElementById } from './helpers';
-import { getTokenIndex, getScopeElement, type PageToken } from './token-engine';
+import { hasPresetStyles } from '../preset-styles';
+import { getElementById, getOrAssignId } from './helpers';
+import { getTokenUsageElements, type PageToken } from './token-engine';
+import { isViewportPageElement } from './viewport-page';
 
 export type ScaleEntry = {
   value: string;           // e.g. '12px', 'oklch(...)', the raw computed value
@@ -63,14 +65,6 @@ function clusterNumeric(rawCounts: Map<string, number>): Map<string, number> {
   return out;
 }
 
-function isInViewport(el: Element): boolean {
-  const r = el.getBoundingClientRect();
-  if (r.width <= 0 || r.height <= 0) return false;
-  if (r.bottom < 0 || r.top > window.innerHeight) return false;
-  if (r.right < 0 || r.left > window.innerWidth) return false;
-  return true;
-}
-
 // Walk viewport-visible elements and tally how often each spacing / radius /
 // font-size / shadow value appears. Returns the top N per scale, sorted by
 // frequency. Values are normalised — '0px' is collapsed to '0', identical
@@ -88,7 +82,7 @@ export function detectScales(topN = 8): Scales {
   let walked = 0;
   for (let i = 0; i < all.length && walked < 4000; i++) {
     const el = all[i];
-    if (!isInViewport(el)) continue;
+    if (!isViewportPageElement(el)) continue;
     walked++;
     const cs = getComputedStyle(el);
 
@@ -150,41 +144,8 @@ export function annotateDrift(scales: Scales, tokens: PageToken[]): void {
 // styles across the common property surfaces (colour, background,
 // border-colour, font-size, padding, margin, gap, border-radius,
 // box-shadow). Used by the Tokens panel's "find uses" button.
-export function findTokenUsages(cssVar: string): string[] {
-  const token = getTokenIndex().byVar.get(cssVar);
-  const scopeEl = token ? getScopeElement(token.scope.selector) : document.documentElement;
-  const tokenValue = token?.resolvedValue ||
-    (scopeEl ? getComputedStyle(scopeEl).getPropertyValue(cssVar).trim() : '');
-  if (!tokenValue) return [];
-  // Theme/component-scoped tokens only count consumers inside the scope —
-  // the same resolved value outside it comes from something else.
-  const scopeSel = token && token.scope.kind !== 'root' ? token.scope.selector : null;
-  const PROPS = [
-    'color', 'backgroundColor', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
-    'outlineColor', 'fill', 'stroke', 'accentColor', 'caretColor',
-    'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
-    'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-    'marginTop', 'marginRight', 'marginBottom', 'marginLeft', 'gap', 'rowGap', 'columnGap',
-    'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius',
-    'boxShadow', 'textShadow', 'opacity',
-  ] as const;
-  const matches: string[] = [];
-  const all = document.querySelectorAll<HTMLElement>('[data-dm-id]');
-  all.forEach(el => {
-    if (scopeSel) {
-      try { if (!el.closest(scopeSel)) return; } catch {}
-    }
-    const cs = getComputedStyle(el);
-    for (const p of PROPS) {
-      const v = cs[p as keyof CSSStyleDeclaration] as string | undefined;
-      if (v && v === tokenValue) {
-        const id = el.getAttribute('data-dm-id');
-        if (id) matches.push(id);
-        return;
-      }
-    }
-  });
-  return matches;
+export function findTokenUsages(cssVar: string, scopeSelector?: string): string[] {
+  return getTokenUsageElements(cssVar, scopeSelector).map(getOrAssignId);
 }
 
 // ── User-defined preset bundles ───────────────────────────────
@@ -235,6 +196,9 @@ export async function saveCustomPreset(
   if (!el) return { error: 'No element to capture' };
   if (!props || props.length === 0) return { error: 'No properties to capture for this kind' };
   const cs = window.getComputedStyle(el);
+  if (kind === 'motion' && !hasPresetStyles(kind, cs as unknown as Record<string, string>, props)) {
+    return { error: `No ${kind} styles found on this element` };
+  }
   const styles: Record<string, string> = {};
   for (const prop of props) {
     const val = (cs as any)[prop];
@@ -262,6 +226,17 @@ export async function saveCustomPreset(
     const message = (e as Error)?.message || '';
     return { error: /QUOTA/i.test(message) ? quotaErrorMessage() : (message || 'Save failed') };
   }
+}
+
+export function withPresetUsageCounts(presets: Preset[]): (Preset & { usageCount: number })[] {
+  const styles = Array.from(document.querySelectorAll('*')).filter(isViewportPageElement).slice(0, 4000).map(el => getComputedStyle(el));
+  return presets.map(preset => {
+    const props = Object.entries(preset.styles);
+    const usageCount = props.length ? styles.filter(style => props.every(([prop, value]) =>
+      style.getPropertyValue(prop.replace(/[A-Z]/g, c => '-' + c.toLowerCase()).replace(/^webkit-/, '-webkit-')) === value,
+    )).length : 0;
+    return { ...preset, usageCount };
+  });
 }
 
 export async function deleteCustomPreset(id: string): Promise<void> {

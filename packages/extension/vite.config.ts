@@ -43,6 +43,14 @@ export default defineConfig({
         format: current.format,
         name: current.name,
         inlineDynamicImports: true,
+        // Guard before imported modules register listeners; invalidated runtimes may be replaced.
+        intro: entry === 'content' ? `
+          try { if (globalThis.__dmContentRuntime?.()) return; } catch {}
+        ` : undefined,
+        outro: entry === 'content' ? `
+          const dmContentRuntime = (globalThis.browser || globalThis.chrome).runtime;
+          globalThis.__dmContentRuntime = () => Boolean(dmContentRuntime.id);
+        ` : undefined,
       },
     },
     cssCodeSplit: false,
@@ -53,5 +61,6 @@ export default defineConfig({
   },
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+    __DM_ANALYTICS__: JSON.stringify({ host: process.env.DM_POSTHOG_HOST || '', key: process.env.DM_POSTHOG_KEY || '', distribution: process.env.DM_DISTRIBUTION || 'unknown' }),
   },
 });

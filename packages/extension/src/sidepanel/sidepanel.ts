@@ -8,6 +8,8 @@
 // ============================================================
 
 import '../platform/polyfill';
+import { commandOutcome, messageFeatures, type AnalyticsEvent } from '../platform/analytics';
+import { disableAnalytics, initAnalyticsSetting, renderAnalyticsSetting, toggleAnalytics } from './analytics-setting';
 import { IS_FIREFOX } from '../platform/target';
 import { openPanel } from '../platform/panel';
 import {
@@ -17,16 +19,19 @@ import {
   type LaunchSurface,
 } from '../platform/launch-surface';
 import morphdom from 'morphdom';
+import { openPresetDialog } from './preset-dialog';
+import { hasPresetStyles } from '../preset-styles';
+import type { ElementInfo as SharedElementInfo } from '@shared/types';
 import { icon, icons } from '../content/icons';
 import { escapeAttr, rgbToHex } from '../content/helpers';
 import { sizeFieldView, type AuthoredDimension } from '../content/authored-sizing';
 import { AGENT_COMMAND_MARKDOWN, AGENT_TOOLS } from './agent-workflow';
-import { changeGroupKey, collectGroupRevertIds } from './change-group';
+import { changeGroupKey, styleChangeGroupKey, collectGroupRevertIds } from './change-group';
 import { componentGroup, groupByComponent, type ComponentContext } from '../component-group';
 import { parseFeedbackSession, type FeedbackSessionView } from './feedback-view';
 import { enableShortcuts, loadShortcuts, registerShortcut } from '../content/keyboard-shortcuts';
 import { diffWords } from './word-diff';
-import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
+import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, sanitizeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
   isTransparent, resolveCategory, thresholdFor,
@@ -87,7 +92,7 @@ import {
 } from '@shared/constants';
 
 /* ── Types ── */
-interface ElementInfo {
+interface ElementInfo extends Pick<SharedElementInfo, 'rect' | 'childGap'> {
   id: string; tagName: string; className: string;
   computedStyles: Record<string, string>;
   // camelCase prop → the token it's authored from (var name + the scope
@@ -135,7 +140,7 @@ interface StyleChange {
   // row label (`PRESET`, `APPLIED to N`, `HIDE`). When `groupKind` is set
   // without a `groupId`, it's treated as a single-row label override.
   groupId?: string;
-  groupKind?: 'preset' | 'multi-select' | 'visibility';
+  groupKind?: 'preset' | 'multi-select' | 'visibility' | 'consolidate';
   groupLabel?: string;
   status?: ChangeStatus;
 }
@@ -177,6 +182,18 @@ let matchingLayersChecked = false;
 let shortcutsOpen = false;
 let contributeOpen = false;
 let fileAccessBlocked = false;
+let pageUnavailable = false;
+let pageNavigating = false;
+let pageGeneration = 0;
+let boundPageUrl = '';
+function resetPageContext() {
+  pageGeneration++;
+  info = null; hoverInfo = null;
+  styleChanges = []; textChanges = []; domChanges = []; comments = []; tokenChanges = [];
+  componentContexts = {}; domTree = []; designTokens = [];
+  viewingCommentId = null; editingCommentId = null; commentMode = false; commentText = '';
+  feedbackSession = null; undoCount = 0; redoCount = 0;
+}
 // True when the page's visible content is sealed inside a sandboxed /
 // cross-origin iframe the inspector can't enter (e.g. a saved `srcdoc`
 // artifact). The Layers + Design tabs swap in an explanatory notice
@@ -217,6 +234,7 @@ let componentContexts: Record<string, ComponentContext> = {};
 let changesGrouping: 'element' | 'component' = 'element';
 let feedbackSession: FeedbackSessionView | null = null;
 let sendingFeedback = false;
+let feedbackSentUntil = 0;
 // Design-system :root token edits, synced from the content change payload
 // (same source the Copy Prompt reads) so they appear in the Changes tab.
 let tokenChanges: Array<{ cssVar: string; scopeSelector: string; original: string; current: string; system?: string }> = [];
@@ -257,6 +275,7 @@ let colorFormat: ColorFormat = 'hex';
 type CaptureMode = 'clipboard' | 'download' | 'both';
 let captureMode: CaptureMode = 'clipboard';
 let multiSelectActive = false;
+let layerMultiSelectMode = false;
 let multiSelectIds: string[] = [];
 // The token whose consumers are currently highlighted via the "×N uses"
 // chip. Clicking the same chip again clears the highlight (toggle).
@@ -296,6 +315,7 @@ let layersFilter: LayersFilter = 'all';
 
 // Phase 4: Changes tab UI state.
 const changesGroupCollapsed = new Set<string>();
+const initializedPresetGroups = new Set<string>();
 // Filter narrows the visible items to one change kind.
 type ChangesFilter = 'all' | 'style' | 'text' | 'dom' | 'comment' | 'token';
 let changesFilter: ChangesFilter = 'all';
@@ -341,7 +361,7 @@ type TokenGroup = 'colour' | 'typography' | 'spacing' | 'radius' | 'shadow' | 'o
 type TokenScopeKind = 'root' | 'theme' | 'component';
 interface TokenScope { selector: string; kind: TokenScopeKind; active: boolean; matchCount: number }
 interface DesignSystemProfile { id: string; label: string; tokenCount: number }
-interface TokenVariant { scope: TokenScope; value: string; resolvedValue: string }
+interface TokenVariant { scope: TokenScope; value: string; resolvedValue: string; usageCount: number }
 interface DesignToken {
   cssVar: string; value: string; resolvedValue: string; group: TokenGroup; usageCount: number;
   scope: TokenScope; scopes: string[]; variants: TokenVariant[]; system?: string;
@@ -356,7 +376,7 @@ interface DesignSystemPayload {
 type TokenFilter = 'all' | TokenGroup;
 type TokensTab = 'declared' | 'detected' | 'defined';
 type PresetKindLocal = 'position' | 'layout' | 'appearance' | 'typography' | 'fill' | 'stroke' | 'effects' | 'motion';
-interface PresetLocal { id: string; name: string; kind: PresetKindLocal; styles: Record<string, string>; createdAt: number }
+interface PresetLocal { id: string; name: string; kind: PresetKindLocal; styles: Record<string, string>; createdAt: number; usageCount?: number }
 let tokensOpen = false;
 let tokensTab: TokensTab = 'declared';
 let designSystem: DesignSystemPayload | null = null;
@@ -418,7 +438,7 @@ let borderColorLinked = true;
 const strokeStyleByElement = new Map<string, 'solid' | 'dashed'>();
 
 // Figma-style Design tab state
-let cornerRadiusLinked = true;
+let cornerRadiusLinked = false;
 let cornerRadiusExpanded = false;
 let cornerShapePickerOpen = false;
 let marginExpanded = false;
@@ -592,7 +612,8 @@ browser.storage?.local?.get?.([
   if (result?.['dm-capture-mode']) { captureMode = result['dm-capture-mode']; }
   if (typeof result?.['dm-mcp-port'] === 'number') mcpPort = result['dm-mcp-port'];
   if (typeof result?.['dm-mcp-auto-connect'] === 'boolean') mcpAutoConnect = result['dm-mcp-auto-connect'];
-  if (typeof result?.['dm-mcp-mode'] === 'string') mcpMode = result['dm-mcp-mode'];
+  const savedMcpMode = result?.['dm-mcp-mode'];
+  if (savedMcpMode === 'local' || savedMcpMode === 'cloud' || savedMcpMode === 'self-hosted') mcpMode = savedMcpMode;
   if (typeof result?.['dm-mcp-cloud-token'] === 'string') mcpCloudToken = result['dm-mcp-cloud-token'];
   if (typeof result?.['dm-mcp-cloud-url'] === 'string') mcpCloudUrl = result['dm-mcp-cloud-url'];
   if (typeof result?.['dm-mcp-cloud-tenant'] === 'string') mcpCloudTenantId = result['dm-mcp-cloud-tenant'];
@@ -696,14 +717,32 @@ let pipUnsupported = false;
 let pipSavedSize: { width: number; height: number } | null = null;
 let pipLaunchPending = pipLaunchRequested && !IS_FIREFOX && pipAvailable;
 
+initAnalyticsSetting(() => render());
+
+function trackFeature(event: AnalyticsEvent) {
+  void browser.runtime.sendMessage({ type: 'DM_ANALYTICS_EVENT', event }).catch(() => {});
+}
+let lastAnalyticsMcpState = '';
+function trackMcpState() {
+  const current = mcpMode + ':' + mcpState;
+  if (lastAnalyticsMcpState === current) return;
+  lastAnalyticsMcpState = current;
+  trackFeature({ feature: 'mcp_state', outcome: 'state', mode: mcpMode, state: mcpState });
+}
 async function send(msg: any): Promise<any> {
+  const feature = Object.hasOwn(messageFeatures, msg?.type) ? messageFeatures[msg.type] : undefined;
+  if (feature) trackFeature({ feature, outcome: 'attempt' });
   const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
     ? { ...msg, targetTabId: myTabId }
     : msg;
   try {
     const r = await browser.runtime.sendMessage(stamped);
+    if (feature) {
+      trackFeature({ feature, ...commandOutcome(r) });
+    }
     return r || {};
   } catch {
+    if (feature) trackFeature({ feature, outcome: 'failure', reason: 'unavailable' });
     return {};
   }
 }
@@ -732,13 +771,24 @@ port.onMessage.addListener((msg) => {
     void takeScreenshot();
     return;
   }
+  if (msg.type === 'PAGE_NAVIGATING') {
+    resetPageContext();
+    boundPageUrl = msg.pinnedUrl || '';
+    pageNavigating = true; pageUnavailable = false;
+    enabled = false; mcpState = 'offline';
+    render(); return;
+  }
   if (msg.type === 'INIT_STATE') {
+    if (msg.pinnedUrl !== boundPageUrl) resetPageContext();
+    boundPageUrl = msg.pinnedUrl || '';
+    pageNavigating = false;
+    pageUnavailable = !!msg.pageUnavailable;
     enabled = msg.enabled ?? false; inspecting = msg.inspecting ?? true;
     if (typeof msg.tabId === 'number') myTabId = msg.tabId;
     mcpState = !msg.connected ? 'offline' : msg.agentConnected ? 'connected' : 'running';
     if (msg.pinnedUrl) { pinnedDomain = domainLabel(msg.pinnedUrl); }
     fileAccessBlocked = !!msg.fileAccessBlocked;
-    if (fileAccessBlocked) { render(); return; }
+    if (fileAccessBlocked || pageUnavailable) { resetPageContext(); render(); return; }
     render(); refreshMcpStatus(); refreshDomTree(); refreshChanges(); refreshDesignTokens(); refreshPageFonts();
   }
 });
@@ -837,13 +887,22 @@ function openPipWindow() {
 }
 
 /* ── Async actions ── */
-async function refreshMcpStatus() { const res = await send({ type: 'SP_GET_MCP_STATUS' }); if (res.mcpState) mcpState = res.mcpState; else if (res.connected && res.agentConnected) mcpState = 'connected'; else if (res.connected) mcpState = 'running'; else mcpState = 'offline'; await refreshFeedbackSession(); render(); }
+let mcpStatusRequest = 0;
+async function refreshMcpStatus(reping = false) {
+  const request = ++mcpStatusRequest;
+  const generation = pageGeneration;
+  const res = await send({ type: 'SP_GET_MCP_STATUS', reping });
+  if (request !== mcpStatusRequest || generation !== pageGeneration) return;
+  mcpState = !res.connected ? 'offline' : res.agentConnected ? 'connected' : 'running';
+  await refreshFeedbackSession();
+  render();
+}
 async function refreshFeedbackSession() {
   const res = mcpMode === 'local' && mcpState === 'connected' ? await send({ type: 'SP_GET_FEEDBACK_SESSION' }) : null;
   feedbackSession = res?.supported ? parseFeedbackSession(res.session) : null;
 }
 async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; if (typeof res.hoverAvailable === 'boolean') applyHoverAvailable(res.hoverAvailable); undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
-async function refreshChanges() { const res = await send({ type: 'SP_GET_CHANGES' }); if (res.error || !Array.isArray(res.comments)) { showCaptureToast('error', res.error || 'Comments could not be loaded. Please retry.'); return; } styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; componentContexts = res.componentContexts || {}; render(); }
+async function refreshChanges() { const generation = pageGeneration; if (pageUnavailable || pageNavigating) return; const res = await send({ type: 'SP_GET_CHANGES' }); if (generation !== pageGeneration) return; if (res.error || !Array.isArray(res.comments)) { showCaptureToast('error', res.error || 'Comments could not be loaded. Please retry.'); return; } styleChanges = res.styleChanges || []; textChanges = res.textChanges || []; domChanges = res.domChanges || []; comments = res.comments || []; tokenChanges = res.tokenChanges || []; componentContexts = res.componentContexts || {}; render(); }
 async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
@@ -1095,7 +1154,18 @@ function applyShadowFromFields() {
 // content script's APPLY_STYLE handler does the multi-select fan-out, undo
 // bookkeeping, and stylesheet write — keeping all of it on one path is what
 // makes Changes-tab grouping and reverts predictable.
-async function applyStyle(property: string, value: string) {
+async function applyStyle(property: string, value: string, preserveEffectSlots = false) {
+  if (property === 'lineHeight' && value && !CSS.supports('line-height', value)) return;
+  if (property === 'borderRadius' || (cornerRadiusLinked && CORNER_RADIUS_PROPS.has(property))) {
+    return applyStylesBatch(
+      [...CORNER_RADIUS_PROPS].filter(prop => prop !== 'borderRadius').map(property => ({ property, value })),
+      'Corner radius',
+    );
+  }
+  const borderWidths = ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'];
+  if (borderWidthLinked && borderWidths.includes(property)) {
+    return applyStylesBatch(borderWidths.map(property => ({ property, value })), 'Border widths');
+  }
   // Route virtual stroke props (`__stroke_color`, `__stroke_weight`,
   // `__stroke_style`) to their real CSS targets based on the active
   // stroke position (Inside / Outside / Center). This keeps the Stroke
@@ -1308,7 +1378,11 @@ async function applyStyle(property: string, value: string) {
     dispatchOverlayEntries(id, list);
     return;
   }
-  const res = await send({ type: 'SP_APPLY_STYLE', property, value });
+  // Keep single-property edits on the selection-aware path. Content owns
+  // each target's hidden metadata and records CSS + metadata as one gesture.
+  const res = await send(preserveEffectSlots
+    ? { type: 'SP_APPLY_STYLES', changes: withHiddenEffects([{ property, value }], true) }
+    : { type: 'SP_APPLY_STYLE', property, value });
   if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
 }
 
@@ -1319,8 +1393,9 @@ async function applyStyle(property: string, value: string) {
 // its own send + content-side apply + response, and the panel
 // re-rendered after each — visible flicker plus the "tab moves through
 // every state" feeling. One message, one re-paint, one render.
-async function applyStylesBatch(changes: Array<{ property: string; value: string }>, groupLabel?: string) {
+async function applyStylesBatch(changes: Array<{ property: string; value: string }>, groupLabel?: string, removedEffect?: { chain: CssEffectChain; index: number }) {
   if (changes.length === 0) return;
+  changes = withHiddenEffects(changes, false, removedEffect);
   const res = await send({ type: 'SP_APPLY_STYLES', changes, groupLabel });
   if (res.info) info = res.info;
   if (res.styleChanges) styleChanges = res.styleChanges;
@@ -1645,7 +1720,7 @@ async function pushMultiSelectIds(ids: string[]) {
 // just clicked as the "primary" target.
 async function handleLayerClick(id: string, e: MouseEvent) {
   const isShift = !!e.shiftKey;
-  const isToggle = !isShift && (e.metaKey || e.ctrlKey);
+  const isToggle = !isShift && (layerMultiSelectMode || e.metaKey || e.ctrlKey);
   if (isShift && multiSelectAnchor) {
     const visible = getVisibleLayers();
     const ai = visible.findIndex(n => n.id === multiSelectAnchor);
@@ -1662,13 +1737,14 @@ async function handleLayerClick(id: string, e: MouseEvent) {
     // plain single-select rather than no-op'ing.
   }
   if (isToggle) {
+    if (!multiSelectAnchor) multiSelectAnchor = id;
     const set = new Set(multiSelectIds);
     if (set.has(id)) {
       set.delete(id);
     } else {
       // First cmd-click on an empty set seeds with the existing anchor
       // so the previously focused layer is part of the group too.
-      if (set.size === 0 && multiSelectAnchor && multiSelectAnchor !== id) {
+      if (!layerMultiSelectMode && set.size === 0 && multiSelectAnchor && multiSelectAnchor !== id) {
         set.add(multiSelectAnchor);
       }
       set.add(id);
@@ -1752,9 +1828,11 @@ async function takeScreenshot() {
       const blob = await resp.blob();
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       clipboardOk = true;
+      trackFeature({ feature: 'screenshot', outcome: 'clipboard_completed' });
     } catch (err) {
       console.warn('[DM] Clipboard write failed', err);
       clipboardOk = false;
+      trackFeature({ feature: 'screenshot', outcome: 'clipboard_failed' });
     }
   }
   if (wantDownload) {
@@ -1762,13 +1840,14 @@ async function takeScreenshot() {
       const a = document.createElement('a');
       a.href = res.dataUrl; a.download = filename; a.click();
       downloadOk = true;
-    } catch { downloadOk = false; }
+      trackFeature({ feature: 'screenshot', outcome: 'download_initiated' });
+    } catch { downloadOk = false; trackFeature({ feature: 'screenshot', outcome: 'download_failed' }); }
   }
   const btn = root.querySelector('[data-dm-action="screenshot"]');
   if (btn && (clipboardOk || downloadOk)) { btn.innerHTML = icon('check', 14); setTimeout(() => render(), 1200); }
-  if (clipboardOk && downloadOk && wantClipboard && wantDownload) showCaptureToast('success', 'Copied & saved as ' + filename);
+  if (clipboardOk && downloadOk && wantClipboard && wantDownload) showCaptureToast('success', 'Copied & download requested: ' + filename);
   else if (clipboardOk && wantClipboard) showCaptureToast('success', 'Copied to clipboard');
-  else if (downloadOk && wantDownload) showCaptureToast('success', 'Saved as ' + filename);
+  else if (downloadOk && wantDownload) showCaptureToast('success', 'Download requested: ' + filename);
   else showCaptureToast('error', 'Capture failed');
 }
 let commentSubmitting = false;
@@ -1838,9 +1917,6 @@ function renderCommentMarkdown(s: string): string {
   return h;
 }
 
-// Revert every change in a single group (one element). The group key is
-// either the element id or, when the tracker couldn't capture one, the
-// selector — match against the same fallback the renderer uses.
 async function revertGroup(groupKey: string) {
   const inGroup = (c: { elementId?: string; selector?: string }) => changeGroupKey(c) === groupKey;
   const ids = collectGroupRevertIds(groupKey, {
@@ -1848,11 +1924,11 @@ async function revertGroup(groupKey: string) {
     texts: textChanges,
     dom: domChanges,
     comments,
-  });
+  }, changesGrouping);
   for (const id of ids) {
     await send({ type: 'SP_REMOVE_CHANGE', changeId: id });
   }
-  styleChanges = styleChanges.filter(c => !inGroup(c));
+  styleChanges = styleChanges.filter(c => styleChangeGroupKey(c, changesGrouping) !== groupKey);
   textChanges  = textChanges.filter(c => !inGroup(c));
   domChanges   = domChanges.filter(c => !inGroup(c));
   for (const id of ids) batchAppliedChanges.delete(id);
@@ -1874,13 +1950,13 @@ async function sendToAgent() {
   sendingFeedback = true;
   try {
   await refreshMcpStatus();
-  if (mcpState !== 'connected') { sendAgentHelpOpen = true; render(); return; }
+  if (mcpState !== 'connected') { trackFeature({ feature: 'send_to_agent', outcome: 'failure', reason: mcpState === 'offline' ? 'offline' : 'waiting_for_agent', mode: mcpMode }); sendAgentHelpOpen = true; render(); return; }
   if (feedbackSession?.state === 'implementing') return;
   const res = await send({ type: 'SP_SEND_TO_AGENT' });
   if (res?.ok) {
     feedbackSession = res.supported ? parseFeedbackSession(res.session) : null;
-    const btn = root.querySelector('#dm-send-agent-btn');
-    if (btn) { (btn as HTMLElement).textContent = 'Sent!'; setTimeout(() => render(), 1500); }
+    feedbackSentUntil = Date.now() + 1500;
+    setTimeout(() => render(), 1500);
     showCaptureToast('success', feedbackSession?.state === 'implementing' ? 'Feedback sent. Make your next edits while the agent works.' : 'Staged for your agent — run /design-mode to implement.');
   } else {
     showCaptureToast('error', 'Could not reach the agent — check the MCP status and retry.');
@@ -1968,6 +2044,8 @@ function dropZoneAt(target: HTMLElement, clientY: number): 'before' | 'inside' |
 
 /* ── Message handling ── */
 browser.runtime.onMessage.addListener((msg, sender) => {
+  if (sender.tab && ((myTabId != null && sender.tab.id !== myTabId) || (sender.frameId != null && sender.frameId !== 0)
+    || pageNavigating || pageUnavailable || (boundPageUrl && sender.url !== boundPageUrl))) return;
   // Content scripts broadcast to every panel context. Ignore broadcasts from
   // a tab this surface isn't bound to (multiple side panels / floating windows
   // can be open at once). Messages without `_dmTab` (or before we know our
@@ -2005,6 +2083,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
       send({ type: 'SP_FORCE_STATE', elementId: info.id, state: pageForcedState, on: false });
       pageForcedState = null;
     }
+    const selectedElementChanged = info?.id !== msg.payload?.id;
     info = msg.payload; hoverInfo = null; commentMode = false;
     hydrateLayoutGuidesFromPayload(info);
     contrastSettingsOpen = false;
@@ -2017,8 +2096,9 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     // Covers pages that hydrated after INIT_STATE fired (SPA nav): without
     // the token cache the badges and swap pickers have nothing to offer.
     if (designTokens.length === 0) refreshDesignTokens();
-    // Matching-layers selection is per-element — reset for the new one.
-    matchingLayersChecked = false;
+    // Style commits refresh the same selection. Keep the matching checkbox
+    // in sync with its active multi-selection until another element is picked.
+    if (selectedElementChanged) matchingLayersChecked = false;
     render();
     refreshMedia();
     setTimeout(() => {
@@ -2089,6 +2169,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     // Only a live content script sends this, so the page is reachable.
     fileAccessBlocked = false;
     enabled = msg.enabled ?? enabled;
+    if (!enabled) computedLayoutOverlayOn = false;
     inspecting = msg.inspecting ?? inspecting;
     if (typeof msg.hoverAvailable === 'boolean') applyHoverAvailable(msg.hoverAvailable);
     undoCount = msg.undoCount ?? undoCount;
@@ -2101,7 +2182,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     // Re-push the panel's session-memory guides so the overlay paints
     // again on the fresh page. If the panel was closed during the
     // reload, this branch never runs and the page stays clean.
-    restoreLayoutGuidesAfterReload();
+    if (enabled) restoreLayoutGuidesAfterReload();
     render();
     // Re-sync the layers tree + pageSealed after a reload / SPA nav so the
     // sealed-frame notice appears (or clears) for the page now in the tab.
@@ -2123,20 +2204,18 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   // to the hovering / page state so the panel matches the page.
   if (msg.type === 'ELEMENT_DESELECTED') {
     if (info?.id) send({ type: 'SP_FORCE_STATE', elementId: info.id, state: '', on: false });
+    computedLayoutOverlayOn = false;
     send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: false });
     motionForcedTrigger = null;
     pageForcedState = null;
     info = null; hoverInfo = null; render();
   }
+  if (msg.type === 'STYLE_OVERRIDE_ERROR') showCaptureToast('error', msg.error);
   if (msg.type === 'COMMENT_ERROR') showCaptureToast('error', msg.error || 'Comment was not saved. Please retry.');
   if (msg.type === 'CHANGES_UPDATE') { styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; componentContexts = msg.componentContexts || {}; render(); }
   if (msg.type === 'AGENT_PRESENCE_UPDATE') {
-    // Transport state is implicit from current mcpState — if we were
-    // 'offline' an AGENT_PRESENCE_UPDATE shouldn't suddenly say
-    // connected, so guard on the existing state.
-    if (mcpState === 'offline') return;
-    mcpState = msg.connected ? 'connected' : 'running';
-    render();
+    // Presence may arrive after INIT_STATE observed a still-opening transport.
+    void refreshMcpStatus();
   }
 });
 
@@ -2440,7 +2519,7 @@ function inp(label: string, prop: string, value: string, unit = 'px', badgeProp?
     return '<div class="dm-field">' +
       (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
       '<div class="dm-input-shell">' +
-      '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" value="' + escapeAttr(value) + '"/>' +
+      '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '"' + (prop === 'zIndex' ? ' data-dm-numeric="1" data-dm-unit="" inputmode="decimal"' : '') + ' value="' + escapeAttr(value) + '"/>' +
       badge +
       '</div>' + overlays + '</div>';
   }
@@ -2555,8 +2634,8 @@ function renderTokenPicker(prop: string): string {
         // Name over value, each on its own line so a long token name and a
         // long value (e.g. calc(…)) both stay readable; full text on hover.
         return '<button data-dm-pick-token="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" title="' + escapeAttr(t.cssVar + ' = ' + display) + '" style="width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:6px 10px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
-          '<span style="max-width:100%;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
-          '<span style="max-width:100%;font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(display) + '</span>' +
+          '<span style="max-width:100%;font-size:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
+          '<span style="max-width:100%;font-size:9px;color:var(--dm-text-dim);font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(display) + '</span>' +
           '</button>';
       }).join('')
     : '<div style="padding:12px;font-size:10px;color:var(--dm-text-dim);text-align:center;">No ' + group + ' tokens on this page.</div>';
@@ -2577,10 +2656,10 @@ function renderTokenOverlays(prop: string): string {
   // The scope line matters: it's where an edit to this token has to land
   // for this element to change.
   const scopeLine = tok.scope !== ':root'
-    ? '<div style="padding:0 10px 6px;font-size:9px;color:var(--dm-text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">via <span style="font-family:SF Mono,Monaco,monospace;">' + escapeAttr(tok.scope) + '</span></div>'
+    ? '<div style="padding:0 10px 6px;font-size:9px;color:var(--dm-text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">via <span style="font-family:inherit;">' + escapeAttr(tok.scope) + '</span></div>'
     : '';
   return '<div data-dm-token-menu="' + escapeAttr(prop) + '" data-dm-token-popover="right" style="position:fixed;z-index:60;visibility:hidden;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;min-width:180px;">' +
-    '<div style="padding:5px 10px 3px;font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">var(' + escapeAttr(tok.cssVar) + ')</div>' +
+    '<div style="padding:5px 10px 3px;font-size:9px;color:var(--dm-text-dim);font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">var(' + escapeAttr(tok.cssVar) + ')</div>' +
     scopeLine +
     '<div style="border-bottom:1px solid var(--dm-separator);margin-bottom:3px;"></div>' +
     item('swap', 'Swap token…') +
@@ -2601,7 +2680,7 @@ function renderShadowVarChip(prop: string, menuKey: string, label: string, data:
   const menu = open
     ? '<div data-dm-token-popover="right" style="position:fixed;z-index:60;visibility:hidden;background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.18);padding:4px 0;min-width:200px;max-width:260px;">' +
       '<div style="padding:5px 10px 3px;font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Composed from</div>' +
-      data.vars.map(v => '<button data-dm-shadow-edit-var="' + escapeAttr(v) + '" data-dm-shadow-scope="' + escapeAttr(data.scope) + '" title="Edit ' + escapeAttr(v) + ' globally" style="width:100%;display:block;padding:5px 10px;background:transparent;border:none;cursor:pointer;text-align:left;font-family:SF Mono,Monaco,monospace;font-size:10px;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(v) + '</button>').join('') +
+      data.vars.map(v => '<button data-dm-shadow-edit-var="' + escapeAttr(v) + '" data-dm-shadow-scope="' + escapeAttr(data.scope) + '" title="Edit ' + escapeAttr(v) + ' globally" style="width:100%;display:block;padding:5px 10px;background:transparent;border:none;cursor:pointer;text-align:left;font-family:inherit;font-size:10px;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(v) + '</button>').join('') +
       '<div style="border-top:1px solid var(--dm-separator);margin:3px 0;"></div>' +
       '<button data-dm-shadow-detach="' + escapeAttr(prop) + '" style="width:100%;display:block;padding:6px 10px;background:transparent;border:none;cursor:pointer;text-align:left;font-family:inherit;font-size:11px;color:var(--dm-text);">Detach from tokens</button>' +
       '</div>'
@@ -2631,7 +2710,7 @@ function sizeInput(label: string, prop: 'width' | 'height', resolvedValue: strin
   }
   const hint = view.computedHint;
   const isFixed = mode === 'fixed' && view.editable;
-  const readonlyTitle = mode === 'unknown'
+  const readonlyTitle = !view.known
     ? 'Authored size unknown — computed ' + hint
     : 'Authored ' + (view.authoredText || mode) + ' · computed ' + hint;
   const valueCell = isFixed
@@ -2675,7 +2754,7 @@ function inferGapMode(field: 'col' | 'row', s: Record<string, string>): 'fixed' 
 // dropdown. Fixed is editable and writes column-gap / row-gap; Auto spreads
 // the children via space-between and shows the measured effective spacing
 // (info.childGap) read-only.
-function gapInput(label: string, field: 'col' | 'row', s: Record<string, string>, iconName: string): string {
+function gapInput(label: string, field: 'col' | 'row', s: Record<string, string>, iconName: keyof typeof icons): string {
   const prop = field === 'col' ? 'columnGap' : 'rowGap';
   const mode = inferGapMode(field, s);
   const isFixed = mode === 'fixed';
@@ -2709,9 +2788,12 @@ function gapInput(label: string, field: 'col' | 'row', s: Record<string, string>
 // field reverts to the keyword (applyStyleChange treats '' as "remove").
 function inpKw(label: string, prop: string, value: string, unit: string, keyword: string): string {
   const isKeyword = !value || value === keyword;
+  // Line-height supports a multiplier, an explicit CSS length, or normal.
+  // Keep its authored unit in the editable text instead of silently appending px.
+  const isLineHeight = prop === 'lineHeight';
   const parsed = isKeyword ? null : parseNumeric(value);
-  const displayVal = isKeyword ? '' : (parsed ? String(parsed.num) : value);
-  const displayUnit = parsed ? (parsed.unit || unit) : (isKeyword ? unit : '');
+  const displayVal = isKeyword ? '' : (isLineHeight ? value : (parsed ? String(parsed.num) : value));
+  const displayUnit = isLineHeight ? '' : (parsed ? (parsed.unit || unit) : (isKeyword ? unit : ''));
   const placeholder = isKeyword ? '0' : '';
   const keywordChip = isKeyword
     ? '<span class="dm-input-unit dm-input-unit-faint">(' + keyword.charAt(0).toUpperCase() + keyword.slice(1) + ')</span>'
@@ -2719,7 +2801,7 @@ function inpKw(label: string, prop: string, value: string, unit: string, keyword
   return '<div class="dm-field">' +
     (label ? '<label class="dm-field-label">' + label + '</label>' : '') +
     '<div class="dm-input-shell">' +
-    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(unit) + '" data-dm-kw="' + escapeAttr(keyword) + '" inputmode="decimal" placeholder="' + placeholder + '" value="' + escapeAttr(displayVal) + '"/>' +
+    '<input type="text" class="dm-input dm-input-bare" data-dm-prop="' + prop + '"' + (isLineHeight ? ' aria-label="Line height" title="Unitless multiplier (1.5), length (24px), or normal"' : ' data-dm-numeric="1" data-dm-unit="' + escapeAttr(unit) + '" inputmode="decimal"') + ' data-dm-kw="' + escapeAttr(keyword) + '" placeholder="' + placeholder + '" value="' + escapeAttr(displayVal) + '"/>' +
     renderTokenBadge(prop) +
     keywordChip +
     '</div>' + renderTokenOverlays(prop) + '</div>';
@@ -3085,7 +3167,7 @@ function renderInlineColorPicker(prop: string, value: string, compact = false): 
       '<span style="width:28px;height:28px;border-radius:5px;flex-shrink:0;background:' + safeCssColor(swatchBg) + ';border:1px solid var(--dm-separator);"></span>' +
       '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">' +
         '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Hex</label>' +
-        '<input type="text" class="dm-input" data-dm-color-hex="' + escapeAttr(prop) + '" value="' + escapeAttr(hex.slice(1)) + '" style="padding:5px 6px;font-size:10px;font-family:SF Mono,Monaco,monospace;text-transform:uppercase;"/>' +
+        '<input type="text" class="dm-input" data-dm-color-hex="' + escapeAttr(prop) + '" value="' + escapeAttr(hex.slice(1)) + '" style="padding:5px 6px;font-size:10px;font-family:inherit;text-transform:uppercase;"/>' +
       '</div>' +
       (IS_FIREFOX ? '' :
         '<button data-dm-eyedropper="' + escapeAttr(prop) + '" title="Eyedropper — pick a colour from anywhere on screen" style="display:flex;align-items:center;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;">' +
@@ -3121,7 +3203,21 @@ function formatColorForDisplay(value: string): string {
   if (!v) return '';
   const resolved = resolveCssVarToColor(v);
   const target = resolved ?? v;
-  if (colorFormat === 'rgba') return target;
+  if (colorFormat === 'hsl') {
+    const rgb = parseColorRgb(target);
+    if (!rgb) return target;
+    const [h, sat, value] = rgbToHsv(...rgb);
+    const lightness = (2 - sat) * value / 2;
+    const saturation = lightness > 0 && lightness < 1 ? sat * value / (1 - Math.abs(2 * lightness - 1)) : 0;
+    const alpha = splitColorOpacity(target).opacity;
+    const channels = `${Math.round(h)}, ${Math.round(saturation * 100)}%, ${Math.round(lightness * 100)}%`;
+    return alpha < 1 ? `hsla(${channels}, ${alpha})` : `hsl(${channels})`;
+  }
+  if (colorFormat === 'rgba') {
+    const rgb = parseColorRgb(target);
+    if (!rgb) return target;
+    return `rgba(${rgb.join(', ')}, ${splitColorOpacity(target).opacity})`;
+  }
   return rgbToHex(target);
 }
 
@@ -3143,8 +3239,7 @@ function resolveCssVarToColor(value: string): string | null {
 function formatTokenForDisplay(value: string): string {
   const v = (value || '').trim();
   if (!v) return '';
-  if (colorFormat === 'rgba') return v;
-  return rgbToHex(v);
+  return formatColorForDisplay(v);
 }
 
 // Font family — dropdown of fonts actually used on the page (parsed from
@@ -3196,8 +3291,8 @@ function renderColorPanel(prop: string, value: string, compact = false): string 
           const isCurrent = tokenVal === value || tokenHex === hex || ('var(' + t.cssVar + ')') === value;
           return '<button data-dm-pick-color="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;border-radius:0;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
             '<span style="width:14px;height:14px;border-radius:3px;background:' + safeCssColor(tokenVal) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>' +
-            '<span style="flex:1;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
-            '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;">' + escapeAttr(tokenDisplay) + '</span>' +
+            '<span style="flex:1;font-size:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
+            '<span style="font-size:9px;color:var(--dm-text-dim);font-family:inherit;flex-shrink:0;max-width:90px;overflow:hidden;text-overflow:ellipsis;">' + escapeAttr(tokenDisplay) + '</span>' +
             '</button>';
         }).join('')
       : '<div style="padding:14px;font-size:10px;color:var(--dm-text-dim);text-align:center;">' + (q ? 'No matching colors. Press Enter to use "' + escapeAttr(q) + '" as custom value.' : 'No design tokens on this page.') + '</div>') +
@@ -3221,8 +3316,8 @@ function renderTokensDropdown(prop: string, value: string): string {
       const tokenDisplay = formatTokenForDisplay(tokenVal);
       return '<button data-dm-pick-color="' + escapeAttr('var(' + t.cssVar + ')') + '" data-dm-pick-prop="' + escapeAttr(prop) + '" title="' + escapeAttr(t.cssVar + ' = ' + tokenDisplay) + '" style="width:100%;display:flex;align-items:center;gap:8px;padding:5px 8px;background:' + (isCurrent ? 'var(--dm-accent-bg)' : 'transparent') + ';border:none;cursor:pointer;text-align:left;font-family:inherit;color:var(--dm-text);">' +
         '<span style="width:14px;height:14px;border-radius:3px;background:' + escapeAttr(tokenVal) + ';border:1px solid var(--dm-separator);flex-shrink:0;"></span>' +
-        '<span style="flex:1;min-width:0;font-size:10px;font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
-        '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(tokenDisplay) + '</span>' +
+        '<span style="flex:1;min-width:0;font-size:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(t.cssVar) + '</span>' +
+        '<span style="font-size:9px;color:var(--dm-text-dim);font-family:inherit;flex-shrink:0;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(tokenDisplay) + '</span>' +
         '</button>';
     }).join('') +
     '</div>';
@@ -3610,7 +3705,7 @@ function cornerShapeRow(current: string, shapes: string[]): string {
   return '<div data-dm-corner-shape-popover style="display:flex;gap:4px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;padding:6px;">' +
     shapes.map(sh => {
       const active = sh === current;
-      return '<button data-dm-corner-shape="' + sh + '" title="' + sh + '" style="flex:1;display:flex;align-items:center;justify-content:center;padding:7px;background:' + (active ? 'var(--dm-bg-active)' : 'transparent') + ';border:none;border-radius:5px;cursor:pointer;color:' + (active ? 'var(--dm-text)' : 'var(--dm-text-secondary)') + ';">' +
+      return '<button data-dm-corner-shape="' + sh + '" title="' + sh + '" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;padding:7px 4px;background:' + (active ? 'var(--dm-bg-active)' : 'transparent') + ';border:none;border-radius:5px;cursor:pointer;color:' + (active ? 'var(--dm-text)' : 'var(--dm-text-secondary)') + ';">' +
         cornerShapeGlyph(sh, 16) +
       '</button>';
     }).join('') +
@@ -3640,14 +3735,16 @@ function cornerRadius2x2(s: Record<string, string>): string {
     const [xRaw] = parseRadiusXY(c.val);
     const formatted = formatPxValueForDisplay(xRaw);
     return '<div style="position:relative;display:flex;align-items:center;gap:4px;min-width:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:4px 6px;">' +
-      '<span style="font-family:SF Mono,Monaco,monospace;font-size:11px;color:var(--dm-text-muted);width:14px;flex-shrink:0;text-align:center;">' + c.glyph + '</span>' +
+      '<span style="font-family:inherit;font-size:11px;color:var(--dm-text-muted);width:14px;flex-shrink:0;text-align:center;">' + c.glyph + '</span>' +
       '<input class="dm-input" data-dm-prop="' + c.prop + '" data-dm-numeric="1" data-dm-unit="' + escapeAttr(formatted.writeUnit) + '" inputmode="decimal" value="' + escapeAttr(formatted.display) + '" placeholder="0" title="' + c.label + '" aria-label="' + c.label + '" style="background:none;border:none;padding:2px;flex:1;min-width:0;font-size:11px;"/>' +
       renderTokenBadge(c.prop) +
       '<span style="font-size:9px;color:var(--dm-text-dim);flex-shrink:0;">' + formatted.unit + '</span>' +
       renderTokenOverlays(c.prop) +
     '</div>';
   };
-  return '<div class="dm-corner-grid">' + cells.map(cornerCell).join('') + '</div>';
+  return '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
+    '<button type="button" class="dm-icon-row-button" data-dm-corner-link aria-label="Link corner radii" aria-pressed="' + cornerRadiusLinked + '" data-active="' + cornerRadiusLinked + '" title="' + (cornerRadiusLinked ? 'Linked — all corners change together' : 'Unlinked — edit corners individually') + '">' + icon(cornerRadiusLinked ? 'link2' : 'unlink2', 14) + '</button></div>' +
+    '<div class="dm-corner-grid">' + cells.map(cornerCell).join('') + '</div>';
 }
 
 // Figma-style uniform value for margin / padding — the shared value when all
@@ -4267,7 +4364,7 @@ function renderFillSolidRow(layer: FillLayer, idx: number, badgeProp?: string): 
   // from a token the diamond surfaces the token name / swap menu. The badge
   // writes through the real `backgroundColor` prop (not the row's virtual
   // `__fill_color__N`), so swap / edit / detach behave like every other field.
-  const badge = badgeProp ? renderTokenBadge(badgeProp) : '';
+  const badge = badgeProp ? renderTokenBadge(badgeProp, false) : '';
   const badgeTokensPanel = (badgeProp && tokensDropdownProp === badgeProp) ? renderTokensDropdown(badgeProp, color) : '';
   const badgeOverlay = badgeProp ? renderTokenOverlays(badgeProp) : '';
   const row =
@@ -4602,7 +4699,7 @@ function layeredRow(opts: {
   const headRow = '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:5px;">' +
     '<span class="dm-section-action" data-dm-' + opts.prefix + '-drag="' + opts.idx + '" title="Drag to reorder" aria-label="Drag" style="cursor:grab;">' + icon('gripVertical', 12) + '</span>' +
     opts.swatch +
-    '<span style="flex:1;min-width:0;font-size:11px;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(opts.label) + '</span>' +
+    '<span style="flex:1;min-width:0;font-size:11px;font-family:inherit;color:var(--dm-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(opts.label) + '</span>' +
     metaPart +
     '<button class="dm-section-action" data-dm-' + opts.prefix + '-toggle="' + opts.idx + '" title="' + (opts.visible ? 'Hide' : 'Show') + '" data-active="' + (opts.visible ? 'true' : 'false') + '">' + icon(opts.visible ? 'eye' : 'eyeOff', 12) + '</button>' +
     expandBtn +
@@ -4615,12 +4712,96 @@ function layeredRow(opts: {
 }
 
 // ─── Effects layered model ───────────────────────────────────────────────
-// Per-effect visibility lives in memory, keyed by element id + a stable
-// effect id. Hidden effects are dropped from CSS but kept in the chain
-// (and therefore in the visible list) so re-toggling restores them.
+// Hidden CSS slots are persisted with their chain edits so undo restores both.
 const hiddenEffectsByElement = new Map<string, Set<string>>();
 const stashedEffectByKey = new Map<string, string>(); // `${elementId}::${effectId}` → original CSS entry
 
+const effectChainProperties = { box: 'boxShadow', filter: 'filter', backdrop: 'backdropFilter', text: 'textShadow' } as const;
+type CssEffectChain = keyof typeof effectChainProperties;
+
+function hiddenEffectChain(id: string): CssEffectChain | undefined {
+  if (/^box:\d+$/.test(id)) return 'box';
+  if (/^(filter-drop|layer-blur):\d+$/.test(id)) return 'filter';
+  if (/^backdrop-blur:\d+$/.test(id)) return 'backdrop';
+  if (id === 'text-shadow') return 'text';
+}
+
+function effectChainEntries(chain: CssEffectChain, value: string): string[] {
+  return chain === 'box' || chain === 'text' ? parseCssCommaList(value) : splitFilterFunctions(value);
+}
+
+function hydrateHiddenEffects(elementId: string): void {
+  const saved = styleChanges.find(c => c.elementId === elementId && c.property === '__effect_hidden');
+  const hidden = hiddenEffectsByElement.get(elementId) || new Set<string>();
+  for (const id of hidden) {
+    if (!hiddenEffectChain(id)) continue;
+    hidden.delete(id);
+    stashedEffectByKey.delete(elementId + '::' + id);
+  }
+  if (saved?.newValue) {
+    try {
+      const entries: unknown = JSON.parse(saved.newValue);
+      if (Array.isArray(entries)) for (const entry of entries) {
+        if (!entry || typeof entry.id !== 'string' || !hiddenEffectChain(entry.id) || typeof entry.raw !== 'string') continue;
+        hidden.add(entry.id);
+        stashedEffectByKey.set(elementId + '::' + entry.id, entry.raw);
+      }
+    } catch { /* An undone synthetic property has an empty original value. */ }
+  }
+  hiddenEffectsByElement.set(elementId, hidden);
+}
+
+function serializeHiddenEffects(elementId: string): string {
+  return JSON.stringify([...(hiddenEffectsByElement.get(elementId) || [])]
+    .filter(id => hiddenEffectChain(id))
+    .map(id => ({ id, raw: stashedEffectByKey.get(elementId + '::' + id) || '' })));
+}
+
+function rebaseHiddenEffects(elementId: string, chain: CssEffectChain, before: string[], after: string[], removedIndex?: number): void {
+  if (before.length === after.length) return;
+  const hidden = hiddenEffectsByElement.get(elementId);
+  if (!hidden) return;
+  const entries = [...hidden].filter(id => hiddenEffectChain(id) === chain)
+    .map(id => ({ id, index: Number(id.split(':')[1] || 0), raw: stashedEffectByKey.get(elementId + '::' + id)! }))
+    .sort((a, b) => a.index - b.index);
+  // A known removal keeps identical visible shadows from exchanging identities.
+  const used = new Set<number>();
+  const positions = before.map((raw, i) => {
+    if (removedIndex !== undefined) return i === removedIndex ? -1 : i > removedIndex ? i - 1 : i;
+    const index = after.findIndex((value, i) => value === raw && !used.has(i));
+    if (index >= 0) used.add(index);
+    return index;
+  });
+  const rebased = entries.map((entry, i) => {
+    const boundary = entry.index - i;
+    let index = -1;
+    for (let next = boundary; next < positions.length; next++) {
+      if (positions[next] >= 0) { index = positions[next]; break; }
+    }
+    if (index < 0) for (let prev = boundary - 1; prev >= 0; prev--) {
+      if (positions[prev] >= 0) { index = positions[prev] + 1; break; }
+    }
+    return { ...entry, index: index < 0 ? Math.min(boundary, after.length) : index };
+  }).sort((a, b) => a.index - b.index);
+  for (const entry of entries) { hidden.delete(entry.id); stashedEffectByKey.delete(elementId + '::' + entry.id); }
+  rebased.forEach((entry, i) => {
+    const id = entry.id.replace(/:\d+$/, ':' + (entry.index + i));
+    hidden.add(id);
+    stashedEffectByKey.set(elementId + '::' + id, entry.raw);
+  });
+}
+
+function withHiddenEffects(changes: Array<{ property: string; value: string }>, preserveSlots = false, removedEffect?: { chain: CssEffectChain; index: number }): Array<{ property: string; value: string }> {
+  const elementId = info?.id;
+  if (!elementId || !changes.some(c => Object.values(effectChainProperties).includes(c.property as any))) return changes;
+  if (!hiddenEffectsByElement.get(elementId)?.size && !styleChanges.some(c => c.elementId === elementId && c.property === '__effect_hidden')) return changes;
+  if (!preserveSlots) for (const change of changes) {
+    const chain = (Object.keys(effectChainProperties) as CssEffectChain[]).find(chain => effectChainProperties[chain] === change.property);
+    if (chain) rebaseHiddenEffects(elementId, chain, effectChainEntries(chain, info?.computedStyles[change.property] || ''), effectChainEntries(chain, change.value), removedEffect?.chain === chain ? removedEffect.index : undefined);
+  }
+  // Visibility and CSS must share the content-side undo transaction.
+  return [...changes, { property: '__effect_hidden', value: serializeHiddenEffects(elementId) }];
+}
 type ShadowParts = { inset: boolean; x: number; y: number; blur: number; spread: number; color: string };
 // Figma-aligned model:
 //   • Inner shadow → inset box-shadow (chain: 'box', supports spread).
@@ -4749,6 +4930,24 @@ function splitFilterFunctions(value: string): string[] {
 function parseEffects(s: Record<string, string>, elementId: string, isText: boolean): EffectEntry[] {
   const hidden = hiddenEffectsByElement.get(elementId) ?? new Set<string>();
   const out: EffectEntry[] = [];
+  const hiddenIndices = new Map<string, number[]>();
+  s = { ...s };
+  for (const [chain, property, prefixes] of [
+    ['box', 'boxShadow', ['box:']],
+    ['filter', 'filter', ['filter-drop:', 'layer-blur:']],
+    ['backdrop', 'backdropFilter', ['backdrop-blur:']],
+    ['text', 'textShadow', ['text-shadow']],
+  ] as const) {
+    const stashed = [...hidden].filter(id => prefixes.some(prefix => id.startsWith(prefix)))
+      .map(id => ({ index: Number(id.split(':')[1] || 0), raw: stashedEffectByKey.get(elementId + '::' + id) }))
+      .filter(entry => !!entry.raw).sort((a, b) => a.index - b.index);
+    if (!stashed.length) continue;
+    const entries = chain === 'box' || chain === 'text'
+      ? parseCssCommaList(s[property] || '') : splitFilterFunctions(s[property] || '');
+    for (const entry of stashed) entries.splice(entry.index, 0, entry.raw!);
+    s[property] = entries.join(chain === 'box' || chain === 'text' ? ', ' : ' ');
+    hiddenIndices.set(chain, stashed.map(entry => entry.index));
+  }
 
   // box-shadow chain — inner (inset) + drop (non-inset).
   // Stroke-shaped entries belong to Stroke and are skipped here.
@@ -4870,6 +5069,10 @@ function parseEffects(s: Record<string, string>, elementId: string, isText: bool
     });
   });
 
+  // Hidden entries retain a row, but CSS edits index only the visible chain.
+  for (const entry of out) {
+    entry.chainIdx -= (hiddenIndices.get(entry.chain) || []).filter(index => index < entry.chainIdx).length;
+  }
   return out;
 }
 
@@ -4970,7 +5173,7 @@ function flipDropShadowChain(srcChain: 'box' | 'fx' | 'text', srcIdx: number, ch
   batch.push({ property: 'boxShadow', value: boxEntries.length ? boxEntries.join(', ') : 'none' });
   batch.push({ property: 'filter', value: filterEntries.length ? filterEntries.join(' ') : 'none' });
   batch.push({ property: 'textShadow', value: textShadowVal || 'none' });
-  applyStylesBatch(batch, 'Show behind transparent areas');
+  applyStylesBatch(batch, 'Show behind transparent areas', { chain: srcChain === 'fx' ? 'filter' : srcChain, index: srcIdx });
 }
 
 // Per-shadow editor. Writes via virtual props that encode (chain,
@@ -5309,7 +5512,7 @@ function renderAnimationEditor(s: Record<string, string>): string {
   const isBuiltin = name.startsWith('dm-');
   const knownName = isBuiltin || name === 'none' ? name : '';
   const customLabel = isBuiltin || name === 'none' ? '' :
-    '<div style="margin-top:4px;font-size:9px;color:var(--dm-text-dim);">Custom: <span style="font-family:monospace;color:var(--dm-text-muted);">' + escapeAttr(name) + '</span> (page must define @keyframes)</div>';
+    '<div style="margin-top:4px;font-size:9px;color:var(--dm-text-dim);">Custom: <span style="font-family:inherit;color:var(--dm-text-muted);">' + escapeAttr(name) + '</span> (page must define @keyframes)</div>';
   const iterInput =
     '<div class="dm-field">' +
     '<label class="dm-field-label">Iterations</label>' +
@@ -5407,7 +5610,7 @@ function renderMotionInteractionCard(t: typeof MOTION_TRIGGERS[number], changes:
     '<span style="font-size:10px;color:var(--dm-text-muted);width:74px;flex-shrink:0;">Curve</span>' +
     '<input type="text" class="dm-input dm-input-bare" data-dm-prop="transitionDuration" data-dm-numeric="1" data-dm-unit="s" inputmode="decimal" value="' + escapeAttr(parseFloat(dur).toString()) + '" title="Duration (seconds)" style="width:52px;flex-shrink:0;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;"/>' +
     '<select class="dm-select" data-dm-prop="transitionTimingFunction" style="flex:1;min-width:0;font-size:10px;">' +
-      (TIMING_FUNCTION_OPTIONS as readonly string[]).map(o => '<option value="' + o + '"' + (o === timing ? ' selected' : '') + '>' + o + '</option>').join('') +
+      TIMING_FUNCTION_OPTIONS.map(o => '<option value="' + o.value + '"' + (o.value === timing ? ' selected' : '') + '>' + o.label + '</option>').join('') +
     '</select>' +
     '</div>';
 
@@ -5541,7 +5744,7 @@ function renderVizPanel(): string {
     '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">' +
     '<span style="width:22px;font-size:9px;color:var(--dm-text-muted);flex-shrink:0;">' + lbl + '</span>' +
     '<input type="range" data-dm-viz-param="' + param + '" min="' + mn + '" max="' + mx + '" step="' + st + '" value="' + val + '" style="flex:1;accent-color:var(--dm-accent);height:3px;"/>' +
-    '<span style="width:28px;text-align:right;font-size:9px;color:var(--dm-text-dim);font-family:monospace;">' + val.toFixed(2) + '</span>' +
+    '<span style="width:28px;text-align:right;font-size:9px;color:var(--dm-text-dim);font-family:inherit;">' + val.toFixed(2) + '</span>' +
     '</div>';
   const polyline = isEase
     ? bptsToPolyline(sampleBezier(bezX1, bezY1, bezX2, bezY2), 74, 36)
@@ -5739,7 +5942,9 @@ function renderTokensView(): string {
 
   const filter = tokenSearch.toLowerCase().trim();
   const matchesFilter = (s: string) => !filter || s.toLowerCase().includes(filter);
-  const passesUsedFilter = (t: DesignToken) => !tokenUsedOnlyFilter || t.usageCount > 0;
+  const usageCountFor = (t: DesignToken) => tokenScopeFilter === 'all'
+    ? t.usageCount : t.variants.find(v => v.scope.selector === tokenScopeFilter)?.usageCount || 0;
+  const passesUsedFilter = (t: DesignToken) => !tokenUsedOnlyFilter || usageCountFor(t) > 0;
   const systemLabelFor = (id?: string) => ds.systems.find(s => s.id === id)?.label || '';
   // The scope a row represents: the selected one when the user has picked
   // a scope and this token declares in it, otherwise the token's primary.
@@ -5830,9 +6035,10 @@ function renderTokensView(): string {
     const displayValue = edited ? editedTokens.get(tokenEditKey(scopeSel, t.cssVar))! : baseValue;
     const swatch = renderSwatch(t.group, displayValue);
     const valueInputAttrs = 'data-dm-token-edit="' + escapeAttr(t.cssVar) + '" data-dm-token-scope="' + escapeAttr(scopeSel) + '" value="' + escapeAttr(displayValue) + '"';
-    const usageLabel = t.usageCount > 0 ? '×' + t.usageCount + ' uses' : 'unused';
-    const usageTitle = t.usageCount > 0
-      ? 'Highlight ' + t.usageCount + ' element' + (t.usageCount === 1 ? '' : 's') + ' using this token'
+    const usageCount = usageCountFor(t);
+    const usageLabel = usageCount > 0 ? '×' + usageCount + ' uses' : 'unused';
+    const usageTitle = usageCount > 0
+      ? 'Highlight ' + usageCount + ' element' + (usageCount === 1 ? '' : 's') + ' using this token'
       : 'No on-page consumers — declared but never resolved on this page';
     // Scope chip on anything not declared at :root, so the user can see
     // which theme / component the value they're editing belongs to.
@@ -5845,7 +6051,7 @@ function renderTokensView(): string {
       '<span class="dm-token-name" title="' + escapeAttr(t.cssVar) + '">' + escapeAttr(t.cssVar) + '</span>' +
       scopeChip +
       '<input class="dm-input dm-token-value" type="text" ' + valueInputAttrs + ' />' +
-      '<button class="dm-token-uses" data-dm-token-find-uses="' + escapeAttr(t.cssVar) + '" data-unused="' + (t.usageCount === 0 ? 'true' : 'false') + '" data-active="' + (tokenUsesActiveVar === t.cssVar ? 'true' : 'false') + '" title="' + escapeAttr(tokenUsesActiveVar === t.cssVar ? 'Click to hide highlights' : usageTitle) + '">' + usageLabel + '</button>' +
+      '<button class="dm-token-uses" data-dm-token-find-uses="' + escapeAttr(t.cssVar) + '" data-unused="' + (usageCount === 0 ? 'true' : 'false') + '" data-active="' + (tokenUsesActiveVar === t.cssVar ? 'true' : 'false') + '" title="' + escapeAttr(tokenUsesActiveVar === t.cssVar ? 'Click to hide highlights' : usageTitle) + '">' + usageLabel + '</button>' +
       (edited
         ? '<button class="dm-token-reset" data-dm-token-reset="' + escapeAttr(t.cssVar) + '" data-dm-token-scope="' + escapeAttr(scopeSel) + '" title="Restore original value">' + icon('rotateCcw', 10) + '</button>'
         : '<span class="dm-token-reset-placeholder"></span>') +
@@ -5980,16 +6186,8 @@ function renderTokensView(): string {
 function availableKindsForSelection(): PresetKindLocal[] {
   if (!info || !info.computedStyles) return [];
   const cs = info.computedStyles;
-  const isDefault = (v: string | undefined): boolean =>
-    !v || v === 'none' || v === 'normal' || v === 'auto' || v === '0px' || v === '0' ||
-    v === 'rgba(0, 0, 0, 0)' || v === 'transparent';
   const ALL: PresetKindLocal[] = ['typography', 'fill', 'stroke', 'effects', 'position', 'layout', 'appearance', 'motion'];
-  const out: PresetKindLocal[] = [];
-  for (const k of ALL) {
-    const props = (SECTION_PROPS as Record<string, string[]>)[k] || [];
-    if (props.some(p => !isDefault((cs as any)[p]))) out.push(k);
-  }
-  return out;
+  return ALL.filter(kind => hasPresetStyles(kind, cs, SECTION_PROPS[kind] || []));
 }
 
 // Render the Defined tab — user-saved style-bundle presets. Empty by
@@ -6083,7 +6281,7 @@ function renderDefinedTab(allowedKinds: Set<PresetKindLocal>, searchFilter: stri
     p.name.toLowerCase().includes(sf) ||
     KIND_LABELS[p.kind].toLowerCase().includes(sf) ||
     p.kind.toLowerCase().includes(sf);
-  const visiblePresets = customPresets.filter(p => allowedKinds.has(p.kind) && matchesSearch(p));
+  const visiblePresets = customPresets.filter(p => allowedKinds.has(p.kind) && matchesSearch(p) && (!tokenUsedOnlyFilter || (p.usageCount || 0) > 0));
 
   const list = customPresets.length === 0
     ? '<div class="dm-tokens-empty" style="line-height:1.6;">No saved presets yet.<br/><br/>Select an element on the page, choose a category<br/>(Typography, Fill, Stroke, …), and click Add.</div>'
@@ -6091,7 +6289,8 @@ function renderDefinedTab(allowedKinds: Set<PresetKindLocal>, searchFilter: stri
       ? '<div class="dm-tokens-empty">No presets match this filter.</div>'
       : '<div class="dm-defined-list">' +
         visiblePresets.map(p => {
-          const applied = appliedPresetGroups.has(p.id);
+          const appliedGroup = appliedPresetGroups.get(p.id);
+          const applied = !!appliedGroup && styleChanges.some(change => change.groupId === appliedGroup);
           const applyTitle = hasSelection ? 'Apply to the selected element' : 'Select an element on the page first';
           const actionBtn = applied
             ? '<button class="dm-preset-applied" data-dm-action="unapply-preset" data-preset-id="' + escapeAttr(p.id) + '" title="Revert the styles this preset added">' + icon('undo', 10) + ' Applied</button>'
@@ -6102,6 +6301,7 @@ function renderDefinedTab(allowedKinds: Set<PresetKindLocal>, searchFilter: stri
             '<span class="dm-preset-name" title="' + escapeAttr(p.name) + '">' + escapeAttr(p.name) + '</span>' +
             '<span style="' + kindBadgeStyle(p.kind) + '">' + escapeAttr(p.kind) + '</span>' +
             actionBtn +
+            '<button class="dm-preset-apply" data-dm-action="edit-preset" data-preset-id="' + escapeAttr(p.id) + '" title="Edit preset">Edit</button>' +
             '<button class="dm-preset-delete" data-dm-action="delete-preset" data-preset-id="' + escapeAttr(p.id) + '" title="Delete preset">' + icon('trash', 10) + '</button>' +
           '</div>';
         }).join('') +
@@ -6164,7 +6364,10 @@ function renderMediaSection(displayInfo: any, s: Record<string, string>, isImg: 
   } else if (m.kind === 'audio') {
     preview = '<div style="margin-bottom:8px;"><audio src="' + escapeAttr(m.src) + '" controls style="width:100%;"></audio></div>';
   } else if (m.kind === 'svg') {
-    preview = '<div style="margin-bottom:8px;border-radius:6px;overflow:hidden;max-height:140px;background:var(--dm-bg-secondary);display:flex;align-items:center;justify-content:center;padding:12px;"><img src="' + escapeAttr(m.src) + '" style="max-width:100%;max-height:120px;display:block;"/></div>';
+    // Page-owned blob URLs are partitioned from Firefox's extension sidebar.
+    // Render the supplied markup as an image, never as executable inline DOM.
+    const previewSrc = m.markup ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new TextDecoder().decode(new TextEncoder().encode(m.markup))) : m.src;
+    preview = '<div style="margin-bottom:8px;border-radius:6px;overflow:hidden;max-height:140px;background:var(--dm-bg-secondary);display:flex;align-items:center;justify-content:center;padding:12px;"><img src="' + escapeAttr(previewSrc) + '" style="max-width:100%;max-height:120px;display:block;"/></div>';
   }
 
   const metaParts: string[] = [];
@@ -6221,7 +6424,7 @@ function spacingBox(s: Record<string, string>, displayInfo: any): string {
     '<div style="position:absolute;right:1px;top:50%;transform:translateY(-50%);">' + fld('paddingRight', pR, 'Padding right') + '</div>' +
 
     // Element dimensions display
-    '<div style="background:var(--dm-text);color:var(--dm-bg);border-radius:5px;padding:7px 10px;text-align:center;font-size:10px;font-family:SF Mono,Monaco,monospace;font-weight:500;">' + w + ' × ' + h + '</div>' +
+    '<div style="background:var(--dm-text);color:var(--dm-bg);border-radius:5px;padding:7px 10px;text-align:center;font-size:10px;font-family:inherit;font-weight:500;">' + w + ' × ' + h + '</div>' +
     '</div></div>';
 }
 
@@ -6235,7 +6438,7 @@ function mcpStatusDisplay(): { dotStyle: string; textColor: string; label: strin
   if (mcpState === 'offline') {
     return {
       dotStyle: 'width:7px;height:7px;border-radius:50%;background:var(--dm-text-muted);flex-shrink:0;',
-      textColor: 'var(--dm-text-muted)',
+      textColor: 'var(--dm-text-secondary)',
       label: 'Offline',
       detail: isCloud
         ? (mcpCloudToken
@@ -6302,7 +6505,7 @@ function renderHeader(): string {
 }
 
 function renderActionRow(): string {
-  const dis = !info;
+  const dis = !info || classifyTag((info.tagName || '').toLowerCase()) === 'page';
   const bs = (cc?: string, alwaysEnabled?: boolean) => {
     const d = alwaysEnabled ? false : dis;
     const c = d ? 'var(--dm-text-dim)' : (cc || 'var(--dm-text-secondary)');
@@ -6350,7 +6553,7 @@ function renderCommentCard(): string {
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
     '<span style="color:var(--dm-purple);display:flex;">' + icon('messageSquare', 14) + '</span>' +
     '<span style="font-size:11px;font-weight:600;color:var(--dm-text);">' + (isEditing ? 'Edit Comment' : 'Add Comment') + '</span>' +
-    '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,monospace;">' + tagLabel + '</span></div>' +
+    '<span style="font-size:9px;color:var(--dm-text-dim);font-family:inherit;">' + tagLabel + '</span></div>' +
     annotationAlert +
     '<textarea data-dm-comment-input style="width:100%;min-height:60px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:6px;color:var(--dm-text);font-size:11px;padding:8px;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;">' + escapeAttr(commentText) + '</textarea>' +
     '<div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">' +
@@ -6376,7 +6579,7 @@ function renderLiveFeedbackStatus(): string {
   if (mcpMode !== 'local' || !feedbackSession) return '';
   const stopped = feedbackSession.state === 'stopped';
   const label = stopped ? 'Stopped' : feedbackSession.state === 'waiting' ? 'Waiting for feedback' : 'Implementing';
-  const detail = stopped ? 'Run /design-mode again to start a new loop.' : feedbackSession.state === 'waiting' ? 'Make your edits, then Send to Agent.' : 'You can keep editing. Send the next round when the agent is waiting.';
+  const detail = stopped ? 'The extension cannot cancel commands already running in your agent; they may still finish. Run /design-mode again to start a new loop.' : feedbackSession.state === 'waiting' ? 'Make your edits, then Send to your AI agent.' : 'You can keep editing. Send the next round when the agent is waiting.';
   return '<div style="padding:8px 12px 0;display:flex;gap:8px;align-items:center;">' +
     '<div role="status" aria-live="polite" style="flex:1;min-width:0;font-size:10px;line-height:1.5;color:var(--dm-text-secondary);"><strong style="color:var(--dm-text);">Live feedback · ' + label + '</strong><div>' + detail + '</div></div>' +
     (stopped ? '' : '<button data-dm-action="stop-live-feedback" title="End feedback rounds. Commands already running in your agent may still finish." style="padding:6px 9px;border-radius:5px;border:1px solid var(--dm-btn-border);background:var(--dm-btn-bg);color:var(--dm-danger);font:inherit;font-size:11px;cursor:pointer;">Stop</button>') + '</div>';
@@ -6403,9 +6606,9 @@ function renderStickyBottom(): string {
   // works — the click handler is the gate, not CSS.
   const sendS = 'flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;' +
     (sendDis ? 'background:var(--dm-btn-bg-disabled);border:1px solid var(--dm-btn-border-disabled);color:var(--dm-text-dim);cursor:not-allowed;opacity:0.5;' : 'background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);color:var(--dm-accent);cursor:pointer;');
-  return '<div style="border-top:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;bottom:0;z-index:10;">' + renderLiveFeedbackStatus() + '<div style="display:flex;gap:8px;padding:10px 12px;">' +
-    '<button id="dm-copy-prompt-btn" data-dm-action="copy-prompt" title="' + escapeAttr(copyTitle) + '" style="' + copyS + '">' + icon('clipboard', 13) + ' Copy as Prompt</button>' +
-    '<button id="dm-send-agent-btn" data-dm-action="send-to-agent"' + (sendDis ? ' disabled aria-disabled="true"' : '') + ' title="' + escapeAttr(sendTitle) + '" style="' + sendS + '">' + icon('send', 13) + ' Send to Agent</button></div></div>';
+  return '<div style="border-top:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;bottom:0;z-index:10;">' + renderLiveFeedbackStatus() + '<div class="dm-handoff-actions" style="display:flex;gap:8px;padding:10px 12px;">' +
+    '<button id="dm-copy-prompt-btn" data-dm-action="copy-prompt"' + (copyDis ? ' disabled aria-disabled="true"' : '') + ' title="' + escapeAttr(copyTitle) + '" style="' + copyS + '">' + icon('clipboard', 13) + ' Copy as Prompt</button>' +
+    '<button id="dm-send-agent-btn" data-dm-action="send-to-agent"' + (sendDis ? ' disabled aria-disabled="true"' : '') + ' title="' + escapeAttr(sendTitle) + '" style="' + sendS + '">' + icon('send', 13) + (Date.now() < feedbackSentUntil ? ' Sent!' : ' Send to your AI agent') + '</button></div></div>';
 }
 
 // First-run guidance for "Send to Agent": shown when the button is clicked
@@ -6481,17 +6684,11 @@ function renderSealedFrameNotice(): string {
 
 function renderLayersTab(): string {
   if (pageSealed && !inspectWrapperOptedIn) return renderSealedFrameNotice();
-  if (domTree.length === 0) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;"><div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('layers', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">No layers yet. The page tree appears here once the page is ready.</div></div>';
+  if (domTree.length === 0 || (domTree.length === 1 && domTree[0].tagName === 'body' && !domTree[0].hasText)) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;"><div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('layers', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">No layers yet. The page tree appears here once the page is ready.</div></div>';
 
   const selectedId = info?.id || '';
   const visible = getVisibleLayers();
 
-  // Multi-select works through the regular click flow now — Cmd/Ctrl+click
-  // toggles a layer in the set, Shift+click extends a range from the
-  // anchor (last single-click). The old dedicated toggle button next to
-  // search is gone; a small selection chip surfaces the count and offers
-  // a one-click clear so users can exit the set without hunting for the
-  // last selected row.
   const msCount = multiSelectIds.length;
   const selectionChip = msCount > 0
     ? '<button data-dm-action="clear-multi-select" title="Clear multi-select" style="display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;flex-shrink:0;font-weight:600;">' +
@@ -6500,10 +6697,11 @@ function renderLayersTab(): string {
       '<span style="opacity:0.7;display:flex;">' + icon('x', 10) + '</span>' +
       '</button>'
     : '';
-  const searchBar = '<div style="padding:8px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;">' +
-    '<div style="position:relative;flex:1;min-width:0;">' +
+  const searchBar = '<div style="padding:8px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+    '<div style="position:relative;flex:1;min-width:60px;">' +
     '<span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--dm-text-dim);display:flex;pointer-events:none;">' + icon('search', 12) + '</span>' +
     '<input type="text" class="dm-layer-search" data-dm-layer-search placeholder="Search layers..." value="' + escapeAttr(layerSearch) + '"/></div>' +
+    '<button data-dm-action="toggle-layer-multi-select" aria-label="Multi-select layers" aria-pressed="' + layerMultiSelectMode + '" title="Multi-select layers (Shift-click selects a range)" style="display:flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid var(--dm-separator);border-radius:6px;background:' + (layerMultiSelectMode ? 'var(--dm-accent-bg)' : 'transparent') + ';color:' + (layerMultiSelectMode ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';cursor:pointer;font-size:10px;font-family:inherit;flex-shrink:0;">' + icon('checkSquare', 12) + ' Multi-select</button>' +
     selectionChip +
     '</div>';
 
@@ -6619,7 +6817,7 @@ function renderLayersTab(): string {
     // layer has at least one comment.
     const commentCount = comments.filter(cc => cc.elementId === n.id).length;
     const commentChip = commentCount > 0
-      ? '<span title="' + commentCount + ' comment' + (commentCount === 1 ? '' : 's') + ' on this layer" style="display:inline-flex;align-items:center;gap:2px;padding:1px 5px;border-radius:9999px;background:rgba(251,191,36,0.18);color:#92400e;font-size:9px;font-weight:600;flex-shrink:0;font-family:SF Mono,Monaco,monospace;">' + icon('messageSquare', 8) + ' ' + commentCount + '</span>'
+      ? '<span title="' + commentCount + ' comment' + (commentCount === 1 ? '' : 's') + ' on this layer" style="display:inline-flex;align-items:center;gap:2px;padding:1px 5px;border-radius:9999px;background:rgba(251,191,36,0.18);color:#92400e;font-size:9px;font-weight:600;flex-shrink:0;font-family:inherit;">' + icon('messageSquare', 8) + ' ' + commentCount + '</span>'
       : '';
     // Container-kind badge — surfaces shadow / iframe / pseudo subtrees.
     const containerBadge = n.containerKind === 'shadow'
@@ -6631,7 +6829,7 @@ function renderLayersTab(): string {
           : '';
     // Z-index chip — surfaces non-default stacking contexts.
     const zChip = n.zIndex
-      ? '<span title="z-index: ' + escapeAttr(n.zIndex) + '" style="font-size:8px;padding:1px 5px;border-radius:9999px;background:rgba(0,0,0,0.06);color:var(--dm-text-dim);font-weight:600;flex-shrink:0;font-family:SF Mono,Monaco,monospace;">z:' + escapeAttr(n.zIndex) + '</span>'
+      ? '<span title="z-index: ' + escapeAttr(n.zIndex) + '" style="font-size:8px;padding:1px 5px;border-radius:9999px;background:rgba(0,0,0,0.06);color:var(--dm-text-dim);font-weight:600;flex-shrink:0;font-family:inherit;">z:' + escapeAttr(n.zIndex) + '</span>'
       : '';
     // Color swatch — when the layer has a non-transparent background colour.
     const colorSwatch = n.backgroundColor
@@ -6641,13 +6839,13 @@ function renderLayersTab(): string {
     // component, the row reads "ComponentName" with the html tag fading
     // out as a smaller pill on the right.
     const tagSubtitle = n.componentName
-      ? '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;opacity:0.7;">' + escapeAttr('<' + n.tagName + '>') + '</span>'
+      ? '<span style="font-size:9px;color:var(--dm-text-dim);font-family:inherit;flex-shrink:0;opacity:0.7;">' + escapeAttr('<' + n.tagName + '>') + '</span>'
       : '';
 
     // max-width guards against a single pathological class/id name
     // blowing up the max-content row width; the row title carries the
     // full name for that case.
-    const nameCell = '<span style="font-size:11px;color:' + tagColor + ';font-family:SF Mono,Monaco,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;max-width:360px;">' + escapeAttr(displayName) + '</span>';
+    const nameCell = '<span style="font-size:11px;color:' + tagColor + ';font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;max-width:360px;">' + escapeAttr(displayName) + '</span>';
 
     return '<div class="dm-layer-item" data-dm-layer="' + n.id + '" draggable="true" data-dm-layer-drag="' + n.id + '" style="display:flex;align-items:center;gap:3px;padding:3px 6px 3px ' + (4 + indent) + 'px;background:' + bg + ';cursor:pointer;border-left:2px solid ' + borderColor + ';position:relative;min-height:30px;opacity:' + (!n.isVisible || dimmedByAncestor.has(n.id) ? '0.4' : '1') + ';" title="' + escapeAttr(displayName) + '">' +
       guides + dragHandle + chevron + tagIcon + colorSwatch + multiBadge + containerBadge + changeDot + commentChip +
@@ -6793,8 +6991,11 @@ function renderDesignTab(): string {
   const indicator =
     '<div style="padding:6px 12px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;gap:6px;">' +
     indicatorLeft +
-    '<span style="font-size:10px;color:var(--dm-text-dim);font-family:SF Mono,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">&lt;' + escapeAttr(tag) + '&gt;</span>' +
-    multiBadge + matchingCtl + cssBtn + '</div>';
+    '<span style="font-size:10px;color:var(--dm-text-dim);font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">&lt;' + escapeAttr(tag) + '&gt;</span>' +
+    multiBadge + matchingCtl + cssBtn + '</div>' +
+    (!isPageContext && !isHovering && info?.breadcrumbs?.length
+      ? '<nav aria-label="Element breadcrumbs" style="padding:6px 12px;font-size:10px;color:var(--dm-text-secondary);overflow-wrap:anywhere;">' + info.breadcrumbs.map(escapeAttr).join(' › ') + '</nav>'
+      : '');
   const pageStateItems: Array<{ state: ':hover' | ':focus' | ':focus-visible' | ':active'; label: string }> = [
     { state: ':hover', label: 'Hover' },
     { state: ':focus', label: 'Focus' },
@@ -6904,7 +7105,7 @@ function renderDesignTab(): string {
     '</div>' +
     '<div style="display:flex;align-items:center;gap:8px;">' +
     '<span style="font-size:10px;color:var(--dm-text-secondary);">Icon:</span>' +
-    '<span style="font-size:11px;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);">' + escapeAttr(iconInfo.name) + '</span>' +
+    '<span style="font-size:11px;font-family:inherit;color:var(--dm-text);">' + escapeAttr(iconInfo.name) + '</span>' +
     '</div>'
   ) : '';
 
@@ -7051,7 +7252,7 @@ function renderDesignTab(): string {
     renderFontFamilyPicker(s.fontFamily || '') + sp() +
     grid(2, selKV('Weight', 'fontWeight', fontWeightCur, FONT_WEIGHTS, 'fontWeight'), inp('Size', 'fontSize', s.fontSize || '16px')) + sp() +
     grid(2,
-      inputWithIcon('moveVertical', 'lineHeight', s.lineHeight || 'normal', 'normal', 'px', 'Line height'),
+      inputWithIcon('moveVertical', 'lineHeight', styleChanges.find(c => c.elementId === info?.id && c.property === 'lineHeight' && !c.state)?.newValue || s.lineHeight || 'normal', 'normal', '', 'Line height — multiplier, length, or normal'),
       inputWithIcon('moveHorizontal', 'letterSpacing', s.letterSpacing || 'normal', 'normal', 'px', 'Letter spacing')
     ) + sp() +
     colorInp('Color', 'color', s.color || '#000') + sp() +
@@ -7438,7 +7639,7 @@ function renderDesignTab(): string {
       (isGrid ? sub('Grid container') +
         inp('Cols', 'gridTemplateColumns', s.gridTemplateColumns || 'none', '') + sp() +
         inp('Rows', 'gridTemplateRows', s.gridTemplateRows || 'none', '') + sp() +
-        '<div class="dm-field"><label class="dm-field-label">Areas</label><textarea class="dm-input" data-dm-prop="gridTemplateAreas" rows="3" placeholder=\'"a a b" "c c b"\' style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;font-family:SF Mono,Monaco,monospace;resize:vertical;">' + escapeAttr((s as any).gridTemplateAreas || '') + '</textarea></div>' + sp() +
+        '<div class="dm-field"><label class="dm-field-label">Areas</label><textarea class="dm-input" data-dm-prop="gridTemplateAreas" rows="3" placeholder=\'"a a b" "c c b"\' style="background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;padding:6px;font-family:inherit;resize:vertical;">' + escapeAttr((s as any).gridTemplateAreas || '') + '</textarea></div>' + sp() +
         grid(2,
           inp('Auto cols', 'gridAutoColumns', (s as any).gridAutoColumns || 'auto', ''),
           inp('Auto rows', 'gridAutoRows', (s as any).gridAutoRows || 'auto', '')
@@ -7523,7 +7724,8 @@ function renderDesignTab(): string {
   // since it works in tandem with the radius.
   const CORNER_SHAPES = ['round', 'squircle', 'square', 'bevel', 'scoop', 'notch'];
   const cornerShapeVal = (() => {
-    const first = (((s as any).cornerShape as string) || '').trim().split(/\s+/)[0];
+    const recorded = styleChanges.find(c => c.elementId === info?.id && c.property === 'cornerShape' && !c.state)?.newValue;
+    const first = (((s as any).cornerShape as string) || recorded || '').trim().split(/\s+/)[0];
     return CORNER_SHAPES.includes(first) ? first : 'round';
   })();
   const cornerShapeCell = '<div class="dm-field">' +
@@ -7631,7 +7833,7 @@ function renderDesignTab(): string {
             const xv = m ? m[1] : pair;
             const yv = m ? m[2] : '';
             return '<div style="display:grid;grid-template-columns:24px 1fr 1fr 24px;gap:6px;align-items:end;">' +
-              '<div style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;padding-bottom:6px;text-align:right;">' + (i + 1) + '</div>' +
+              '<div style="font-size:9px;color:var(--dm-text-dim);font-family:inherit;padding-bottom:6px;text-align:right;">' + (i + 1) + '</div>' +
               inp('X', '__clippath_polygon_x_' + i, xv, '') +
               inp('Y', '__clippath_polygon_y_' + i, yv, '') +
               '<button class="dm-section-action" data-dm-clippath-polygon-remove="' + i + '" title="Remove vertex" style="height:28px;color:var(--dm-danger);">' + icon('trash', 11) + '</button>' +
@@ -7950,14 +8152,19 @@ function renderDesignTab(): string {
   const strokeShadowChip = (strokePos !== 'center' && info?.shadowVars?.boxShadow)
     ? renderShadowVarChip('boxShadow', 'strokeBoxShadow', 'Stroke', info.shadowVars.boxShadow)
     : '';
-  const strokeContent = strokePos === 'center'
+  const borderSides = sub('CSS border widths') + linked2x2('width', borderWidthLinked,
+    inp('Top', 'borderTopWidth', s.borderTopWidth || '0px'),
+    inp('Right', 'borderRightWidth', s.borderRightWidth || '0px'),
+    inp('Bottom', 'borderBottomWidth', s.borderBottomWidth || '0px'),
+    inp('Left', 'borderLeftWidth', s.borderLeftWidth || '0px'));
+  const strokeContent = borderSides + sp() + (strokePos === 'center'
     ? strokePositionRow(s, strokePos) + sp() +
       centerStrokeRow +
       offsetRow +
       centerColorPanel
     : strokeShadowChip + strokePositionRow(s, strokePos) + sp() +
       strokeRowsHtml +
-      addStrokeBtn;
+      addStrokeBtn);
 
   // Effects \u2014 Figma-style layered list. Each entry is a discrete effect:
   // drop shadow / inner shadow / layer blur / background blur. The header
@@ -7981,8 +8188,10 @@ function renderDesignTab(): string {
   const hasLayerBlur = /\bblur\(/.test(filterCanon);
   const hasBackdrop = /\bblur\(/.test((s.backdropFilter || '').toLowerCase());
   const hasTransition = (s.transition || 'none') !== 'none';
-  const hasAnimation = (s.animation || 'none') !== 'none';
-  const transformIsSet = (!!s.translate && s.translate !== 'none' && s.translate !== '0px 0px') ||
+  // Scroll timelines can make the animation shorthand unserializable.
+  const hasAnimation = (s.animation || 'none') !== 'none' ||
+    (s.animationName || 'none').split(',').some(name => name.trim() !== 'none');
+  const transformIsSet = (!!s.transform && s.transform !== 'none') || (!!s.translate && s.translate !== 'none' && s.translate !== '0px 0px') ||
     (!!s.scale && s.scale !== 'none' && s.scale !== '1 1' && s.scale !== '1') ||
     (!!s.rotate && s.rotate !== '0deg' && s.rotate !== '0' && s.rotate !== 'none');
 
@@ -7990,7 +8199,7 @@ function renderDesignTab(): string {
   // each blur, and the text-shadow each get their own row.
   const effectsElId = info?.id || '';
   const effectsIsText = kind === 'text';
-  if (effectsElId) hydrateOverlayFromChanges(effectsElId);
+  if (effectsElId) { hydrateOverlayFromChanges(effectsElId); hydrateHiddenEffects(effectsElId); }
   const effectEntries: EffectEntry[] = effectsElId ? parseEffects(s, effectsElId, effectsIsText) : [];
   const labelFor = (e: EffectEntry): string => {
     if (e.kind === 'drop-shadow' || e.kind === 'inner-shadow') {
@@ -8038,7 +8247,7 @@ function renderDesignTab(): string {
     const blurPrefix = entry.kind === 'layer-blur' ? '__effd_lblur_' : '__effd_bblur_';
     const blurMetaHtml = isBlurRow
       ? '<div style="display:flex;align-items:center;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:4px;padding:2px 4px;">' +
-          '<input type="number" min="0" data-dm-prop="' + blurPrefix + entry.chainIdx + '_radius" value="' + (entry as any).radius + '" style="background:none;border:none;color:var(--dm-text);font-family:inherit;font-size:10px;width:36px;text-align:right;padding:2px;"/>' +
+          '<input type="number" min="0"' + (entry.visible ? '' : ' disabled') + ' data-dm-prop="' + blurPrefix + entry.chainIdx + '_radius" value="' + (entry as any).radius + '" style="background:none;border:none;color:var(--dm-text);font-family:inherit;font-size:10px;width:36px;text-align:right;padding:2px;"/>' +
           '<span style="font-size:9px;color:var(--dm-text-dim);padding-left:2px;opacity:0.6;">px</span>' +
         '</div>'
       : undefined;
@@ -8052,7 +8261,9 @@ function renderDesignTab(): string {
       hideExpand: isBlurRow,
       visible: entry.visible,
       expanded,
-      body: !isBlurRow && expanded ? bodyFor(entry) : '',
+      body: !isBlurRow && expanded
+        ? '<fieldset data-dm-effect-editor' + (entry.visible ? '' : ' disabled') + ' style="border:0;margin:0;padding:0;min-width:0;">' + bodyFor(entry) + '</fieldset>'
+        : '',
     });
     // Wrap with a draggable wrapper. `data-dm-effect-row` carries the row
     // index; drag-reorder is constrained to within the same chain so
@@ -8081,7 +8292,7 @@ function renderDesignTab(): string {
   );
   if (transformIsSet) motionRawPieces.push(
     '<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 0;color:var(--dm-text-muted);"><span>' + icon('move3d', 12) + '</span><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Transform</span></div>' +
-    renderTransformComponents(s)
+    renderTransformComponents(s) + sp() + inp('Transform', 'transform', s.transform || 'none', '')
   );
   // Motion Path — animate an element along a custom path. Renders only
   // when at least one offset-* property is non-default; the + menu has a
@@ -8307,12 +8518,7 @@ function renderDesignTab(): string {
 
   return '<div style="overflow-x:hidden;">' + indicator + pageStatesRow +
     iconSection +
-    // Media is only meaningful for actual media tags (img / video / audio /
-    // svg / picture / etc.). On a `<body>` or generic container the
-    // SP_GET_MEDIA response can come back with kind:"background" because
-    // the element has a CSS background-image — that's a Fill, not a Media
-    // layer, so don't surface a Media section there.
-    ((kind === 'media' || kind === 'svg') ? renderMediaSection(displayInfo, s, isImg) : '') +
+    ((kind === 'media' || kind === 'svg' || mediaInfo?.kind === 'background') ? renderMediaSection(displayInfo, s, isImg) : '') +
     (!vis.position ? '' : sec('Position', 'move', positionContent, true, advancedToggleBtn('position', !!advancedOpen.position))) +
     (!vis.layout ? '' : sec('Layout', 'layoutGrid', layoutContent, true, layoutActionsHtml)) +
     (!vis.appearance ? '' : sec('Appearance', 'droplet', appearanceContent, true, appearanceActionsHtml)) +
@@ -8432,11 +8638,12 @@ function renderChangesTab(): string {
   for (const item of items) {
     const selector = (item.data as any).selector || 'unknown';
     const elementId = (item.data as any).elementId || '';
-    const key = elementId || selector;
+    const key = item.type === 'style' ? styleChangeGroupKey(item.data, changesGrouping) : elementId || selector;
     if (!groups.has(key)) groups.set(key, { selector, label: '', elementId, items: [] });
     const group = groups.get(key)!;
     group.items.push(item);
-    if (!group.label && (item.data as any).label) group.label = (item.data as any).label;
+    if (!group.label) group.label = key.startsWith('consolidate:')
+      ? (item.data as StyleChange).groupLabel || 'Consolidate' : (item.data as any).label || '';
   }
 
   // Single toggle replaces the old "View Original" / "View Changes" pair —
@@ -8691,14 +8898,15 @@ function renderChangesTab(): string {
 
     const header = componentHeader + '<div class="dm-change-group-header" data-dm-change-group="' + escapeAttr(key) + '"' + (isStale ? ' style="opacity:0.7;"' : '') + '>' +
       '<span style="color:var(--dm-text-dim);display:flex;">' + icon(chevIcon as keyof typeof icons, 10) + '</span>' +
-      '<span style="font-family:SF Mono,Monaco,monospace;font-size:10px;color:var(--dm-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;" title="' + escapeAttr(group.selector) + (isStale ? ' (element no longer reachable)' : '') + '">' + escapeAttr(group.label || group.selector) + '</span>' +
+      '<span style="font-family:inherit;font-size:10px;color:var(--dm-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;" title="' + escapeAttr(group.selector) + (isStale ? ' (element no longer reachable)' : '') + '">' + escapeAttr(group.label || group.selector) + '</span>' +
       (isStale ? '<span style="font-size:8px;padding:1px 6px;border-radius:9999px;background:rgba(0,0,0,0.06);color:var(--dm-text-dim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;flex-shrink:0;">stale</span>' : '') +
       '<span style="font-size:9px;background:var(--dm-accent-bg);color:var(--dm-accent);border-radius:8px;padding:1px 6px;flex-shrink:0;">' + count + '</span>' +
       (group.elementId ? '<button data-dm-select-change-el="' + escapeAttr(group.elementId) + '" title="Select element" style="background:none;border:none;color:var(--dm-text-dim);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('crosshair', 10) + '</button>' : '') +
       '<button data-dm-revert-group="' + escapeAttr(key) + '" title="Revert all changes in this group" style="background:none;border:none;color:var(--dm-danger);cursor:pointer;display:flex;padding:2px;flex-shrink:0;">' + icon('trash', 10) + '</button>' +
       '</div>';
 
-    if (isCollapsed) return '<div class="dm-change-group">' + header + '</div>';
+    const isMultiSelectGroup = key.startsWith('multi-select:');
+    if (isCollapsed && !isMultiSelectGroup) return '<div class="dm-change-group">' + header + '</div>';
 
     // Per-row checkbox HTML — cid scoped to the row's change-id so
     // selection is stable across re-renders.
@@ -8731,7 +8939,7 @@ function renderChangesTab(): string {
         const isVisToggle = c.groupKind === 'visibility';
         const innerLabel = isVisToggle
           ? '<div style="font-size:10px;font-weight:600;color:' + (c.newValue === 'none' ? 'var(--dm-danger)' : 'var(--dm-success)') + ';">' + (c.groupLabel || (c.newValue === 'none' ? 'Hidden' : 'Shown')) + '</div>'
-          : '<div style="font-size:10px;"><span style="color:var(--dm-text-muted);">' + c.property + '</span>: <span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + escapeAttr((c.oldValue || '').slice(0, 20)) + '</span> \u2192 <span style="color:var(--dm-success);">' + escapeAttr((c.newValue || '').slice(0, 20)) + '</span></div>';
+          : '<div style="font-size:10px;overflow-wrap:anywhere;"><span style="color:var(--dm-text-muted);">' + c.property + '</span>: <span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + escapeAttr(c.oldValue || '') + '</span> \u2192 <span style="color:var(--dm-success);">' + escapeAttr(c.newValue || '') + '</span></div>';
         const rowIcon = isVisToggle
           ? '<span style="color:' + (c.newValue === 'none' ? 'var(--dm-danger)' : 'var(--dm-success)') + ';display:flex;flex-shrink:0;">' + icon(c.newValue === 'none' ? 'eyeClosed' : 'eye', 10) + '</span>'
           : '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;">' + icon('sliders', 10) + '</span>';
@@ -8741,14 +8949,14 @@ function renderChangesTab(): string {
           '<div style="flex:1;min-width:0;' + ((c as any).status === 'resolved' ? 'text-decoration:line-through;' : '') + '">' + innerLabel + '</div>' +
           breakpointBadge(c) +
           changeStatusBadge((c as any).status) +
-          '<button data-dm-batch-apply="' + cid + '" title="' + zapTitle + '" style="' + zapStyle + '" aria-label="Batch apply">' + icon('zap', 10) + countBadge + '</button>' +
+          '<button data-dm-batch-apply="' + cid + '" title="' + zapTitle + '" style="' + zapStyle + '" aria-label="Batch apply">' + (isBatched ? icon('zap', 10).replace('fill="none"', 'fill="currentColor"') : icon('zap', 10)) + countBadge + '</button>' +
           '<button class="dm-change-revert" data-dm-remove-change="' + cid + '" title="Revert" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else if (item.type === 'text') {
         const c = item.data;
         const cid = c.id;
         const diffHtml = renderWordDiff(c.oldText || '', c.newText || '');
         const changeLabel = c.attributeName || 'text';
-        const inner = '<div style="font-size:10px;line-height:1.5;font-family:SF Mono,Monaco,monospace;word-break:break-word;"><span style="color:var(--dm-text-muted);">' + escapeAttr(changeLabel) + ':</span> ' + diffHtml + '</div>';
+        const inner = '<div style="font-size:10px;line-height:1.5;font-family:inherit;word-break:break-word;"><span style="color:var(--dm-text-muted);">' + escapeAttr(changeLabel) + ':</span> ' + diffHtml + '</div>';
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
           '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;margin-top:2px;">' + icon('type', 10) + '</span>' +
@@ -8769,10 +8977,10 @@ function renderChangesTab(): string {
         const fmt = (loc: { parentSelector: string; index: number }) =>
           escapeAttr(loc.parentSelector) + ' › position ' + (loc.index + 1);
         const origLine = c.action === 'move' && c.origin
-          ? '<div style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;margin-top:2px;line-height:1.4;"><span style="color:var(--dm-text-muted);">from</span> ' + fmt(c.origin) + '</div>'
+          ? '<div style="font-size:9px;color:var(--dm-text-dim);font-family:inherit;margin-top:2px;line-height:1.4;"><span style="color:var(--dm-text-muted);">from</span> ' + fmt(c.origin) + '</div>'
           : '';
         const destLine = c.action === 'move' && c.destination
-          ? '<div style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;margin-top:2px;line-height:1.4;"><span style="color:var(--dm-text-muted);">to</span> ' + fmt(c.destination) + '</div>'
+          ? '<div style="font-size:9px;color:var(--dm-text-dim);font-family:inherit;margin-top:2px;line-height:1.4;"><span style="color:var(--dm-text-muted);">to</span> ' + fmt(c.destination) + '</div>'
           : '';
         return '<div class="dm-change-item" data-dm-select-change-el="' + escapeAttr(c.elementId || '') + '"' + rowTip + ' style="display:flex;align-items:flex-start;gap:6px;padding:6px 12px 6px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;' + ((c as any).status === 'resolved' ? 'opacity:0.6;' : '') + '">' +
           checkbox(cid) +
@@ -8793,7 +9001,7 @@ function renderChangesTab(): string {
           (scopeSel !== ':root' ? chip(scopeSel, 'Declared on ' + scopeSel) : '');
         return '<div class="dm-change-item"' + rowTip + ' style="display:flex;align-items:center;gap:6px;padding:6px 12px 6px ' + indentLeft + 'px;border-bottom:1px solid var(--dm-separator);">' +
           '<span style="color:var(--dm-accent);display:flex;flex-shrink:0;">' + icon('swatchBook', 10) + '</span>' +
-          '<div style="flex:1;min-width:0;"><div style="font-size:10px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;"><span style="color:var(--dm-text-muted);font-family:SF Mono,Monaco,monospace;">' + escapeAttr(c.cssVar) + '</span>' + chips + '<span><span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + shortOld + '</span> → <span style="color:var(--dm-success);">' + shortNew + '</span></span></div></div>' +
+          '<div style="flex:1;min-width:0;"><div style="font-size:10px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;"><span style="color:var(--dm-text-muted);font-family:inherit;">' + escapeAttr(c.cssVar) + '</span>' + chips + '<span><span style="color:var(--dm-danger);text-decoration:line-through;font-size:9px;">' + shortOld + '</span> → <span style="color:var(--dm-success);">' + shortNew + '</span></span></div></div>' +
           '<button class="dm-change-revert" data-dm-token-reset="' + escapeAttr(c.cssVar) + '" data-dm-token-scope="' + escapeAttr(scopeSel) + '" title="Revert token to original" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;">' + icon('trash', 10) + '</button></div>';
       } else {
         const c = item.data;
@@ -8809,7 +9017,7 @@ function renderChangesTab(): string {
         const wasEdited = !!(c.updatedAt && c.timestamp && c.updatedAt > c.timestamp + 1000);
         const tsLabel = fmtAgo(c.timestamp);
         const editedLabel = wasEdited ? ' · edited ' + fmtAgo(c.updatedAt) : '';
-        const tsInfo = '<span style="font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;flex-shrink:0;">' + escapeAttr(tsLabel + editedLabel) + '</span>';
+        const tsInfo = '<span style="font-size:9px;color:var(--dm-text-dim);font-family:inherit;flex-shrink:0;">' + escapeAttr(tsLabel + editedLabel) + '</span>';
         // Body styling — strikethrough + faded when resolved.
         const bodyStyle = 'font-size:11px;color:' + (isResolved ? 'var(--dm-text-dim)' : 'var(--dm-text)') + ';line-height:1.5;' + (isResolved ? 'text-decoration:line-through;' : '');
         const bodyStyleCompact = 'font-size:10px;color:' + (isResolved ? 'var(--dm-text-dim)' : 'var(--dm-text)') + ';margin-bottom:4px;' + (isResolved ? 'text-decoration:line-through;' : '');
@@ -8819,7 +9027,7 @@ function renderChangesTab(): string {
         const resolveBtnCompact = '<button data-dm-toggle-resolved="' + c.id + '" aria-label="' + (isResolved ? 'Reopen' : 'Resolve') + '" title="' + (isResolved ? 'Reopen' : 'Resolve') + '" style="padding:2px 8px;background:' + (isResolved ? 'var(--dm-btn-bg)' : 'rgba(34,197,94,0.18)') + ';border:1px solid ' + (isResolved ? 'var(--dm-btn-border)' : 'rgba(34,197,94,0.4)') + ';border-radius:3px;color:' + (isResolved ? 'var(--dm-text-secondary)' : 'rgb(34,197,94)') + ';cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:2px;">' + icon(isResolved ? 'rotateCcw' : 'checkCircle', 9) + ' ' + (isResolved ? 'Reopen' : 'Resolve') + '</button>';
         // Pin number badge — small chip mirroring the page pin so the user
         // can match panel ↔ overlay quickly.
-        const pinBadge = '<span title="Pin #' + ordinal + '" style="background:' + (isResolved ? '#A3A3A3' : '#FBBF24') + ';color:#000;font-weight:700;font-size:9px;padding:1px 6px;border-radius:9999px;flex-shrink:0;font-family:SF Mono,Monaco,monospace;">#' + ordinal + '</span>';
+        const pinBadge = '<span title="Pin #' + ordinal + '" style="background:' + (isResolved ? '#A3A3A3' : '#FBBF24') + ';color:#000;font-weight:700;font-size:9px;padding:1px 6px;border-radius:9999px;flex-shrink:0;font-family:inherit;">#' + ordinal + '</span>';
         if (isViewing) {
           return '<div class="dm-change-item" style="border-bottom:1px solid var(--dm-separator);background:' + (isResolved ? 'var(--dm-bg-secondary)' : 'var(--dm-purple-bg)') + ';opacity:' + (isResolved ? '0.85' : '1') + ';">' +
             '<div style="display:flex;align-items:center;gap:6px;padding:8px 12px 6px 28px;">' +
@@ -8845,7 +9053,7 @@ function renderChangesTab(): string {
           '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">' +
           resolveBtnCompact +
           '<button data-dm-edit-comment="' + c.id + '" aria-label="Edit comment" style="padding:2px 8px;background:rgba(139,92,246,0.12);border:1px solid var(--dm-purple-border);border-radius:3px;color:var(--dm-purple);cursor:pointer;font-size:9px;font-family:inherit;">Edit</button>' +
-          '<span style="margin-left:auto;font-size:9px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;">' + escapeAttr(tsLabel + editedLabel) + '</span>' +
+          '<span style="margin-left:auto;font-size:9px;color:var(--dm-text-dim);font-family:inherit;">' + escapeAttr(tsLabel + editedLabel) + '</span>' +
           '</div></div>' +
           '<button class="dm-change-revert" data-dm-delete-comment="' + c.id + '" title="Delete comment" aria-label="Delete comment" style="background:none;border:none;color:var(--dm-text-muted);cursor:pointer;display:flex;padding:4px;flex-shrink:0;margin-top:2px;">' + icon('trash', 10) + '</button>' +
           '</div>';
@@ -8860,14 +9068,15 @@ function renderChangesTab(): string {
     // position of its first member.
     type Unit =
       | { kind: 'item'; item: typeof group.items[number] }
-      | { kind: 'subgroup'; gid: string; gkind: 'preset' | 'multi-select'; gLabel: string; items: typeof group.items };
+      | { kind: 'subgroup'; gid: string; gkind: 'preset' | 'multi-select' | undefined; gLabel: string; items: typeof group.items };
     const units: Unit[] = [];
     const unitIdx = new Map<string, number>();
     for (const item of group.items) {
-      if (item.type === 'style' && (item.data as any).groupId &&
-          ((item.data as any).groupKind === 'preset' || (item.data as any).groupKind === 'multi-select')) {
+      if (!key.startsWith('consolidate:') && item.type === 'style' && (item.data as any).groupId &&
+          ((item.data as any).groupKind === 'preset' || (item.data as any).groupKind === 'multi-select' || (item.data as any).groupKind === 'consolidate' ||
+           ['Move', 'Resize'].includes((item.data as any).groupLabel))) {
         const gid = (item.data as any).groupId as string;
-        const gkind = (item.data as any).groupKind as 'preset' | 'multi-select';
+        const gkind = (item.data as any).groupKind as 'preset' | 'multi-select' | undefined;
         const existing = unitIdx.get(gid);
         if (existing != null) {
           (units[existing] as { kind: 'subgroup'; items: typeof group.items }).items.push(item);
@@ -8887,9 +9096,13 @@ function renderChangesTab(): string {
     const body = units.map(u => {
       if (u.kind === 'item') return renderItem(u.item);
       const subKey = 'sub:' + u.gid;
-      const isSubCollapsed = changesGroupCollapsed.has(subKey);
+      if (u.gkind === 'preset' && !initializedPresetGroups.has(u.gid)) {
+        initializedPresetGroups.add(u.gid);
+        changesGroupCollapsed.add(subKey);
+      }
+      const isSubCollapsed = changesGroupCollapsed.has(subKey) || (isMultiSelectGroup && isCollapsed);
       const chev = isSubCollapsed ? 'chevronRight' : 'chevronDown';
-      const labelPrefix = u.gkind === 'preset' ? 'PRESET' : 'APPLIED TO';
+      const labelPrefix = u.gkind === 'preset' ? 'PRESET' : u.gkind === 'multi-select' ? 'MULTI-SELECT' : '';
       const subColor = u.gkind === 'preset' ? 'var(--dm-purple)' : 'var(--dm-accent)';
       const subIcon: keyof typeof icons = u.gkind === 'preset' ? 'bookmark' : 'layers';
       const headerHtml = '<div class="dm-change-subgroup-header" data-dm-toggle-subgroup="' + escapeAttr(subKey) + '" style="display:flex;align-items:center;gap:6px;padding:5px 12px 5px 28px;border-bottom:1px solid var(--dm-separator);cursor:pointer;background:rgba(0,0,0,0.025);">' +
@@ -8907,7 +9120,7 @@ function renderChangesTab(): string {
       return headerHtml + childrenHtml;
     }).join('');
 
-    return '<div class="dm-change-group">' + header + body + '</div>';
+    return '<div class="dm-change-group">' + (isMultiSelectGroup ? componentHeader : header) + body + '</div>';
   }).join('');
 
   // When filter / search produces an empty list, replace the group HTML
@@ -8949,11 +9162,11 @@ function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: stri
 
     const urlField = isSelf
       ? '<div style="display:flex;flex-direction:column;gap:4px;"><span style="' + lS + '">Server URL</span><input id="dm-mcp-cloud-url" type="text" class="dm-input" data-dm-setting="cloudUrl" value="' + escapeAttr(mcpCloudUrl) + '" placeholder="https://your-deploy.vercel.app" style="font-size:10px;"/></div>'
-      : '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Server</span><span style="font-size:10px;color:var(--dm-text-secondary);font-family:SF Mono,monospace;">' + escapeAttr(mcpCloudUrl) + '</span></div>';
+      : '<div style="display:flex;justify-content:space-between;align-items:center;"><span style="' + lS + '">Server</span><span style="font-size:10px;color:var(--dm-text-secondary);font-family:inherit;">' + escapeAttr(mcpCloudUrl) + '</span></div>';
 
     if (!hasToken) {
       body = urlField +
-        '<button data-dm-action="mcp-cloud-register" style="margin-top:8px;padding:8px 10px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px;"' + (mcpCloudRegistering ? ' disabled' : '') + '>' + icon('zap', 11) + (mcpCloudRegistering ? ' Connecting…' : ' Connect to Cloud') + '</button>' +
+        '<button data-dm-action="mcp-cloud-register" style="margin-top:8px;padding:8px 10px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-text);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px;"' + (mcpCloudRegistering ? ' disabled' : '') + '>' + icon('zap', 11) + (mcpCloudRegistering ? ' Connecting…' : ' Connect to Cloud') + '</button>' +
         '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-top:6px;line-height:1.4;">A device token is generated on the server. Copy the config, paste it into your agent (Claude Code, Cursor, VS Code, …), restart the agent.</div>';
     } else {
       // One reasonable, IDE-agnostic snippet. The `mcpServers` wrapper +
@@ -8964,7 +9177,7 @@ function renderMcpServerCard(sS: string, sT: string, lS: string, activeBtn: stri
         mcpServers: { 'design-mode': { type: 'http', url: mcpEndpoint, headers: { Authorization: 'Bearer ' + mcpCloudToken } } },
       }, null, 2);
       const tenantBadge = mcpCloudTenantId
-        ? '<span style="font-size:9px;color:var(--dm-text-dimmer);font-family:SF Mono,monospace;">' + escapeAttr(mcpCloudTenantId) + '</span>'
+        ? '<span style="font-size:9px;color:var(--dm-text-dimmer);font-family:inherit;">' + escapeAttr(mcpCloudTenantId) + '</span>'
         : '';
       body = urlField +
         '<div style="display:flex;align-items:center;gap:6px;justify-content:space-between;"><span style="' + lS + '">Token</span>' + tenantBadge + '</div>' +
@@ -9027,7 +9240,7 @@ function renderAgentCommandCard(sS: string, sT: string, lS: string): string {
 // token), and the agent-setup command card. These used to live inside
 // Settings; they're MCP/agent concerns, so they get their own home.
 function renderMcpView(): string {
-  const activeBtn = 'flex:1;padding:5px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
+  const activeBtn = 'flex:1;padding:5px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-text);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
   const inactiveBtn = 'flex:1;padding:5px 8px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
   const sS = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:12px;';
   const sT = 'font-size:11px;font-weight:600;color:var(--dm-text-secondary);margin-bottom:8px;';
@@ -9043,12 +9256,13 @@ function renderMcpView(): string {
     '<div style="font-size:10px;color:var(--dm-text-dim);line-height:1.4;">' + escapeAttr(detail) + '</div>' +
     '</div>';
 
-  return '<div style="padding:16px;">' +
+  return '<div class="dm-overlay-page" style="padding:16px;">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
     '<button data-dm-action="back-from-mcp" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">MCP</span></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px;">' +
     statusCard +
+    (mcpMode === 'local' && mcpState === 'offline' ? '<button data-dm-action="connect-mcp" style="' + inactiveBtn + '">Connect</button>' : '') +
     renderMcpServerCard(sS, sT, lS, activeBtn, inactiveBtn) +
     renderAgentCommandCard(sS, sT, lS) +
     '</div></div>';
@@ -9058,14 +9272,14 @@ function renderSettingsView(): string {
   const cfHex = colorFormat === 'hex';
   const cfRgba = colorFormat === 'rgba';
   const cfHsl = colorFormat === 'hsl';
-  const activeBtn = 'flex:1;padding:5px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
+  const activeBtn = 'flex:1;padding:5px 8px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-text);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
   const inactiveBtn = 'flex:1;padding:5px 8px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;text-transform:uppercase;';
   const themeActive = (m: string) => theme === m ? activeBtn.replace('uppercase','capitalize') : inactiveBtn.replace('uppercase','capitalize');
   const sS = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:12px;';
   const sT = 'font-size:11px;font-weight:600;color:var(--dm-text-secondary);margin-bottom:8px;';
   const lS = 'font-size:11px;color:var(--dm-text-muted);';
 
-  return '<div style="padding:16px;">' +
+  return '<div class="dm-overlay-page" style="padding:16px;">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
     '<button data-dm-action="back-from-settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Settings</span></div>' +
@@ -9073,7 +9287,7 @@ function renderSettingsView(): string {
     (() => {
       const swatch = (key: string, val: string) =>
         '<div style="display:flex;align-items:center;gap:8px;">' +
-          '<span style="font-size:10px;color:var(--dm-text-dim);font-family:SF Mono,Monaco,monospace;text-transform:uppercase;letter-spacing:0.4px;">' + escapeAttr(val.toUpperCase()) + '</span>' +
+          '<span style="font-size:10px;color:var(--dm-text-dim);font-family:inherit;text-transform:uppercase;letter-spacing:0.4px;">' + escapeAttr(val.toUpperCase()) + '</span>' +
           '<input type="color" data-dm-setting="' + key + '" value="' + escapeAttr(val) + '" style="width:28px;height:22px;border:1px solid var(--dm-input-border);border-radius:4px;cursor:pointer;background:none;padding:0;"/>' +
         '</div>';
       const row = (label: string, key: string, val: string) =>
@@ -9138,12 +9352,13 @@ function renderSettingsView(): string {
     '<button data-dm-theme="system" style="' + themeActive('system') + '">System</button>' +
     '<button data-dm-theme="dark" style="' + themeActive('dark') + '">Dark</button>' +
     '<button data-dm-theme="light" style="' + themeActive('light') + '">Light</button></div></div>' +
+    renderAnalyticsSetting() +
     // Footer actions — Reset + Shortcuts. Reset wipes the locally-stored
     // settings (theme, color format, capture mode, MCP port + auto-connect,
     // inspector colours) so the next session starts at defaults.
     '<div style="display:flex;gap:6px;margin-top:4px;">' +
     '<button data-dm-action="show-shortcuts" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('keyboard', 11) + ' Keyboard shortcuts</button>' +
-    '<button data-dm-action="reset-settings" style="flex:1;padding:6px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:6px;color:var(--dm-danger);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('rotateCcw', 11) + ' Reset settings</button>' +
+    '<button data-dm-action="reset-settings" style="flex:1;padding:6px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:6px;color:var(--dm-text);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('rotateCcw', 11) + ' Reset settings</button>' +
     '</div>' +
     '</div><div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v' + extensionVersion() + '</div></div></div>';
 }
@@ -9212,7 +9427,7 @@ function shortcutChips(sc: { key: string; modifiers: readonly string[] }): strin
     : { alt: 'Alt', ctrl: 'Ctrl', meta: '⌘', shift: 'Shift' };
   const keyLabel: Record<string, string> = { Escape: 'Esc', Delete: 'Del', ArrowUp: '↑', ArrowDown: '↓', Enter: 'Enter' };
   const parts = [...(sc.modifiers || []).map(m => modLabel[m] || m), keyLabel[sc.key] || sc.key.toUpperCase()];
-  const kbd = 'display:inline-flex;align-items:center;min-width:18px;height:20px;padding:0 6px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-bottom-width:2px;border-radius:4px;font-size:10px;font-weight:600;font-family:SF Mono,Monaco,monospace;color:var(--dm-text);justify-content:center;';
+  const kbd = 'display:inline-flex;align-items:center;min-width:18px;height:20px;padding:0 6px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-bottom-width:2px;border-radius:4px;font-size:10px;font-weight:600;font-family:inherit;color:var(--dm-text);justify-content:center;';
   // Mac uses glyphs with no separator (⌘⇧Z); other platforms join with "+".
   const sep = IS_MAC ? '<span style="display:inline-block;width:2px;"></span>' : '<span style="color:var(--dm-text-dim);font-size:9px;margin:0 1px;">+</span>';
   return parts.map(p => '<kbd style="' + kbd + '">' + escapeAttr(p) + '</kbd>').join(sep);
@@ -9272,11 +9487,12 @@ function renderHelpView(): string {
   const secondaryBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:9px 12px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:12px;font-weight:500;font-family:inherit;';
   const linkStyle = 'color:var(--dm-text-secondary);text-decoration:none;font-size:11px;';
 
-  return '<div style="padding:16px;">' +
+  return '<div class="dm-overlay-page" style="padding:16px;">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
     '<button data-dm-action="back-from-help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Help</span></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px;">' +
+    '<button data-dm-action="show-shortcuts" style="' + secondaryBtn + '">' + icon('keyboard', 12) + ' Keyboard shortcuts</button>' +
     '<div style="' + card + '">' +
     '<p style="margin:0 0 12px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">Found a bug or want to request a feature? File it on GitHub — please include your Chrome version and repro steps.</p>' +
     '<a href="https://github.com/SandeepBaskaran/design-mode/issues/new/choose" target="_blank" rel="noopener noreferrer" style="' + primaryBtn + '">Report an issue ' + icon('externalLink', 12) + '</a>' +
@@ -9304,13 +9520,14 @@ function renderFileAccessView(): string {
     '<span style="display:flex;color:var(--dm-text-secondary);">' + icon('fileText', 14) + '</span>' +
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Local file</span></div>' +
     '<div style="' + card + '">' +
-    '<p style="margin:0 0 12px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">Chrome blocks extensions from local files by default. To edit this file, allow Design Mode to access file URLs:</p>' +
+    '<p style="margin:0 0 12px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">' +
+    (IS_FIREFOX ? 'Firefox has not allowed Design Mode to access this local file. Enable local-file access in the add-on’s permissions:' : 'Chrome blocks extensions from local files by default. To edit this file, allow Design Mode to access file URLs:') + '</p>' +
     '<ol style="margin:0 0 12px 0;padding-left:18px;">' +
-    step('Open Design Mode’s extension settings — the button below takes you there.') +
-    step('Turn on <strong style="color:var(--dm-text);">“Allow access to file URLs”</strong>.') +
-    step('Chrome reloads the extension — come back to this tab and reopen the panel.') +
+    step(IS_FIREFOX ? 'Type <strong style="color:var(--dm-text);">about:addons</strong> in Firefox’s address bar, select Design Mode, then open <strong style="color:var(--dm-text);">Permissions</strong>.' : 'Open Design Mode’s extension settings — the button below takes you there.') +
+    step('Turn on <strong style="color:var(--dm-text);">“' + (IS_FIREFOX ? 'Access local files on your computer' : 'Allow access to file URLs') + '”</strong>.') +
+    step(IS_FIREFOX ? 'Come back to this file tab, reload the page, and reopen the sidebar.' : 'Chrome reloads the extension — come back to this tab and reopen the panel.') +
     '</ol>' +
-    '<button data-dm-action="open-file-access-settings" style="' + primaryBtn + '">Open extension settings ' + icon('externalLink', 12) + '</button>' +
+    (IS_FIREFOX ? '' : '<button data-dm-action="open-file-access-settings" style="' + primaryBtn + '">Open extension settings ' + icon('externalLink', 12) + '</button>') +
     '</div>' +
     '</div>';
 }
@@ -9341,6 +9558,7 @@ function renderHoverGuideView(): string {
     '<p style="margin:0 0 10px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">Your browser is emulating touch, and touch has no hover — so element preview is off. Tapping still selects.</p>' +
     '<p style="margin:0 0 6px 0;font-size:11px;font-weight:600;color:var(--dm-text-muted);text-transform:uppercase;letter-spacing:0.3px;">Get hover back</p>' +
     '<ul style="margin:0 0 12px 0;padding-left:18px;">' + steps + '</ul>' +
+    '<p style="font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">The panel returns to normal on its own when hover is available again.</p>' +
     '<button data-dm-action="hover-guide-proceed" style="' + primaryBtn + '">Continue anyway — tap to select</button>' +
     '</div>' +
     '</div>';
@@ -9374,7 +9592,7 @@ function renderContributeView(): string {
       icon('heartHandshake', 14) + ' Sponsor on GitHub ' + icon('externalLink', 12) +
     '</a>';
 
-  return '<div style="padding:16px;">' +
+  return '<div class="dm-overlay-page" style="padding:16px;">' +
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
     '<button data-dm-action="back-from-contribute" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Contribute</span></div>' +
@@ -9505,6 +9723,7 @@ function reconcileInspectWithComment() {
 }
 
 function render() {
+  trackMcpState();
   reconcileInspectWithComment();
   // Capture scroll for the current tab before morphdom runs. morphdom's
   // diff temporarily drops scrollHeight while adding/removing children,
@@ -9538,6 +9757,8 @@ function render() {
   } else if (tokensOpen) {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
       renderHeader() + renderTokensView() + renderCaptureToast() + '</div>';
+  } else if (pageUnavailable) {
+    html = renderHeader() + '<div role="status" style="box-sizing:border-box;width:100vw;max-width:100%;padding:24px 16px;text-align:center;overflow-wrap:anywhere;"><h2 style="font-size:16px;">Page unavailable</h2><p>Design Mode cannot inspect this page. Open a regular website, then reopen the panel.</p></div>';
   } else if (fileAccessBlocked) {
     html = renderHeader() + renderFileAccessView() + renderCaptureToast();
   } else if (!hoverAvailable && !hoverGuideProceeded) {
@@ -9626,6 +9847,15 @@ function render() {
 
 /* ── Phase 1: Event Delegation (bound once, never re-bound) ── */
 function setupDelegation() {
+  // Hidden entries retain logical indices, not positions in the visible CSS chain.
+  for (const type of ['click', 'input', 'change', 'keydown', 'mousedown', 'pointerdown']) {
+    root.addEventListener(type, (e) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-dm-effect-editor][disabled], input[data-dm-prop^="__effd_"][disabled]')) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }, true);
+  }
   // Padding-pad inputs and the like — focus highlights the cell, blur
   // restores transparency, and on focus we select-all so a single keystroke
   // overwrites the value. Used to live as inline `onfocus="this.select()"`
@@ -9735,6 +9965,12 @@ function setupDelegation() {
   root.addEventListener('click', async (e) => {
     const target = e.target as HTMLElement;
 
+    if (cornerShapePickerOpen && !target.closest('[data-dm-corner-shape-popover], [data-dm-corner-shape-trigger]')) {
+      cornerShapePickerOpen = false;
+      // Preserve the clicked control until its own handler has consumed the event.
+      queueMicrotask(render);
+    }
+
     // Tab switching. When arriving on the Layers tab from somewhere else
     // (e.g. user changed selection on the Design tab), auto-scroll the
     // currently-selected layer into view so the layers list is "ready" —
@@ -9742,7 +9978,12 @@ function setupDelegation() {
     const tabBtn = target.closest<HTMLElement>('[data-dm-tab]');
     if (tabBtn) {
       const newTab = tabBtn.dataset.dmTab as Tab;
-      if (newTab === tab) return;
+      const hadColorPicker = activeColorPickerProp !== null;
+      activeColorPickerProp = null;
+      colorAdvancedProp = null;
+      colorPickerSearch = '';
+      contrastSettingsOpen = false;
+      if (newTab === tab) { if (hadColorPicker) render(); return; }
       // Save the old tab's scroll before swapping so we can return the
       // user to where they were when they come back. Only queue a
       // restore when the destination tab has a remembered position;
@@ -9787,9 +10028,10 @@ function setupDelegation() {
         case 'copy-svg-markup': copySvgMarkup(); break;
         case 'undo': undoAction(); break;
         case 'redo': redoAction(); break;
+        case 'connect-mcp': send({ type: 'SP_RECONFIGURE_TRANSPORT' }); break;
         case 'refresh-mcp': {
           const before = mcpState;
-          refreshMcpStatus().then(() => {
+          refreshMcpStatus(true).then(() => {
             // Toast only when state actually changed — avoids noise on
             // routine clicks. The renderMcpStatus tooltip explains the
             // current state regardless.
@@ -9797,11 +10039,6 @@ function setupDelegation() {
               if (mcpState === 'connected') showCaptureToast('success', 'MCP connected');
               else if (mcpState === 'running') showCaptureToast('success', 'MCP running — waiting for agent');
               else showCaptureToast('error', 'MCP offline');
-            } else if (mcpState === 'offline') {
-              const cloudMode = mcpMode === 'cloud' || mcpMode === 'self-hosted';
-              showCaptureToast('error', cloudMode
-                ? (mcpCloudToken ? 'Cloud relay still unreachable.' : 'No cloud token. Click Connect to Cloud below.')
-                : 'MCP still offline. Run `npm start --prefix packages/mcp-local`.');
             }
           });
           break;
@@ -9929,7 +10166,7 @@ function setupDelegation() {
         case 'collapse-all-groups': {
           // Re-derive every group key so we can collapse them all in one pass.
           const allKeys = new Set<string>();
-          for (const c of styleChanges)   allKeys.add(c.elementId || c.selector || 'unknown');
+          for (const c of styleChanges) allKeys.add(styleChangeGroupKey(c, changesGrouping));
           for (const c of textChanges)    allKeys.add(c.elementId || c.selector || 'unknown');
           for (const c of domChanges)     allKeys.add(c.elementId || c.selector || 'unknown');
           for (const c of comments)       allKeys.add((c as any).elementId || (c as any).selector || 'unknown');
@@ -9942,7 +10179,7 @@ function setupDelegation() {
         case 'back-from-settings': settingsOpen = false; render(); break;
         case 'settings': helpOpen = false; contributeOpen = false; mcpOpen = false; settingsOpen = !settingsOpen; render(); break;
         case 'back-from-mcp': mcpOpen = false; render(); break;
-        case 'mcp': settingsOpen = false; helpOpen = false; contributeOpen = false; mcpOpen = !mcpOpen; if (mcpOpen) refreshMcpStatus(); render(); break;
+        case 'mcp': settingsOpen = false; helpOpen = false; contributeOpen = false; mcpOpen = !mcpOpen; if (mcpOpen) refreshMcpStatus(true); render(); break;
         case 'back-from-help': helpOpen = false; render(); break;
         case 'help': settingsOpen = false; contributeOpen = false; mcpOpen = false; helpOpen = !helpOpen; render(); break;
         case 'back-from-contribute': contributeOpen = false; render(); break;
@@ -10125,12 +10362,18 @@ function setupDelegation() {
           }
           break;
         }
+        case 'toggle-analytics': void toggleAnalytics(); break;
         case 'reset-settings': {
+          void disableAnalytics().catch(() => showCaptureToast('error', 'Could not reset analytics consent. Please retry.'));
           theme = 'system'; resolveTheme();
           colorFormat = 'hex';
           captureMode = 'clipboard';
           mcpPort = 9960; mcpAutoConnect = true;
           inspectorHoverColor = '#4F9EFF'; inspectorSelectColor = '#FF6B35';
+          overlayMarginColor = OVERLAY_MARGIN_DEFAULT;
+          overlayPaddingColor = OVERLAY_PADDING_DEFAULT;
+          nudgeAmount = 10;
+          inputUnit = 'px';
           customCursor = true;
           launchSurface = DEFAULT_LAUNCH_SURFACE;
           pipSavedSize = null; pipUnsupported = false;
@@ -10138,6 +10381,8 @@ function setupDelegation() {
             'dm-theme', 'dm-color-format', 'dm-capture-mode',
             'dm-mcp-port', 'dm-mcp-auto-connect',
             'dm-inspector-hover-color', 'dm-inspector-select-color',
+            'dm-overlay-margin-color', 'dm-overlay-padding-color',
+            'dm-nudge-amount', 'dm-input-unit',
             'dm-custom-cursor',
             'dm-pip-size', 'dm-pip-unsupported',
             LAUNCH_SURFACE_KEY,
@@ -10267,12 +10512,12 @@ function setupDelegation() {
           });
           break;
         }
+        case 'edit-preset':
         case 'delete-preset': {
-          const pid = actionBtn.dataset.presetId;
-          if (!pid) break;
-          send({ type: 'SP_DELETE_PRESET', presetId: pid }).then(() => {
-            refreshCustomPresets();
-          });
+          const preset = customPresets.find(p => p.id === actionBtn.dataset.presetId);
+          if (!preset) break;
+          openPresetDialog(preset, actionBtn.dataset.dmAction === 'edit-preset' ? 'edit' : 'delete', actionBtn,
+            refreshCustomPresets, showCaptureToast);
           break;
         }
         case 'tokens-export': {
@@ -10323,7 +10568,18 @@ function setupDelegation() {
           if (src) send({ type: 'SP_OPEN_VSCODE', source: src });
           break;
         }
+        case 'toggle-layer-multi-select': {
+          layerMultiSelectMode = !layerMultiSelectMode;
+          if (layerMultiSelectMode) {
+            multiSelectAnchor = info?.id || multiSelectAnchor;
+            pushMultiSelectIds(multiSelectIds.length ? multiSelectIds : info ? [info.id] : []).then(() => render());
+          } else {
+            pushMultiSelectIds([]).then(() => render());
+          }
+          break;
+        }
         case 'clear-multi-select': {
+          layerMultiSelectMode = false;
           pushMultiSelectIds([]).then(() => render());
           break;
         }
@@ -10457,7 +10713,7 @@ function setupDelegation() {
       else if (action === 'hide-all') ids.forEach(id => { if (domTree.find(n => n.id === id)?.isVisible) toggleLayerVisibility(id); });
       else if (action === 'duplicate-all') ids.forEach(id => duplicateLayer(id));
       else if (action === 'delete-all') void domAction('delete');
-      else if (action === 'clear-selection') { multiSelectIds.length = 0; multiSelectActive = false; tokenUsesActiveVar = null; render(); }
+      else if (action === 'clear-selection') { layerMultiSelectMode = false; tokenUsesActiveVar = null; pushMultiSelectIds([]).then(() => render()); }
       return;
     }
 
@@ -10470,8 +10726,7 @@ function setupDelegation() {
     }
 
     // Layer selection — clicking the row selects that element. Modifier
-    // keys drive multi-select directly (the old standalone toggle button
-    // is gone):
+    // keys work alongside the standalone multi-select toggle:
     //   Plain click    → single-select, clear multi, set anchor to id.
     //   Cmd/Ctrl+click → toggle id in the multi-select set. First cmd-
     //                    click seeds the set with the existing anchor so
@@ -10613,7 +10868,12 @@ function setupDelegation() {
     if (subgroupHeader && !target.closest('[data-dm-revert-subgroup]')) {
       e.stopPropagation();
       const subKey = subgroupHeader.dataset.dmToggleSubgroup!;
-      if (changesGroupCollapsed.has(subKey)) changesGroupCollapsed.delete(subKey);
+      const multiKey = 'multi-select:' + subKey.slice(4);
+      if (changesGroupCollapsed.has(multiKey)) {
+        changesGroupCollapsed.delete(multiKey);
+        changesGroupCollapsed.delete(subKey);
+      }
+      else if (changesGroupCollapsed.has(subKey)) changesGroupCollapsed.delete(subKey);
       else changesGroupCollapsed.add(subKey);
       render();
       return;
@@ -10795,7 +11055,7 @@ function setupDelegation() {
         send({ type: 'SP_SET_MULTI_SELECT_IDS', ids: [] }).then(() => render());
         return;
       }
-      send({ type: 'SP_GET_TOKEN_USAGES', cssVar }).then((r: { ids?: string[] }) => {
+      send({ type: 'SP_GET_TOKEN_USAGES', cssVar, scopeSelector: tokenScopeFilter === 'all' ? undefined : tokenScopeFilter }).then((r: { ids?: string[] }) => {
         const ids: string[] = r?.ids || [];
         if (!ids.length) {
           showCaptureToast('error', 'No on-page consumers of ' + cssVar);
@@ -10990,12 +11250,6 @@ function setupDelegation() {
       colorAdvancedProp = null;
       colorPickerSearch = '';
       contrastSettingsOpen = false;
-      render();
-    }
-
-    // Click outside the corner-shape popover closes it
-    if (cornerShapePickerOpen && !target.closest('[data-dm-corner-shape-popover]') && !target.closest('[data-dm-corner-shape-trigger]')) {
-      cornerShapePickerOpen = false;
       render();
     }
 
@@ -11674,29 +11928,44 @@ function setupDelegation() {
       // round-trips through the change-tracker; we splice the typed
       // entry out of the in-memory stash and re-dispatch the JSON.
       const t2chain = (target2 as any).chain;
+      const hidden = hiddenEffectsByElement.get(id);
+      const wasHidden = !!hidden?.has(target2.id);
+      if (hidden && t2chain !== 'overlay') {
+        const removedIndex = Number(target2.id.split(':')[1] || 0);
+        const stashed = list.filter(entry => entry.chain === target2.chain && hidden.has(entry.id));
+        for (const entry of stashed) {
+          hidden.delete(entry.id);
+          stashedEffectByKey.delete(id + '::' + entry.id);
+        }
+        for (const entry of stashed) {
+          if (entry.id === target2.id) continue;
+          const index = Number(entry.id.split(':')[1] || 0);
+          const key = index > removedIndex ? entry.id.replace(/:\d+$/, ':' + (index - 1)) : entry.id;
+          hidden.add(key);
+          stashedEffectByKey.set(id + '::' + key, entry.raw);
+        }
+        if (wasHidden) { applyStyle('__effect_hidden', serializeHiddenEffects(id)); return; }
+      } else hidden?.delete(target2.id);
       if (t2chain === 'box') {
         const entries = parseCssCommaList(cs.boxShadow || '');
         entries.splice(target2.chainIdx, 1);
-        applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none');
+        applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none', true);
       } else if (t2chain === 'filter') {
         const list2 = splitFilterFunctions(cs.filter || '');
         list2.splice((target2 as any).chainIdx, 1);
-        applyStyle('filter', list2.length ? list2.join(' ') : 'none');
+        applyStyle('filter', list2.length ? list2.join(' ') : 'none', true);
       } else if (t2chain === 'backdrop') {
         const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
         list2.splice(target2.chainIdx, 1);
-        applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none');
+        applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none', true);
       } else if (t2chain === 'text') {
-        applyStyle('textShadow', 'none');
+        applyStyle('textShadow', 'none', true);
       } else if (t2chain === 'overlay') {
         const list3 = getOverlayEntries(id).slice();
         list3.splice(target2.chainIdx, 1);
         setOverlayEntries(id, list3);
         dispatchOverlayEntries(id, list3);
       }
-      // Clean up any stash for this id.
-      const hidden = hiddenEffectsByElement.get(id);
-      if (hidden) hidden.delete(target2.id);
       return;
     }
 
@@ -11721,24 +11990,24 @@ function setupDelegation() {
         // overlay effects (Noise / Texture) carry their own `visible` flag and
         // have an empty `raw`, so the stash is falsy and must not gate them.
         const stashed = stashedEffectByKey.get(stashKey);
-        const t2chain2 = (target2 as any).chain;
+        const t2chain2 = target2.chain;
         hidden.delete(target2.id);
         stashedEffectByKey.delete(stashKey);
         if (stashed || t2chain2 === 'overlay') {
-          if (t2chain2 === 'box') {
+          if (t2chain2 === 'box' && stashed) {
             const entries = parseCssCommaList(cs.boxShadow || '');
             entries.splice(target2.chainIdx, 0, stashed);
-            applyStyle('boxShadow', entries.join(', '));
-          } else if (t2chain2 === 'filter') {
+            applyStyle('boxShadow', entries.join(', '), true);
+          } else if (t2chain2 === 'filter' && stashed) {
             const list2 = splitFilterFunctions(cs.filter || '');
             list2.splice((target2 as any).chainIdx, 0, stashed);
-            applyStyle('filter', list2.join(' '));
-          } else if (t2chain2 === 'backdrop') {
+            applyStyle('filter', list2.join(' '), true);
+          } else if (t2chain2 === 'backdrop' && stashed) {
             const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
             list2.splice(target2.chainIdx, 0, stashed);
-            applyStyle('backdropFilter', list2.join(' '));
-          } else if (t2chain2 === 'text') {
-            applyStyle('textShadow', stashed);
+            applyStyle('backdropFilter', list2.join(' '), true);
+          } else if (t2chain2 === 'text' && stashed) {
+            applyStyle('textShadow', stashed, true);
           } else if (t2chain2 === 'overlay') {
             const list3 = getOverlayEntries(id).slice();
             const entry3 = list3[target2.chainIdx];
@@ -11758,17 +12027,17 @@ function setupDelegation() {
         if (t2chain3 === 'box') {
           const entries = parseCssCommaList(cs.boxShadow || '');
           entries.splice(target2.chainIdx, 1);
-          applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none');
+          applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none', true);
         } else if (t2chain3 === 'filter') {
           const list2 = splitFilterFunctions(cs.filter || '');
           list2.splice((target2 as any).chainIdx, 1);
-          applyStyle('filter', list2.length ? list2.join(' ') : 'none');
+          applyStyle('filter', list2.length ? list2.join(' ') : 'none', true);
         } else if (t2chain3 === 'backdrop') {
           const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
           list2.splice(target2.chainIdx, 1);
-          applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none');
+          applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none', true);
         } else if (t2chain3 === 'text') {
-          applyStyle('textShadow', 'none');
+          applyStyle('textShadow', 'none', true);
         } else if (t2chain3 === 'overlay') {
           const list3 = getOverlayEntries(id).slice();
           const entry3 = list3[target2.chainIdx];
@@ -12114,8 +12383,9 @@ function setupDelegation() {
     const linkUrlInput = target.closest<HTMLInputElement>('[data-dm-rich-link-url]');
     if (linkUrlInput) {
       const editor = root.querySelector<HTMLElement>('[data-dm-richtext]');
-      const value = linkUrlInput.value.trim();
-      if (!editor || (value && !isSafeRichTextHref(value))) {
+      const rawValue = linkUrlInput.value.trim();
+      const value = rawValue === '' ? '' : sanitizeRichTextHref(rawValue);
+      if (!editor || value === null) {
         linkUrlInput.setCustomValidity('Use an http(s), relative, or fragment URL.');
         linkUrlInput.reportValidity();
         return;
@@ -12145,6 +12415,10 @@ function setupDelegation() {
     const scopeFilterSel = target.closest<HTMLSelectElement>('[data-dm-token-scope-filter]');
     if (scopeFilterSel) {
       tokenScopeFilter = scopeFilterSel.value;
+      if (tokenUsesActiveVar) {
+        tokenUsesActiveVar = null;
+        send({ type: 'SP_SET_MULTI_SELECT_IDS', ids: [] });
+      }
       render();
       return;
     }
@@ -12466,6 +12740,11 @@ function setupDelegation() {
       const raw = propInput.value.trim();
       const isPureNumber = /^-?\d+(?:\.\d+)?$/.test(raw);
       const val = isNumeric && unit && isPureNumber ? raw + unit : raw;
+      if (prop === 'zIndex') {
+        const valid = !raw || CSS.supports('z-index', raw);
+        propInput.setAttribute('aria-invalid', String(!valid));
+        if (!valid) return;
+      }
       // var(--token) passes through verbatim — the non-negative clamp
       // below would otherwise flatten a token reference to 0.
       if (/^var\(\s*--/.test(raw)) {
@@ -12846,27 +13125,7 @@ function setupDelegation() {
         applyLayoutGuideProperty(prop, raw);
         return;
       }
-      const borderWidths = ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'];
-      const borderRadii = ['borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius'];
-      // Margin / padding: the uniform field writes the `margin`/`padding`
-      // shorthand (which applyStyle fans out to the four longhands); per-side
-      // inputs write their own longhand only. No side-edit fan-out here.
-      if (borderWidthLinked && borderWidths.includes(prop)) {
-        Promise.all(borderWidths.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
-          const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();
-        }); return;
-      }
-      // Corner-radius fan-out only triggers for the shorthand `borderRadius`
-      // input on the main row — that input is explicitly the "all four
-      // corners equal" control. Per-corner inputs in the expanded 2×2
-      // panel write to their specific long-form prop (borderTopLeftRadius
-      // etc.) and must NOT fan out, otherwise edit-each-corner would
-      // immediately equalise every corner again.
-      if (prop === 'borderRadius') {
-        Promise.all(borderRadii.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
-          const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();
-        }); return;
-      }
+
       applyStyle(prop, val); return;
     }
 
@@ -13158,6 +13417,7 @@ function setupDelegation() {
         if (r?.tokenChanges) tokenChanges = r.tokenChanges;
         if (r?.undoCount != null) undoCount = r.undoCount;
         if (r?.redoCount != null) redoCount = r.redoCount;
+        render();
       });
       return;
     }
@@ -13191,12 +13451,14 @@ function setupDelegation() {
         inspectorHoverColor = settingInput.value;
         browser.storage?.local?.set?.({ 'dm-inspector-hover-color': inspectorHoverColor });
         send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
+        settingInput.previousElementSibling!.textContent = inspectorHoverColor.toUpperCase();
         return;
       }
       if (key === 'selectColor') {
         inspectorSelectColor = settingInput.value;
         browser.storage?.local?.set?.({ 'dm-inspector-select-color': inspectorSelectColor });
         send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
+        settingInput.previousElementSibling!.textContent = inspectorSelectColor.toUpperCase();
         return;
       }
       if (key === 'marginColor') {
@@ -13258,7 +13520,11 @@ function setupDelegation() {
       const prop = hexEl.dataset.dmColorHex!;
       let v = hexEl.value.trim().replace(/^#/, '');
       if (/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$|^[0-9a-fA-F]{8}$/.test(v)) {
+        colorPickerSearch = '';
         applyStyle(prop, '#' + v);
+      } else {
+        colorPickerSearch = v;
+        render();
       }
       return;
     }
@@ -13310,7 +13576,16 @@ function setupDelegation() {
     const commentInput = target.closest<HTMLTextAreaElement>('[data-dm-comment-input]');
     if (commentInput) {
       commentText = commentInput.value;
-      commentDirty = true;
+      commentDirty = !editingCommentId || commentText !== comments.find(c => c.id === editingCommentId)?.text;
+      const submit = root.querySelector<HTMLButtonElement>('[data-dm-action="submit-comment"]');
+      if (submit) {
+        submit.disabled = !!editingCommentId && !commentDirty;
+        submit.style.background = 'rgba(139,92,246,0.15)';
+        submit.style.borderColor = 'var(--dm-purple-border)';
+        submit.style.color = 'var(--dm-purple)';
+        submit.style.cursor = submit.disabled ? 'default' : 'pointer';
+        submit.style.opacity = submit.disabled ? '0.5' : '1';
+      }
       return;
     }
 
@@ -13382,6 +13657,18 @@ function setupDelegation() {
     }
 
 
+    const pickerHexInput = target.closest<HTMLInputElement>('[data-dm-color-hex]');
+    if (pickerHexInput && (e.key === 'Enter' || e.key === 'Escape')) {
+      e.preventDefault();
+      activeColorPickerProp = null;
+      colorAdvancedProp = null;
+      colorPickerSearch = '';
+      contrastSettingsOpen = false;
+      pickerHexInput.blur();
+      render();
+      return;
+    }
+
     // Color trigger: Enter applies typed value as custom color, Escape closes
     const colorTriggerKey = target.closest<HTMLInputElement>('[data-dm-color-trigger]');
     if (colorTriggerKey && activeColorPickerProp === colorTriggerKey.dataset.dmColorTrigger) {
@@ -13452,6 +13739,19 @@ function setupDelegation() {
       const unit = propInput.dataset.dmUnit || '';
       const propName = propInput.dataset.dmProp || '';
 
+      if (propName === 'lineHeight' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        const match = propInput.value.trim().match(/^(-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*([a-z%]*)$/i);
+        const current = match ? { num: Number(match[1]), unit: match[2] } : null;
+        // Keywords and expressions have no unambiguous numeric nudge.
+        if (!current || !Number.isFinite(current.num) || !CSS.supports('line-height', propInput.value)) return;
+        const step = current.unit ? (e.shiftKey ? nudgeAmount : 1) : (e.shiftKey ? 1 : 0.1);
+        const value = Math.max(0, Math.round((current.num + (e.key === 'ArrowUp' ? step : -step)) * 100) / 100) + current.unit;
+        propInput.value = value;
+        applyStyle(propName, value);
+        return;
+      }
+
       // Opacity percent input — same conversion as the change handler:
       // display 0-100, clamp, divide by 100, write the real CSS prop.
       const commitOpacityPct = (rawStr: string) => {
@@ -13487,8 +13787,9 @@ function setupDelegation() {
 
       if (isNumeric && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
+        if (propName === 'zIndex' && propInput.value.trim() !== 'auto' && !/^[+-]?\d+$/.test(propInput.value.trim())) return;
         // Step size depends on the property's natural scale. Unitless
-        // properties (line-height, opacity, scale, z-index decimals)
+        // properties (flex-grow, flex-shrink, scale)
         // live in the 0..2 range — stepping by 1 is far too coarse, so
         // they use 0.1 (with Shift = 1). Properties with a unit
         // (px, %, deg, em…) keep the original 1 / Shift+10 cadence. The
@@ -13519,7 +13820,8 @@ function setupDelegation() {
       // Non-negative props (corner radius, stroke weight) also block the
       // minus sign so the field never accepts a value CSS will silently
       // discard.
-      if (isNumeric) {
+      // z-index also accepts keywords and expressions; validate those on commit.
+      if (isNumeric && propName !== 'zIndex') {
         const allowedKeys = ['Backspace','Tab','Escape','ArrowLeft','ArrowRight','Delete','Home','End'];
         if (allowedKeys.includes(e.key) || e.ctrlKey || e.metaKey) return;
         if (e.key.length !== 1) return; // ignore other special keys
@@ -13764,27 +14066,28 @@ function setupDelegation() {
     const tgtEntry = list[tgtIdx];
     if (!srcEntry || !tgtEntry) return;
     if ((srcEntry as any).chain !== (tgtEntry as any).chain) return;
-    if (dragSrc.chain === 'box') {
-      const entries = parseCssCommaList(cs.boxShadow || '');
-      const sci = (srcEntry as any).chainIdx;
-      const tci = (tgtEntry as any).chainIdx;
-      const [moved] = entries.splice(sci, 1);
-      entries.splice(tci, 0, moved);
-      applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none');
-    } else if (dragSrc.chain === 'filter') {
-      const list2 = splitFilterFunctions(cs.filter || '');
-      const sci = (srcEntry as any).chainIdx;
-      const tci = (tgtEntry as any).chainIdx;
-      const [moved] = list2.splice(sci, 1);
-      list2.splice(tci, 0, moved);
-      applyStyle('filter', list2.length ? list2.join(' ') : 'none');
-    } else if (dragSrc.chain === 'backdrop') {
-      const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
-      const sci = (srcEntry as any).chainIdx;
-      const tci = (tgtEntry as any).chainIdx;
-      const [moved] = list2.splice(sci, 1);
-      list2.splice(tci, 0, moved);
-      applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none');
+    if (dragSrc.chain === 'box' || dragSrc.chain === 'filter' || dragSrc.chain === 'backdrop') {
+      const chain = dragSrc.chain as CssEffectChain;
+      const property = effectChainProperties[chain];
+      const hidden = hiddenEffectsByElement.get(id) || new Set<string>();
+      const entries = effectChainEntries(chain, cs[property] || '').map(raw => ({ raw, hiddenId: '' }));
+      const stashed = list.filter(entry => entry.chain === chain && !entry.visible);
+      for (const entry of stashed) {
+        entries.splice(Number(entry.id.split(':')[1]), 0, { raw: entry.raw, hiddenId: entry.id });
+        hidden.delete(entry.id);
+        stashedEffectByKey.delete(id + '::' + entry.id);
+      }
+      const [moved] = entries.splice(Number(srcEntry.id.split(':')[1]), 1);
+      entries.splice(Number(tgtEntry.id.split(':')[1]), 0, moved);
+      entries.forEach((entry, index) => {
+        if (!entry.hiddenId) return;
+        const key = entry.hiddenId.replace(/:\d+$/, ':' + index);
+        hidden.add(key);
+        stashedEffectByKey.set(id + '::' + key, entry.raw);
+      });
+      hiddenEffectsByElement.set(id, hidden);
+      const visible = entries.filter(entry => !entry.hiddenId).map(entry => entry.raw);
+      applyStyle(property, visible.join(chain === 'box' ? ', ' : ' ') || 'none', true);
     } else if (dragSrc.chain === 'overlay') {
       // Overlay chain reorder — swap entries inside the in-memory
       // stash and re-dispatch the JSON. Later entries paint on top,
@@ -13948,12 +14251,21 @@ function setupDelegation() {
 
 /* ── Phase 4C: Global keyboard navigation ── */
 document.addEventListener('keydown', (e) => {
+  // A popover click can leave focus on body, outside root. Keep Escape
+  // dismissal at document scope too, without also deselecting the page.
+  if (e.defaultPrevented) return;
+  if (shortcutsOpen && e.key === 'Escape') {
+    e.preventDefault();
+    shortcutsOpen = false;
+    render();
+    return;
+  }
   const tag = (e.target as HTMLElement)?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
   // Undo/Redo
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undoAction(); }
-  if ((e.ctrlKey || e.metaKey) && ((e.key === 'z' && e.shiftKey) || e.key === 'y')) { e.preventDefault(); redoAction(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undoAction(); }
+  if ((e.ctrlKey || e.metaKey) && ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y')) { e.preventDefault(); redoAction(); }
 
   // Escape to deselect. Also tell the PAGE to clear its selection + resize
   // dots and drop back to hover — the page never receives this keydown when

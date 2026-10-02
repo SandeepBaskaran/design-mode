@@ -21,7 +21,7 @@ let selectPaddingBand: HTMLDivElement | null = null;
 let teardown = false;
 
 const OVERLAY_BASE = {
-  position: 'absolute', pointerEvents: 'none', borderRadius: '2px',
+  position: 'absolute', pointerEvents: 'none', borderRadius: '2px', boxSizing: 'border-box',
   transition: 'all 80ms ease-out', display: 'none',
 } as const;
 
@@ -96,21 +96,25 @@ try {
     if (area !== 'local') return;
     let touched = false;
     if (changes['dm-inspector-hover-color']) {
-      hoverHex = changes['dm-inspector-hover-color'].newValue || HOVER_DEFAULT_HEX;
+      const value = changes['dm-inspector-hover-color'].newValue;
+      hoverHex = typeof value === 'string' && value ? value : HOVER_DEFAULT_HEX;
       hoverFillCss = hexToRgba(hoverHex, HOVER_FILL_ALPHA);
       touched = true;
     }
     if (changes['dm-inspector-select-color']) {
-      selectHex = changes['dm-inspector-select-color'].newValue || SELECT_DEFAULT_HEX;
+      const value = changes['dm-inspector-select-color'].newValue;
+      selectHex = typeof value === 'string' && value ? value : SELECT_DEFAULT_HEX;
       touched = true;
     }
     if (changes['dm-overlay-margin-color']) {
-      marginBandHex = changes['dm-overlay-margin-color'].newValue || MARGIN_DEFAULT_HEX;
+      const value = changes['dm-overlay-margin-color'].newValue;
+      marginBandHex = typeof value === 'string' && value ? value : MARGIN_DEFAULT_HEX;
       marginBandCss = hexToRgba(marginBandHex, MARGIN_BAND_ALPHA);
       touched = true;
     }
     if (changes['dm-overlay-padding-color']) {
-      paddingBandHex = changes['dm-overlay-padding-color'].newValue || PADDING_DEFAULT_HEX;
+      const value = changes['dm-overlay-padding-color'].newValue;
+      paddingBandHex = typeof value === 'string' && value ? value : PADDING_DEFAULT_HEX;
       paddingBandCss = hexToRgba(paddingBandHex, PADDING_BAND_ALPHA);
       touched = true;
     }

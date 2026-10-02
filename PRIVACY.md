@@ -1,11 +1,14 @@
 # Privacy
 
-Design Mode runs locally. The browser extension does not send your browsing
-activity, page contents, or edits to any server controlled by us.
+Design Mode's editor runs in your browser. Configured Cloud or Self-hosted MCP
+connections can transmit page data, edits and tool results through the selected
+relay; Local MCP uses your machine. Optional extension analytics is a separate,
+off-by-default opt-in and never includes page content or edits. The flows and
+exceptions are described below.
 
 ## What the extension stores, and where
 
-All extension data lives on **your machine**, in the browser's extension storage.
+Editor data and preferences live on **your machine**, in the browser's extension storage. Optional usage analytics is described below.
 
 | Storage area              | What's there                                                                        | Lifetime                       |
 | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ |
@@ -30,7 +33,7 @@ rounds reuse that Local connection and retain snapshots/session state only
 in process memory. No new external service or stored browser preference is
 introduced by these features.
 
-The extension sends data only through the MCP mode you configure. Fresh
+Apart from the optional usage analytics described below, the extension sends data through the MCP mode you configure. Fresh
 installs select Cloud; existing installs retain their saved mode. Cloud and
 Self-hosted need a configured relay and bearer token. Local mode talks only to
 your machine.
@@ -68,10 +71,98 @@ at edit time and the derived breakpoint (mobile / tablet / desktop) so the agent
 can scope edits to a media query. This is window-size metadata, not personal
 data, and it only travels over the connection you've already opted into.
 
-There are **no analytics, no telemetry, and no error reporting** in the
-extension or the MCP server. There is no remote update channel beyond the
-standard store mechanism — the Chrome Web Store for Chromium browsers and
-addons.mozilla.org (AMO) for Firefox.
+### Optional extension usage analytics (off by default)
+
+Unconfigured builds send **no analytics requests**. A distributor must explicitly
+configure a PostHog project at build time; even then, nothing is sent until you
+choose **Settings → Optional usage analytics → I agree to enable**. Declining
+has no effect on editor or MCP functionality. The setting discloses the actual
+receiver. Consent is local, versioned and bound to that receiver and project;
+a different project or consent scope needs a fresh opt-in. Scope version 2 rejects
+older consent and requires a new explicit choice. Consent is not synced between
+devices. Project 629592 is the authorized extension-only destination for the
+maintainer's optional local configuration; no project token is committed. The
+opt-in build command and separately recorded live-receipt verification are
+described in [ANALYTICS.md](packages/extension/ANALYTICS.md). Building a configured
+extension does not enable consent or verify account billing/retention settings.
+
+If enabled, the extension sends only a fixed event schema: bounded feature names,
+attempt/command_acknowledged/failure or MCP-state outcomes, bounded friction
+reasons, MCP mode and state when applicable, best-effort browser name and vendor
+(Firefox/Mozilla, UA-CH-advertised Chrome/Google, or chromium/unknown), validated
+browser language and Intl timezone when available (which may suggest a region),
+extension version, schema version 2, `extension` surface, and a best-effort distribution label.
+Event names describe the action (for example `dm_style_edit`, `dm_send_to_agent`)
+rather than the generic `dm_feature`; outcomes remain separate. No raw user agent,
+browser version, OS or certain Brave identification is collected. Language is
+bounded to 35 characters with no private-use subtags; timezone to 64 and validated
+by Intl. Invalid/unavailable metadata is omitted.
+`command_acknowledged` means only a command returned without a reported error,
+including empty/no-op responses; it is not feature or agent completion. Screenshot
+clipboard outcomes follow the actual clipboard promise. Download outcomes mean
+only initiation or failure to initiate, never verified save-to-disk completion.
+Distribution labels (`published_hint`, `unpublished_hint`, `fork`, `unknown`)
+are unverified signals or distributor declarations, **not proof of an official
+installation**. No extra browser permission is requested to classify installs.
+
+There is **no autocapture, session replay, pageview tracking, remote SDK code,
+feature-flag fetching, or exception reporting**. Events cannot include page URLs,
+selectors, comments, text, edits, design/authentication tokens, screenshots, raw
+errors, MCP payloads, account IDs or extension IDs. PostHog requires a distinct ID;
+we generate a new random ID for every event, never persist it or correlate devices,
+and disable person profiles and GeoIP enrichment. This deliberately cannot measure
+unique users, retention cohorts, sessions or user-level funnels: aggregate-only
+measurement, with no persistent or session tracking identity. As with any HTTPS request, the receiver still
+sees your IP address and ordinary transport metadata. This is not a promise of
+network-level anonymity. Cookies and referrers are omitted; redirects are rejected.
+
+The sole sender is the background context. Events are best-effort, capped at 60
+per minute per live background context and four in flight; there is no disk queue,
+retry, beacon, or saved analytics identifier. Closing/restarting that context can
+lose events and resets its in-memory rate limit. An acknowledged opt-out stop blocks
+new sends in the live sender, invalidates pending checks and aborts in-flight
+requests. Opt-out removes `dm-analytics-consent-v1` from `storage.local`; on removal
+failure it attempts a durable disabled record under the same key. If both writes
+fail, the UI warns that old consent may resume sending after a worker restart.
+Browser storage failure means a permanent stop cannot be guaranteed. Already
+received requests cannot be recalled. Reset settings also opts out. Removing Firefox data
+permission stops the live sender and attempts the same durable opt-out. Once
+persisted, regranting native permission alone cannot enable analytics. If storage
+writes fail, old local consent may survive and become usable on a later restart
+with native permission granted.
+
+Firefox 140+ uses optional `technicalAndInteraction` and `locationInfo` permissions
+(the latter conservatively covers timezone/region) **in addition
+to** our explicit opt-in. Firefox 121–139 uses the same in-extension disclosure and
+unchecked/off consent control, detected via the absence of `data_collection` in
+`permissions.getAll()`. The minimum supported version remains 121. This declaration
+covers optional analytics, not a new authorization to transmit page/MCP content.
+
+No account, project, retention settings or billing plan is provisioned by this
+code. Before distributing an enabled build, its operator must verify free-only
+billing, publish the receiver/operator and retention/deletion policy, and update
+store disclosures. See [analytics activation and verification](packages/extension/ANALYTICS.md).
+MCP servers and CLI do not emit analytics. There is no remote update channel beyond
+the standard Chrome Web Store / addons.mozilla.org mechanisms.
+
+## Agent CLI
+
+The optional `@designmode-app/cli` executable (`designmode-app`) defaults to
+Cloud. After you configure that mode's credential, `tools`, `schema`, `status`
+and `call` contact `https://mcp.designmode.app/api/mcp`. Self-hosted sends those
+requests to your explicitly configured `/api/mcp` endpoint. HTTPS is required
+except for a relay on literal localhost / 127.0.0.1 / [::1]; redirects are not
+followed. Requests carry the selected mode's bearer token, and tool calls/results
+may include page edits, comments, screenshots and session metadata. Relay
+retention and logging are as described above. Discovery/status also update
+relay presence and credential last-seen metadata without verifying the browser.
+
+CLI credentials come from mode-specific environment variables or an explicitly
+selected user-owned 0600 JSON file (`DM_CONFIG`), never argv. The CLI does not
+persist credentials or read a default credential file. Help/no-argument usage
+reads no config and makes no network requests. Local mode reuses the existing
+loopback bridge; its tool/schema discovery is offline. CLI stdout can contain
+sensitive tool results; take care where you store it. No CLI telemetry is added.
 
 ## What the website (designmode.app) does
 

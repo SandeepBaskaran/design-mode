@@ -7,12 +7,14 @@ import { getAuthoredVarsForElement, getAuthoredShadowVars, type PropToken, type 
 import { inspectAuthoredSizing, unknownDimension, type AuthoredDimension } from './authored-sizing';
 import { showHover, hideHover, showSelect, updateSelectPosition, isOverlayElement } from './overlays';
 import { isMultiSelectActive, enableMultiSelect, disableMultiSelect, toggleSelection, getSelectedIds } from './multi-select';
-import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag } from './measure-guides';
+import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag, isResizing } from './measure-guides';
 import { baseCursor, restoreBaseCursor } from './custom-cursor';
+import { measureChildGap } from './child-gap';
+import type { ElementInfo as SharedElementInfo } from '@shared/types';
 
 export type IconInfo = { library: string; name: string };
 
-export type ElementInfo = {
+export type ElementInfo = Pick<SharedElementInfo, 'rect' | 'childGap'> & {
   id: string; tagName: string; className: string; elementId: string;
   breadcrumbs: string[]; computedStyles: Record<string, string>;
   // camelCase prop → the token it's authored from (var name + the scope
@@ -21,7 +23,6 @@ export type ElementInfo = {
   // camelCase compound-shadow prop → the vars it's composed from. Drives the
   // multi-token shadow chip (a single `styleTokens` entry can't hold a stack).
   shadowVars: Record<string, ShadowVarInfo>;
-  rect: { top: number; left: number; width: number; height: number; bottom: number; right: number };
   textContent: string | null; innerHTML: string;
   attributes: Record<string, string>; selector: string;
   iconInfo?: IconInfo;
@@ -44,12 +45,17 @@ let onSelect: SelectionCallback | null = null;
 let hoverDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let lastHoveredId: string | null = null;
 
+let selectionIsExplicit = false;
 export function getSelectedElementId() { return selectedId; }
-export function setSelectedElementId(id: string | null) { selectedId = id; }
+export function hasExplicitSelection() { return selectedId !== null && selectionIsExplicit; }
+export function setSelectedElementId(id: string | null, explicit = true) {
+  selectedId = id;
+  selectionIsExplicit = id !== null && explicit;
+}
 
 function detectIconInfo(el: HTMLElement): IconInfo | undefined {
   const tag = el.tagName.toUpperCase();
-  const classes = typeof el.className === 'string' ? Array.from(el.classList) : [];
+  const classes = Array.from(el.classList);
 
   if (tag === 'SVG') {
     // Lucide: class="lucide lucide-chevron-right"
@@ -63,6 +69,9 @@ function detectIconInfo(el: HTMLElement): IconInfo | undefined {
     if (faIcon) return { library: 'fontawesome', name: faIcon };
   }
 
+  const remixClass = classes.find(c => /^ri-[a-z0-9]+(?:-[a-z0-9]+)*-(?:line|fill)$/.test(c));
+  if (remixClass) return { library: 'remix', name: remixClass.slice(3) };
+
   // FontAwesome <i class="fa fa-heart">
   if (tag === 'I') {
     const faClass = classes.find(c => c.startsWith('fa-'));
@@ -72,41 +81,6 @@ function detectIconInfo(el: HTMLElement): IconInfo | undefined {
   return undefined;
 }
 
-// Effective spacing between a flex/grid container's children, per axis.
-// `space-between` distribution leaves the computed gap as `normal`, so the
-// Design panel's "Auto" gap read-out needs the actual rendered distance.
-function measureChildGap(el: HTMLElement): { col: number | null; row: number | null } {
-  if (!/flex|grid/.test(window.getComputedStyle(el).display)) return { col: null, row: null };
-  const kids = (Array.from(el.children) as HTMLElement[]).filter(
-    (c) => !(c.id && c.id.startsWith('dm-')),
-  );
-  const rects = kids
-    .map((k) => k.getBoundingClientRect())
-    .filter((r) => r.width > 0 || r.height > 0);
-  if (rects.length < 2) return { col: null, row: null };
-  const round = (n: number) => Math.max(0, Math.round(n * 10) / 10);
-  let col: number | null = null;
-  const byLeft = [...rects].sort((a, b) => a.left - b.left);
-  for (let i = 0; i < byLeft.length - 1; i++) {
-    const a = byLeft[i];
-    const b = byLeft[i + 1];
-    if (Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0) {
-      col = round(b.left - a.right);
-      break;
-    }
-  }
-  let row: number | null = null;
-  const byTop = [...rects].sort((a, b) => a.top - b.top);
-  for (let i = 0; i < byTop.length - 1; i++) {
-    const a = byTop[i];
-    const b = byTop[i + 1];
-    if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0) {
-      row = round(b.top - a.bottom);
-      break;
-    }
-  }
-  return { col, row };
-}
 
 // `skipTokens` keeps the debounced hover path cheap — var attribution
 // walks matched rules and is only needed once an element is selected.
@@ -148,7 +122,7 @@ export function buildElementInfo(el: HTMLElement, skipTokens = false): ElementIn
     parentJustifyContent: pcs?.justifyContent || '',
     parentAlignItems: pcs?.alignItems || '',
     parentGap: pcs?.gap || '',
-    childGap: measureChildGap(el),
+    childGap: skipTokens ? { col: null, row: null } : measureChildGap(el),
     authoredWidth: sizing.width,
     authoredHeight: sizing.height,
   };
@@ -165,6 +139,7 @@ function isDMElement(el: HTMLElement): boolean {
 }
 
 function handleMouseOver(e: MouseEvent) {
+  if (isResizing()) return;
   const t = e.target as HTMLElement;
   if (!t || isDMElement(t)) return;
   showHover(t);
@@ -208,6 +183,7 @@ function handleMouseOver(e: MouseEvent) {
 }
 
 function handleMouseOut() {
+  if (isResizing()) return;
   hideHover();
   hideAxisGuides();
   // Single-select hover measurement clears; multi-select pairwise distances
@@ -234,9 +210,7 @@ function handleMouseDown(e: MouseEvent) {
   e.preventDefault();
   if (e.shiftKey) {
     window.getSelection()?.removeAllRanges();
-    // Shift-mousedown is the "add to multi-select" gesture; never start a
-    // drag — let the click handler toggle membership instead.
-    return;
+    // Selected members may still cross the drag threshold for axis locking.
   }
   const tId = t.dataset.dmId;
   if (!tId) return;
@@ -275,7 +249,7 @@ function handleClick(e: MouseEvent) {
     if (!isMultiSelectActive()) enableMultiSelect();
     if (getSelectedIds().length === 0 && selectedId && selectedId !== id) toggleSelection(selectedId);
     toggleSelection(id);
-    selectedId = id;
+    setSelectedElementId(id);
     showSelect(t);
     showResizeDots(t);
     try {
@@ -290,7 +264,7 @@ function handleClick(e: MouseEvent) {
     document.documentElement.style.cursor = getSelectedIds().includes(id) ? 'move' : baseCursor();
     return;
   }
-  selectedId = id;
+  setSelectedElementId(id);
   showSelect(t);
   showResizeDots(t);
   hideDistance();

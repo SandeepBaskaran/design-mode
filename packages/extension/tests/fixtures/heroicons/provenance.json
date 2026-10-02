@@ -1,0 +1,24 @@
+{
+  "version": "v2.2.0",
+  "upstream": "tailwindlabs/heroicons",
+  "files": {
+    "LICENSE": {
+      "url": "https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/LICENSE",
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    },
+    "optimized/24/outline/home.svg": {
+      "url": "https://raw.githubusercontent.com/tailwindlabs/heroicons/v2.2.0/optimized/24/outline/home.svg",
+      "sha256": "bf22818e3638f217e824ff26c8ffaf2ef014803982ca7c430e6c3c20915b185a"
+    },
+    "package/24/outline/esm/HomeIcon.js": {
+      "url": "https://registry.npmjs.org/@heroicons/react/-/react-2.2.0.tgz",
+      "archiveSha256": "d00fc573f383a5a17f1c5223e05781f93fa32c9419dcf4f592676b5a03534222",
+      "sha256": "45fe0faca0a245e7cdc5ea2f8d6fd9bde47cafe667766fbf540a6c5f9fd3b65f"
+    },
+    "package/LICENSE": {
+      "url": "https://registry.npmjs.org/@heroicons/react/-/react-2.2.0.tgz",
+      "archiveSha256": "d00fc573f383a5a17f1c5223e05781f93fa32c9419dcf4f592676b5a03534222",
+      "sha256": "60e0b68c0f35c078eef3a5d29419d0b03ff84ec1df9c3f9d6e39a519a5ae7985"
+    }
+  }
+}

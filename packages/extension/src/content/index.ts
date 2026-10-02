@@ -6,9 +6,11 @@
 // ============================================================
 
 import '../platform/polyfill';
+import { rebaseHiddenEffectValue } from './hidden-effects';
+import { whenUserStylesPainted, withTemporaryUserStyles } from './user-styles';
 import { validateImportPayload } from './import-validation';
 import { captureImportDomRollback } from './import-transaction';
-import { captureTrackerRollback, persistImportedSession, requestStopFeedback } from './change-tracker';
+import { captureTrackerRollback, persistImportedSession, requestStopFeedback, syncAllChanges } from './change-tracker';
 import { captureTokenRollback } from './root-var-store';
 import { captureCommentPinsRollback } from './comments';
 import { DEFAULT_WS_PORT } from '@shared/constants';
@@ -20,17 +22,20 @@ import {
 } from './inspect-states';
 import { setComputedLayoutOverlay, clearComputedLayoutOverlay } from './computed-layout-overlay';
 import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOverlayTeardown } from './overlays';
-import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
+import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, hasExplicitSelection, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
 import { initCustomCursor, applyBaseCursor, clearBaseCursor } from './custom-cursor';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, applyTextChange, applyHtmlChange, applyAttributeChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff, getFeedbackSessionView, isLiveFeedbackSupported, stopFeedbackSessionFromUi } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, computeCompanions, applyTextChange, applyHtmlChange, applyAttributeChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff, getFeedbackSessionView, isLiveFeedbackSupported, stopFeedbackSessionFromUi } from './change-tracker';
 import { isSafeRichTextHref } from '../rich-text-preservation';
-import { cutElement, copyElement, pasteElement, duplicateElement, deleteElement, moveElement } from './html-editor';
-import { orderDomDeletionTargets } from './dom-delete';
+import { copyElement, pasteElement, duplicateElement, moveElement } from './html-editor';
+import { isTypingTarget } from './shortcut-binding';
+import { deleteElements, type DeleteCommand } from './delete-command';
+import { beginMove, type MoveCommand } from './move-command';
+import { previewOriginal, restoreOriginalPreview } from './original-preview';
 import { captureElementScreenshot, captureViewportScreenshotClean } from './screenshots';
 import {
   detectScales, annotateDrift, findTokenUsages,
-  getCustomPresets, saveCustomPreset, deleteCustomPreset,
+  getCustomPresets, saveCustomPreset, deleteCustomPreset, withPresetUsageCounts,
   type PresetKind,
 } from './presets';
 import { getTokenIndex, invalidateTokenIndex, authoredTokenValueFor } from './token-engine';
@@ -63,19 +68,8 @@ import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } fr
 // Keyboard shortcuts
 import { enableShortcuts, disableShortcuts, registerShortcut, loadShortcuts, getShortcuts, triggerShortcut } from './keyboard-shortcuts';
 
-// Re-injection guard. The manifest injects content.js at document_idle AND
-// the background re-injects it on panel-connect (a fallback for tabs open
-// before the extension loaded). When both fire — common on SPAs / slow pages
-// where the panel opens before document_idle — multiple instances register
-// `chrome.runtime.onMessage` listeners in one document. Duplicate listeners
-// fight over the single response channel, so GET_DOM_TREE / GET_CHANGES
-// round-trips never resolve and the Layers / Changes tabs hang.
-//
-// Each injection stamps a fresh token on the shared `window`; the message
-// listener below only handles a message while it's still the newest instance,
-// so exactly one handler ever answers. Using the newest (not the first) means
-// a fresh injection after an extension reload correctly takes over from the
-// old, now-dead context instead of being locked out by a stale flag.
+// The bundle guard skips live re-injections before module side effects; this
+// token also silences callbacks left behind by an invalidated extension context.
 const dmInstanceToken = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 (window as unknown as { __dmActiveInstance?: string }).__dmActiveInstance = dmInstanceToken;
 function dmIsActiveInstance(): boolean {
@@ -83,6 +77,7 @@ function dmIsActiveInstance(): boolean {
 }
 
 let on = false;
+let activationGeneration = 0;
 // Lets the cursor module repaint correctly on a live settings toggle
 // without importing the inspector (which imports the cursor module).
 initCustomCursor(isInspectActive);
@@ -112,15 +107,16 @@ function startPanelHeartbeat() {
   if (panelHeartbeatTimer) return;
   panelHeartbeatTimer = setInterval(async () => {
     if (!on) return;
+    const generation = activationGeneration;
     // Bail when the extension has been reloaded / disabled — browser.runtime
     // is null in orphaned content scripts.
     if (!browser.runtime?.id) { disable(); return; }
     try {
       const r: { open?: boolean } | undefined = await browser.runtime.sendMessage({ type: 'IS_PANEL_OPEN' });
-      if (!r || r.open === false) disable();
+      if (generation === activationGeneration && (!r || r.open === false)) disable();
     } catch {
-      // Extension context invalidated or SW gone — definitely no panel.
-      disable();
+      // Ignore replies from the surface that preceded the current activation.
+      if (generation === activationGeneration) disable();
     }
   }, 4000);
 }
@@ -142,7 +138,8 @@ interface DomUndoEntry { kind: "dom"; action: string; elementId: string; html: s
 interface TextUndoEntry { kind: "text"; elementId: string; oldText: string; newText: string; isHtml?: boolean; attributeName?: string; }
 interface VisibilityUndoEntry { kind: "visibility"; elementId: string; wasHidden: boolean; oldDisplay: string; }
 interface TokenUndoEntry { kind: "token"; cssVar: string; scopeSelector: string; oldValue: string; newValue: string; original: string; }
-type UndoEntry = StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoEntry | TokenUndoEntry;
+interface GestureUndoEntry { kind: "gesture"; entries: StyleUndoEntry[]; meta: { groupId: string; groupLabel: string }; }
+type UndoEntry = GestureUndoEntry | StyleUndoEntry | DomUndoEntry | TextUndoEntry | VisibilityUndoEntry | TokenUndoEntry | DeleteCommand | MoveCommand;
 const pageSessionStartedAt = Date.now();
 const undoStack: UndoEntry[] = [];
 const redoStack: UndoEntry[] = [];
@@ -151,6 +148,7 @@ let importInProgress = false;
 function applyTokenUndoValue(cssVar: string, scopeSelector: string, value: string, original: string) {
   if (value === original) resetTokenEdit(cssVar, scopeSelector);
   else setTokenEdit(cssVar, value, scopeSelector);
+  syncAllChanges();
 }
 
 function pushTokenUndo(entry: TokenUndoEntry) {
@@ -166,20 +164,18 @@ function pushTokenUndo(entry: TokenUndoEntry) {
 }
 
 
-// Corner-dot resize commits its final width/height through the change-tracker
-// (so it lands in the Changes tab and exports), pushes an undo entry per
-// dimension, and refreshes the panel — same path the side panel's APPLY_STYLE
-// would take, just initiated from the page.
-setResizeCommitHandler((id, width, height) => {
+// A corner resize is one history action even when both dimensions change.
+setResizeCommitHandler((id, width, height, before) => {
   const el = getElementById(id);
   if (!el) return;
   const meta = { groupId: `resize-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, groupLabel: 'Resize' };
-  const cs = window.getComputedStyle(el);
-  const beforeW = cs.width, beforeH = cs.height;
+  const entries: StyleUndoEntry[] = [];
+  const beforeW = before.width, beforeH = before.height;
   if (width) applyWithCompanions(id, 'width', width, undefined, meta);
   const change = height ? applyWithCompanions(id, 'height', height, undefined, meta) : null;
-  if (width) undoStack.push({ kind: 'style', elementId: id, property: 'width', oldValue: beforeW, newValue: width });
-  if (height) undoStack.push({ kind: 'style', elementId: id, property: 'height', oldValue: beforeH, newValue: height, changeId: change?.id });
+  if (width) entries.push({ kind: 'style', elementId: id, property: 'width', oldValue: beforeW, newValue: width });
+  if (height) entries.push({ kind: 'style', elementId: id, property: 'height', oldValue: beforeH, newValue: height, changeId: change?.id });
+  if (entries.length) undoStack.push({ kind: 'gesture', entries, meta });
   redoStack.length = 0;
   const updated = getElementById(id);
   if (updated) onElementSelected(buildElementInfo(updated));
@@ -199,24 +195,27 @@ setResizePreviewHandler((id, width, height) => {
 setMoveCommitHandler((entries) => {
   if (!entries.length) return;
   const meta = { groupId: `move-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, groupLabel: 'Move' };
+  const history: StyleUndoEntry[] = [];
   for (const entry of entries) {
     const el = getElementById(entry.id);
     if (!el) continue;
     const cs = window.getComputedStyle(el);
-    const beforeLeft = cs.left, beforeTop = cs.top, beforePos = cs.position;
+    const beforePos = cs.position;
     if (entry.promotedPosition) {
       applyWithCompanions(entry.id, 'position', entry.promotedPosition, undefined, meta);
-      undoStack.push({ kind: 'style', elementId: entry.id, property: 'position', oldValue: beforePos, newValue: entry.promotedPosition });
+      history.push({ kind: 'style', elementId: entry.id, property: 'position', oldValue: beforePos, newValue: entry.promotedPosition });
     }
+    const beforeLeft = cs.left, beforeTop = cs.top;
     if (entry.left) {
       applyWithCompanions(entry.id, 'left', entry.left, undefined, meta);
-      undoStack.push({ kind: 'style', elementId: entry.id, property: 'left', oldValue: beforeLeft, newValue: entry.left });
+      history.push({ kind: 'style', elementId: entry.id, property: 'left', oldValue: beforeLeft, newValue: entry.left });
     }
     if (entry.top) {
       const change = applyWithCompanions(entry.id, 'top', entry.top, undefined, meta);
-      undoStack.push({ kind: 'style', elementId: entry.id, property: 'top', oldValue: beforeTop, newValue: entry.top, changeId: change?.id });
+      history.push({ kind: 'style', elementId: entry.id, property: 'top', oldValue: beforeTop, newValue: entry.top, changeId: change?.id });
     }
   }
+  if (history.length) undoStack.push({ kind: 'gesture', entries: history, meta });
   redoStack.length = 0;
   const focusId = getSelectedElementId();
   const focusEl = focusId ? getElementById(focusId) : null;
@@ -413,27 +412,17 @@ function revertAllPageMutations() {
   });
 }
 
-async function getChangesPayload(savedComments?: Awaited<ReturnType<typeof getPageComments>>) {
-  const pageComments = savedComments ?? await getPageComments();
-  // Decorate style changes with the number of elements currently matching
-  // their saved selector — drives the "applies to N elements" badge in the
-  // panel's Changes tab so the user knows what a Zap-Apply will hit.
+function buildChangesPayload(pageComments: Awaited<ReturnType<typeof getPageComments>>) {
+  // Count the same bounded peer set that batch apply uses, once per source.
+  const matchCounts = new Map<string, number>();
   const decorated = getStyleChanges().map(c => {
-    let matchCount = 1;
-    try { matchCount = Math.max(1, document.querySelectorAll(c.selector).length); } catch {}
-    return { ...c, matchCount };
+    if (!matchCounts.has(c.elementId)) {
+      matchCounts.set(c.elementId, findMatchingElements(c.elementId).length);
+    }
+    return { ...c, matchCount: matchCounts.get(c.elementId)! };
   });
   const contextChanges = [...decorated, ...getTextChanges(), ...getDomChanges(), ...pageComments];
   const componentContexts = getChangeComponentContexts(contextChanges);
-  const elementIds = [...new Set(contextChanges.map(c => c.elementId).filter(Boolean))];
-  if (elementIds.length) {
-    try {
-      const pageContexts = await browser.runtime.sendMessage({ type: 'GET_CHANGE_COMPONENT_CONTEXTS', elementIds });
-      for (const id of elementIds) {
-        if (pageContexts?.[id]?.name || pageContexts?.[id]?.file) componentContexts[id] = pageContexts[id];
-      }
-    } catch { /* Source metadata is optional on restricted pages. */ }
-  }
   return {
     styleChanges: decorated,
     textChanges: getTextChanges(),
@@ -444,16 +433,28 @@ async function getChangesPayload(savedComments?: Awaited<ReturnType<typeof getPa
   };
 }
 
-// Look up the transferred size of a resource via the Performance API.
-// Returns undefined when the entry is missing (resource not navigated
-// through the network — e.g. inline data:, cross-origin opaque) or when
-// transferSize is 0 (cache hit on a CORS-opaque response). encodedBodySize
-// is the on-the-wire compressed bytes; falling back to decodedBodySize
-// approximates the uncompressed size when both are zero.
+async function getChangesPayload(savedComments?: Awaited<ReturnType<typeof getPageComments>>) {
+  const pageUrl = location.href;
+  const payload = buildChangesPayload(savedComments ?? await getPageComments());
+  const elementIds = [...new Set([...payload.styleChanges, ...payload.textChanges, ...payload.domChanges, ...payload.comments].map(c => c.elementId).filter(Boolean))];
+  if (elementIds.length) {
+    try {
+      const pageContexts = await browser.runtime.sendMessage({ type: 'GET_CHANGE_COMPONENT_CONTEXTS', elementIds });
+      for (const id of elementIds) {
+        if (pageContexts?.[id]?.name || pageContexts?.[id]?.file) payload.componentContexts[id] = pageContexts[id];
+      }
+    } catch { /* Source metadata is optional on restricted pages. */ }
+  }
+  if (pageUrl !== location.href) throw Error('Page changed while loading changes. Please retry.');
+  return payload;
+}
+
 function resolveResourceBytes(src: string): number | undefined {
   try {
-    const url = new URL(src, location.href).href;
-    const entries = performance.getEntriesByName(url) as PerformanceResourceTiming[];
+    const url = new URL(src, location.href);
+    // Firefox's privileged timing can expose opaque cross-origin sizes; timing alone cannot prove CORS eligibility.
+    if (url.origin !== location.origin) return undefined;
+    const entries = performance.getEntriesByName(url.href) as PerformanceResourceTiming[];
     for (let i = entries.length - 1; i >= 0; i--) {
       const e = entries[i];
       if (e.transferSize) return e.transferSize;
@@ -486,6 +487,13 @@ function notifyPanel(type: string, payload?: any) {
     browser.runtime.sendMessage({ type, ...payload, _dmTab: selfTabId });
   } catch {}
 }
+
+window.addEventListener('dm-styles-painted', () => {
+  if (!on || !dmIsActiveInstance()) return;
+  const id = getSelectedElementId();
+  const el = id && getElementById(id);
+  if (el) onElementSelected(buildElementInfo(el));
+});
 
 function selectAndNotify(el: HTMLElement) {
   const info = buildElementInfo(el);
@@ -539,7 +547,7 @@ async function performFullClear() {
   // Make sure the override stylesheet is enabled before we clear it,
   // otherwise the page would still be showing `disabled` overrides.
   setOverridesEnabled(true);
-  if ((window as any).__dmPreviewSaved) delete (window as any).__dmPreviewSaved;
+  restoreOriginalPreview();
 
   revertAllPageMutations();
 
@@ -549,6 +557,7 @@ async function performFullClear() {
   clearAllLayoutGuides();
   undoStack.length = 0;
   redoStack.length = 0;
+  syncAllChanges();
 }
 
 // Cloud-tools dispatcher. Mirrors the local server's MCP handlers but runs
@@ -677,8 +686,8 @@ function dispatchCloudMessage(msg: any) {
       const commentId = msg.payload?.commentId;
       const resolved = msg.payload?.resolved !== false;
       if (!commentId) { sendRelayResponse(msg.requestId, { ok: false }); return; }
-      setCommentResolved(commentId, resolved).then(c => {
-        if (c) { void showCommentPins(); syncCommentChange(c); notifyPanel('CHANGES_UPDATE', {}); }
+      setCommentResolved(commentId, resolved).then(async c => {
+        if (c) { void showCommentPins(); syncCommentChange(c); notifyPanel('CHANGES_UPDATE', await getChangesPayload()); }
         sendRelayResponse(msg.requestId, { ok: !!c });
       }).catch(error => sendRelayResponse(msg.requestId, { ok: false, error: String(error) }));
       return;
@@ -724,11 +733,11 @@ function renderExportText(format: 'css' | 'tailwind' | 'scss' | 'jsx'): string {
 
 setUnhandledMessageHandler(dispatchCloudMessage);
 
-// Reads the user's chosen MCP transport mode + cloud creds from storage,
-// then opens the appropriate transport. Falls back to local on any error.
-async function openConfiguredTransport() {
+async function openConfiguredTransport(isCurrent = () => on && dmIsActiveInstance(), automatic = false) {
   try {
-    const conf = await browser.storage.local.get(['dm-mcp-mode', 'dm-mcp-port', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url']);
+    const conf = await browser.storage.local.get(['dm-mcp-mode', 'dm-mcp-port', 'dm-mcp-cloud-token', 'dm-mcp-cloud-url', 'dm-mcp-auto-connect']);
+    if (!isCurrent()) return;
+    if (automatic && conf['dm-mcp-auto-connect'] === false) return;
     const mode = (conf['dm-mcp-mode'] as 'local' | 'cloud' | 'self-hosted' | undefined) || 'cloud';
     if (mode === 'local') {
       const port = typeof conf['dm-mcp-port'] === 'number' ? conf['dm-mcp-port'] : DEFAULT_WS_PORT;
@@ -741,44 +750,52 @@ async function openConfiguredTransport() {
     // every transport closed instead of dialing localhost. The MCP status
     // dot stays "offline" and the panel's tooltip points the user to
     // the MCP page → Connect to Cloud.
-    if (!cloudToken || !cloudUrl) { disconnectFromServer(); return; }
+    if (typeof cloudToken !== 'string' || !cloudToken || typeof cloudUrl !== 'string' || !cloudUrl) { disconnectFromServer(); return; }
     connectToServer({ mode, cloudToken, cloudUrl });
   } catch {
-    connectToServer({ mode: 'local' });
+    // An unreadable preference is not consent to dial a different transport.
+    if (isCurrent()) disconnectFromServer();
   }
 }
 
 function enable() {
   if (on) return;
   on = true;
+  const generation = ++activationGeneration;
+  const isCurrent = () => on && generation === activationGeneration && dmIsActiveInstance();
+  document.addEventListener('keydown', onHistoryKeyDown, true);
   refreshSelfTabId();
   resetOverlayTeardown();
   resetMeasureTeardown();
   applyBaseCursor();
-  void restoreCommentPins().then(() => notifyPanel('STATE_UPDATE', getFullState()));
+  void restoreCommentPins(isCurrent).then(() => {
+    if (isCurrent()) notifyPanel('STATE_UPDATE', getFullState());
+  }).catch(() => {});
   startPanelHeartbeat();     // detect a panel-close that the message chain missed
-  void openConfiguredTransport();
+  void openConfiguredTransport(isCurrent, true);
   enableInspect((i: ElementInfo) => onElementSelected(i));
   loadShortcuts().then(() => {
+    if (!isCurrent()) return;
     enableShortcuts();
     registerAllShortcuts();
-  });
+  }).catch(() => {});
   // Replay any changes saved in this session for this URL — survives reloads
   // and back/forward navigation. Always notify so the side panel resets
   // its state to match the new page (even if it's empty).
-  replaySession().finally(() => {
-    notifyPanel('CHANGES_UPDATE', {
-      styleChanges: getStyleChanges(),
-      textChanges: getTextChanges(),
-      domChanges: getDomChanges(),
-    });
+  replaySession(isCurrent).then(() => getChangesPayload()).then(payload => {
+    if (isCurrent()) notifyPanel('CHANGES_UPDATE', payload);
+  }).catch(error => {
+    if (isCurrent()) notifyPanel('COMMENT_ERROR', { error: String(error) });
   });
-  setTimeout(() => notifyPanel('STATE_UPDATE', getFullState()), 1000);
+  setTimeout(() => { if (isCurrent()) notifyPanel('STATE_UPDATE', getFullState()); }, 1000);
 }
 
 function disable() {
   if (!on) return;
   on = false;
+  activationGeneration++;
+  document.removeEventListener('keydown', onHistoryKeyDown, true);
+  restoreOriginalPreview();
   stopPanelHeartbeat();
   // Order matters: kill the input handlers BEFORE removing the overlays so
   // an in-flight mouseover can't repaint the hover layer after we tear it
@@ -807,6 +824,7 @@ function disable() {
   clearPageStateForceCss();
   clearComputedLayoutOverlay();
   clearBaseCursor();
+  notifyPanel('STATE_UPDATE', getFullState());
 }
 
 // Clear the current single selection and return to hover mode — inspect stays
@@ -823,6 +841,33 @@ function clearSelectionToHover() {
   clearComputedLayoutOverlay();
   setSelectedElementId(null);
   notifyPanel('ELEMENT_DESELECTED', {});
+}
+
+function onHistoryKeyDown(event: KeyboardEvent) {
+  if (!on || !dmIsActiveInstance() || isTypingTarget(event.target) || event.isComposing || event.altKey) return;
+  if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return;
+  const type = event.shiftKey ? 'REDO' : 'UNDO';
+  if (!(event.shiftKey ? redoStack : undoStack).length) return;
+  event.preventDefault();
+  event.stopPropagation();
+  handleContentMessage({ type }, {}, response => {
+    notifyPanel('CHANGES_UPDATE', response);
+    notifyPanel('STATE_UPDATE', getFullState());
+  });
+}
+
+function deleteSelectedElements(ids: string[]) {
+  restoreOriginalPreview();
+  const command = deleteElements(ids);
+  if (!command) return;
+  undoStack.push(command);
+  redoStack.length = 0;
+  clearSelectionToHover();
+  if (isMultiSelectActive()) disableMultiSelect();
+  notifyPanel('STATE_UPDATE', getFullState());
+  getChangesPayload().then(p => notifyPanel('CHANGES_UPDATE', {
+    ...p, undoCount: undoStack.length, redoCount: redoStack.length,
+  })).catch(() => {});
 }
 
 function registerAllShortcuts() {
@@ -842,8 +887,7 @@ function registerAllShortcuts() {
     notifyPanel('STATE_UPDATE', getFullState());
   });
   registerShortcut('delete-element', () => {
-    const sid = getSelectedElementId();
-    if (sid) { deleteElement(sid); setSelectedElementId(null); hideSelect(); }
+    deleteSelectedElements(isMultiSelectActive() ? getMultiSelectIds() : [getSelectedElementId() || '']);
   });
   registerShortcut('export-css', () => {
     const ch = getStyleChanges();
@@ -855,7 +899,7 @@ function registerAllShortcuts() {
   // nothing is selected.
   registerShortcut('add-annotation', () => {
     const sid = getSelectedElementId();
-    if (!sid) return;
+    if (!sid || !hasExplicitSelection()) return;
     notifyPanel('OPEN_COMMENT_FOR_SELECTED', { elementId: sid });
   });
   // Alt+R — drag a freeform rectangle to comment on a region of the page
@@ -881,7 +925,7 @@ function registerAllShortcuts() {
 
 /* —— Message handler —— */
 
-browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
+function handleContentMessage(msg: any, _: chrome.runtime.MessageSender, sendResponse: (response: any) => void) {
   // Decline if a newer injection has superseded this instance (see the
   // re-injection guard at the top). Exactly one instance answers each
   // message, so the panel's round-trips can't be corrupted by duplicates.
@@ -915,6 +959,14 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
+    case 'REFRESH_PAGE_CONTEXT': {
+      const url = location.href;
+      hideCommentPins();
+      restoreCommentPins(() => on && location.href === url)
+        .then(() => sendResponse({ ok: true }))
+        .catch(error => sendResponse({ error: String(error) }));
+      return true;
+    }
     case 'GET_STATE': sendResponse(getFullState()); break;
     // Side panel asked us to drop the active transport and open a fresh
     // one — used when the user flips Mode in Settings or finishes the
@@ -964,26 +1016,40 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       //   - running: transport up, no agent attached recently
       //   - connected: transport up AND an agent has signalled presence
       //     (HELLO from mcp-local, or AGENT_PRESENCE from the cloud relay)
-      const connected = isConnected();
-      const agent = isAgentConnected();
-      sendResponse({
-        connected,
-        serverRunning: connected,
-        agentConnected: agent,
-        mcpState: !connected ? 'offline' : agent ? 'connected' : 'running',
-      });
+      const respond = (serverRunning = isConnected()) => {
+        const connected = serverRunning && isConnected();
+        const agent = connected && isAgentConnected();
+        sendResponse({
+          connected,
+          serverRunning,
+          agentConnected: agent,
+          mcpState: !connected ? 'offline' : agent ? 'connected' : 'running',
+        });
+      };
+      if (msg.reping === true) {
+        browser.storage.local.get(['dm-mcp-mode', 'dm-mcp-port']).then(async (saved) => {
+          if (saved['dm-mcp-mode'] !== 'local') { respond(); return; }
+          const result = await browser.runtime.sendMessage({
+            type: 'GET_LOCAL_MCP_TOKEN', port: saved['dm-mcp-port'] ?? DEFAULT_WS_PORT,
+          });
+          respond(typeof result?.token === 'string');
+        }).catch(() => respond(false));
+        return true;
+      }
+      respond();
       break;
     }
 
     // Implicit page-context selection. Side panel calls this when no element
     // is selected so the design tab can show body's properties as defaults.
-    // Selects <body> WITHOUT painting the orange select overlay (the overlay
-    // would visually wrap the entire viewport and look broken).
+    // Empty-panel queries can arrive after a page click; preserve that selection.
     case 'INSPECT_PAGE': {
-      const body = document.body;
-      if (body) {
-        const info = buildElementInfo(body);
-        setSelectedElementId(info.id);
+      const selected = getSelectedElementId();
+      const selectedElement = selected && getElementById(selected);
+      const context = selectedElement || document.body;
+      if (context) {
+        const info = buildElementInfo(context);
+        if (!selectedElement) setSelectedElementId(info.id, false);
         // Deliberately DO NOT call showSelect here.
         const guides = getLayoutGuidesFor(info.id);
         sendResponse({ payload: { ...info, element: undefined, layoutGuides: guides } });
@@ -1083,9 +1149,16 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
 
     // Undo (supports style, dom, text, visibility)
     case 'UNDO': {
+      restoreOriginalPreview();
       if (undoStack.length > 0) {
-        const entry = undoStack.pop()!;
-        if (entry.kind === 'style') {
+        const entry = undoStack[undoStack.length - 1];
+        if ((entry.kind === 'delete-group' || entry.kind === 'move') && !entry.undo()) { sendResponse({ ok: false, error: 'Page or tracked changes changed; cannot safely undo DOM change.' }); return false; }
+        undoStack.pop();
+        if (entry.kind === 'gesture') {
+          for (const item of [...entry.entries].reverse()) {
+            applyStyleChange(item.elementId, item.property, item.oldValue);
+          }
+        } else if (entry.kind === 'style') {
           // Re-apply the recorded oldValue through the change-tracker rather
           // than deleting by id. The tracker drops the record when the value
           // returns to its original oldValue (and otherwise steps newValue
@@ -1094,18 +1167,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           // in sync. `state` targets the right rule (base vs :hover variant).
           applyStyleChange(entry.elementId, entry.property, entry.oldValue, undefined, undefined, entry.state || '');
         } else if (entry.kind === 'dom') {
-          if (entry.action === 'delete') {
-            const parent = getElementById(entry.parentId);
-            if (parent) {
-              const temp = document.createElement('div');
-              temp.innerHTML = entry.html;
-              const restored = temp.firstElementChild as HTMLElement;
-              if (restored) {
-                const next = entry.nextSiblingId ? getElementById(entry.nextSiblingId) : null;
-                parent.insertBefore(restored, next);
-              }
-            }
-          } else if (entry.action === 'duplicate') {
+          if (entry.action === 'duplicate') {
             const dup = getElementById(entry.elementId);
             if (dup) dup.remove();
           }
@@ -1141,15 +1203,19 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
 
     // Redo (supports style, dom, text, visibility)
     case 'REDO': {
+      restoreOriginalPreview();
       if (redoStack.length > 0) {
-        const entry = redoStack.pop()!;
-        if (entry.kind === 'style') {
+        const entry = redoStack[redoStack.length - 1];
+        if ((entry.kind === 'delete-group' || entry.kind === 'move') && !entry.redo()) { sendResponse({ ok: false, error: 'Page or tracked changes changed; cannot safely redo DOM change.' }); return false; }
+        redoStack.pop();
+        if (entry.kind === 'gesture') {
+          for (const item of entry.entries) {
+            applyStyleChange(item.elementId, item.property, item.newValue, undefined, entry.meta);
+          }
+        } else if (entry.kind === 'style') {
           applyStyleChange(entry.elementId, entry.property, entry.newValue, undefined, undefined, entry.state || '');
         } else if (entry.kind === 'dom') {
-          if (entry.action === 'delete') {
-            const el = getElementById(entry.elementId);
-            if (el) el.remove();
-          } else if (entry.action === 'duplicate') {
+          if (entry.action === 'duplicate') {
             const parent = getElementById(entry.parentId);
             if (parent) {
               const temp = document.createElement('div');
@@ -1451,9 +1517,10 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         // and the agent gets a per-element diff in Copy Prompt). Otherwise
         // just the focused element. Make sure the focused element is in
         // the target list so the side-panel preview updates correctly.
-        const multiIds = isMultiSelectActive() ? getMultiSelectIds() : [];
+        // A serialized hidden stash is target-local, never a selection-wide value.
+        const multiIds = isMultiSelectActive() && msg.property !== '__effect_hidden' ? getMultiSelectIds() : [];
         const targetIds = multiIds.length > 0
-          ? Array.from(new Set([sid, ...multiIds]))
+          ? multiIds
           : [sid];
         const kebab = msg.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
         // Multi-select fan-out → one Changes-tab row that collapses every
@@ -1468,10 +1535,13 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
               groupLabel: `${targetIds.length} elements`,
             }
           : undefined;
+        const undoCountBefore = undoStack.length;
+        const entries: StyleUndoEntry[] = [];
         for (const id of targetIds) {
           const el = getElementById(id);
           if (!el) continue;
-          const beforeValue = authoredTokenValueFor(el, kebab) ?? window.getComputedStyle(el).getPropertyValue(kebab);
+          const prior = getStyleChanges().find(c => c.elementId === id && c.property === msg.property && (c.state || '') === (msg.state || ''));
+          const beforeValue = prior?.newValue ?? authoredTokenValueFor(el, kebab) ?? window.getComputedStyle(el).getPropertyValue(kebab);
           // Route through applyWithCompanions so well-known traps
           // (border-width without border-style, transition-property
           // with 0s duration, etc.) auto-emit the missing companion
@@ -1481,12 +1551,28 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
             const el2 = getElementById(id);
             if (el2 && id === sid) onElementSelected(buildElementInfo(el2));
           }, groupMeta, msg.state || '');
-          const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
-          if (afterValue !== beforeValue) {
-            undoStack.push({ kind: 'style', elementId: id, property: msg.property, oldValue: beforeValue, newValue: msg.value, changeId: change?.id, state: msg.state || '' });
+          // User-origin painting is asynchronous; history follows recorded intent.
+          if ((change || prior) && (msg.value !== beforeValue || (!!msg.state && !prior))) {
+            entries.push({ kind: 'style', elementId: id, property: msg.property, oldValue: beforeValue, newValue: msg.value, changeId: change?.id, state: msg.state || '' });
+          }
+          // Use THIS target's history, including when the focused target has
+          // never hidden an effect. Never copy the focused element's stash.
+          const hidden = getStyleChanges().find(c => c.elementId === id && c.property === '__effect_hidden' && !c.state);
+          if (hidden && !msg.state) {
+            const value = rebaseHiddenEffectValue(hidden.newValue, msg.property, beforeValue, msg.value);
+            if (value !== hidden.newValue) {
+              const oldValue = hidden.newValue;
+              const metadata = applyWithCompanions(id, '__effect_hidden', value, undefined, groupMeta);
+              entries.push({ kind: 'style', elementId: id, property: '__effect_hidden', oldValue, newValue: value, changeId: metadata?.id });
+            }
           }
         }
-        if (targetIds.length > 0) redoStack.length = 0;
+        // State-specific edits retain their existing history path: gesture
+        // replay is base-style-only. Effect metadata exists only in base state.
+        if (msg.state) undoStack.push(...entries);
+        else if (entries.length > 1) undoStack.push({ kind: 'gesture', entries, meta: groupMeta ?? { groupId: `effect-${Date.now()}`, groupLabel: 'Effect' } });
+        else if (entries.length) undoStack.push(entries[0]);
+        if (undoStack.length > undoCountBefore) redoStack.length = 0;
         // Re-position overlays after the browser repaints — the style we just
         // wrote can change the element's bounding rect (width/height/left/top)
         // and the select+hover overlays plus the W×H dimension label all need
@@ -1499,15 +1585,17 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           if (focusedEl) showSelect(focusedEl);
           repositionResizeDots();
         });
-        const updatedEl = getElementById(sid);
-        const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
-        getChangesPayload().then(p => sendResponse({
-          info: updatedInfo ? { ...updatedInfo, element: undefined, imgSrc: updatedEl?.tagName === 'IMG' ? (updatedEl as HTMLImageElement).src : undefined } : null,
-          ...p,
-          undoCount: undoStack.length,
-          redoCount: redoStack.length,
-          appliedTo: targetIds.length,
-        })).catch(error => sendResponse({ ok: false, error: String(error) }));
+        Promise.all([getChangesPayload(), whenUserStylesPainted()]).then(([p]) => {
+          const updatedEl = getElementById(sid);
+          const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
+          sendResponse({
+            info: updatedInfo ? { ...updatedInfo, element: undefined, imgSrc: updatedEl?.tagName === 'IMG' ? (updatedEl as HTMLImageElement).src : undefined } : null,
+            ...p,
+            undoCount: undoStack.length,
+            redoCount: redoStack.length,
+            appliedTo: targetIds.length,
+          });
+        }).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       } else sendResponse({ error: 'No element selected' });
       break;
@@ -1574,32 +1662,70 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         groupKind: 'multi-select' as const,
         groupLabel: msg.groupLabel || 'Batch',
       };
-      for (const c of msg.changes) {
-        if (!c?.property) continue;
-        const el = getElementById(sid);
+      const multiIds = isMultiSelectActive() ? getMultiSelectIds() : [];
+      const targetIds = Array.from(new Set([sid, ...multiIds]));
+      if (targetIds.length > 1) groupMeta.groupLabel = `${targetIds.length} elements — ${msg.groupLabel || 'Batch'}`;
+      const entries: StyleUndoEntry[] = [];
+      // Batch is a property transaction, not a single-element edit. Uniform
+      // padding/margin and linked borders use this same selection-aware path.
+      const hasFocusedHiddenValue = msg.changes.some((c: { property?: string }) => c?.property === '__effect_hidden');
+      for (const id of targetIds) {
+        const el = getElementById(id);
         if (!el) continue;
-        const kebab = c.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
-        const beforeValue = authoredTokenValueFor(el, kebab) ?? window.getComputedStyle(el).getPropertyValue(kebab);
-        const change = applyWithCompanions(sid, c.property, c.value, undefined, groupMeta);
-        const afterValue = window.getComputedStyle(el).getPropertyValue(kebab);
-        if (afterValue !== beforeValue) {
-          undoStack.push({ kind: 'style', elementId: sid, property: c.property, oldValue: beforeValue, newValue: c.value, changeId: change?.id });
+        for (const c of msg.changes) {
+          if (typeof c?.property !== 'string' || !c.property || typeof c.value !== 'string' || (c.property === '__effect_hidden' && id !== sid)) continue;
+          const kebab = c.property.replace(/[A-Z]/g, (m: string) => '-' + m.toLowerCase());
+          const prior = getStyleChanges().find(change => change.elementId === id && change.property === c.property && !change.state);
+          const beforeValue = prior?.newValue ?? authoredTokenValueFor(el, kebab) ?? window.getComputedStyle(el).getPropertyValue(kebab);
+          const companions = computeCompanions(c.property, c.value, window.getComputedStyle(el)).map(companion => ({
+            ...companion,
+            oldValue: getStyleChanges().find(change => change.elementId === id && change.property === companion.property && !change.state)?.newValue
+              ?? window.getComputedStyle(el).getPropertyValue(companion.property),
+          }));
+          const change = applyWithCompanions(id, c.property, c.value, undefined, groupMeta);
+          // Undo the full batch, including automatic border/position/size fixes.
+          for (const companion of companions) {
+            if (companion.oldValue === companion.value) continue;
+            const recorded = getStyleChanges().find(change => change.elementId === id && change.property === companion.property && !change.state);
+            entries.push({ kind: 'style', elementId: id, property: companion.property, oldValue: companion.oldValue, newValue: companion.value, changeId: recorded?.id });
+          }
+          if ((change || prior) && c.value !== beforeValue) {
+            entries.push({ kind: 'style', elementId: id, property: c.property, oldValue: beforeValue, newValue: c.value, changeId: change?.id });
+          }
+          // The panel's explicit stash belongs only to its focused element.
+          // Other targets rebase their OWN stash, just like APPLY_STYLE; never
+          // copy hidden effects between elements. Preserve explicit slot edits.
+          const hidden = getStyleChanges().find(change => change.elementId === id && change.property === '__effect_hidden' && !change.state);
+          if (hidden && c.property !== '__effect_hidden' && !(id === sid && hasFocusedHiddenValue)) {
+            const value = rebaseHiddenEffectValue(hidden.newValue, c.property, beforeValue, c.value);
+            if (value !== hidden.newValue) {
+              const oldValue = hidden.newValue;
+              const metadata = applyWithCompanions(id, '__effect_hidden', value, undefined, groupMeta);
+              entries.push({ kind: 'style', elementId: id, property: '__effect_hidden', oldValue, newValue: value, changeId: metadata?.id });
+            }
+          }
         }
       }
-      if (msg.changes.length > 0) redoStack.length = 0;
+      if (entries.length) {
+        undoStack.push({ kind: 'gesture', entries, meta: groupMeta });
+        redoStack.length = 0;
+      }
       requestAnimationFrame(() => {
+        if (multiIds.length > 0) refreshMultiSelectOverlays();
         const focusedEl = getElementById(sid);
         if (focusedEl) showSelect(focusedEl);
         repositionResizeDots();
       });
-      const updatedEl = getElementById(sid);
-      const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
-      getChangesPayload().then(p => sendResponse({
-        info: updatedInfo ? { ...updatedInfo, element: undefined } : null,
-        ...p,
-        undoCount: undoStack.length,
-        redoCount: redoStack.length,
-      })).catch(error => sendResponse({ ok: false, error: String(error) }));
+      Promise.all([getChangesPayload(), whenUserStylesPainted()]).then(([p]) => {
+        const updatedEl = getElementById(sid);
+        const updatedInfo = updatedEl ? buildElementInfo(updatedEl) : null;
+        sendResponse({
+          info: updatedInfo ? { ...updatedInfo, element: undefined } : null,
+          ...p,
+          undoCount: undoStack.length,
+          redoCount: redoStack.length,
+        });
+      }).catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
 
@@ -1637,7 +1763,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       if (!sid && requestedIds.length === 0 && msg.action !== 'paste') { sendResponse({ error: 'No element selected' }); break; }
       let newInfo: any = null;
       switch (msg.action) {
-        case 'cut': if (sid) { cutElement(sid); setSelectedElementId(null); hideSelect(); } break;
+        case 'cut': if (sid && copyElement(sid)) deleteSelectedElements([sid]); break;
         case 'copy': if (sid) copyElement(sid); break;
         case 'paste': if (sid) { const nid = pasteElement(sid); if (nid) { setSelectedElementId(nid); const el = getElementById(nid); if (el) { showSelect(el); newInfo = buildElementInfo(el); } } } break;
         case 'duplicate': if (sid) {
@@ -1657,25 +1783,8 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         } break;
         case 'delete': {
           const ids = (requestedIds.length > 0 ? requestedIds : [msg.elementId || sid])
-            .filter((id): id is string => Boolean(id));
-          const targetIds = orderDomDeletionTargets(
-            ids,
-            (id: string) => getElementById(id) as HTMLElement | null,
-            (a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? 1 : -1,
-          );
-          const deletedIds = new Set<string>();
-          for (const { id, element } of targetIds) {
-            const parentId = element.parentElement ? getOrAssignId(element.parentElement as HTMLElement) : '';
-            const nextId = element.nextElementSibling ? getOrAssignId(element.nextElementSibling as HTMLElement) : null;
-            const html = element.outerHTML;
-            if (deleteElement(id)) {
-              undoStack.push({ kind: 'dom', action: 'delete', elementId: id, html, parentId, nextSiblingId: nextId });
-              deletedIds.add(id);
-            }
-          }
-          if (deletedIds.size > 0) redoStack.length = 0;
-          if (sid && deletedIds.has(sid)) { setSelectedElementId(null); hideSelect(); }
-          if (requestedIds.length > 0 && isMultiSelectActive()) disableMultiSelect();
+            .filter((id: unknown): id is string => typeof id === 'string' && Boolean(id));
+          deleteSelectedElements(ids);
         } break;
         case 'move-up': if (sid) moveElement(sid, 'up'); break;
         case 'move-down': if (sid) moveElement(sid, 'down'); break;
@@ -1708,6 +1817,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         const existing = peekTokenEdit(msg.cssVar, scope);
         const priorCurrent = existing?.current;
         setTokenEdit(msg.cssVar, msg.value, scope);
+        syncAllChanges();
         const after = peekTokenEdit(msg.cssVar, scope);
         const original = after?.original ?? existing?.original ?? '';
         pushTokenUndo({
@@ -1738,6 +1848,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           });
         }
         resetTokenEdit(msg.cssVar, scope);
+        syncAllChanges();
         getChangesPayload().then(p => sendResponse({ ok: true, ...p, undoCount: undoStack.length, redoCount: redoStack.length })).catch(error => sendResponse({ ok: false, error: String(error) }));
         return true;
       }
@@ -1745,7 +1856,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
     case 'GET_TOKEN_USAGES': {
       if (msg.cssVar) {
-        sendResponse({ ids: findTokenUsages(msg.cssVar) });
+        sendResponse({ ids: findTokenUsages(msg.cssVar, msg.scopeSelector) });
       } else {
         sendResponse({ ids: [] });
       }
@@ -1804,7 +1915,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       return true;
     }
     case 'GET_PRESETS': {
-      getCustomPresets().then(presets => sendResponse({ presets }));
+      getCustomPresets().then(presets => sendResponse({ presets: withPresetUsageCounts(presets) }));
       return true;
     }
     case 'SAVE_PRESET': {
@@ -1872,28 +1983,35 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       (async () => {
         try {
           const incoming = validateImportPayload(msg.payload);
+          const fingerprint = () => JSON.stringify([getStyleChanges(), getTextChanges(), getDomChanges(), getTokenEdits(), undoStack, redoStack, (window as any).__dmPreviewSaved]);
+          const initial = fingerprint();
           const previousComments = await getPageComments();
-          const previous = { styleChanges: getStyleChanges(), textChanges: getTextChanges(), domChanges: getDomChanges() };
-          const restoreDom = captureImportDomRollback();
-          const restoreTracker = captureTrackerRollback();
-          const restoreTokens = captureTokenRollback();
-          const restorePins = captureCommentPinsRollback();
-          const preview = (window as any).__dmPreviewSaved;
+          let restore: Array<() => void> = [];
+          let preview: unknown;
           let commentsWritten = false, sessionWritten = false, mutated = false;
           try {
             const savedComments = await persistPageComments(incoming.comments);
             commentsWritten = true;
             await persistImportedSession(incoming);
             sessionWritten = true;
+            if (fingerprint() !== initial) throw Error('Session changed while importing; retry the import.');
+            // No await may separate this journal from the DOM commit or rollback.
+            const restoreDom = captureImportDomRollback();
+            const undo = [...undoStack], redo = [...redoStack];
+            restore = [captureCommentPinsRollback(), captureTrackerRollback(), captureTokenRollback(), restoreDom, () => {
+              undoStack.splice(0, undoStack.length, ...undo);
+              redoStack.splice(0, redoStack.length, ...redo);
+            }];
+            preview = (window as any).__dmPreviewSaved;
             mutated = true;
             setOverridesEnabled(true);
-            delete (window as any).__dmPreviewSaved;
+            restoreOriginalPreview();
             revertAllPageMutations();
             clearAllChanges(false);
             applyChangesPayload(incoming);
             clearAllTokenEdits();
             renderPageComments(savedComments);
-            const p = await getChangesPayload(savedComments);
+            const p = buildChangesPayload(savedComments);
             clearAllLayoutGuides();
             undoStack.length = 0;
             redoStack.length = 0;
@@ -1902,13 +2020,13 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           } catch (error) {
             const rollbackErrors: string[] = [];
             if (mutated) {
-              for (const restore of [restorePins, restoreTracker, restoreTokens, restoreDom]) {
-                try { restore(); } catch (e) { rollbackErrors.push(String(e)); }
+              for (const rollback of restore) {
+                try { rollback(); } catch (e) { rollbackErrors.push(String(e)); }
               }
               (window as any).__dmPreviewSaved = preview;
             }
             if (sessionWritten || mutated) {
-              try { await persistImportedSession(previous); } catch (e) { rollbackErrors.push(String(e)); }
+              try { await persistImportedSession({ styleChanges: getStyleChanges(), textChanges: getTextChanges(), domChanges: getDomChanges() }); } catch (e) { rollbackErrors.push(String(e)); }
             }
             if (commentsWritten) {
               try { await persistPageComments(previousComments); } catch (e) { rollbackErrors.push(String(e)); }
@@ -2119,16 +2237,16 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
-    // Re-trigger an @starting-style "on appear" transition. Toggling
-    // display:none → reflow → restore makes the browser treat the element as
-    // newly rendered, so its @starting-style transition plays again.
+    // A discrete display transition can defer display:none, so remount the same
+    // node to reset its before-change style without losing listeners or identity.
     case 'REPLAY_APPEAR': {
       const el = getElementById(msg.elementId || getSelectedElementId() || '');
-      if (el) {
-        const prev = el.style.display;
-        el.style.display = 'none';
+      if (el?.parentNode) {
+        const parent = el.parentNode;
+        const next = el.nextSibling;
+        el.remove();
         void el.offsetHeight;
-        el.style.display = prev;
+        parent.insertBefore(el, next);
       }
       sendResponse({ ok: true });
       break;
@@ -2168,21 +2286,25 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
       break;
     }
 
-    // Re-trigger the animation on the selected element by toggling the
-    // animation-name longhand to 'none', forcing reflow, then clearing the
-    // inline override so the stylesheet rule's animation-name kicks back in.
+    // User-origin important rules outrank inline styles, so restart the timeline.
     case 'PREVIEW_ANIMATION': {
       const sid = getSelectedElementId();
       if (sid) {
         const el = getElementById(sid);
         if (el) {
-          // Toggle longhand animation-name only — preserves duration/timing/etc.
-          // applied via the rule.
-          el.style.animationName = 'none';
-          // Reading offsetHeight forces a synchronous style recalc and reflow,
-          // so the next change re-triggers the animation cleanly.
-          void el.offsetHeight;
-          el.style.animationName = '';
+          // Firefox's injected USER sheets do not give layered replay priority over editor rules.
+          // Unlayered specificity must exceed base and state variants; fill exposes completed animations.
+          const css = `[data-dm-id="${CSS.escape(sid)}"][data-dm-id][data-dm-id][data-dm-id] { animation-fill-mode: both !important; }`;
+          void withTemporaryUserStyles(css, () => {
+            for (const animation of el.getAnimations()) {
+              if (!(animation instanceof CSSAnimation)) continue;
+              const paused = animation.playState === 'paused' || isFrozen();
+              animation.currentTime = 0;
+              if (!paused) animation.play();
+            }
+          }).then(() => sendResponse({ ok: true }))
+            .catch(error => sendResponse({ ok: false, error: String(error) }));
+          return true;
         }
       }
       sendResponse({ ok: true });
@@ -2242,101 +2364,33 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     }
 
     case 'PREVIEW_ORIGINAL': {
-      // Style rollback is one DOM op — flip the override stylesheet's
-      // disabled bit. Everything else (text + DOM mutations) still needs
-      // hand-rolling because they aren't stylesheet-based.
-      setOverridesEnabled(false);
-
-      const savedTexts: Array<{ elementId: string; currentText: string; isHtml?: boolean; attributeName?: string }> = [];
-      const firstOldText = new Map<string, { elementId: string; oldText: string; isHtml?: boolean; attributeName?: string }>();
-      for (const ch of getTextChanges()) {
-        const key = `${ch.elementId}\0${ch.attributeName || 'content'}`;
-        if (!firstOldText.has(key)) firstOldText.set(key, ch);
-      }
-      for (const [, ch] of firstOldText) {
-        const el = getElementById(ch.elementId);
-        if (el) {
-          const currentText = ch.attributeName
-            ? el.getAttribute(ch.attributeName) || ''
-            : ch.isHtml ? el.innerHTML : el.textContent || '';
-          savedTexts.push({ elementId: ch.elementId, currentText, isHtml: ch.isHtml, attributeName: ch.attributeName });
-          if (ch.attributeName) {
-            if (ch.oldText) el.setAttribute(ch.attributeName, ch.oldText); else el.removeAttribute(ch.attributeName);
-          } else if (ch.isHtml) el.innerHTML = ch.oldText;
-          else el.textContent = ch.oldText;
+      if ((window as any).__dmPreviewSaved) { sendResponse({ ok: true }); break; }
+      try {
+        const retained = new Map<string, HTMLElement>();
+        for (const entry of undoStack) {
+          if (entry.kind === 'delete-group') for (const [id, el] of entry.elements) retained.set(id, el);
         }
-      }
-
-      // For each DOM change, hide additions and re-insert deletions. The
-      // `data-dm-preview-*` attributes are markers we strip during restore;
-      // Clear All also strips them.
-      for (const ch of getDomChanges()) {
-        try {
-          if (ch.action === 'duplicate' || ch.action === 'insert') {
-            const el = (getElementById(ch.elementId) || document.querySelector(ch.selector)) as HTMLElement | null;
-            if (el && el.style.display !== 'none') {
-              el.dataset.dmPreviewPrevDisplay = el.style.display || '';
-              el.style.display = 'none';
-              el.setAttribute('data-dm-preview-hidden', '1');
-            }
-          } else if (ch.action === 'delete' && ch.outerHTML) {
-            if (document.querySelector(ch.selector)) continue;
-            const temp = document.createElement('div');
-            temp.innerHTML = ch.outerHTML;
-            const restored = temp.firstElementChild as HTMLElement | null;
-            if (restored) {
-              restored.setAttribute('data-dm-preview-restored', '1');
-              (document.body || document.documentElement).appendChild(restored);
-            }
-          }
-        } catch {}
-      }
-
-      try { hideCommentPins(); } catch {}
-      (window as any).__dmPreviewSaved = { savedTexts };
-      sendResponse({ ok: true }); break;
+        (window as any).__dmPreviewSaved = previewOriginal(retained);
+        hideCommentPins();
+        sendResponse({ ok: true });
+      } catch (error) { sendResponse({ ok: false, error: String(error) }); }
+      break;
     }
 
     case 'RESTORE_CHANGES': {
-      setOverridesEnabled(true);
-      const saved = (window as any).__dmPreviewSaved as
-        | { savedTexts: Array<{ elementId: string; currentText: string; isHtml?: boolean; attributeName?: string }> }
-        | undefined;
-      if (saved) {
-        for (const t of saved.savedTexts || []) {
-          const el = getElementById(t.elementId);
-          if (!el) continue;
-          if (t.attributeName) {
-            if (t.currentText) el.setAttribute(t.attributeName, t.currentText); else el.removeAttribute(t.attributeName);
-          } else if (t.isHtml) el.innerHTML = t.currentText;
-          else el.textContent = t.currentText;
-        }
-        delete (window as any).__dmPreviewSaved;
-      }
-      // Restore display on the duplicates/inserts we hid; remove preview-only deletes.
-      document.querySelectorAll<HTMLElement>('[data-dm-preview-hidden="1"]').forEach(el => {
-        el.style.display = el.dataset.dmPreviewPrevDisplay || '';
-        delete el.dataset.dmPreviewPrevDisplay;
-        el.removeAttribute('data-dm-preview-hidden');
-      });
-      document.querySelectorAll('[data-dm-preview-restored="1"]').forEach(el => el.remove());
-      try { showCommentPins(); } catch {}
+      restoreOriginalPreview();
+      void showCommentPins();
       sendResponse({ ok: true }); break;
     }
 
     case 'BATCH_APPLY_CHANGE': {
       const change = getStyleChanges().find(c => c.id === msg.changeId);
       if (change) {
-        try {
-          const matchingEls = document.querySelectorAll(change.selector);
-          for (const el of Array.from(matchingEls)) {
-            const htmlEl = el as HTMLElement;
-            const elId = getOrAssignId(htmlEl);
-            if (elId !== change.elementId) {
-              applyStyleChange(elId, change.property, change.newValue);
-            }
+        for (const elId of findMatchingElements(change.elementId)) {
+          if (elId !== change.elementId) {
+            applyStyleChange(elId, change.property, change.newValue);
           }
-        } catch {}
+        }
       }
       getChangesPayload().then(p => sendResponse({ ok: true, ...p })).catch(error => sendResponse({ ok: false, error: String(error) })); return true;
       break;
@@ -2421,6 +2475,11 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           position === 'inside' ? null
           : position === 'after' ? target.nextSibling
           : target;
+        if (parent === source.parentNode && (beforeNode === source || beforeNode === source.nextSibling)) {
+          getChangesPayload().then(p => sendResponse({ ok: true, ...p })).catch(error => sendResponse({ ok: false, error: String(error) }));
+          return true;
+        }
+        const finishMove = beginMove(source, msg.sourceId);
         parent.insertBefore(source, beforeNode);
         // Bring the moved row into view so the user sees where it landed.
         try { source.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch {}
@@ -2433,6 +2492,8 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
           { parentSelector, index, parentId: dmAttrParent(parent) },
           origin,
         );
+        const command = finishMove();
+        if (command) { undoStack.push(command); redoStack.length = 0; }
         // Keep the moved element selected so the Design tab + breadcrumb
         // follow the move; without this the panel still points at the
         // pre-move ancestor selection.
@@ -2448,7 +2509,9 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     default: return false;
   }
   return true;
-});
+}
+
+browser.runtime.onMessage.addListener(handleContentMessage);
 
 // Build the list of fonts to surface in the Typography → Font dropdown.
 // Two sources, deduped + sorted: every `font-family` declared in the page's

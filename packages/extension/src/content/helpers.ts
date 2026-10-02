@@ -4,15 +4,17 @@
 
 import { DATA_ATTR } from '../shared';
 
-let nextId = 1;
+let nextId = 1n;
 export const elementMap = new Map<string, HTMLElement>();
 
 export function getOrAssignId(el: HTMLElement): string {
   let id = el.getAttribute(DATA_ATTR);
   if (!id) {
-    id = `dm-${nextId++}`;
+    do { id = `dm-${nextId++}`; }
+    while (document.querySelector(`[${DATA_ATTR}="${id}"]`));
     el.setAttribute(DATA_ATTR, id);
   }
+  reserveIdsAtLeast([id]);
   elementMap.set(id, el);
   return id;
 }
@@ -23,8 +25,8 @@ export function reserveIdsAtLeast(ids: string[]) {
   for (const id of ids) {
     const m = /^dm-(\d+)$/.exec(id);
     if (m) {
-      const n = parseInt(m[1], 10);
-      if (n >= nextId) nextId = n + 1;
+      const n = BigInt(m[1]);
+      if (n >= nextId) nextId = n + 1n;
     }
   }
 }
@@ -43,6 +45,24 @@ export function getElementById(id: string): HTMLElement | null {
   return fresh;
 }
 
+export function restoreElementAnchor(id: string, selector: string): HTMLElement | null {
+  reserveIdsAtLeast([id]);
+  if (!id || !selector) return null;
+  let matches: NodeListOf<HTMLElement>;
+  try { matches = document.querySelectorAll<HTMLElement>(selector); }
+  catch { return null; }
+  // A saved selector is evidence of identity only while it is unique.
+  if (matches.length !== 1) return null;
+  const target = matches[0];
+  const stamped = document.querySelectorAll<HTMLElement>(`[${DATA_ATTR}="${CSS.escape(id)}"]`);
+  if (stamped.length > 1 || (stamped.length === 1 && stamped[0] !== target)) return null;
+  const currentId = target.getAttribute(DATA_ATTR);
+  if (currentId && currentId !== id) return null;
+  target.setAttribute(DATA_ATTR, id);
+  elementMap.set(id, target);
+  return target;
+}
+
 export interface Rect {
   top: number; left: number; width: number; height: number;
   bottom: number; right: number;
@@ -55,6 +75,7 @@ export function getElementRect(el: HTMLElement): Rect {
 }
 
 export function generateSelector(el: HTMLElement): string {
+  if (el === document.body) return 'body';
   if (el.id) return `#${CSS.escape(el.id)}`;
   const parts: string[] = [];
   let cur: HTMLElement | null = el;

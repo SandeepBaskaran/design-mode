@@ -10,8 +10,10 @@ import { BUILTIN_KEYFRAMES } from './keyframes-library';
 import { captureElementScreenshot, captureViewportScreenshotClean, captureRegionScreenshot } from './screenshots';
 import { loadComments } from './comments';
 import { getTokenEdits } from './root-var-store';
-import { isSafeRichTextHref, restoreRichTextHtml } from '../rich-text-preservation';
+import { isSafeRichTextHref, replaceRichTextHtml, restoreRichTextHtml } from '../rich-text-preservation';
 import { IMPORT_STATES, validateImportPayload } from './import-validation';
+import { restoreSavedDomLocations } from './saved-session';
+import { userOverrideScope, setUserOverridesEnabled, syncUserStyles } from './user-styles';
 
 // Lifecycle a coding agent drives over MCP: untouched → working → done.
 // Absent ⇒ 'todo'. Mirrors @design-mode/shared ChangeStatus.
@@ -103,6 +105,24 @@ export function getStyleChanges() { return [...styleChanges]; }
 export function getTextChanges() { return [...textChanges]; }
 export function getDomChanges() { return [...domChanges]; }
 
+// History restores the exact report envelope (id, origin, timestamp, status,
+// viewport), not a freshly recorded approximation. Do not roll back siblings.
+export function captureMoveChangeRestore(elementId: string): () => void {
+  const saved = domChanges.flatMap((change, index) => change.elementId === elementId && change.action === 'move'
+    ? [{ index, change: { ...change, origin: change.origin && { ...change.origin }, destination: change.destination && { ...change.destination } } }]
+    : []);
+  return () => {
+    for (let i = domChanges.length - 1; i >= 0; i--) {
+      if (domChanges[i].elementId === elementId && domChanges[i].action === 'move') domChanges.splice(i, 1);
+    }
+    // Preserve ledger ordering: deletion history compares the untouched rows.
+    for (const { index, change } of saved) domChanges.splice(index, 0, { ...change });
+    persistSession();
+    // Local agents cache the whole report, including live positional selectors.
+    syncAllChanges();
+  };
+}
+
 export function getAllChanges(): Array<StyleChange | TextChange | DomChange> {
   return [...styleChanges, ...textChanges, ...domChanges].sort((a, b) => a.timestamp - b.timestamp);
 }
@@ -137,6 +157,27 @@ const appliedRules = new Map<string, Map<string, string>>(); // elementId -> pro
 const appliedVariants = new Map<string, Map<string, Map<string, string>>>();
 const injectedKeyframes = new Set<string>();
 let appliedStyleEl: HTMLStyleElement | null = null;
+let overridesEnabled = true;
+const styleAnchors = new Map<string, { element: HTMLElement; selector: string | null }>();
+let restampObserver: MutationObserver | null = null;
+let restampQueued = false;
+
+function watchStyleAnchor(elementId: string) {
+  if (!styleAnchors.has(elementId)) {
+    const element = getElementById(elementId);
+    if (element) {
+      const selector = generateSelector(element);
+      const matches = document.querySelectorAll(selector);
+      // Positional selectors can remain unique while silently switching siblings.
+      const stable = !/:nth-(?:child|of-type)\(/.test(selector) && matches.length === 1 && matches[0] === element;
+      styleAnchors.set(elementId, { element, selector: stable ? selector : null });
+    }
+  }
+  if (!restampObserver && typeof MutationObserver !== 'undefined') {
+    restampObserver = new MutationObserver(scheduleRestamp);
+    restampObserver.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'class', DATA_ATTR] });
+  }
+}
 
 // CSS properties that inherit by default. Writing one of these on a
 // container visually cascades to every text-bearing descendant, which
@@ -282,10 +323,10 @@ function buildOverlayCss(elementId: string, value: string): string {
     }
   }
   if (!images.length) return '';
-  return `[data-dm-id="${elementId}"][data-dm-id] {\n` +
+  return `${userOverrideScope()}[data-dm-id="${elementId}"][data-dm-id] {\n` +
     `  position: relative !important;\n` +
     `}\n` +
-    `[data-dm-id="${elementId}"]::after {\n` +
+    `${userOverrideScope()}[data-dm-id="${elementId}"]::after {\n` +
     `  content: '' !important;\n` +
     `  position: absolute !important;\n` +
     `  inset: 0 !important;\n` +
@@ -309,17 +350,25 @@ function ensureStyleEl(): HTMLStyleElement {
 }
 
 function rebuildStyleSheet() {
+  if (!appliedRules.size && !appliedVariants.size) {
+    restampObserver?.disconnect();
+    restampObserver = null;
+    styleAnchors.clear();
+  }
   bumpStyleGen();
   const el = ensureStyleEl();
+  el.disabled = !overridesEnabled;
   el.textContent = '';
   const sheet = el.sheet;
   if (!sheet) return;
+  // CSSOM insertRule leaves textContent empty; assigning '' again need not reset it.
+  while (sheet.cssRules.length) sheet.deleteRule(sheet.cssRules.length - 1);
   const addRule = (selector: string, props: Map<string, string>, priority = 'important', starting = false) => {
     try {
       const index = sheet.insertRule(starting ? `@starting-style { ${selector} {} }` : `${selector} {}`, sheet.cssRules.length);
       const rule = starting ? (sheet.cssRules[index] as CSSGroupingRule).cssRules[0] : sheet.cssRules[index];
       for (const [prop, value] of props) {
-        if (prop !== '__effect_overlay') (rule as CSSStyleRule).style.setProperty(kebab(prop), value, priority);
+        if (prop !== '__effect_overlay' && prop !== '__effect_hidden') (rule as CSSStyleRule).style.setProperty(kebab(prop), value, priority);
       }
     } catch { /* Unsupported browser rules/properties are inert, never raw CSS. */ }
   };
@@ -329,11 +378,11 @@ function rebuildStyleSheet() {
   }
   for (const [elementId, props] of appliedRules) {
     const escaped = CSS.escape(elementId);
-    const base = `[data-dm-id="${escaped}"][data-dm-id]`;
+    const base = `${userOverrideScope()}[data-dm-id="${escaped}"][data-dm-id]`;
     addRule(base, props);
     const inherited = new Map<string, string>();
     for (const [prop] of props) if (INHERITED_TYPOGRAPHY_PROPS.has(prop)) inherited.set(prop, 'revert');
-    if (inherited.size) addRule(`[data-dm-id="${escaped}"] [data-dm-id]`, inherited, '');
+    if (inherited.size) addRule(`${userOverrideScope()}[data-dm-id="${escaped}"] [data-dm-id]`, inherited, '');
     const overlay = props.get('__effect_overlay');
     if (overlay && overlay !== 'none') {
       // Only locally generated rules: IDs escaped, SVG parameters numeric and
@@ -346,7 +395,7 @@ function rebuildStyleSheet() {
     }
   }
   for (const [elementId, states] of appliedVariants) {
-    const base = `[data-dm-id="${CSS.escape(elementId)}"][data-dm-id]`;
+    const base = `${userOverrideScope()}[data-dm-id="${CSS.escape(elementId)}"][data-dm-id]`;
     for (const [state, props] of states) {
       if (!(IMPORT_STATES as readonly string[]).includes(state)) continue;
       const selector = state === '@starting' ? base
@@ -354,9 +403,11 @@ function rebuildStyleSheet() {
       addRule(selector, props, 'important', state === '@starting');
     }
   }
+  syncUserStyles(Array.from(sheet.cssRules, rule => rule.cssText).join('\n'));
 }
 
 function upsertRule(elementId: string, property: string, value: string, state = '') {
+  watchStyleAnchor(elementId);
   if (state) {
     if (!appliedVariants.has(elementId)) appliedVariants.set(elementId, new Map());
     const states = appliedVariants.get(elementId)!;
@@ -391,21 +442,42 @@ function removeRule(elementId: string, property: string, state = '') {
 }
 
 function clearAllRules() {
+  restampObserver?.disconnect();
+  restampObserver = null;
+  styleAnchors.clear();
   appliedRules.clear();
   appliedVariants.clear();
   injectedKeyframes.clear();
   rebuildStyleSheet();
 }
 
-// Toggle the override sheet for "preview original" mode without losing
-// any state — flipping `disabled` is one DOM op.
+export function areOverridesEnabled(): boolean { return overridesEnabled; }
+
 export function setOverridesEnabled(enabled: boolean) {
+  overridesEnabled = enabled;
+  setUserOverridesEnabled(enabled);
   const el = ensureStyleEl();
   el.disabled = !enabled;
 }
 
-// No-op kept for back-compat with content/index.ts call sites.
-export function scheduleRestamp() { /* selector-based rules don't need restamping */ }
+export function scheduleRestamp() {
+  if (restampQueued) return;
+  restampQueued = true;
+  queueMicrotask(() => {
+    restampQueued = false;
+    for (const [id, anchor] of styleAnchors) {
+      if (!appliedRules.has(id) && !appliedVariants.has(id)) { styleAnchors.delete(id); continue; }
+      if (anchor.element.isConnected || !anchor.selector) continue;
+      if (document.querySelector(`[${DATA_ATTR}="${CSS.escape(id)}"]`)) continue;
+      const matches = document.querySelectorAll(anchor.selector);
+      if (matches.length !== 1 || matches[0].hasAttribute(DATA_ATTR)) continue;
+      const element = matches[0] as HTMLElement;
+      element.setAttribute(DATA_ATTR, id);
+      anchor.element = element;
+    }
+    if ((appliedRules.size || appliedVariants.size) && !appliedStyleEl?.isConnected) rebuildStyleSheet();
+  });
+}
 
 // ── Session persistence (per URL) ──────────────────────────────────
 // Saves changes to browser.storage.session keyed by origin+pathname+search,
@@ -419,31 +491,23 @@ function sessionKey(): string {
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 export function persistSession() {
   if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = setTimeout(() => {
+  persistTimer = setTimeout(async () => {
     persistTimer = null;
     try {
       const payload = { styleChanges, textChanges, domChanges, savedAt: Date.now() };
       const storage: any = (browser.storage as any).session || browser.storage.local;
-      // Callback form: reading lastError swallows the rejection that the
-      // sync try/catch can't reach (e.g. access level not yet granted).
-      storage.set({ [sessionKey()]: payload }, () => void browser.runtime.lastError);
+      await storage.set({ [sessionKey()]: payload });
     } catch {}
   }, 100);
 }
 
 // Import uses an acknowledged write, unlike ordinary debounced editing.
-export function persistImportedSession(payload: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }): Promise<void> {
+export async function persistImportedSession(payload: { styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] }): Promise<void> {
   if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
-  return new Promise((resolve, reject) => {
-    try {
-      const storage: any = (browser.storage as any).session || browser.storage.local;
-      storage.set({ [sessionKey()]: { styleChanges: payload.styleChanges, textChanges: payload.textChanges, domChanges: payload.domChanges, savedAt: Date.now() } }, () => {
-        const error = browser.runtime.lastError;
-        if (error) { persistSession(); reject(new Error(error.message || 'Could not save imported session')); }
-        else resolve();
-      });
-    } catch (error) { persistSession(); reject(error); }
-  });
+  try {
+    const storage = browser.storage.session || browser.storage.local;
+    await storage.set({ [sessionKey()]: { styleChanges: payload.styleChanges, textChanges: payload.textChanges, domChanges: payload.domChanges, savedAt: Date.now() } });
+  } catch (error) { persistSession(); throw error; }
 }
 
 export function captureTrackerRollback(): () => void {
@@ -453,6 +517,7 @@ export function captureTrackerRollback(): () => void {
   const variants = new Map(Array.from(appliedVariants, ([id, states]) => [id,
     new Map(Array.from(states, ([state, props]) => [state, new Map(props)]))]));
   const keyframes = [...injectedKeyframes];
+  const anchors = new Map(styleAnchors);
   return () => {
     styleChanges.splice(0, styleChanges.length, ...styles);
     textChanges.splice(0, textChanges.length, ...texts);
@@ -461,26 +526,23 @@ export function captureTrackerRollback(): () => void {
     appliedRules.clear(); for (const [id, props] of rules) appliedRules.set(id, props);
     appliedVariants.clear(); for (const [id, states] of variants) appliedVariants.set(id, states);
     injectedKeyframes.clear(); for (const name of keyframes) injectedKeyframes.add(name);
+    styleAnchors.clear(); for (const [id, anchor] of anchors) { styleAnchors.set(id, anchor); watchStyleAnchor(id); }
     rebuildStyleSheet();
   };
 }
 
-export function loadSession(): Promise<{ styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] } | null> {
-  return new Promise((resolve) => {
-    try {
-      const storage: any = (browser.storage as any).session || browser.storage.local;
-      storage.get(sessionKey(), (data: any) => {
-        if (browser.runtime.lastError) return resolve(null);
-        const payload = data?.[sessionKey()];
-        if (!payload) return resolve(null);
-        resolve({
-          styleChanges: payload.styleChanges || [],
-          textChanges: payload.textChanges || [],
-          domChanges: payload.domChanges || [],
-        });
-      });
-    } catch { resolve(null); }
-  });
+export async function loadSession(): Promise<{ styleChanges: StyleChange[]; textChanges: TextChange[]; domChanges: DomChange[] } | null> {
+  try {
+    const storage = browser.storage.session || browser.storage.local;
+    const data = await storage.get(sessionKey());
+    const payload = data?.[sessionKey()] as { styleChanges?: StyleChange[]; textChanges?: TextChange[]; domChanges?: DomChange[] } | undefined;
+    if (!payload) return null;
+    return {
+      styleChanges: payload.styleChanges || [],
+      textChanges: payload.textChanges || [],
+      domChanges: restoreSavedDomLocations(payload.domChanges || []),
+    };
+  } catch { return null; }
 }
 
 // Replays a payload of changes onto the current DOM and replaces the in-
@@ -558,9 +620,9 @@ export function applyChangesPayload(input: { styleChanges: StyleChange[]; textCh
           (document.querySelector(c.selector) as HTMLElement | null);
         const parent = resolveParent(c.destination);
         if (source && parent) {
-          const siblings = Array.from(parent.children);
+          const siblings = Array.from(parent.children).filter(child => child !== source);
           const idx = Math.min(c.destination.index, siblings.length);
-          const before = siblings[idx] === source ? siblings[idx + 1] : siblings[idx];
+          const before = siblings[idx];
           if (before && before !== source) parent.insertBefore(source, before);
           else if (!before) parent.appendChild(source);
         }
@@ -636,9 +698,9 @@ export function applyChangesPayload(input: { styleChanges: StyleChange[]; textCh
   persistSession();
 }
 
-export async function replaySession(): Promise<boolean> {
+export async function replaySession(isCurrent = () => true): Promise<boolean> {
   const saved = await loadSession();
-  if (!saved) return false;
+  if (!saved || !isCurrent()) return false;
   try { applyChangesPayload(saved); return true; } catch { return false; }
 }
 
@@ -794,7 +856,7 @@ export function applyWithCompanions(
   meta?: StyleChangeMeta,
   state = '',
 ): StyleChange | null {
-  if (!/^dm-\d+$/.test(elementId) || !/^(?:--[\w-]+|-?[a-zA-Z][\w-]*|__effect_overlay)$/.test(property)
+  if (!/^dm-\d+$/.test(elementId) || !/^(?:--[\w-]+|-?[a-zA-Z][\w-]*|__effect_overlay|__effect_hidden)$/.test(property)
     || typeof value !== 'string' || !(IMPORT_STATES as readonly string[]).includes(state)) return null;
   const el = getElementById(elementId);
   if (!el) return applyStyleChange(elementId, property, value, refreshPanel, meta, state);
@@ -809,10 +871,14 @@ export function applyWithCompanions(
     const groupId = meta?.groupId ?? `auto-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const groupLabel = meta?.groupLabel ?? 'Auto-fix';
     const groupKind = meta?.groupKind ?? 'preset';
+    // Capture the primary property's original value before companions alter
+    // computed style (e.g. border-style:none has a computed width of 0px).
+    const primary = applyStyleChange(elementId, property, value, undefined, { groupId, groupKind, groupLabel });
     for (const c of companions) {
       applyStyleChange(elementId, c.property, c.value, undefined, { groupId, groupKind, groupLabel });
     }
-    return applyStyleChange(elementId, property, value, refreshPanel, { groupId, groupKind, groupLabel });
+    refreshPanel?.();
+    return primary;
   }
   return applyStyleChange(elementId, property, value, refreshPanel, meta, state);
 }
@@ -833,7 +899,7 @@ export function applyStyleChange(
   meta?: StyleChangeMeta,
   state = '',
 ): StyleChange | null {
-  if (!/^dm-\d+$/.test(elementId) || !/^(?:--[\w-]+|-?[a-zA-Z][\w-]*|__effect_overlay)$/.test(property)
+  if (!/^dm-\d+$/.test(elementId) || !/^(?:--[\w-]+|-?[a-zA-Z][\w-]*|__effect_overlay|__effect_hidden)$/.test(property)
     || typeof value !== 'string' || !(IMPORT_STATES as readonly string[]).includes(state)) return null;
   const el = getElementById(elementId);
   if (!el) return null;
@@ -888,6 +954,7 @@ export function applyStyleChange(
   // Prefer the authored token (`var(--x)`) over its resolved value so undo
   // and the Changes tab step back to the token, keeping the badge intact.
   const oldValue = authoredTokenValueFor(el, k) ?? window.getComputedStyle(el).getPropertyValue(k);
+  if (!state && value === oldValue) return null;
   upsertRule(elementId, property, value, state);
   // We used to drop rules whose computed value didn't change (invalid CSS,
   // var() that resolves to the same color, etc.) but that swallowed valid
@@ -1007,7 +1074,7 @@ export function applyHtmlChange(
     nextHtml = restoreRichTextHtml(el, html);
   }
   if (priorHtml === nextHtml) return null;
-  el.innerHTML = nextHtml;
+  replaceRichTextHtml(el, nextHtml);
   // Dedup per element, same as applyTextChange — one row, original oldText
   // preserved, dropped when the HTML returns to its original.
   const existingIdx = textChanges.findIndex(c => c.elementId === elementId && !c.attributeName);
@@ -1235,6 +1302,7 @@ export function getChangeReport() {
       return {
         id: c.id, status: c.status || 'todo',
         elementId: c.elementId, timestamp: c.timestamp,
+        viewportWidth: c.viewportWidth, breakpoint: c.breakpoint,
         selector, label: c.label, property: c.property,
         oldValue: c.oldValue, newValue: c.newValue,
         cssRule: `${selector} { ${c.property.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}: ${c.newValue}; }`,
@@ -1243,6 +1311,7 @@ export function getChangeReport() {
     textChanges: textChanges.map(c => ({
       id: c.id, status: c.status || 'todo',
       elementId: c.elementId, timestamp: c.timestamp,
+      viewportWidth: c.viewportWidth, breakpoint: c.breakpoint,
       selector: liveSelector(c.elementId, c.selector), label: c.label,
       oldText: c.oldText, newText: c.newText, attributeName: c.attributeName,
     })),
@@ -1267,6 +1336,7 @@ export function getChangeReport() {
       return {
         id: c.id, status: c.status || 'todo',
         elementId: c.elementId, timestamp: c.timestamp,
+        viewportWidth: c.viewportWidth, breakpoint: c.breakpoint,
         selector: el ? generateSelector(el) : c.selector, label: c.label,
         action: c.action, tagName: c.tagName,
         origin, destination,
@@ -1446,7 +1516,6 @@ export function requestStopFeedback() {
 }
 
 function setAgentConnected(next: boolean) {
-  if (agentConnected === next) return;
   agentConnected = next;
   try {
     browser.runtime.sendMessage({ type: 'AGENT_PRESENCE_UPDATE', connected: next });
@@ -1583,6 +1652,7 @@ async function connectLocal(port: number) {
       socket.onopen = () => {
         if (ws !== socket || transportMode !== 'local') return;
         localReconnectAttempt = 0;
+        setAgentConnected(false);
         console.log('[Design Mode] Connected to companion server');
         // Back-fill everything recorded before the server came up (it is
         // spawned by the agent, usually after the user already edited).
@@ -1610,21 +1680,24 @@ async function connectLocal(port: number) {
 
 async function runCloudStream() {
   let backoff = 1000;
-  sseAbort = new AbortController();
-  while (sseAbort && !sseAbort.signal.aborted && cloudToken && cloudBaseUrl) {
+  const controller = new AbortController();
+  sseAbort = controller;
+  const token = cloudToken;
+  const baseUrl = cloudBaseUrl;
+  while (!controller.signal.aborted && token && baseUrl) {
     // The extension may have been reloaded / disabled while the SSE was
     // open. The `browser.runtime.id` check is the cheapest way to notice
     // an orphan content script — we'd otherwise loop forever calling
     // fetch and logging warnings.
     if (typeof chrome !== 'undefined' && !browser.runtime?.id) {
-      sseAbort?.abort();
+      controller.abort();
       return;
     }
     try {
-      const resp = await fetch(`${cloudBaseUrl}/api/extension/stream`, {
+      const resp = await fetch(`${baseUrl}/api/extension/stream`, {
         method: 'GET',
-        headers: { 'Authorization': `Bearer ${cloudToken}`, 'Accept': 'text/event-stream' },
-        signal: sseAbort.signal,
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'text/event-stream' },
+        signal: controller.signal,
       });
       if (!resp.ok || !resp.body) {
         if (resp.status === 401) { console.warn('[Design Mode] cloud stream auth failed'); return; }
@@ -1646,11 +1719,12 @@ async function runCloudStream() {
         }
       }
     } catch (err) {
-      if (sseAbort?.signal.aborted) return;
+      if (controller.signal.aborted) return;
       // Quieted from warn → debug. Reconnect storms during a redeploy or
       // a brief network blip aren't worth crowding the console for.
       console.debug('[Design Mode] cloud stream lost, retrying:', err);
     }
+    if (controller.signal.aborted) return;
     await new Promise(r => setTimeout(r, backoff));
     backoff = Math.min(backoff * 2, 15000);
   }
@@ -1684,6 +1758,8 @@ function transportSend(msg: object) {
     keepalive: true,
   }).catch(() => {});
 }
+
+const feedbackDocumentId = crypto.randomUUID();
 
 window.addEventListener('pagehide', () => {
   if (transportMode === 'local') {
@@ -1795,10 +1871,13 @@ function syncTextChange(change: TextChange) {
 
 function syncDomChange(change: DomChange) {
   transportSend({ type: 'DOM_CHANGED', payload: change });
+  // Reordering changes positional selectors cached by the local companion.
+  if (transportMode === 'local') syncAllChanges();
 }
 
 export function syncAllChanges() {
-  transportSend({ type: 'SESSION_UPDATE', payload: getChangeReport() });
+  const report = getChangeReport();
+  transportSend({ type: 'SESSION_UPDATE', payload: transportMode === 'local' ? { ...report, documentId: feedbackDocumentId } : report });
 }
 
 // Comments live in content/comments.ts, not in this module's change report,

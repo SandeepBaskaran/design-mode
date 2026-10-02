@@ -11,12 +11,21 @@ import { cpSync, mkdirSync, existsSync } from 'fs';
 import { createRequire } from 'module';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { analyticsBuildEnv } from './analytics-build-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const viteCli = resolve(dirname(require.resolve('vite/package.json')), 'bin/vite.js');
 
 const entries = ['content', 'background', 'sidepanel'];
+let buildEnv = process.env;
+try {
+  if (process.argv.slice(2).some(arg => arg !== '--analytics')) throw new Error('Unknown build option');
+  if (process.argv.includes('--analytics')) buildEnv = analyticsBuildEnv(__dirname);
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
 
 console.log('\n◆ Building Design Mode extension...\n');
@@ -25,7 +34,7 @@ for (const entry of entries) {
   console.log(`  Building ${entry}...`);
   execFileSync(process.execPath, [viteCli, 'build'], {
     cwd: __dirname,
-    env: { ...process.env, ENTRY: entry },
+    env: { ...buildEnv, ENTRY: entry },
     stdio: 'inherit',
     shell: false,
   });

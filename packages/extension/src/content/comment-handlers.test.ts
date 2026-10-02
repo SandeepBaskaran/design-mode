@@ -7,7 +7,7 @@ import { validateImportPayload } from './import-validation';
 
 const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('index.ts', source, ts.ScriptTarget.Latest, true);
-const functions = ['performFullClear', 'dispatchCloudMessage', 'getChangesPayload'].map(name => {
+const functions = ['handleContentMessage', 'performFullClear', 'dispatchCloudMessage', 'buildChangesPayload', 'getChangesPayload'].map(name => {
   const node = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === name);
   assert.ok(node, name);
   return node.getText(ast);
@@ -28,6 +28,7 @@ function fixture() {
     window: { __dmPreviewSaved: 'preview' }, location: { href: 'https://example.test' }, document: { title: 'Test' },
     dmIsActiveInstance: () => true,
     validateImportPayload,
+    restoreOriginalPreview: () => { delete context.window.__dmPreviewSaved; },
     captureImportDomRollback: () => () => {},
     captureTrackerRollback: () => () => {},
     captureTokenRollback: () => () => {},
@@ -52,6 +53,7 @@ function fixture() {
     requestStopFeedback: () => {},
     clearAllTokenEdits: () => events.push('tokens'),
     clearAllLayoutGuides: () => events.push('guides'),
+    syncAllChanges: () => events.push('sync'),
     applyChangesPayload: () => events.push('apply'),
     reorderChange: () => {}, exportMarkdown: () => 'markdown',
     setChangesStatus: () => { events.push('status'); return 1; },
@@ -109,6 +111,7 @@ for (const type of ['CLEAR_CHANGES', 'IMPORT_CHANGES']) {
     assert.equal(f.context.redoStack.length, 0);
     assert.ok(f.events.includes('tokens'));
     assert.ok(f.events.includes('guides'));
+    if (type === 'CLEAR_CHANGES') assert.ok(f.events.indexOf('sync') > f.events.indexOf('guides'));
     assert.equal(f.context.window.__dmPreviewSaved, undefined);
   });
 }
@@ -148,6 +151,30 @@ it('cloud status acknowledges a comment write failure without updating change st
   assert.match(f.relays[0].error, /write failed/);
   assert.equal(f.events.includes('status'), false);
 });
+
+for (const type of ['MARK_COMMENT_RESOLVED', 'CLOUD_MARK_COMMENT_RESOLVED']) {
+  it(`${type} publishes resolved and reopened comments to the mounted panel`, async () => {
+    const f = fixture();
+    const comment = { id: 'one', resolved: false };
+    await f.context.persistPageComments([comment]);
+    const updates: any[] = [];
+    f.context.setCommentResolved = async (_id: string, resolved: boolean) => {
+      comment.resolved = resolved;
+      return comment;
+    };
+    f.context.showCommentPins = async () => {};
+    f.context.syncCommentChange = () => {};
+    f.context.notifyPanel = (type: string, payload: any) => updates.push({ type, payload });
+    for (const resolved of [true, false]) {
+      await f.cloud({ type, requestId: 'resolve', payload: { commentId: 'one', resolved } });
+      const update = updates.at(-1);
+      assert.equal(update.type, 'CHANGES_UPDATE');
+      assert.equal(update.payload.comments?.[0]?.id, 'one');
+      assert.equal(update.payload.comments[0].resolved, resolved);
+      assert.equal(f.relays.at(-1).ok, true);
+    }
+  });
+}
 
 it('every direct payload/comment read promise chain handles rejection', () => {
   const missing: string[] = [];

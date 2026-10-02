@@ -6,7 +6,7 @@ export interface RichTextNodeLike {
 }
 
 const EDITABLE_TAGS = new Set([
-  'B', 'I', 'U', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'UL', 'OL', 'LI',
+  'B', 'I', 'U', 'S', 'STRIKE', 'STRONG', 'EM', 'A', 'BR', 'P', 'SPAN', 'UL', 'OL', 'LI',
   'CODE', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE',
   'SMALL', 'MARK', 'SUB', 'SUP',
 ]);
@@ -41,15 +41,29 @@ export function editableRichTextAttributes(tagName: string): ReadonlySet<string>
   return EDITABLE_ATTRIBUTES[tagName.toUpperCase()] ?? EMPTY_ATTRIBUTES;
 }
 
-export function isSafeRichTextHref(value: string): boolean {
+export function sanitizeRichTextHref(value: string): string | null {
   const trimmed = value.trim();
   // URL parsing drops controls and treats backslashes as slashes on web pages.
-  if (/[\u0000-\u001f\u007f\\]/.test(trimmed)) return false;
-  // Keep active protocols and protocol-relative URLs out of the privileged editor.
-  return /^https?:\/\//i.test(trimmed)
+  if (/[\u0000-\u001f\u007f\\]/.test(trimmed)) return null;
+  // Return the validated value so callers cannot accidentally use the raw input.
+  if (/^https?:\/\//i.test(trimmed)
     || trimmed.startsWith('#')
     || (trimmed.startsWith('/') && !trimmed.startsWith('//'))
-    || trimmed.startsWith('.');
+    || trimmed.startsWith('.')) {
+    try {
+      // Keep IPv6 delimiters and existing escapes while encoding URL data.
+      return encodeURI(trimmed)
+        .replace(/%5B/gi, '[').replace(/%5D/gi, ']')
+        .replace(/%25([0-9a-f]{2})/gi, '%$1');
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+export function isSafeRichTextHref(value: string): boolean {
+  return sanitizeRichTextHref(value) !== null;
 }
 
 export function sanitizeRichTextHtml(raw: string): string {
@@ -132,6 +146,19 @@ export function restoreRichTextHtml(root: Element, html: string): string {
   return template.innerHTML;
 }
 
+export function replaceRichTextHtml(root: Element, html: string): void {
+  const preservedNodes = collectPreservedRichTextNodes(root);
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  for (const replacement of collectPreservedRichTextNodes(template.content)) {
+    const index = preservedNodes.findIndex(node => node.outerHTML === replacement.outerHTML);
+    if (index === -1) continue;
+    // Reuse opaque page-owned islands, not clones that lose listeners and live state.
+    replacement.replaceWith(preservedNodes.splice(index, 1)[0]);
+  }
+  root.replaceChildren(template.content);
+}
+
 export function getRichTextLinks(html: string): Array<{ index: number; label: string; href: string }> {
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   return Array.from(doc.querySelectorAll<HTMLAnchorElement>(`a[${RICH_TEXT_LINK_NODE_ATTR}]`)).flatMap(link => {
@@ -164,9 +191,9 @@ export function shouldPreserveRichTextNode(node: RichTextNodeLike): boolean {
   return hasPageOwnedAttributes;
 }
 
-export function collectPreservedRichTextNodes<T extends RichTextNodeLike>(root: T): T[] {
+export function collectPreservedRichTextNodes<T extends RichTextNodeLike>(root: { children: Iterable<T> }): T[] {
   const preserved: T[] = [];
-  const visit = (node: RichTextNodeLike) => {
+  const visit = (node: { children: Iterable<RichTextNodeLike> }) => {
     for (const child of Array.from(node.children) as T[]) {
       if (shouldPreserveRichTextNode(child)) {
         preserved.push(child);

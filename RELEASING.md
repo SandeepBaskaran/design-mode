@@ -125,12 +125,17 @@ Chrome-only `side_panel` key + `sidePanel` permission. Steps:
    (`browser_specific_settings.gecko.id`) with `strict_min_version`
    `121.0` (MV3 background event page + sidebar). Keep the id stable
    across versions — it is the add-on's identity.
-4. Data collection is declared **in the manifest** —
-   `browser_specific_settings.gecko.data_collection_permissions.required: ["none"]`
-   (the extension collects nothing; localhost-only). AMO's server validator
-   **rejects new submissions without this key** (hard error). Older Firefox
-   ignores the key, so `strict_min_version` stays at `121.0`; the linter's
-   `KEY_FIREFOX_UNSUPPORTED_BY_MIN_VER` note about it is advisory only.
+4. Review the manifest's `browser_specific_settings.gecko.data_collection_permissions`
+   and store disclosures against [PRIVACY.md](PRIVACY.md) for the exact artifact.
+   Required `none` is paired with optional `technicalAndInteraction` and
+   `locationInfo` for consent-gated analytics; it does **not** mean the extension
+   is localhost-only or never transmits data. Configured Cloud/Self-hosted MCP
+   carries user-directed page/tool data and needs a separate disclosure review.
+   Older Firefox ignores the native consent key; the minimum stays `121.0` and
+   those versions use the in-extension analytics opt-in. See
+   [ANALYTICS.md](packages/extension/ANALYTICS.md) before distributing a configured
+   build. The normal packaging commands do not load `.env.analytics.local`;
+   do not mistake a local configured test build for the packaged release.
 5. Expect **manual review**: `<all_urls>` host access + `scripting`
    are broad permissions and trigger human review. AMO may request the
    build steps (`npm ci && npm run build:extension`).

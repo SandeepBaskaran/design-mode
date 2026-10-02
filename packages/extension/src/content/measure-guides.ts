@@ -7,6 +7,8 @@
 // ============================================================
 
 import { Z_INDEX } from '../shared';
+import { inspectAuthoredSizing } from './authored-sizing';
+import { setUserStylePreview, whenUserStylesPainted, userOverrideScope } from './user-styles';
 import { getElementRect, getElementById, type Rect } from './helpers';
 import { showSelect, setOverlayTransitions } from './overlays';
 
@@ -22,8 +24,11 @@ const SNAP_THRESHOLD = 6;
 // Resize commit is owned by index.ts (it holds the change-tracker import,
 // the undo stack, and the panel-notify path). We just hand it the final
 // border-box dimensions on mouseup.
-type ResizeCommit = (elementId: string, width: string, height: string) => void;
+type ResizeCommit = (elementId: string, width: string, height: string, before: { width: string; height: string }) => void;
 let resizeCommit: ResizeCommit | null = null;
+let resizing = false;
+let cancelResize: (() => void) | null = null;
+export function isResizing() { return resizing; }
 export function setResizeCommitHandler(fn: ResizeCommit) { resizeCommit = fn; }
 
 // Live (uncommitted) dimensions during a drag — drives the side panel's W/H
@@ -389,7 +394,13 @@ export function hideResizeDots() {
 }
 
 function startResize(el: HTMLElement, dir: string, e: MouseEvent) {
+  cancelResize?.();
+  resizing = true;
   const startRect = el.getBoundingClientRect();
+  const sizing = inspectAuthoredSizing(el);
+  const before = { width: sizing.width.authored || sizing.width.computed, height: sizing.height.authored || sizing.height.computed };
+  let width = '', height = '';
+  let finished = false;
   const cs = window.getComputedStyle(el);
   const borderBox = cs.boxSizing === 'border-box';
   // When box-sizing is content-box, style width/height exclude padding+border,
@@ -409,34 +420,50 @@ function startResize(el: HTMLElement, dir: string, e: MouseEvent) {
     if (dir.includes('w')) w = startRect.width - dx;
     if (dir.includes('s')) h = startRect.height + dy;
     if (dir.includes('n')) h = startRect.height - dy;
-    // Use !important so the live drag also overrides an existing tracked
-    // resize rule (which itself is !important) — otherwise the second drag
-    // of the same element appears frozen.
-    if (dir.includes('e') || dir.includes('w')) el.style.setProperty('width', Math.max(MIN_SIZE, w - extraX) + 'px', 'important');
-    if (dir.includes('n') || dir.includes('s')) el.style.setProperty('height', Math.max(MIN_SIZE, h - extraY) + 'px', 'important');
-    const rect = getElementRect(el);
-    showSelect(el);            // keeps the orange box + W×H label live
-    showAxisGuides(rect, 'select');
-    repositionResizeDots();
-    // Push the live border-box dimensions to the side panel's W/H fields.
-    if (id) schedulePreview(id, Math.round(rect.width) + 'px', Math.round(rect.height) + 'px');
+    if (dir.includes('e') || dir.includes('w')) width = Math.max(MIN_SIZE, w - extraX) + 'px';
+    if (dir.includes('n') || dir.includes('s')) height = Math.max(MIN_SIZE, h - extraY) + 'px';
+    // USER-important rules outrank even inline-important author declarations.
+    if (id) setUserStylePreview(`${userOverrideScope()}[data-dm-id="${CSS.escape(id)}"][data-dm-id][data-dm-id] { ${width ? `width:${width}!important;` : ''}${height ? `height:${height}!important;` : ''} }`);
+    void whenUserStylesPainted().then(() => {
+      if (finished) return;
+      const rect = getElementRect(el);
+      showSelect(el);
+      showAxisGuides(rect, 'select');
+      repositionResizeDots();
+      if (id) schedulePreview(id, Math.round(rect.width) + 'px', Math.round(rect.height) + 'px');
+    });
   };
 
-  const onUp = () => {
+  const finish = () => {
     document.removeEventListener('mousemove', onMove, true);
     document.removeEventListener('mouseup', onUp, true);
+    cancelResize = null;
+    resizing = false;
+    finished = true;
+    if (previewRaf) cancelAnimationFrame(previewRaf);
+    previewRaf = 0;
+    pendingPreview = null;
     setOverlayTransitions(true);
     hideAxisGuides();
-    const width = el.style.getPropertyValue('width');
-    const height = el.style.getPropertyValue('height');
-    // Hand the final dimensions to the change-tracker (persist + export) and
-    // drop the inline values we set during the drag so the tracked rule owns them.
-    el.style.removeProperty('width');
-    el.style.removeProperty('height');
-    if (id && resizeCommit) resizeCommit(id, width, height);
+    setUserStylePreview('');
+  };
+  const onUp = () => {
+    finish();
+    // The tracker must read the pre-gesture cascade, not a still-painted preview.
+    void whenUserStylesPainted().then(() => {
+      if (id && resizeCommit && (width || height)) resizeCommit(id, width, height, before);
+    });
+    const suppress = (click: MouseEvent) => {
+      click.preventDefault();
+      click.stopImmediatePropagation();
+      window.removeEventListener('click', suppress, true);
+    };
+    window.addEventListener('click', suppress, true);
+    setTimeout(() => window.removeEventListener('click', suppress, true), 0);
     repositionResizeDots();
   };
 
+  cancelResize = finish;
   document.addEventListener('mousemove', onMove, true);
   document.addEventListener('mouseup', onUp, true);
 }
@@ -482,9 +509,9 @@ export function armMoveDrag(anchor: HTMLElement, members: HTMLElement[], preview
       clickEv.preventDefault();
       clickEv.stopPropagation();
       clickEv.stopImmediatePropagation();
-      document.removeEventListener('click', suppress, true);
+      window.removeEventListener('click', suppress, true);
     };
-    document.addEventListener('click', suppress, true);
+    window.addEventListener('click', suppress, true);
   };
   document.addEventListener('mousemove', onMove, true);
   document.addEventListener('mouseup', onUp, true);
@@ -511,8 +538,14 @@ function startMove(anchor: HTMLElement, members: HTMLElement[], previewId: strin
   }
   setOverlayTransitions(false);
   const previewState = previewId ? states.find(s => s.id === previewId) : null;
-  // Alignment-guide inputs, captured once while the element is still at rest.
-  const anchorStartRect = getElementRect(anchor);
+  // Snap the selection's outer bounds, not whichever member was grabbed.
+  // One correction is applied to every member, preserving their offsets.
+  const memberRects = (members.length ? members : [anchor]).map(getElementRect);
+  const left = Math.min(...memberRects.map(r => r.left));
+  const right = Math.max(...memberRects.map(r => r.right));
+  const top = Math.min(...memberRects.map(r => r.top));
+  const bottom = Math.max(...memberRects.map(r => r.bottom));
+  const selectionStartRect: Rect = { left, right, top, bottom, width: right - left, height: bottom - top };
   const alignCandidates = collectAlignCandidates(anchor, members);
 
   return {
@@ -523,27 +556,27 @@ function startMove(anchor: HTMLElement, members: HTMLElement[], previewId: strin
       if (ev.shiftKey) {
         if (Math.abs(dx) >= Math.abs(dy)) dy = 0; else dx = 0;
       }
-      // Alignment snapping — snap the dragged anchor's edges/centres to its
-      // siblings and the parent box. Alt frees the drag (no snap); a Shift
+      // Alignment snapping — snap the selection's edges/centres to the
+      // anchor's siblings and parent box. Alt frees the drag (no snap); a Shift
       // axis-lock already zeroed one axis, so only the free axis snaps.
       let guides: AlignGuide[] = [];
       if (!ev.altKey && alignCandidates.length) {
         const freeX = !(ev.shiftKey && dx === 0);
         const freeY = !(ev.shiftKey && dy === 0);
-        const cx = (anchorStartRect.left + anchorStartRect.right) / 2;
-        const cy = (anchorStartRect.top + anchorStartRect.bottom) / 2;
+        const cx = (selectionStartRect.left + selectionStartRect.right) / 2;
+        const cy = (selectionStartRect.top + selectionStartRect.bottom) / 2;
         if (freeX) {
-          const s = bestAxisSnap([anchorStartRect.left + dx, cx + dx, anchorStartRect.right + dx], alignCandidates, 'xs');
+          const s = bestAxisSnap([selectionStartRect.left + dx, cx + dx, selectionStartRect.right + dx], alignCandidates, 'xs');
           if (s != null) dx += s;
         }
         if (freeY) {
-          const s = bestAxisSnap([anchorStartRect.top + dy, cy + dy, anchorStartRect.bottom + dy], alignCandidates, 'ys');
+          const s = bestAxisSnap([selectionStartRect.top + dy, cy + dy, selectionStartRect.bottom + dy], alignCandidates, 'ys');
           if (s != null) dy += s;
         }
         guides = collectAlignGuides({
-          left: anchorStartRect.left + dx, right: anchorStartRect.right + dx,
-          top: anchorStartRect.top + dy, bottom: anchorStartRect.bottom + dy,
-          width: anchorStartRect.width, height: anchorStartRect.height,
+          left: selectionStartRect.left + dx, right: selectionStartRect.right + dx,
+          top: selectionStartRect.top + dy, bottom: selectionStartRect.bottom + dy,
+          width: selectionStartRect.width, height: selectionStartRect.height,
         }, alignCandidates);
       }
       for (const s of states) {
@@ -630,6 +663,7 @@ function paintSegments(layer: HTMLDivElement, seg: DistanceSegments) {
 
 export function teardownMeasureGuides() {
   teardown = true;
+  cancelResize?.();
   resizeDotsForId = null;
   [axisLayer, alignLayer, distanceLayer, dotsLayer].forEach(l => l?.remove());
   axisLayer = alignLayer = distanceLayer = dotsLayer = null;

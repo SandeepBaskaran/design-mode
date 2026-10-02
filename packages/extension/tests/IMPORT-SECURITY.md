@@ -5,6 +5,7 @@ Run from the repository root:
 ```sh
 TSX_TSCONFIG_PATH=packages/extension/tsconfig.json node --import tsx --test packages/extension/src/content/*.test.ts packages/extension/src/platform/*.test.ts packages/extension/src/sidepanel/*.test.ts
 node packages/extension/tests/import-security-browser.mjs
+node packages/extension/tests/import-storage-firefox.mjs
 node packages/extension/tests/rich-text-browser.mjs
 npm run build:extension
 ```
@@ -12,10 +13,14 @@ npm run build:extension
 The import browser runner compiles the actual tracker, validator, DOM rollback,
 comments and token modules, and extracts the actual IMPORT_CHANGES case and
 revertAllPageMutations function from content/index.ts. It runs them in a fresh
-headless Chromium profile, with extension storage/message transport mocked.
-The source metadata response is stubbed; a deliberate late response failure
-exercises rollback after DOM, trackers, tokens and comment pins changed.
-It is not an installed-extension, service-worker or Firefox certification.
+headless Chromium profile in promise-native, real webextension-polyfill local,
+and real webextension-polyfill session modes; storage/message backends remain
+mocked. The actual synchronous payload builder is included, with source-context
+lookup deliberately throwing to exercise late synchronous rollback. Delayed
+writes exercise unrelated website edits and stale extension edits/undo history.
+The separate Firefox runner installs a temporary probe add-on using the actual
+persistence module and native storage APIs. This is API-contract evidence, not
+full production-extension or service-worker certification.
 
 ## Policy and traced sinks
 
@@ -23,7 +28,8 @@ It is not an installed-extension, service-worker or Firefox certification.
   change. IDs, selector syntax, state suffixes, timestamps, regions, nested
   locations, text flags, attributes and overlay structures are checked.
   Files/messages are limited to 5 MiB; lists to 5,000 records each. A rollback
-  journal refuses pages above 100,000 DOM nodes before a storage write.
+  journal refuses pages above 100,000 DOM nodes before DOM mutation;
+  acknowledged storage writes are compensated if journal capture fails.
 - Imports **reject**, rather than silently sanitize, active/unsupported HTML.
   The existing rich-editor sanitizer is deliberately not reused: its opaque
   placeholders and formatting-only output are unsuitable for reconstructing
@@ -49,7 +55,13 @@ It is not an installed-extension, service-worker or Firefox certification.
 - Comment and session writes are acknowledged before DOM replacement.
   A failed second write restores previous comments. A later failure restores
   original DOM node identities, CSSOM, tracker maps, tokens, comment-pin maps,
-  preview state and durable session/comments. Histories are only cleared at
+  preview state and durable session/comments. Journals are captured after all
+  persistence awaits, immediately before a synchronous commit/rollback phase.
+  Changed tracker/token/history/preview state rejects a stale import and persists
+  the live session, rather than restoring an earlier snapshot. Missing legacy
+  comment updatedAt defaults to timestamp; malformed supplied values reject.
+  Move replay chooses final indices excluding the source sibling.
+  Histories are only cleared at
   successful commit, and concurrent imports in the same content instance are
   rejected. Feedback stop is deferred until success.
 - Version 1 exports contain no tokens. Successful replacement clears old
@@ -73,8 +85,10 @@ effects and edits from other tabs during an import are not covered by this
 component test. An installed-extension run and human security review remain
 required before security certification.
 
-The isolated verification also ran the snapshot's typecheck: both snapshot and
-correction have the same 21 pre-existing TypeScript diagnostics (after building
-shared declarations), including ElementInfo gaps and existing panel typing
-errors. No new type diagnostics were observed. The full extension build and
-focused test gates pass; typecheck is not represented as a passing gate.
+Correction verification: 145 unit tests pass; each of the three Chromium API
+modes passes 118 checks. Installed Firefox 155.0.1 passes three native storage
+checks (session round trip, local round trip, debounced persistence). Extension
+build passes; web-ext lint reports 0 errors, 0 notices and 35 warnings. Typecheck
+is not a passing gate: this worktree lacks generated shared declarations
+(TS6305) and reports existing content/panel typing errors. No shared build
+symlinks were created. Review here is direct, not an independent second review.

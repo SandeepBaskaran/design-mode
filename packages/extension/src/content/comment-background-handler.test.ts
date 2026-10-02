@@ -29,7 +29,7 @@ it('background handler exposes page-local recovery and preserves damaged data on
   vm.runInContext(code, context);
   const request = (operation: any, url = pageUrl) => new Promise<any>((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('background did not acknowledge')), 500);
-    handler({ type: 'COMMENT_STORE', pageUrl: url, operation }, { id: 'extension', tab: { id: 1 } }, (reply: any) => {
+    handler({ type: 'COMMENT_STORE', pageUrl: url, operation }, { id: 'extension', url, tab: { id: 1 } }, (reply: any) => {
       clearTimeout(timer); resolve(reply);
     });
   });

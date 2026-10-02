@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "NODE_ENV=development node build.mjs",
     "build": "node build.mjs",
-    "typecheck": "tsc --noEmit"
+    "build:analytics": "node build.mjs --analytics",
+    "typecheck": "tsc --build ../shared && tsc --noEmit"
   },
   "dependencies": {
     "@design-mode/shared": "*",

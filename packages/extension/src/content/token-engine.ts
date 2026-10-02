@@ -8,6 +8,8 @@
 // with design-system recognition (Carbon, Material, shadcn, …).
 // ============================================================
 
+import { isViewportPageElement } from './viewport-page';
+
 export type TokenGroup =
   | 'colour' | 'typography' | 'spacing' | 'radius' | 'shadow' | 'other';
 
@@ -29,7 +31,7 @@ export type DesignSystemProfile = { id: DesignSystemId; label: string; tokenCoun
 // once per theme, so `variants` carries the per-scope values and `scope`
 // names the primary (the active scope declaring the most tokens) — the
 // one the panel shows until the user picks another.
-export type TokenVariant = { scope: TokenScope; value: string; resolvedValue: string };
+export type TokenVariant = { scope: TokenScope; value: string; resolvedValue: string; usageCount: number };
 
 export type PageToken = {
   cssVar: string;
@@ -257,21 +259,66 @@ const USAGE_PROPS = [
   'boxShadow', 'textShadow', 'opacity',
 ] as const;
 
-function countUsages(tokens: PageToken[]): void {
-  if (tokens.length === 0) return;
-  const valueCounts = new Map<string, number>();
-  const all = document.querySelectorAll<HTMLElement>('*');
-  for (let i = 0; i < all.length && i < 10_000; i++) {
-    const cs = getComputedStyle(all[i]);
-    for (const p of USAGE_PROPS) {
-      const v = cs[p as keyof CSSStyleDeclaration] as string | undefined;
-      if (!v) continue;
-      valueCounts.set(v, (valueCounts.get(v) || 0) + 1);
+function tokenUsageElements(tokens: PageToken[]): Map<string, Map<string, HTMLElement[]>> {
+  const consumers = new Map<string, Map<string, HTMLElement[]>>();
+  if (!tokens.length) return consumers;
+  const elements = Array.from(document.querySelectorAll<HTMLElement>('*')).filter(isViewportPageElement).slice(0, 10_000);
+  const values = elements.map(el => {
+    const cs = getComputedStyle(el);
+    return new Set(USAGE_PROPS.map(p => cs[p]));
+  });
+  // Custom properties retain authored syntax (hex, rem); consumers serialize
+  // computed values (rgb, px). Resolve through CSS, not string substitution.
+  const probe = document.createElement('span');
+  probe.id = 'dm-token-value-probe';
+  document.documentElement.append(probe);
+  try {
+    for (const token of tokens) {
+      const byScope = new Map<string, HTMLElement[]>();
+      consumers.set(token.cssVar, byScope);
+      for (const variant of token.variants) {
+        const matches: HTMLElement[] = [];
+        byScope.set(variant.scope.selector, matches);
+        if (!variant.scope.active) continue;
+        const scopeEl = getScopeElement(variant.scope.selector);
+        if (!scopeEl) continue;
+        const raw = variant.resolvedValue || variant.value;
+        const normalized = new Set([raw]);
+        const props = token.group === 'colour' ? ['color']
+          : token.group === 'spacing' ? ['padding-top']
+          : token.group === 'radius' ? ['border-top-left-radius']
+          : token.group === 'shadow' ? ['box-shadow']
+          : token.group === 'typography' ? ['font-size', 'font-weight', 'line-height', 'letter-spacing'] : [];
+        for (const prop of props) {
+          if (!CSS.supports(prop, raw)) continue;
+          probe.style.cssText = 'all:initial!important;position:fixed!important;visibility:hidden!important;pointer-events:none!important';
+          probe.style.setProperty('font-size', getComputedStyle(scopeEl).fontSize, 'important');
+          probe.style.setProperty(prop, raw, 'important');
+          normalized.add(getComputedStyle(probe).getPropertyValue(prop));
+        }
+        elements.forEach((el, i) => {
+          if (scopeForElement(el, token.scopes) !== variant.scope.selector) return;
+          if ([...normalized].some(value => value && values[i].has(value))) matches.push(el);
+        });
+      }
     }
-  }
-  for (const t of tokens) {
-    const lookup = t.resolvedValue || t.value;
-    t.usageCount = valueCounts.get(lookup) || 0;
+  } finally { probe.remove(); }
+  return consumers;
+}
+
+export function getTokenUsageElements(cssVar: string, scopeSelector?: string): HTMLElement[] {
+  const token = getTokenIndex().byVar.get(cssVar);
+  if (!token) return [];
+  const consumers = tokenUsageElements([token]).get(cssVar)!;
+  return scopeSelector ? consumers.get(scopeSelector) || [] : [...new Set([...consumers.values()].flat())];
+}
+
+function countUsages(tokens: PageToken[]): void {
+  const consumers = tokenUsageElements(tokens);
+  for (const token of tokens) {
+    const byScope = consumers.get(token.cssVar)!;
+    token.usageCount = new Set([...byScope.values()].flat()).size;
+    for (const variant of token.variants) variant.usageCount = byScope.get(variant.scope.selector)?.length || 0;
   }
 }
 
@@ -280,12 +327,8 @@ function countUsages(tokens: PageToken[]): void {
 let cache: TokenIndex | null = null;
 let styleRulesCache: StyleRule[] = [];
 
-// Generation counter for the authored-vars memo. It bumps whenever anything
-// that changes attribution changes: the page-rule scan refreshes, or the
-// extension's override sheet is rebuilt (change-tracker's rebuildStyleSheet
-// calls bumpStyleGen). getAuthoredVarsForElement caches its per-element
-// result under the current generation, so the duplicate before/after captures
-// within a single edit share one cascade walk without ever going stale.
+// Stylesheet generations do not cover pseudo-state or animation progress;
+// those inputs are checked separately before reusing an authored-vars memo.
 let styleGen = 0;
 export function bumpStyleGen(): void { styleGen++; }
 // `shadowVars` records the var(s) a compound shadow property is composed from
@@ -439,15 +482,17 @@ function varFallback(raw: string): string | null {
 // silently do nothing to this element.
 export function owningScopeFor(el: Element, cssVar: string): string {
   const scopes = getTokenIndex().byVar.get(cssVar)?.scopes;
-  if (!scopes || scopes.length === 0) return ':root';
-  if (scopes.length === 1) return scopes[0];
+  return scopeForElement(el, scopes || []) ?? ':root';
+}
+
+function scopeForElement(el: Element, scopes: string[]): string | undefined {
   const scoped = scopes.filter(s => s !== ':root' && s !== 'html');
   for (let node: Element | null = el; node; node = node.parentElement) {
     for (const sel of scoped) {
       try { if (node.matches(sel)) return sel; } catch {}
     }
   }
-  return scopes.find(s => s === ':root' || s === 'html') ?? scopes[0];
+  return scopes.find(s => s === ':root' || s === 'html');
 }
 
 export type PropToken = { cssVar: string; scope: string };
@@ -456,8 +501,13 @@ export function getAuthoredVarsForElement(el: HTMLElement): Record<string, PropT
   // getStyleRules() may refresh the index (bumping styleGen); call it before
   // reading the memo so a stale generation never satisfies the cache check.
   const styleRules = getStyleRules();
+  const animations = typeof el.getAnimations === 'function' ? el.getAnimations() : [];
+  // Pseudo-state and animation changes do not bump the stylesheet generation.
+  const canMemoize = typeof el.getAnimations === 'function' && animations.length === 0 &&
+    !styleRules.some(rule => rule.selectorText.includes(':'));
+  const memoGen = canMemoize ? styleGen : -1;
   const memo = authoredVarsCache.get(el);
-  if (memo && memo.gen === styleGen) return memo.vars;
+  if (canMemoize && memo?.gen === styleGen) return memo.vars;
   // Winner per property, following the cascade: !important beats normal,
   // inline beats page rules, then specificity, then source order. Every
   // declaration competes — including literal ones, because a more
@@ -551,7 +601,7 @@ export function getAuthoredVarsForElement(el: HTMLElement): Record<string, PropT
     const m = cand.raw.match(/var\(\s*(--[\w-]+)/);
     if (m) candidates.set(prop, { cssVar: m[1], raw: cand.raw });
   }
-  if (candidates.size === 0) { authoredVarsCache.set(el, { gen: styleGen, vars: {}, shadowVars }); return {}; }
+  if (candidates.size === 0) { authoredVarsCache.set(el, { gen: memoGen, vars: {}, shadowVars }); return {}; }
 
   // Verification gate — fail closed: only report an attribution when the
   // var's resolved value actually shows up in the property's computed
@@ -561,7 +611,14 @@ export function getAuthoredVarsForElement(el: HTMLElement): Record<string, PropT
   for (const [kebabProp, cand] of candidates) {
     const varValue = cs.getPropertyValue(cand.cssVar).trim() || varFallback(cand.raw) || '';
     if (!varValue) continue;
-    const propValue = cs.getPropertyValue(kebabProp).trim();
+    // A transition paints an intermediate value, not the authored destination.
+    const transition = animations.find(animation =>
+      typeof CSSTransition !== 'undefined' && animation instanceof CSSTransition &&
+      animation.transitionProperty === kebabProp && animation.playState !== 'idle' &&
+      animation.playbackRate > 0 && animation.effect instanceof KeyframeEffect &&
+      animation.effect.target === el && !animation.effect.pseudoElement);
+    const endpoint = (transition?.effect as KeyframeEffect | null)?.getKeyframes().at(-1)?.[camelize(kebabProp)];
+    const propValue = typeof endpoint === 'string' ? endpoint.trim() : cs.getPropertyValue(kebabProp).trim();
     if (!propValue) continue;
     // Compound shadow props: a pure whole-value var with no literal rival is
     // the value, so trust it directly (the value-match gate can't survive the
@@ -573,7 +630,7 @@ export function getAuthoredVarsForElement(el: HTMLElement): Record<string, PropT
       out[camelize(kebabProp)] = { cssVar: cand.cssVar, scope: owningScopeFor(el, cand.cssVar) };
     }
   }
-  authoredVarsCache.set(el, { gen: styleGen, vars: out, shadowVars });
+  authoredVarsCache.set(el, { gen: memoGen, vars: out, shadowVars });
   return out;
 }
 
@@ -682,7 +739,7 @@ export function scanTokenIndex(): TokenIndex {
     for (const [sel, d] of byScope) {
       const scope = scopeBySel.get(sel)!;
       const resolved = scope.active ? (scopeStyles(sel)?.getPropertyValue(cssVar).trim() || '') : '';
-      variants.push({ scope, value: d.value || resolved, resolvedValue: resolved });
+      variants.push({ scope, value: d.value || resolved, resolvedValue: resolved, usageCount: 0 });
     }
     const primaryVariant = variants.find(v => v.scope.selector === primary)!;
     if (!primaryVariant.value) continue;

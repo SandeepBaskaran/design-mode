@@ -23,7 +23,7 @@ const base = {
 };
 const loc = z.object({ parentSelector: selector, parentId: id.optional(), index: number.int().nonnegative().max(1_000_000) });
 const style = z.object({ ...base,
-  property: z.string().max(200).regex(/^(?:--[\w-]+|-?[a-zA-Z][\w-]*|__effect_overlay)$/),
+  property: z.string().max(200).regex(/^(?:--[\w-]+|-?[a-zA-Z][\w-]*|__effect_overlay|__effect_hidden)$/),
   oldValue: str, newValue: str, state: z.enum(IMPORT_STATES).optional(),
   groupId: str.optional(), groupLabel: str.optional(),
   groupKind: z.enum(['preset', 'multi-select', 'visibility', 'consolidate']).optional(),
@@ -38,11 +38,12 @@ const dom = z.object({ ...base,
 });
 const comment = z.object({
   id: z.string().min(1).max(200), elementId: id.or(z.literal('')), selector: selector.or(z.literal('')),
-  text: str, timestamp: number.nonnegative(), updatedAt: number.nonnegative(), pageUrl: str,
+  text: str, timestamp: number.nonnegative(), updatedAt: number.nonnegative().optional(), pageUrl: str,
   resolved: z.boolean().optional(),
   pinOffset: z.object({ x: number, y: number }).optional(),
   region: z.object({ x: number, y: number, w: number.nonnegative(), h: number.nonnegative() }).optional(),
-}).refine(c => Boolean(c.region) || Boolean(c.elementId && c.selector), 'Missing comment anchor');
+}).refine(c => Boolean(c.region) || Boolean(c.elementId && c.selector), 'Missing comment anchor')
+  .transform(c => ({ ...c, updatedAt: c.updatedAt ?? c.timestamp }));
 const schema = z.object({
   styleChanges: z.array(style).max(5000), textChanges: z.array(text).max(5000),
   domChanges: z.array(dom).max(5000), comments: z.array(comment).max(5000).optional().default([]),
@@ -103,6 +104,13 @@ export function validateImportPayload(input: unknown): ValidatedImport {
   }
   for (const c of result.domChanges) if (c.outerHTML) assertPassiveHtml(c.outerHTML, true);
   for (const c of result.styleChanges) {
+    if (c.property === '__effect_hidden') {
+      const hidden = z.array(z.object({
+        id: z.string().regex(/^(?:(?:box|filter-drop|layer-blur|backdrop-blur):\d{1,6}|text-shadow)$/),
+        raw: str,
+      })).max(1000);
+      for (const value of [c.oldValue, c.newValue]) if (value) hidden.parse(JSON.parse(value));
+    }
     if (c.property === '__effect_overlay' && c.newValue && c.newValue !== 'none') {
       const overlay = z.array(z.object({ kind: z.enum(['noise', 'texture']), visible: z.boolean().optional(),
         mode: z.enum(['mono', 'duo', 'multi']).optional(), sizeX: number, sizeY: number,

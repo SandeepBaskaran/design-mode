@@ -387,7 +387,7 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     for (const c of pageComments) {
       // Comments don't carry an elementId we can look up here; rely on the
       // selector and skip source pointers for them.
-      lines.push(`- on ${c.selector}: ${c.text.trim()}`);
+      lines.push(`- note on ${c.selector}: ${c.text.trim()}`);
     }
   }
 

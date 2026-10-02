@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Design Mode</title>
   <style>
+    @font-face {
+      font-family: 'Inter';
+      src: url('../assets/fonts/InterVariable.woff2') format('woff2');
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     /* ── CSS Custom Properties (shadcn preset b1D0dv86 + dm-* mappings) ── */
@@ -67,6 +75,11 @@
 
       /* Native <select> popups (Linux Chrome especially) follow color-scheme. */
       color-scheme: dark;
+    }
+    .dm-overlay-page {
+      --dm-text-muted: var(--dm-text-secondary);
+      --dm-text-dim: var(--dm-text-secondary);
+      --dm-text-dimmer: var(--dm-text-secondary);
     }
     :root[data-theme="light"] {
       /* shadcn tokens — light */
@@ -131,13 +144,14 @@
 
     html, body {
       width: 100%; height: 100%; overflow: hidden;
-      /* Floor the width so the layout holds when popped out into a freely
-         resizable window (the native side panel is always wide enough). */
-      min-width: 320px;
+      min-width: 0;
       background: var(--dm-bg);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       font-size: 13px;
       color: var(--dm-text);
+    }
+    @media (max-width: 319px) {
+      .dm-handoff-actions { flex-direction: column; }
     }
     body { display: flex; flex-direction: column; }
     #dm-root { flex: 1; overflow-y: auto; overflow-x: hidden; }
@@ -145,7 +159,7 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--dm-scrollbar-thumb); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--dm-scrollbar-thumb-hover); }
-    input, select, button { font-family: inherit; }
+    input, select, button, textarea { font-family: inherit; }
     /* Closed <select> is styled; the OS popup still needs explicit option
        colours so Linux Chrome dark mode is not black-on-black. Keep native
        <select> (no custom listbox) so keyboard / AT behaviour stays intact. */
@@ -167,7 +181,7 @@
       font-size: 11px;
       padding: 6px;
       outline: none;
-      font-family: 'SF Mono', Monaco, monospace;
+      font-family: inherit;
       transition: border-color 0.12s ease;
     }
     .dm-input:hover { border-color: var(--dm-input-border-hover); }
@@ -414,7 +428,7 @@
       flex-shrink: 0;
     }
     .dm-contrast-ratio {
-      font-family: SF Mono, Monaco, monospace;
+      font-family: inherit;
       font-size: 11px;
       color: var(--dm-text);
       letter-spacing: 0.2px;
@@ -613,7 +627,7 @@
       color: var(--dm-accent);
     }
     .dm-token-chip-count {
-      font-family: SF Mono, Monaco, monospace;
+      font-family: inherit;
       font-size: 9px;
       opacity: 0.7;
     }
@@ -655,7 +669,7 @@
       gap: 6px;
     }
     .dm-tokens-tab-count {
-      font-family: SF Mono, Monaco, monospace;
+      font-family: inherit;
       font-size: 9px;
       opacity: 0.7;
     }
@@ -834,7 +848,7 @@
       border-radius: 3px;
       background: var(--dm-bg-tertiary, var(--dm-bg-secondary));
       color: var(--dm-text-muted);
-      font-family: SF Mono, Monaco, monospace;
+      font-family: inherit;
       font-size: 8px;
       line-height: 1.6;
     }
@@ -845,17 +859,17 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      font-family: SF Mono, Monaco, monospace;
+      font-family: inherit;
       font-size: 10px;
       color: var(--dm-text);
     }
-    .dm-token-name-detected { font-family: SF Mono, Monaco, monospace; color: var(--dm-text-secondary); }
+    .dm-token-name-detected { font-family: inherit; color: var(--dm-text-secondary); }
     .dm-token-value {
       flex: 1;
       min-width: 0;
       font-size: 10px;
       padding: 4px 6px;
-      font-family: SF Mono, Monaco, monospace;
+      font-family: inherit;
     }
     .dm-token-uses {
       flex-shrink: 0;
@@ -894,7 +908,7 @@
       margin-left: auto;
       font-size: 9px;
       color: var(--dm-text-dim);
-      font-family: SF Mono, Monaco, monospace;
+      font-family: inherit;
     }
     .dm-token-drift {
       flex-shrink: 0;
@@ -903,7 +917,7 @@
       gap: 2px;
       padding: 2px 6px;
       font-size: 9px;
-      font-family: SF Mono, Monaco, monospace;
+      font-family: inherit;
       color: #f59e0b;
       background: rgba(245, 158, 11, 0.14);
       border-radius: 9999px;
@@ -1074,7 +1088,7 @@
     }
     .dm-token-badge-open { outline: 1px solid var(--dm-accent); }
     .dm-token-badge-name {
-      font-family: SF Mono, Monaco, monospace;
+      font-family: inherit;
       font-size: 9px;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1163,7 +1177,7 @@
       background: none;
       border: none;
       padding: 4px 6px;
-      font-family: 'SF Mono', Monaco, monospace;
+      font-family: inherit;
       font-size: 11px;
       color: var(--dm-text);
       outline: none;

@@ -67,8 +67,8 @@ Empty input shows the full tree.
 
 | State | Behavior |
 |---|---|
-| Off (default) | Clicking a layer in the tree (or in the page) selects only it. The Design tab edits that one layer. |
-| On (icon + background turn blue) | Clicking layers **adds them to a selection set**. Edits in the Design tab fan out to every selected layer. The button shows a count badge of how many are selected. Click the button again to exit multi-select. |
+| Off (default) | Plain-clicking a layer selects only it. Cmd/Ctrl-click toggles a layer in the set; Shift-click selects a range from the anchor. |
+| On (icon + background turn blue) | Plain-clicking Layers rows **adds or removes them from the selection set**. Shift-click still selects a range. Edits in the Design tab fan out to selected layers. A separate selection chip shows the count and clears the set. Click the toggle again (or Clear) to exit multi-select. Removing the last row keeps the toggle on so a new set can be started. |
 
 When multi-select is active, every layer that's part of the set has a small blue `check-square` icon in its row plus an accent-colored left border.
 
@@ -233,7 +233,7 @@ Two icon buttons, in order:
 
 Sets `info.id` to this layer. Switches focus from any other layer. The Design tab refreshes to show this layer's properties.
 
-If multi-select is active, clicking a layer **adds** it to the set instead of replacing focus.
+If the standalone multi-select toggle is on, clicking a layer toggles its membership in the set. The clicked row still becomes the focused layer. The toggle applies to Layers rows; page-selection gestures are unchanged.
 
 ### Hover → highlight in page
 

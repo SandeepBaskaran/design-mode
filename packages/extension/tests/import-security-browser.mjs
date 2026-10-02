@@ -5,11 +5,13 @@ import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 
 const pkg = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const fixture = mkdtempSync(resolve(pkg, '.import-test-'));
 const source = readFileSync(resolve(pkg, 'src/content/index.ts'), 'utf8');
 const ast = ts.createSourceFile('index.ts', source, ts.ScriptTarget.Latest, true);
+const buildPayload = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'buildChangesPayload').getText(ast);
 const revert = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'revertAllPageMutations').getText(ast);
 let importCase;
 function visit(node) {
@@ -20,24 +22,26 @@ visit(ast);
 assert.ok(importCase);
 try {
   const result = buildSync({ stdin: { contents: `
+    import { restoreOriginalPreview } from './src/content/original-preview';
     import { validateImportPayload } from './src/content/import-validation';
     import { captureImportDomRollback } from './src/content/import-transaction';
-    import { applyChangesPayload, applyStyleChange, getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, setOverridesEnabled, captureTrackerRollback, persistImportedSession, requestStopFeedback } from './src/content/change-tracker';
+    import { applyChangesPayload, applyStyleChange, getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, setOverridesEnabled, captureTrackerRollback, persistImportedSession, persistSession, loadSession, requestStopFeedback } from './src/content/change-tracker';
     import { getElementById } from './src/content/helpers';
     import { setTokenEdit, getTokenEdits, clearAllTokenEdits, captureTokenRollback } from './src/content/root-var-store';
     const undoStack = ['old-undo'], redoStack = ['old-redo'];
     let importInProgress = false;
     import { getPageComments, persistPageComments, renderPageComments, captureCommentPinsRollback, showAllPins } from './src/content/comments';
     const clearAllLayoutGuides = () => {};
-    const getChangesPayload = async () => {
+    const getChangeComponentContexts = () => {
       if (window.failAfterMutation) { window.failAfterMutation = false; throw Error('late failure'); }
-      return {styleChanges:getStyleChanges(), textChanges:getTextChanges(), domChanges:getDomChanges(), tokens:getTokenEdits()};
+      return {};
     };
+    ${buildPayload}
     ${revert}
     async function request(payload) {
       return new Promise(sendResponse => { const msg = {payload}; switch ('IMPORT_CHANGES') { ${importCase} } });
     }
-    export { showAllPins, request, applyChangesPayload, applyStyleChange, getStyleChanges, getTextChanges, getDomChanges, setTokenEdit, getTokenEdits, undoStack, redoStack, revertAllPageMutations, validateImportPayload };
+    export { persistImportedSession, persistSession, loadSession, showAllPins, request, applyChangesPayload, applyStyleChange, getStyleChanges, getTextChanges, getDomChanges, setTokenEdit, getTokenEdits, undoStack, redoStack, revertAllPageMutations, validateImportPayload };
   `, resolveDir: pkg, loader: 'ts' }, bundle: true, write: false, format: 'iife', globalName: 'Probe', tsconfig: resolve(pkg, 'tsconfig.json') });
   writeFileSync(resolve(fixture, 'bundle.js'), result.outputFiles[0].text);
   writeFileSync(resolve(fixture, 'test.js'), String.raw`
@@ -129,6 +133,58 @@ try {
     check((await Probe.request({...empty(),domChanges:[deleted]})).ok && !document.querySelector('#b'), 'safe delete replay');
     Probe.revertAllPageMutations();
     check(document.querySelector('#parent').children[1].id === 'b', 'safe deleted outerHTML reverts at original sibling position');
+    const legacy = {...base,id:'legacy',text:'legacy comment',pageUrl:location.href};
+    check((await Probe.request({...empty(),comments:[legacy]})).ok && durableComments[0].updatedAt === 1, 'legacy comment normalized through handler');
+    for (const updatedAt of [null, '1', -1]) {
+      check(!(await Probe.request({...empty(),comments:[{...legacy,updatedAt}]})).ok, 'supplied malformed updatedAt rejected');
+    }
+    await Probe.persistImportedSession(empty());
+    check((await Probe.loadSession()).styleChanges.length === 0, 'promise storage load');
+    window.failRead = true;
+    check(await Probe.loadSession() === null, 'promise storage read rejection');
+    window.failRead = false;
+    window.failSession = true;
+    let rejected = false;
+    try { await Probe.persistImportedSession(empty()); } catch { rejected = true; }
+    check(rejected, 'promise storage write rejection');
+    Probe.persistSession();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    window.failSession = false;
+
+    // Persistence yields to the host page; rollback must retain intervening edits.
+    const savedHistory = JSON.stringify([Probe.undoStack, Probe.redoStack]);
+    window.onSessionWrite = () => {
+      document.querySelector('#b').textContent = 'website intervening edit';
+      window.failAfterMutation = true;
+    };
+    check(!(await Probe.request(empty())).ok, 'late synchronous commit failure');
+    check(document.querySelector('#b').textContent === 'website intervening edit', 'late rollback retains website edit during await');
+    check(JSON.stringify([Probe.undoStack, Probe.redoStack]) === savedHistory, 'late failure retains undo and redo history');
+    window.onSessionWrite = () => {
+      Probe.applyStyleChange('dm-1','opacity','0.7');
+      Probe.undoStack.push('intervening-undo');
+    };
+    const stale = await Probe.request(empty());
+    check(!stale.ok && /Session changed/.test(stale.error), 'stale import rejected after live extension edit');
+    check(Probe.getStyleChanges().some(c => c.property === 'opacity') && Probe.undoStack.at(-1) === 'intervening-undo', 'live tracker and undo retained');
+    check(Object.values(window.durableSession)[0].styleChanges.some(c => c.property === 'opacity'), 'rollback persists live session not stale snapshot');
+
+    const host = document.createElement('div'); host.id = 'move-host';
+    const other = document.createElement('div'); other.id = 'move-other';
+    document.body.append(host, other);
+    for (const [from,to,cross] of [[0,1,false],[2,0,false],[0,2,false],[1,0,true]]) {
+      host.innerHTML = '<i id="m0"></i><i id="m1"></i><i id="m2"></i>'; other.replaceChildren();
+      const source = host.children[from];
+      const move = {...base,id:'move',elementId:'dm-900',selector:'#'+source.id,action:'move',tagName:'I',origin:{parentSelector:'#move-host',index:from},destination:{parentSelector:cross?'#move-other':'#move-host',index:to}};
+      const expected = Array.from(host.children).map(c => c.id); expected.splice(from,1); if (!cross) expected.splice(to,0,source.id);
+      Probe.applyChangesPayload({...empty(),domChanges:[move]});
+      const exported = JSON.parse(JSON.stringify(Probe.getDomChanges()));
+      check(Array.from(host.children).map(c=>c.id).join() === expected.join(), 'move final-index ordering');
+      host.innerHTML = '<i id="m0"></i><i id="m1"></i><i id="m2"></i>'; other.replaceChildren();
+      Probe.applyChangesPayload({...empty(),domChanges:exported});
+      check(Array.from(host.children).map(c=>c.id).join() === expected.join() && (!cross || other.firstElementChild.id === source.id), 'export and replay move ordering');
+    }
+    host.remove(); other.remove();
     const first = Probe.request(empty());
     const concurrent = await Probe.request(empty());
     check(concurrent.ok === false && /already in progress/.test(concurrent.error), 'concurrent import rejected without racing replacement');
@@ -140,10 +196,20 @@ try {
   }
 })();
   `);
+  const polyfill = readFileSync(createRequire(import.meta.url).resolve('webextension-polyfill/dist/browser-polyfill.js'), 'utf8');
+  writeFileSync(resolve(fixture, 'polyfill.js'), polyfill);
+  for (const mode of ['native', 'polyfill-local', 'polyfill-session']) {
   writeFileSync(resolve(fixture, 'index.html'), `<!doctype html><body><div id="parent"><div id="a">original</div><div id="b">sibling</div></div><script>
     window.writes=0;window.durableComments=[];
-    window.browser={runtime:{lastError:null,sendMessage:async msg=>{if(msg.type==='COMMENT_STORE'){if(msg.operation.kind==='replacePage'){window.writes++;if(window.failComments)return {ok:false,error:'comment storage failure'};window.durableComments=structuredClone(msg.operation.comments);}return {ok:true,comments:structuredClone(window.durableComments)};}return {ok:true};}},storage:{session:{set(data,cb){window.writes++; if(window.failSession){browser.runtime.lastError={message:'session storage failure'}; cb();browser.runtime.lastError=null;}else{window.durableSession=data;cb();}}}}};
-  </script><script src="bundle.js"></script><script src="test.js"></script>`);
+    const runtime={id:'fixture',lastError:null,sendMessage:async msg=>{if(msg.type==='COMMENT_STORE'){if(msg.operation.kind==='replacePage'){window.writes++;if(window.failComments)return {ok:false,error:'comment storage failure'};window.durableComments=structuredClone(msg.operation.comments);}return {ok:true,comments:structuredClone(window.durableComments)};}return {ok:true};}};
+    const area={async set(data){if(arguments.length!==1)throw Error('promise API received callback');window.writes++;await new Promise(r=>setTimeout(r,1));const hook=window.onSessionWrite;window.onSessionWrite=null;if(hook)hook();if(window.failSession)throw Error('session storage failure');window.durableSession=structuredClone(data);},async get(){if(window.failRead)throw Error('read failure');return window.durableSession||{};}};
+    if ('${mode}' === 'native') window.browser={runtime,storage:{session:area,local:area}};
+    else {
+      const local={set(data,cb){area.set(data).then(()=>cb(),error=>{runtime.lastError={message:error.message};cb();runtime.lastError=null;});},get(key,cb){area.get(key).then(cb,error=>{runtime.lastError={message:error.message};cb();runtime.lastError=null;});}};
+      const send = runtime.sendMessage; runtime.sendMessage = (msg,cb) => { send(msg).then(cb); };
+      window.chrome={runtime,storage:{local,...('${mode}' === 'polyfill-session'?{session:area}:{})}};
+    }
+  </script>${mode === 'native' ? '' : '<script src="polyfill.js"></script>'}<script src="bundle.js"></script><script src="test.js"></script>`);
   const run = spawnSync(process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', [
     '--headless', '--disable-gpu', '--no-first-run', '--disable-background-networking',
     `--user-data-dir=${resolve(fixture, 'profile')}`, '--dump-dom', '--virtual-time-budget=2000',
@@ -151,5 +217,6 @@ try {
   ], { encoding: 'utf8', timeout: 30000, maxBuffer: 3 * 1024 * 1024 });
   assert.equal(run.status, 0, run.error?.message || run.stderr);
   assert.match(run.stdout, /id="result">PASS:/, run.stdout);
-  console.log(run.stdout.match(/PASS: [^<]+/)[0] + ' (actual source modules/handler; mocked extension storage, not installed-extension certification)');
+  console.log(mode + ': ' + run.stdout.match(/PASS: [^<]+/)[0] + ' (actual handler/polyfill; storage backend mocked, not installed-extension certification)');
+  }
 } finally { rmSync(fixture, { recursive: true, force: true }); }
