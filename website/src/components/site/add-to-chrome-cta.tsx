@@ -11,14 +11,14 @@ const STORES = {
   chrome: {
     name: "Chrome",
     label: "Download latest",
-    href: "https://github.com/SandeepBaskaran/design-mode/releases",
+    href: "https://github.com/SandeepBaskaran/design-mode/releases/latest",
     icon: "/chrome.svg",
     event: "add_to_chrome",
   },
   firefox: {
     name: "Firefox",
     label: "Download latest",
-    href: "https://github.com/SandeepBaskaran/design-mode/releases",
+    href: "https://github.com/SandeepBaskaran/design-mode/releases/latest",
     icon: "/firefox.svg",
     event: "add_to_firefox",
   },
