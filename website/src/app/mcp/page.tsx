@@ -154,8 +154,10 @@ export default function McpPage() {
               In your agent’s hands.
             </h1>
             <p className="text-muted-foreground mt-6 max-w-2xl text-base leading-relaxed">
-              Start with this prompt. A capable agent can help you connect; apps
-              that cannot configure themselves can guide you through the steps.
+              Use Copy as prompt without a server, or connect a compatible
+              client through Cloud, Local or Self-hosted MCP. The extension
+              records browser changes; it does not grant repository access. This
+              setup prompt can help your agent guide you through the connection.
             </p>
             <div className="bg-background/90 mt-10 rounded-xl border p-6 sm:p-8">
               <h2 className="text-xl font-semibold">Set up with your agent</h2>
@@ -175,6 +177,21 @@ export default function McpPage() {
             Mode gives a connected agent tools to read your recorded browser
             edits, inspect screenshots and update their status. The agent still
             needs separate access to your repository to change source code.
+            Review the{" "}
+            <Link
+              href="/docs/changes-tab"
+              className="underline underline-offset-4"
+            >
+              recorded changes and copy formats
+            </Link>
+            , then use the{" "}
+            <Link
+              href="/blog/turn-visual-edits-into-precise-ai-prompts"
+              className="underline underline-offset-4"
+            >
+              precise-prompts guide
+            </Link>{" "}
+            to add scope and acceptance checks.
           </p>
           <div className="mt-12 grid gap-8 rounded-xl border p-6 md:grid-cols-2 md:p-8">
             <div>
@@ -338,9 +355,10 @@ export default function McpPage() {
                     [&quot;start&quot;, &quot;--prefix&quot;,
                     &quot;/absolute/path/to/design-mode/packages/mcp-local&quot;]
                   </code>
-                  . The client owns this process. There is no published CLI
-                  install assumed here: the agent CLI package is currently
-                  private. If another app owns port 9960, set DM_PORT in the
+                  . The client owns this process. The published agent CLI is{" "}
+                  <code>@designmode-app/cli</code> (<code>designmode-app</code>
+                  ). It does not start this bridge and it does not send
+                  analytics. If another app owns port 9960, set DM_PORT in the
                   companion’s environment and match the extension’s Local port;
                   never kill a foreign process.
                 </p>
@@ -377,8 +395,14 @@ export default function McpPage() {
             Mode comparison
           </h2>
           <p className="text-muted-foreground mt-2 max-w-2xl">
-            Setup steps, privacy posture, agent compatibility, and cost across
-            the three modes.
+            Setup, MCP transport, client requirements and cost across the three
+            modes. Local keeps this MCP transport on localhost; it is not a
+            no-egress guarantee for the coding client or other enabled features.
+            See the{" "}
+            <Link href="/privacy" className="underline underline-offset-4">
+              privacy disclosure
+            </Link>{" "}
+            for the separate data flows.
           </p>
         </div>
         <ModesComparison />
@@ -452,7 +476,21 @@ export default function McpPage() {
           <p className="text-muted-foreground mt-6 text-base">
             Examples checked against first-party documentation on 29 September
             2026. Client versions and organisation policies can change
-            availability.
+            availability. Use the{" "}
+            <Link
+              href="/docs/mcp-setup"
+              className="underline underline-offset-4"
+            >
+              client setup reference
+            </Link>{" "}
+            for configuration details and{" "}
+            <Link
+              href="/docs/troubleshooting"
+              className="underline underline-offset-4"
+            >
+              troubleshooting
+            </Link>{" "}
+            when a connection check fails.
           </p>
         </div>
       </section>

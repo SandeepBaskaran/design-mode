@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import {
   AlignLeft,
   ArrowDown,
@@ -7,14 +9,12 @@ import {
   Copy,
   CornerUpLeft,
   Eye,
-  Folder,
   HeartHandshake,
   HelpCircle,
   Layers,
   Layers3,
   MessageCircle,
   MoveHorizontal,
-  MoveVertical,
   Pause,
   Plug,
   Send,
@@ -130,7 +130,7 @@ const actionItems = [
     icon: Pause,
     title: "Freeze animations",
     description:
-      "Pause every CSS/JS animation on the page so you can edit mid-state.",
+      "Pause CSS and Web Animations API animations and playing videos; suppress transitions. Custom JavaScript animation loops may continue.",
   },
   {
     icon: Camera,
@@ -140,7 +140,8 @@ const actionItems = [
   {
     icon: Bookmark,
     title: "Presets",
-    description: "Save and reapply styles across all nine Design-tab sections.",
+    description:
+      "Save supported style properties as presets and reapply them. Presets do not capture every editor action or page state.",
   },
   {
     icon: CornerUpLeft,
@@ -151,15 +152,14 @@ const actionItems = [
 ];
 
 const designSections = [
-  { icon: Type, label: "Typography" },
   { icon: AlignLeft, label: "Position" },
   { icon: Layers, label: "Layout" },
-  { icon: MoveVertical, label: "Size & spacing" },
-  { icon: Square, label: "Border" },
-  { icon: Eye, label: "Appearance" },
+  { icon: Type, label: "Typography" },
+  { icon: Eye, label: "Fill" },
+  { icon: Square, label: "Stroke" },
   { icon: Sparkles, label: "Effects" },
   { icon: MoveHorizontal, label: "Motion" },
-  { icon: Folder, label: "Variants" },
+  { icon: Layers3, label: "Layout Guides" },
 ];
 
 export default function FeaturesPage() {
@@ -175,8 +175,13 @@ export default function FeaturesPage() {
             <p className="text-muted-foreground mt-4 max-w-3xl text-base">
               The Design Mode side panel is split into three rows. A header row
               to pick what you're working on, three middle panels for the actual
-              editing, and a bottom row that ships your edits to your AI coding
-              agent.
+              editing, and a bottom row for handing changes to your AI coding
+              agent. These are browser previews, not source edits or published
+              changes. Try the{" "}
+              <Link href="/demo" className="underline underline-offset-4">
+                guided demo
+              </Link>{" "}
+              on a supported page.
             </p>
           </div>
         </section>
@@ -281,7 +286,7 @@ export default function FeaturesPage() {
                 <Layers className="text-foreground size-6" />
                 <h3 className="text-2xl font-semibold">Layers</h3>
                 <p className="text-muted-foreground text-base leading-relaxed">
-                  Full DOM tree of the page you're editing. Search,
+                  The accessible DOM tree of the page you're editing. Search,
                   expand/collapse, multi-select, drag rows to rearrange the
                   actual document, toggle visibility with an eye icon per row.
                 </p>
@@ -299,16 +304,16 @@ export default function FeaturesPage() {
                 <Sparkles className="text-foreground size-6" />
                 <h3 className="text-2xl font-semibold">Design</h3>
                 <p className="text-muted-foreground text-base leading-relaxed">
-                  Nine sections, Figma-aligned. Every input is a real control —
-                  sliders, colour pickers, segmented buttons — not a textarea of
-                  CSS. Motion leads with trigger-first interaction cards (Hover
-                  / Press / Focus / Appear / Loop / Scroll). Inspect authored
-                  hover, focus, and active states; force-preview them, or
-                  overlay computed flex/grid tracks. Any field bound to a
-                  design-system token shows a ◆ badge for swapping or editing
-                  it. Width and height show authored CSS separately from the
-                  computed measurement. Rich text preserves attributed spans,
-                  icons and media while exposing safe link destinations.
+                  Controls grouped by editing task — sliders, colour pickers,
+                  segmented buttons — not a textarea of CSS. Motion leads with
+                  trigger-first interaction cards (Hover / Press / Focus /
+                  Appear / Loop / Scroll). Inspect authored hover, focus, and
+                  active states; force-preview them, or overlay computed
+                  flex/grid tracks. Any field bound to a design-system token
+                  shows a ◆ badge for swapping or editing it when the token can
+                  be detected. Width and height show authored CSS separately
+                  from the computed measurement. Rich text preserves attributed
+                  spans, icons and media while exposing safe link destinations.
                 </p>
                 <ul className="mt-2 grid grid-cols-1 gap-2 text-base">
                   {designSections.map((s) => {
@@ -335,7 +340,14 @@ export default function FeaturesPage() {
                   Every style, text, DOM, and comment edit collected in
                   reverse-chronological order. Keep element groups or add
                   detected component/source headings, filter by kind, search by
-                  value, resolve or revert anything.
+                  value, and review or revert recorded edits. See the{" "}
+                  <Link
+                    href="/docs/changes-tab"
+                    className="underline underline-offset-4"
+                  >
+                    Changes guide
+                  </Link>{" "}
+                  for storage, JSON export and sharing scope.
                 </p>
                 <ul className="text-muted-foreground mt-2 space-y-2 text-base">
                   <li>• Sticky search + filter chips header</li>
@@ -364,8 +376,13 @@ export default function FeaturesPage() {
               </h2>
             </div>
             <p className="text-muted-foreground mb-10 max-w-2xl">
-              Two buttons. The only two ways your changes leave the panel — one
-              to the clipboard, one to a connected AI coding agent.
+              Two primary hand-off buttons — one to the clipboard, one to a
+              connected AI coding agent. JSON export and MCP reads are also
+              sharing paths. Review the{" "}
+              <Link href="/privacy" className="underline underline-offset-4">
+                privacy and sharing boundaries
+              </Link>{" "}
+              before sending.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
               <Card>
@@ -375,10 +392,17 @@ export default function FeaturesPage() {
                     <h3 className="text-2xl font-semibold">Copy as Prompt</h3>
                   </div>
                   <p className="text-muted-foreground text-base leading-relaxed">
-                    Bundles every change into a Markdown export (selector →
-                    property → value lines) and writes it to your clipboard.
-                    Paste into whichever agent you use — works without any MCP
-                    setup.
+                    Copies your recorded changes as a Markdown prompt. In the
+                    next-release source this can include all saved routes on the
+                    current site, even collapsed groups. Review it before
+                    pasting; no MCP setup is required. See the{" "}
+                    <Link
+                      href="/blog/turn-visual-edits-into-precise-ai-prompts"
+                      className="underline underline-offset-4"
+                    >
+                      illustrative prompt and review checklist
+                    </Link>
+                    .
                   </p>
                 </CardContent>
               </Card>
@@ -389,12 +413,18 @@ export default function FeaturesPage() {
                     <h3 className="text-2xl font-semibold">Send to Agent</h3>
                   </div>
                   <p className="text-muted-foreground text-base leading-relaxed">
-                    Marks the current edit session as ready over MCP. A
-                    connected agent retrieves the live changes and hand-off
-                    marker through the MCP tools. Without an attached agent,
-                    Design Mode opens setup guidance instead of claiming the
-                    hand-off succeeded. Local mode can continue into explicit
-                    feedback rounds with immutable snapshots and a Stop action.
+                    Marks recorded changes as ready over MCP. A connected agent
+                    retrieves the live changes and hand-off marker through the
+                    MCP tools. Without an attached agent, Design Mode opens
+                    setup guidance instead of claiming the hand-off succeeded.
+                    Local mode can continue into explicit feedback rounds with
+                    immutable snapshots and a Stop action in the next-release
+                    implementation. Follow the{" "}
+                    <Link href="/mcp" className="underline underline-offset-4">
+                      MCP setup guide
+                    </Link>
+                    ; the agent still needs authorised repository access and its
+                    changes need review.
                   </p>
                 </CardContent>
               </Card>

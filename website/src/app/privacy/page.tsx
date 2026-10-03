@@ -17,8 +17,9 @@ export default function PrivacyPage() {
               Privacy
             </h1>
             <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              Design Mode runs locally by default. Here's exactly what data
-              leaves your machine, when, and why.
+              Design Mode runs in your browser. Release builds send usage
+              analytics without page content. Here is what else can leave your
+              machine, when, and why.
             </p>
           </div>
         </section>

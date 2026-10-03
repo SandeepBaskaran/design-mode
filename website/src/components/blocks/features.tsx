@@ -45,9 +45,23 @@ export const Features = () => {
           <p className="text-muted-foreground max-w-2xl leading-snug">
             Edit the rendered interface with visual controls. Design Mode
             records selectors, properties, old values, new values, text edits,
-            DOM changes and comments. Copy that specification as Markdown or let
-            a connected MCP client read it, update the repository and return a
-            result for you to review.
+            DOM changes and comments. Use{" "}
+            <Link
+              href="/docs/changes-tab"
+              className="underline underline-offset-4"
+            >
+              Copy as prompt
+            </Link>{" "}
+            for Markdown, or let a connected MCP client read it. The client
+            needs separate repository access to implement the changes. Add
+            intent and verification with the{" "}
+            <Link
+              href="/blog/turn-visual-edits-into-precise-ai-prompts"
+              className="underline underline-offset-4"
+            >
+              precise-prompts guide
+            </Link>{" "}
+            before reviewing the source diff.
           </p>
         </div>
 

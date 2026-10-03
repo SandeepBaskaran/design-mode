@@ -32,13 +32,13 @@ const comparisonFeatures: FeatureSection[] = [
     category: "Setup",
     features: [
       {
-        name: "Install command",
-        local: "clone repo + npm start",
-        cloud: "no install",
-        selfHosted: "deploy anywhere",
+        name: "Setup requirements",
+        local: "checkout + dependencies + client stdio config",
+        cloud: "bearer credential + HTTP client config",
+        selfHosted: "Node.js + Redis relay + client config",
       },
       {
-        name: "Bearer token required",
+        name: "Client HTTP bearer header",
         local: false,
         cloud: true,
         selfHosted: true,
@@ -55,10 +55,10 @@ const comparisonFeatures: FeatureSection[] = [
     category: "Privacy",
     features: [
       {
-        name: "Network egress from your machine",
-        local: false,
-        cloud: true,
-        selfHosted: true,
+        name: "Design Mode MCP transport",
+        local: "localhost bridge",
+        cloud: "hosted relay",
+        selfHosted: "your relay deployment",
       },
       {
         name: "Relay payload buffering",
@@ -69,8 +69,8 @@ const comparisonFeatures: FeatureSection[] = [
       {
         name: "Payload queue expiry",
         local: "n/a",
-        cloud: "best-effort 60-second expiry",
-        selfHosted: "best-effort 60-second default",
+        cloud: "new messages refresh the queue expiry",
+        selfHosted: "source default refreshes; verify your deployment",
       },
       {
         name: "Anyone else operates the infra",
@@ -85,27 +85,27 @@ const comparisonFeatures: FeatureSection[] = [
     features: [
       {
         name: "Claude Desktop",
-        local: true,
-        cloud: true,
-        selfHosted: true,
+        local: "local stdio configuration",
+        cloud: "verify custom bearer-header support",
+        selfHosted: "verify custom bearer-header support",
       },
       {
         name: "Cursor",
-        local: true,
-        cloud: true,
-        selfHosted: true,
+        local: "stdio configuration",
+        cloud: "HTTP + bearer header",
+        selfHosted: "HTTP + bearer header",
       },
       {
         name: "Claude Code",
-        local: true,
-        cloud: true,
-        selfHosted: true,
+        local: "stdio configuration",
+        cloud: "HTTP + bearer header",
+        selfHosted: "HTTP + bearer header",
       },
       {
         name: "Agents in remote / sandboxed contexts",
-        local: false,
-        cloud: true,
-        selfHosted: true,
+        local: "requires access to the local bridge",
+        cloud: "requires permitted authenticated HTTP",
+        selfHosted: "requires permitted authenticated HTTP",
       },
     ],
   },

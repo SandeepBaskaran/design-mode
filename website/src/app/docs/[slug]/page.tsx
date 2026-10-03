@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Background } from "@/components/background";
@@ -5,7 +6,7 @@ import { DashedLine } from "@/components/dashed-line";
 import {
   JsonLd,
   breadcrumbSchema,
-  howToSchema,
+  articleSchema,
 } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
 import { docs, getDoc } from "@/content/docs";
@@ -17,10 +18,8 @@ export function generateStaticParams() {
 export const dynamicParams = false;
 
 const docDescriptions: Record<string, string> = {
-  install:
-    "Install Design Mode from the Chrome Web Store or Firefox Add-ons, open it on a supported page and optionally configure an agent hand-off.",
   "browser-support":
-    "Chrome, Chromium and Firefox support, including the three Chromium-only features and protected pages where extensions cannot run.",
+    "Install Design Mode from the Chrome Web Store or Firefox Add-ons, or add the Safari Web Inspector zip from the latest GitHub release.",
   "mcp-setup":
     "Bearer-token Cloud, Local and Self-hosted MCP setup for Claude Code, Cursor and VS Code, with protected configuration and read-only verification.",
   troubleshooting:
@@ -87,20 +86,17 @@ export default async function DocPage({
   if (!d) notFound();
 
   const url = `https://designmode.app/docs/${d.slug}`;
-  const isHowTo = d.slug === "mcp-setup";
 
   return (
     <>
-      {isHowTo && (
-        <JsonLd
-          data={howToSchema({
-            name: d.title,
-            description: d.intro,
-            url,
-            steps: d.sections.map((s) => ({ name: s.heading, text: s.body })),
-          })}
-        />
-      )}
+      <JsonLd
+        data={articleSchema({
+          title: d.title,
+          description: d.intro,
+          url,
+          type: "TechArticle",
+        })}
+      />
       <JsonLd
         data={breadcrumbSchema([
           { name: "Home", url: "https://designmode.app/" },
@@ -115,9 +111,7 @@ export default async function DocPage({
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {d.title}
             </h1>
-            <p className="text-muted-foreground mt-4 text-base">
-              {d.intro}
-            </p>
+            <p className="text-muted-foreground mt-4 text-base">{d.intro}</p>
           </div>
         </section>
       </Background>
@@ -133,6 +127,20 @@ export default async function DocPage({
               <p className="text-muted-foreground mt-4 leading-relaxed">
                 {s.body}
               </p>
+              {s.links && (
+                <ul className="mt-4 space-y-2">
+                  {s.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="underline underline-offset-4"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {s.code && (
                 <pre className="bg-muted text-foreground mt-4 overflow-x-auto rounded-lg border p-4 text-base leading-relaxed">
                   <code>{s.code}</code>

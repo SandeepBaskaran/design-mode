@@ -10,6 +10,7 @@ import {
 } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
 import { Button } from "@/components/ui/button";
+import { useCaseContextualLinks } from "@/content/contextual-links";
 import { getUseCase, useCases } from "@/content/use-cases";
 
 export function generateStaticParams() {
@@ -105,9 +106,7 @@ export default async function UseCasePage({
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {u.title}
             </h1>
-            <p className="text-muted-foreground mt-4 text-base">
-              {u.intro}
-            </p>
+            <p className="text-muted-foreground mt-4 text-base">{u.intro}</p>
           </div>
         </section>
       </Background>
@@ -165,15 +164,18 @@ export default async function UseCasePage({
         </article>
 
         <RelatedLinks
-          title="Related use cases"
-          links={u.related
-            .map((slug) => getUseCase(slug))
-            .filter((r): r is NonNullable<typeof r> => Boolean(r))
-            .map((r) => ({
-              href: `/use-cases/${r.slug}`,
-              title: r.title,
-              description: r.intro.split(". ")[0] + ".",
-            }))}
+          title="Continue this workflow"
+          links={[
+            ...(useCaseContextualLinks[u.slug] ?? []),
+            ...u.related
+              .map((slug) => getUseCase(slug))
+              .filter((r): r is NonNullable<typeof r> => Boolean(r))
+              .map((r) => ({
+                href: `/use-cases/${r.slug}`,
+                title: r.title,
+                description: r.intro.split(". ")[0] + ".",
+              })),
+          ]}
         />
       </section>
     </>

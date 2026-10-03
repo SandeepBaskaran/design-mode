@@ -1,27 +1,22 @@
 import Link from "next/link";
 
 import { Background } from "@/components/background";
+import { FAQItems } from "@/components/blocks/faq";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, faqSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { faqGroups } from "@/content/product-facts";
 
 export const metadata = {
   title: { absolute: "Design Mode FAQ — Browser editing, MCP and privacy" },
   description:
-    "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome and Firefox, and handles storage and Cloud relay data.",
+    "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari on Mac, and handles storage and Cloud relay data.",
   alternates: { canonical: "https://designmode.app/faq" },
   openGraph: {
     type: "website",
     title: "Design Mode FAQ — Browser editing, MCP and privacy",
     description:
-      "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome and Firefox, and handles storage and Cloud relay data.",
+      "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari on Mac, and handles storage and Cloud relay data.",
     url: "https://designmode.app/faq",
     images: [
       {
@@ -36,7 +31,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "Design Mode FAQ — Browser editing, MCP and privacy",
     description:
-      "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome and Firefox, and handles storage and Cloud relay data.",
+      "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari on Mac, and handles storage and Cloud relay data.",
     images: [
       {
         url: "/og-design-mode-inter-v3.png",
@@ -89,21 +84,12 @@ export default function FaqPage() {
               >
                 {group.title}
               </h2>
-              <Accordion type="single" collapsible className="mt-2 w-full">
-                {group.items.map((qa, itemIndex) => (
-                  <AccordionItem
-                    key={qa.question}
-                    value={`${groupIndex}-${itemIndex}`}
-                  >
-                    <AccordionTrigger className="text-left">
-                      {qa.question}
-                    </AccordionTrigger>
-                    <AccordionContent className="text-muted-foreground leading-relaxed">
-                      {qa.answer}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
+              <div className="mt-2 w-full">
+                <FAQItems
+                  items={group.items}
+                  name={`faq-group-${groupIndex}`}
+                />
+              </div>
             </section>
           ))}
         </div>
@@ -118,9 +104,9 @@ export default function FaqPage() {
             },
             {
               href: "/docs/browser-support",
-              title: "Chrome and Firefox support",
+              title: "Chrome, Firefox and Safari support",
               description:
-                "Core parity, browser-specific features and limitations.",
+                "Store installs, the Safari Web Inspector zip, and browser-specific limits.",
             },
             {
               href: "/privacy",

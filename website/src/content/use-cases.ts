@@ -42,7 +42,7 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Send to Claude Code over MCP",
-        text: "With Claude Code connected through Cloud, Local, or Self-hosted MCP, click Send to Agent to mark the session ready. Ask Claude Code to read the selectors and properties, implement only that scoped change in the repository it already has access to, and show you the diff. Setup lives on /mcp.",
+        text: "With Claude Code connected through Cloud, Local, or Self-hosted MCP, click Send to Agent to mark the session ready. Ask Claude Code to read the selectors and properties, implement only that scoped change in the repository it already has access to, and show you the diff. Use the current MCP setup guide for client-specific configuration.",
       },
       {
         name: "Review the repository change",
@@ -72,13 +72,13 @@ export const useCases: UseCase[] = [
       "Cursor + Design Mode",
     ],
     intro:
-      "Cursor's built-in design mode lives inside the editor. Design Mode is a Chrome and Firefox extension that edits the actual rendered page. Use them together when you want live layout, fonts, and states in the browser, then ask Cursor to implement only the scoped change in the repo you already opened. Cursor does not commit automatically.",
+      "Design Mode is an independent Chrome and Firefox extension, distinct from Cursor’s built-in design mode. Preview a change on a scriptable webpage, then ask Cursor to implement only that change in the repository you have authorised. Review the diff before committing.",
     problem:
-      "Cursor's chat is text-first. Describing a hover state, a gradient, or a kerning tweak in prose is slow and imprecise. Pasting screenshots works for big changes but falls apart at the pixel level. Cursor's editor-native design surface is also not the live rendered page.",
+      "A screenshot can show the visual issue without identifying its selector, exact values or intended state. Pair it with recorded changes and a scoped implementation request.",
     workflow: [
       {
         name: "Point Cursor at Design Mode",
-        text: "Add the Cloud or Local snippet from /mcp into ~/.cursor/mcp.json. Restart Cursor.",
+        text: "Use the current MCP setup guide to choose a Cursor project or global configuration. Match the connection mode, protect the bearer token when required, and verify a read-only session call before asking for source edits.",
       },
       {
         name: "Edit the page in the browser",
@@ -100,11 +100,11 @@ export const useCases: UseCase[] = [
   {
     slug: "redesign-any-website",
     persona: "Designers",
-    title: "Redesign any website",
+    title: "Preview a redesign on a webpage",
     metaTitle:
-      "Redesign any website — browser-as-design-surface with Design Mode",
+      "Preview a redesign on a webpage — browser-as-design-surface with Design Mode",
     metaDescription:
-      "Open a scriptable URL in your browser, click anything, and redesign it visually — no source code, no Figma mock. Every change is a structured preview you can hand to your team or AI agent.",
+      "Open a scriptable URL in your browser, select an accessible element, and preview changes visually — no source code, no Figma mock. Every change is a structured preview you can hand to your team or AI agent.",
     keywords: [
       "redesign a website",
       "in-browser website editor",
@@ -122,7 +122,7 @@ export const useCases: UseCase[] = [
         text: "Browse to a localhost, staging, or production URL the extension can script. Open the Design Mode side panel.",
       },
       {
-        name: "Click anything; edit anything",
+        name: "Select an element and preview a change",
         text: "Typography, colour, layout, spacing, motion, effects, copy, DOM. Every input is a real control — not a CSS textarea.",
       },
       {
@@ -149,7 +149,7 @@ export const useCases: UseCase[] = [
     metaTitle:
       "Design review in production — annotate the live deploy, ship a structured diff",
     metaDescription:
-      "Walk your team through a deployed app, annotate every drift from the design system, and export a structured diff for engineering. Design Mode replaces the screenshot-plus-Linear-ticket loop.",
+      "Review a deployed app against your design reference, annotate issues and record candidate fixes for engineering. Pair the specification with screenshots and acceptance checks.",
     keywords: [
       "design review tool",
       "design QA",
@@ -158,7 +158,7 @@ export const useCases: UseCase[] = [
       "design handoff",
     ],
     intro:
-      "Design reviews on staging always end the same way: a Loom recording, a Notion doc full of screenshots, and engineering scrambling to interpret ambiguous arrows. Design Mode collapses that into one structured artefact.",
+      "Review a deployed page against your agreed design reference, annotate deviations, and record candidate fixes for engineering. The local preview does not alter production.",
     problem:
       'Verbal feedback is lossy. "This needs more breathing room" can mean any of five different changes depending on who reads it. Engineers waste cycles asking which spacing token.',
     workflow: [
@@ -168,15 +168,15 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Capture before / after",
-        text: "Screenshots and the Changes tab automatically build a per-page audit trail.",
+        text: "Capture screenshots manually before and after the preview. Pair them with the recorded changes, page URL, viewport and review notes.",
       },
       {
         name: "Export the spec",
-        text: "Markdown export with selector → property → value lines. Paste straight into Linear, GitHub, or Jira.",
+        text: "Use Copy as prompt to copy a Markdown specification. Paste it into your tracker and attach screenshots separately.",
       },
     ],
     outcome:
-      'Engineering knows exactly what to change. No "what did you mean by this?" follow-up.',
+      "Engineering receives the proposed changes and review context. Confirm scope, resolve open questions and verify the implemented source.",
     related: [
       "ui-testing-export-to-developers",
       "bug-report-with-visual-diff",
@@ -190,7 +190,7 @@ export const useCases: UseCase[] = [
     metaTitle:
       "Tailwind component tuning — edit shadcn / Tailwind UI visually with AI agent handoff",
     metaDescription:
-      "Tune Tailwind / shadcn components visually in the browser, then have Claude Code or Cursor write the utility classes. The fastest way to refine a Tailwind UI without leaving the page.",
+      "Tune Tailwind / shadcn components visually in the browser, then have Claude Code or Cursor write the utility classes. Review how the agent maps the values to your project’s utilities and tokens.",
     keywords: [
       "Tailwind visual editor",
       "shadcn visual editor",
@@ -199,7 +199,7 @@ export const useCases: UseCase[] = [
       "Tailwind + AI agent",
     ],
     intro:
-      "Tailwind makes building UI fast and tuning it slow — once you have utility classes, you're guessing at numeric increments. Design Mode gives you a visual handle on every Tailwind class and emits the diff your AI agent can translate back to utilities.",
+      "Tune the rendered component, then ask your agent to map the selected values to existing Tailwind utilities or tokens. Design Mode records browser CSS changes; it is not a source-level Tailwind class editor.",
     problem:
       "Adjusting `space-y-4` to something between 16 and 20 pixels means editing classes, refreshing, and eyeballing. Multiply that across a real component and the loop kills momentum.",
     workflow: [
@@ -213,11 +213,11 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Hand the diff to your agent",
-        text: "Claude Code or Cursor reads the structured diff and translates the pixel/colour values into the closest Tailwind utility classes (or your tokens) in your source.",
+        text: "Ask the agent to inspect the existing utilities and tokens first. Reuse an exact matching value; flag an unmatched value rather than silently choosing the nearest utility. Specify whether shared instances and breakpoints should change.",
       },
     ],
     outcome:
-      "Visual control of a utility-class UI. Your design system constraints are respected; you just spec from the rendered surface.",
+      "Review the utility-class diff and check the component at desktop and mobile widths without preview overrides. Token reuse and shared-component scope are acceptance checks, not automatic guarantees.",
     related: [
       "vibe-coding-with-claude-code",
       "visual-editing-with-cursor",
@@ -227,11 +227,10 @@ export const useCases: UseCase[] = [
   {
     slug: "figma-to-code-without-figma",
     persona: "Solo makers & small teams",
-    title: "Figma-to-code without Figma",
-    metaTitle:
-      "Figma-to-code without Figma — design on the live page, ship to your AI agent",
+    title: "Refine an existing page without a duplicate mock-up",
+    metaTitle: "Refine an existing page without a duplicate mock-up",
     metaDescription:
-      "Skip the Figma round-trip. Edit the real page visually, hand the structured diff to your AI agent, and let it write the code. A faster design-to-code path for small teams and indie hackers.",
+      "Skip the Figma round-trip. Edit the real page visually, hand the structured diff to your AI agent, and let it write the code. This workflow refines existing pages; it does not import or convert Figma files.",
     keywords: [
       "Figma alternative",
       "design without Figma",
@@ -258,7 +257,7 @@ export const useCases: UseCase[] = [
       },
     ],
     outcome:
-      "Less context-switching, less file drift, more shipped iterations per week.",
+      "A browser-based specification for an existing page, ready for implementation and review. This is not Figma-file conversion.",
     related: [
       "vibe-coding-with-claude-code",
       "landing-page-iteration-for-indie-hackers",
@@ -283,9 +282,9 @@ export const useCases: UseCase[] = [
       "visual diff for developers",
     ],
     intro:
-      "Visual bugs are the worst category of bug to report and the worst to receive. A screenshot plus a sentence isn't enough context; a Loom video is too much. Design Mode gives you a third option — annotate visually and export a precise, structured diff that ships with every detail a developer needs.",
+      "For manual visual QA, record the affected element, observed state and intended change. Copy a Markdown specification and attach screenshots. This is a reporting workflow, not automated UI testing.",
     problem:
-      "Most UI bug reports are screenshot + prose: \"the button is misaligned on mobile.\" Engineering opens the page, can't reproduce, asks for repro steps, gets a Loom, still can't tell which spacing value is wrong. Cycle time is days, not minutes.",
+      "Most UI bug reports are screenshot + prose: \"the button is misaligned on mobile.\" Engineering opens the page, can't reproduce, asks for repro steps, gets a Loom, still can't tell which spacing value is wrong. Include browser, viewport, reproduction steps, expected and actual behaviour, and any unresolved questions.",
     workflow: [
       {
         name: "Walk the build under test",
@@ -301,11 +300,11 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Export and hand off",
-        text: "Use Export → Markdown to paste into Linear, GitHub, or Jira. Developers see selector, property, old value, new value, and the screenshot context in one ticket.",
+        text: "Use Copy as prompt to copy Markdown into your tracker. Review selectors and before/after values, then attach screenshots and reproduction steps separately.",
       },
     ],
     outcome:
-      'Developers stop asking "what did you mean?" The bug ticket has the exact change to make. Cycle time drops from days to a single PR review.',
+      "The ticket contains a candidate fix and reproduction context. Engineering still investigates the cause, implements the source change and verifies the result.",
     related: [
       "bug-report-with-visual-diff",
       "design-review-in-production",
@@ -331,7 +330,7 @@ export const useCases: UseCase[] = [
     intro:
       "PMs and designers file most of the visual bugs. Engineering has to translate ambiguous descriptions into code changes. Design Mode bridges the two — annotate the bug visually, export a developer-ready diff.",
     problem:
-      '"The button is wrong" is not actionable. "The button\'s `padding-block` should change from 8px to 12px and the `background-color` from #3B82F6 to #4F46E5" is. The latter takes 30 seconds in Design Mode.',
+      '"The button is wrong" is not actionable. "The button\'s `padding-block` should change from 8px to 12px and the `background-color` from #3B82F6 to #4F46E5" is. These are illustrative values: confirm the intended change on the affected page.',
     workflow: [
       {
         name: "Open the affected page",
@@ -342,8 +341,8 @@ export const useCases: UseCase[] = [
         text: "Make the change you'd want shipped. Use the contrast checker, the spacing inspector, the type controls.",
       },
       {
-        name: "Export markdown diff",
-        text: "Click Export → Markdown. The result lists every property change with selectors.",
+        name: "Copy the Markdown specification",
+        text: "Click Copy as prompt to copy the recorded changes as Markdown. Review the scope before pasting it into your tracker.",
       },
       {
         name: "Paste into your tracker",
@@ -351,7 +350,7 @@ export const useCases: UseCase[] = [
       },
     ],
     outcome:
-      "Developers stop arguing about what the bug actually is and just fix it.",
+      "The report separates the observed problem from the proposed fix, giving engineering a starting point to investigate and verify.",
     related: [
       "ui-testing-export-to-developers",
       "copy-edits-without-a-pr",
@@ -361,10 +360,10 @@ export const useCases: UseCase[] = [
   {
     slug: "copy-edits-without-a-pr",
     persona: "Content & marketing teams",
-    title: "Copy edits without a PR",
+    title: "Propose copy edits without opening a PR yourself",
     metaTitle: "Copy edits without a PR — marketing and content team workflow",
     metaDescription:
-      "Marketing and content people fix microcopy in the live page with Design Mode, export the structured diff, and hand it to engineering. No Figma round-trip, no Slack screenshot back-and-forth.",
+      "Preview proposed microcopy on a rendered page, copy the specification, and hand it to engineering. A developer or authorised agent still implements and reviews the source change.",
     keywords: [
       "copy editing tool",
       "marketing copy edits",
@@ -373,7 +372,7 @@ export const useCases: UseCase[] = [
       "content handoff",
     ],
     intro:
-      'Marketing teams ship copy changes all day. Every "can we change this headline?" turns into a Slack thread, a Figma comment, and finally a PR — for what amounts to seven words. Design Mode removes every middle step.',
+      'Marketing teams ship copy changes all day. Every "can we change this headline?" turns into a Slack thread, a Figma comment, and finally a PR — for what amounts to seven words. Design Mode lets you propose the text in context; a developer or authorised agent still implements and reviews the source change.',
     problem:
       "Content people don't have repo access. Designers don't want to update mocks for microcopy. Engineering interrupts their flow to commit a four-word change.",
     workflow: [
@@ -383,7 +382,7 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Export the diff",
-        text: "Markdown export captures every text change with selectors.",
+        text: "Use Copy as prompt to copy recorded text changes as Markdown. Review selectors, localisation needs and accessible labels before sharing.",
       },
       {
         name: "Hand off to engineering",
@@ -391,7 +390,7 @@ export const useCases: UseCase[] = [
       },
     ],
     outcome:
-      "Faster copy iterations, fewer interrupted engineers, no mockup drift.",
+      "A contextual copy proposal for engineering. Check long-copy wrapping and accessible names after implementation; the preview does not publish the text.",
     related: [
       "bug-report-with-visual-diff",
       "client-handoff-from-agency-to-engineering",
@@ -405,7 +404,7 @@ export const useCases: UseCase[] = [
     metaTitle:
       "Accessibility quick fixes — WCAG contrast, type size, focus states",
     metaDescription:
-      "Use Design Mode to fix accessibility issues visually — bump contrast, increase type size, fix focus states — then export the diff for the a11y backlog. WCAG contrast checker built in.",
+      "Preview candidate visual accessibility fixes in Design Mode, copy a scoped specification, then implement and test in source. Contrast feedback is not a full accessibility audit.",
     keywords: [
       "accessibility audit tool",
       "WCAG contrast checker",
@@ -414,24 +413,25 @@ export const useCases: UseCase[] = [
       "accessibility design tool",
     ],
     intro:
-      "Most accessibility issues are visual — contrast ratios, small type, missing focus states, low-touch targets. Design Mode catches and fixes all four directly in the browser.",
+      "Use Design Mode to preview candidate visual accessibility fixes, such as text colour and size changes, then implement and test them in source. Its contrast read-out is not a complete accessibility audit.",
     problem:
-      'Accessibility audit tools list violations. They don\'t help you fix them on the rendered page or generate a ticket developers can act on. The gap between "this fails WCAG 2.2 AA" and "here\'s the change" is the slowest part.',
+      "Visual feedback needs implementation context. Record a candidate fix and the test needed to verify it; include semantic, keyboard and screen-reader checks outside the extension.",
     workflow: [
       {
         name: "Open the page and walk it",
-        text: "Open the side panel. Use the colour picker to spot-check contrast against the WCAG built-in checker.",
+        text: "Use the colour picker to spot-check contrast, then verify against the actual background. Gradients, images and transparency need additional checks.",
       },
       {
         name: "Fix issues visually",
-        text: "Bump text size, change colour, tweak the focus ring, expand touch targets. Every fix is a structured change.",
+        text: "Preview text colour, size or spacing changes. Record focus and target-size requirements as comments where needed; test keyboard focus and target dimensions in the implemented page.",
       },
       {
         name: "Export the backlog",
-        text: "Markdown export lists each fix with the failing selector. Attach to the a11y backlog or a single PR.",
+        text: "Use Copy as prompt to copy the candidate changes as Markdown. Add the failing condition, expected behaviour and verification steps to the accessibility backlog.",
       },
     ],
-    outcome: "An a11y pass that produces shippable code, not just findings.",
+    outcome:
+      "A scoped set of candidate visual fixes. Test the source implementation with keyboard and assistive technology where relevant; no export establishes WCAG conformance.",
     related: [
       "ui-testing-export-to-developers",
       "bug-report-with-visual-diff",
@@ -445,7 +445,7 @@ export const useCases: UseCase[] = [
     metaTitle:
       "Landing-page iteration for indie hackers — Design Mode + Claude Code",
     metaDescription:
-      "Solo makers iterate on their landing page: edit the rendered page in Design Mode, hand the diff to Claude Code or Cursor, then review the source change. No Figma, no copy-paste.",
+      "Solo makers iterate on their landing page: edit the rendered page in Design Mode, hand the diff to Claude Code or Cursor, then review the source change. Choose a copied prompt or an MCP handoff.",
     keywords: [
       "landing page iteration",
       "indie hacker tools",
@@ -454,7 +454,7 @@ export const useCases: UseCase[] = [
       "AI agent landing page",
     ],
     intro:
-      "If you're a solo founder, the landing page is your conversion funnel and your weekend project. Design Mode + an AI agent is the fastest way to test a hypothesis on the rendered page.",
+      "If you're a solo founder, the landing page is your conversion funnel and your weekend project. Design Mode lets you preview a visual hypothesis before asking an agent to implement it. A preferred appearance is not evidence of better conversion.",
     problem:
       "Iterating on a landing page in a Figma file, copying decisions back into code, then deploying is a four-step loop. By the time you ship, you've lost the energy of the original idea.",
     workflow: [
@@ -471,7 +471,8 @@ export const useCases: UseCase[] = [
         text: "Use Send to Agent with a verified MCP client. The client retrieves the session, implements the source change with its own repository access, and returns a diff for review.",
       },
     ],
-    outcome: "You can test a hypothesis on the rendered page, then implement and review it in source. The preview is not a live deploy.",
+    outcome:
+      "You can test a hypothesis on the rendered page, then implement and review it in source. The preview is not a live deploy.",
     related: [
       "redesign-any-website",
       "figma-to-code-without-figma",
@@ -485,7 +486,7 @@ export const useCases: UseCase[] = [
     metaTitle:
       "Client handoff from agency to engineering — structured design specs",
     metaDescription:
-      "Agencies use Design Mode to tweak on the client's staging URL during design review and hand engineering a precise, code-ready spec. Replaces Figma comments and Loom recordings.",
+      "Record agreed visual changes on a client’s staging page, then give engineering a scoped specification with approval ownership, screenshots and open questions.",
     keywords: [
       "agency design handoff",
       "client design review",
@@ -496,7 +497,7 @@ export const useCases: UseCase[] = [
     intro:
       "Agency design reviews often happen on the client's staging URL with three people on a call. Design Mode turns that ad-hoc conversation into a structured artefact engineering can act on.",
     problem:
-      "Agencies own the design; the client's engineering team owns the build. The handoff is the most expensive part of the project — every ambiguity becomes a billable round-trip.",
+      "Agencies own the design; the client's engineering team owns the build. A useful handoff identifies approved decisions, open questions and the person responsible for acceptance.",
     workflow: [
       {
         name: "Run the review on staging",
@@ -504,14 +505,15 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Bundle the spec",
-        text: "Export the Changes tab as JSON + markdown. Attach screenshots.",
+        text: "Export JSON for portable session data; use Copy as prompt for a Markdown specification. Attach screenshots separately, record the approval owner and review the bundle for sensitive data.",
       },
       {
         name: "Send to the client's engineers",
         text: "Engineering reads the structured spec and ships. Optional: their coding agent implements the change when it has repository access; someone still reviews the diff.",
       },
     ],
-    outcome: "Fewer billable rounds. Cleaner handoff. Happier clients.",
+    outcome:
+      "A reviewable record of agreed changes, open questions and acceptance ownership. Engineering still implements and verifies the source.",
     related: [
       "design-review-in-production",
       "bug-report-with-visual-diff",
@@ -525,7 +527,7 @@ export const useCases: UseCase[] = [
     metaTitle:
       "Design-system audit — find token drift in a deployed app with Design Mode",
     metaDescription:
-      "Walk a deployed app with Design Mode and log every off-spec colour, spacing, type, or radius. Export the full audit as a structured spec for engineering.",
+      "Compare rendered colours, spacing, type and radius with an agreed token reference. Record scoped corrections for engineering and verify shared-token effects after implementation.",
     keywords: [
       "design system audit",
       "design token drift",
@@ -534,9 +536,9 @@ export const useCases: UseCase[] = [
       "design ops",
     ],
     intro:
-      "Design systems decay. Engineers under deadline reach for raw hex codes; designers hand off without checking tokens; a year later the deployed app uses 14 shades of grey. Design Mode is the fastest way to find and fix the drift.",
+      "Design systems decay. Engineers under deadline reach for raw hex codes; designers hand off without checking tokens; a year later the deployed app uses 14 shades of grey. Use Design Mode to compare rendered values with your agreed token reference and record candidate corrections.",
     problem:
-      "Reading code for drift means parsing thousands of CSS rules. Reading the design system file doesn't tell you what's actually deployed. The only ground truth is the rendered page.",
+      "Reading code for drift means parsing thousands of CSS rules. Reading the design system file doesn't tell you what's actually deployed. The rendered page shows the current result, not necessarily the intended token. Compare source definitions and the agreed design-system reference too; inaccessible stylesheets can limit discovery.",
     workflow: [
       {
         name: "Walk the deployed app",
@@ -548,11 +550,11 @@ export const useCases: UseCase[] = [
       },
       {
         name: "Export the audit",
-        text: "Markdown export becomes the audit report. Engineering ships the fixes as one or many PRs.",
+        text: "Use Copy as prompt to copy the recorded changes as Markdown. Add the expected token, resolved value, scope and exceptions; engineering implements and reviews the fixes.",
       },
     ],
     outcome:
-      "A deployed app that matches the design system. A reproducible audit that can run again next quarter.",
+      "A scoped drift report to verify after implementation. Check shared-token effects on other pages before accepting the changes.",
     related: [
       "tailwind-component-tuning",
       "design-review-in-production",

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export function AboutHero() {
   return (
     <section>
@@ -12,7 +14,24 @@ export function AboutHero() {
           automating workflows, writing about design, AI, and productivity,
           mentoring aspiring designers, and leading design communities in
           Chennai and Bengaluru. He also builds TypeScript and React tools for
-          agent-assisted product work. Design Mode is one of those projects.
+          agent-assisted product work.{" "}
+          <Link href="/" className="underline underline-offset-4">
+            Design Mode
+          </Link>{" "}
+          is his independent, MIT-licensed browser visual editor: it previews
+          changes on rendered pages and records a specification, while an
+          authorised developer or coding agent implements the source. Read the{" "}
+          <Link href="/changelog" className="underline underline-offset-4">
+            release history
+          </Link>{" "}
+          and the{" "}
+          <Link
+            href="/blog/why-we-built-an-mcp-server-for-design-edits"
+            className="underline underline-offset-4"
+          >
+            MCP design rationale
+          </Link>
+          .
         </p>
       </div>
     </section>

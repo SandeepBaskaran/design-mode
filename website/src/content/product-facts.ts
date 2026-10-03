@@ -2,7 +2,7 @@ export type QA = { question: string; answer: string };
 export type FaqGroup = { title: string; items: QA[] };
 
 export const PRODUCT_DEFINITION =
-  "Design Mode is a free, open-source Chrome and Firefox extension that lets you edit a rendered webpage visually, records the exact changes, and hands them to a coding agent. The browser edit is a preview and specification; the agent updates source code in a repository it can access.";
+  "Design Mode is a free, open-source browser extension for Chrome, Firefox and Safari on Mac. It lets you edit a rendered webpage visually, records the exact changes, and hands them to a coding agent. The browser edit is a preview and specification; the agent updates source code in a repository it can access.";
 
 export const faqGroups: FaqGroup[] = [
   {
@@ -45,7 +45,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Which browsers are supported?",
         answer:
-          "Design Mode supports current desktop Chromium browsers that provide Manifest V3 side panels, including Chrome, Edge, Brave and Arc, plus Firefox 121 or later through its native sidebar. Safari is not supported. Firefox provides the core editor; pop-out, Document Picture-in-Picture and the EyeDropper API remain Chromium-only. In Chrome, toolbar clicks and Alt+D open the launch surface selected in Settings (Side panel by default, Floating, or a Pin-on-top opener). Firefox always opens its sidebar.",
+          "Design Mode is free on desktop Chrome, Firefox and Safari on Mac. Chromium browsers with Manifest V3 side panels, including Chrome, Edge, Brave and Arc, install from the Chrome Web Store and open in the side panel. Firefox 121 or later installs from Firefox Add-ons and opens in the native sidebar. Safari uses a separate temporary extension, designmode-for-safari.zip, from the latest GitHub release. Add it in Safari and open Design Mode as a Web Inspector tab, not from the extensions toolbar or the App Store. Safari removes temporary extensions after 24 hours or when Safari quits, so re-add it then. Do not install the Chrome or Firefox zip in Safari. Pop-out, Document Picture-in-Picture and the EyeDropper API remain Chromium-only. Store listings can lag the GitHub release.",
       },
       {
         question: "Should I use Chrome or Firefox?",
@@ -112,7 +112,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Is Design Mode free and open source?",
         answer:
-          "The extension and repository are published under the MIT licence and the current store listings are free to install. MIT permits commercial use, modification and redistribution subject to its licence notice. Future hosting or service policy should be judged from the terms published at that time rather than a promise that can never change.",
+          "Design Mode is free and MIT-licensed, with no paid version of the extension. It is a self-sustained project focused on features people regularly use. MIT permits commercial use, modification and redistribution subject to its licence notice. Coding-agent subscriptions, API usage and self-hosting costs are separate. This is not a promise of permanent free hosting.",
       },
     ],
   },

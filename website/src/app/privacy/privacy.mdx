@@ -1,9 +1,11 @@
 ## The short version
 
 Design Mode edits the page rendered in your browser and records a local change
-session. The extension has no product analytics or telemetry. A fresh install
-selects Cloud mode, but it does **not** contact the hosted relay until you choose
-**Connect to Cloud** and create an anonymous device credential.
+session. Release builds send usage analytics to PostHog without an opt-in and
+without a Settings off-switch. An unconfigured source build sends nothing.
+Events do not include page content or edits. A fresh install selects Cloud mode,
+but it does **not** contact the hosted relay until you choose **Connect to
+Cloud** and create an anonymous device credential.
 
 When you deliberately send changes to Claude, Cursor or another coding agent,
 that provider processes the content under your account settings and its own
@@ -50,7 +52,7 @@ privacy terms.
       </tr>
       <tr>
         <th scope="row">
-          <code>storage.session</code> on Chromium
+          <code>storage.session</code> when available
         </th>
         <td>Per-URL style, text and DOM change sessions</td>
         <td>
@@ -59,11 +61,12 @@ privacy terms.
       </tr>
       <tr>
         <th scope="row">
-          <code>storage.local</code> fallback on Firefox
+          <code>storage.local</code> fallback
         </th>
         <td>
           Per-URL style, text and DOM change sessions when{" "}
-          <code>storage.session</code> is unavailable
+          <code>storage.session</code> is unavailable. The choice is based on
+          the storage API, not the browser name.
         </td>
         <td>Until cleared, overwritten or the extension is removed</td>
       </tr>
@@ -83,8 +86,11 @@ you are not authorised to share.
 
 Component-grouped change review also performs a bounded, read-only probe for
 React or Vue component names and source-file hints attached to changed elements.
-These hints remain in the local review interface; production builds may omit
-them. The grouping choice is kept only in panel memory.
+These hints are used in the local review interface. Markdown export can include
+detected file and line pointers, so a copied prompt can disclose them. The
+structured MCP get_changes and Send report does not add that grouping context.
+Production pages may omit source metadata. The grouping choice is kept only in
+panel memory.
 
 ## When network traffic starts
 
@@ -155,6 +161,24 @@ Copy as Prompt writes a Markdown specification to your clipboard. Send to Agent
 makes the recorded changes available to a connected MCP client. Neither action
 grants Design Mode access to your repository; the coding agent must already have
 that access.
+
+## Usage analytics
+
+Design Mode is free and MIT-licensed, with no paid version of the extension. It
+is a self-sustained project focused on features people regularly use. Release
+builds send usage analytics to PostHog without an opt-in and without a Settings
+off-switch. An unconfigured source build sends nothing. Analytics does not
+change what the editor can do. Coding-agent subscriptions, API usage and
+self-hosting costs are separate.
+
+Each event uses a fresh random ID, so the stream cannot measure unique people,
+sessions or retention. The event payload names the browser package as `chrome`,
+`firefox` or `safari` and omits page URLs, selectors, edits, comments, text,
+tokens and screenshots. It also omits raw user agent, browser version and OS.
+Ordinary HTTPS metadata may still disclose browser or device information, and
+the receiver sees the IP address. This source does not verify the receiver's
+retention, deletion or billing settings. The marketing site is a separate
+project and is not included in these extension events.
 
 ## What designmode.app collects
 

@@ -7,7 +7,12 @@ export type DocPage = {
   metaDescription: string;
   keywords: string[];
   intro: string;
-  sections: { heading: string; body: string; code?: string }[];
+  sections: {
+    heading: string;
+    body: string;
+    code?: string;
+    links?: { href: string; label: string }[];
+  }[];
   related: string[];
 };
 
@@ -15,25 +20,35 @@ export const docs: DocPage[] = [
   {
     slug: "browser-support",
     title: "Browser support & parity",
-    metaTitle: "Browser support — Chrome, Firefox, and feature parity",
+    metaTitle: "Browser support — Chrome, Firefox and Safari",
     metaDescription:
-      "Design Mode runs on Chrome, Edge, Brave, Arc, and Firefox. What's identical across browsers, and the few Chrome-only features (pop-out window, Picture-in-Picture, screen eyedropper).",
+      "Install Design Mode from the Chrome Web Store, Firefox Add-ons, or the Safari Web Inspector zip on GitHub Releases.",
     keywords: [
       "Design Mode browser support",
       "Design Mode Firefox",
+      "Design Mode Safari",
       "Firefox add-on",
-      "Chrome vs Firefox extension",
-      "browser feature parity",
+      "Safari Web Inspector extension",
     ],
     intro:
-      "Design Mode runs on Chromium browsers (Chrome, Edge, Brave, Arc) and on Firefox 121+. Everything core is identical across browsers; a few extras depend on APIs that only Chromium ships, so they're hidden on Firefox.",
+      "Design Mode is free on desktop Chrome, Firefox and Safari on Mac. Chrome and Firefox install from their stores. Safari uses a separate temporary Web Inspector extension from GitHub Releases.",
     sections: [
       {
         heading: "Supported browsers",
-        body: "Chromium browsers with Manifest V3 side panels — Chrome, Edge, Brave, Arc — install from the Chrome Web Store and render the editor in the right-side panel. Firefox (121+) installs from Firefox Add-ons (AMO) and renders in the native sidebar. Safari is not supported (no MV3 side-panel API). It's a desktop-primary experience.",
+        body: "Chromium browsers with Manifest V3 side panels — Chrome, Edge, Brave and Arc — install from the Chrome Web Store and open the editor in the side panel. Firefox 121 or later installs from Firefox Add-ons and opens in the native sidebar. Safari on Mac is a separate install and is not a side panel.",
       },
       {
-        heading: "Identical on every browser",
+        heading: "Safari on Mac",
+        body: "Download designmode-for-safari.zip from the latest GitHub release. Add it in Safari as a temporary extension, then open Design Mode as a Web Inspector tab. It does not appear in the extensions toolbar and it is not an App Store install. Do not use the Chrome or Firefox zip. Safari removes temporary extensions after 24 hours or when Safari quits, so re-add the same zip then. Store listings can lag the GitHub release.",
+        links: [
+          {
+            href: "https://github.com/SandeepBaskaran/design-mode/releases/latest",
+            label: "Download the latest GitHub release",
+          },
+        ],
+      },
+      {
+        heading: "Shared editor",
         body: "The whole editing surface is the same: inspect any element; edit Position, Layout, Typography, Fill, Stroke, Effects, Motion, and Layout Guides; the Layers tree; the Changes tab with export/import; comments; element and viewport screenshots; DOM edits (duplicate, delete, reorder); the design-token engine; and the full MCP / send-to-agent handoff. Firefox always opens its sidebar; Chrome can launch into its side panel or Chrome-only floating surfaces.",
       },
       {
@@ -104,7 +119,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "2. Local — run from source",
-        body: 'Review and clone https://github.com/SandeepBaskaran/design-mode and run npm ci at the repository root. Configure your MCP client to launch the stdio command below with the absolute checkout path; then select Local in the extension. In JSON use command npm and args ["start", "--prefix", "/absolute/path/to/design-mode/packages/mcp-local"]. The agent CLI package is private; no published CLI installation is assumed. Clients share a bridge owner on localhost:9960. If another app owns that port, use DM_PORT and match the extension\'s Local port. Never kill a foreign process.',
+        body: 'Review and clone https://github.com/SandeepBaskaran/design-mode and run npm ci at the repository root. Configure your MCP client to launch the stdio command below with the absolute checkout path; then select Local in the extension. In JSON use command npm and args ["start", "--prefix", "/absolute/path/to/design-mode/packages/mcp-local"]. The published agent CLI is @designmode-app/cli, command designmode-app. It does not start the local bridge and it does not send analytics. Clients share a bridge owner on localhost:9960. If another app owns that port, use DM_PORT and match the extension\'s Local port. Never kill a foreign process.',
         code: "npm start --prefix /absolute/path/to/design-mode/packages/mcp-local",
       },
       {

@@ -56,12 +56,12 @@ export const posts: BlogPost[] = [
         ],
       },
       {
-        heading: "A real example: homepage hero spacing",
+        heading: "An illustrative hero-spacing specification",
         paragraphs: [
-          "The pricing-card numbers above are illustrative. The following is a labelled export from an actual Design Mode session on this site's homepage hero, quoted as exported:",
+          "The following illustrates the shape of a mobile hero-spacing specification. It is not a current-site measurement or a verified source-change result:",
           "- section.py-24: padding-top 96px → 64px; padding-bottom 96px → 64px _(mobile · 404px)_",
-          "The same session also recorded a change to the hero container's mobile side padding, from 24px to 16px.",
-          "Those preview values map to existing Tailwind breakpoints on the homepage hero: the section uses py-16 sm:py-24, and the inner container uses max-sm:px-4 against the default 24px container sides. At a 404px-wide viewport the rendered result was 64px vertical padding and 16px side padding; at 1440px it was 96px vertical and 24px sides. The exported selector identified the element before implementation; the agent used the existing sm breakpoint to keep desktop spacing unchanged.",
+          "A companion instruction could request that mobile side padding change from 24px to 16px while desktop spacing stays unchanged.",
+          "Ask the agent to inspect the existing breakpoint and spacing conventions before selecting utilities. Check the intended 64px vertical and 16px side padding at a 404px viewport, and verify that desktop values remain unchanged at 1440px. Those are example acceptance checks, not reported test results.",
           "This is not a speed benchmark. The browser preview is not the repository change: after implementation, inspect the source diff and re-check the page without Design Mode overrides.",
         ],
       },
@@ -127,11 +127,11 @@ export const posts: BlogPost[] = [
     ],
     datePublished: "2026-03-12",
     excerpt:
-      "The first version of Design Mode shipped a clipboard button. The second version shipped MCP — and changed how the loop felt.",
+      "Why a browser visual editor offers both a portable copied prompt and an optional MCP connection to coding clients.",
     body: [
       {
         paragraphs: [
-          "Design Mode shipped its first version with a single handoff button: Copy Prompt. It dumped a Markdown export of your changes into the clipboard, you pasted it into Claude, Cursor, or whatever, and an agent picked it up from there. It worked. But it was clunky — context-switch, paste, switch back.",
+          "Copy as prompt copies a Markdown specification that you can paste into your coding tool. MCP offers a different handoff: a configured client can read the session directly. This article explains the design rationale, not a version-by-version release chronology.",
           "When Anthropic released Model Context Protocol in late 2024, it was obvious in retrospect what the right surface was. MCP is a standard for letting agents call tools. A design edit is a tool call. Match made.",
         ],
       },
@@ -139,14 +139,14 @@ export const posts: BlogPost[] = [
         heading: "Why MCP and not a custom protocol",
         paragraphs: [
           "We could have built a bespoke WebSocket protocol and an SDK per client. We chose MCP because it provides a shared tool boundary and supports both local stdio and remote HTTP transports, while still requiring client-specific configuration and verification.",
-          "Design Mode 2.0 exposes eight MCP tools. Those tools do not themselves grant filesystem or general network access; a coding client may have separate capabilities and repository permissions outside Design Mode.",
+          "The current tool catalogue is documented on the MCP page. Those tools do not themselves grant filesystem or general network access; a coding client may have separate capabilities and repository permissions outside Design Mode.",
         ],
       },
       {
         heading: "Three connection modes",
         paragraphs: [
-          "We launched Local mode first — a stdio MCP server you run on your laptop. Design Mode MCP traffic stays on localhost, latency is low, and the agent must run on the same machine. The trade-off is a steeper setup for people who are not comfortable with terminal commands.",
-          "Cloud mode came next. It exposes a Streamable HTTP endpoint at mcp.designmode.app and uses an authenticated event stream for the extension. Relay queues request a 60-second Redis expiry and responses are normally deleted when consumed; the expiry is best-effort rather than a guaranteed maximum. A client-specific configuration and bearer token are required; no local companion process is needed.",
+          "Local mode uses a stdio MCP server on your machine. Design Mode MCP traffic stays on localhost, latency is low, and the agent must run on the same machine. The trade-off is a steeper setup for people who are not comfortable with terminal commands.",
+          "Cloud mode exposes a Streamable HTTP endpoint at mcp.designmode.app and uses an authenticated event stream for the extension. Consult the canonical privacy disclosure for relay handling and retention limits. A client-specific configuration and bearer token are required; no local companion process is needed.",
           "Self-hosted mode is the same Cloud relay code (packages/mcp-cloud) deployed on infrastructure you operate. For teams who want Cloud ergonomics but their own infra.",
         ],
       },
@@ -192,8 +192,8 @@ export const posts: BlogPost[] = [
       {
         heading: "The intent gap",
         paragraphs: [
-          "AI coding agents are great at writing CSS once they know what you want. The bottleneck is conveying what you want. Three options today:",
-          "1. Screenshots. Lossy. Ambiguous about which property changed. Doesn't work for hover states, animations, or pixel-level work.",
+          "Exact values can make a visual request easier to interpret, but the agent still needs codebase context and review. Three common ways to communicate intent:",
+          "1. Screenshots. Useful visual context, but a single frame does not specify an exact CSS property or every hover and motion state. Pair screenshots with values and state descriptions.",
           "2. Figma mockups. High-fidelity, but maintaining a Figma file that matches production is its own job. Indie hackers don't have time.",
           '3. Prose descriptions. "Make the hero pop more." "Tighten the spacing." Imprecise, slow, error-prone.',
           "Visual editing on the live page is a fourth option: tweak the real rendered surface, capture a structured diff, hand it to the agent.",
@@ -210,9 +210,9 @@ export const posts: BlogPost[] = [
       {
         heading: "Where it doesn't work",
         paragraphs: [
-          "Greenfield UI from scratch — Design Mode needs a page to edit. For brand-new components, Figma + AI generators are still better.",
+          "Greenfield UI from scratch — Design Mode needs a page to edit. Start with a prototype or another creation tool, then review the rendered result.",
           'Pure logic changes — Design Mode is for visual surface. "Fix this race condition" is a job for the agent alone.',
-          "Anywhere your design system mandates specific tokens and the agent can't infer them — pair Design Mode with a CONTRIBUTING.md that names the token system, and Claude Code will reach for the right utility classes.",
+          "Where a design system mandates tokens, provide its reference and ask the agent to inspect the source definitions. Verify that the selected token resolves to the intended value; instructions do not guarantee the correct utility choice.",
         ],
       },
     ],
@@ -271,9 +271,9 @@ export const posts: BlogPost[] = [
         ],
       },
       {
-        heading: "What's next",
+        heading: "Historical scope",
         paragraphs: [
-          "1.6 is in flight. Expected: a fuller Variants section (responsive breakpoints in the Design tab), a new export format for Linear, and a longer-term experiment with a Figma sync mode. Track progress on GitHub.",
+          "These notes describe 1.5.0, not the current roadmap. Earlier plans are not evidence that a capability shipped; consult the changelog and current feature documentation for release status.",
         ],
       },
     ],
@@ -284,11 +284,12 @@ export const posts: BlogPost[] = [
   },
   {
     slug: "redesigning-a-tailwind-landing-page-with-claude-code",
-    title: "Hands-on: redesigning a Tailwind landing page with Claude Code",
+    title:
+      "Illustrative walkthrough: redesigning a Tailwind landing page with Claude Code",
     metaTitle:
       "Redesigning a Tailwind landing page with Claude Code and Design Mode",
     metaDescription:
-      "A walkthrough of redesigning a Tailwind landing page using Design Mode for visual edits and Claude Code (over MCP) to write the production utility classes.",
+      "An illustrative Tailwind workflow: preview browser changes, ask Claude Code to map exact values into source, then review tokens, shared scope and responsive behaviour.",
     keywords: [
       "Tailwind redesign",
       "Tailwind + Claude Code",
@@ -298,23 +299,23 @@ export const posts: BlogPost[] = [
     ],
     datePublished: "2026-05-20",
     excerpt:
-      "A concrete walkthrough: take an OK-looking Tailwind landing page, redesign it visually, and let Claude Code commit every Tailwind utility class update over MCP.",
+      "An illustrative workflow for previewing Tailwind page changes, asking Claude Code to map them into source, and reviewing the result. Not a measured case study.",
     body: [
       {
         paragraphs: [
-          "Tailwind landing pages all start to look the same — same hero, same three-column features, same testimonial section. Refining one to actually feel custom is hours of class-tweaking. This is a walkthrough of doing it in roughly an hour using Design Mode + Claude Code.",
+          "This illustrative walkthrough shows how to specify a change on a rendered Tailwind page. It is not a report of a completed project or a timing benchmark. Design Mode records the desired browser result; Claude Code needs separate repository access to implement it.",
         ],
       },
       {
         heading: "Setup",
         paragraphs: [
-          "Open the landing page on localhost or staging. Open the Design Mode side panel. Wire Claude Code's MCP config to Design Mode's Cloud mode (paste from /mcp). Confirm the MCP status chip is connected.",
+          "Open the landing page on localhost or staging. Open the Design Mode side panel. Follow the current MCP setup guide to configure Claude Code for the mode you choose. Confirm the MCP status chip is connected.",
         ],
       },
       {
         heading: "Hero",
         paragraphs: [
-          "Start with the headline. Adjust the type size visually until it feels right — drag the slider, see the rendered size, settle. Pick the colour with the colour picker; the WCAG contrast indicator confirms it passes AA on the gradient background.",
+          "Start with the headline. Adjust the type size visually until it feels right — drag the slider, see the rendered size, settle. Pick the colour with the colour picker; the contrast indicator is a spot-check against an inferred background, not proof of AA contrast across a gradient. Verify text against the actual colours behind it, including responsive and interactive states.",
           "Adjust hero padding using the visual spacing controls. Drop the hero image's `border-radius` from `1rem` to `0.75rem`. Every edit lands in the Changes tab.",
         ],
       },
@@ -322,25 +323,25 @@ export const posts: BlogPost[] = [
         heading: "Send to Claude Code",
         paragraphs: [
           "After Send to Agent marks the session ready, ask Claude Code to read the changes through MCP, find the JSX file and propose the utility-class update. Type sizes can map to a Tailwind step or arbitrary value; colours and spacing should be checked against the project's actual tokens and conventions.",
-          "Review the diff in Claude Code's chat. Accept. Commit.",
+          "Review the source diff and run project checks. Reopen the page without Design Mode overrides at desktop and mobile widths. Commit only after the implementation is accepted.",
         ],
       },
       {
         heading: "Sections",
         paragraphs: [
-          "Repeat for the features section, the testimonial section, the CTA. Each section is a 5-minute loop. Total elapsed: about 45 minutes for a meaningful redesign across five sections.",
+          "Repeat for another section only after checking the first implementation. Keep each request scoped and review effects on shared components. No elapsed-time result is claimed for this illustrative workflow.",
         ],
       },
       {
         heading: "The pattern",
         paragraphs: [
-          "Visual control of a utility-class UI without leaving the rendered page. Your design tokens are respected (Claude Code reads `tailwind.config.ts`). The git diff is clean — utility class changes only, no inline styles. The loop fits in your existing branch.",
+          "The browser specification is an input, not a guarantee of clean code. Ask the agent to inspect the project’s actual Tailwind configuration and token definitions, preserve matching utilities, flag unmatched values, and avoid unrelated changes. Review the diff rather than assuming it contains only utility-class edits.",
         ],
       },
     ],
     related: [
+      "turn-visual-edits-into-precise-ai-prompts",
       "vibe-coding-visual-editing-workflow",
-      "why-we-built-an-mcp-server-for-design-edits",
     ],
   },
   {
@@ -371,7 +372,7 @@ export const posts: BlogPost[] = [
       {
         heading: "Design-system aware tokens",
         paragraphs: [
-          "Token discovery moved to a single engine that finds every CSS custom property a page declares, not just the ones on :root. Theme scopes, component scopes, matching @media/@supports blocks, and cascade layers are all picked up — on a Carbon Design System page that's the difference between finding no tokens and finding roughly 660 of them.",
+          "Token discovery inspects accessible stylesheet rules and inline declarations, including scopes beyond :root. Matching theme, component, media and support rules can contribute tokens; inaccessible cross-origin stylesheets and browser CSSOM restrictions can limit what is discovered.",
           "Recognised systems — IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, and Tailwind v4 — get labelled by name, and any Design-tab field authored from a variable now shows a ◆ badge. Click it for Swap token… (colour, spacing, radius, typography, and shadow all get a matched picker now, not just colour), Edit token globally, or Detach from token.",
           "Because a token is one value per theme, edits write into a managed override stylesheet scoped to wherever the element actually resolves the token, instead of a single inline override that a theme scope's own rule would just beat. The agent side gets the same context: get_changes now carries tokenChanges with the scope and system, and the /design-mode workflow tells the agent to edit the token's definition, not restyle the component.",
         ],
@@ -441,7 +442,7 @@ export const posts: BlogPost[] = [
       {
         heading: "Firefox, from a single build",
         paragraphs: [
-          "Design Mode now installs on Firefox 121+ from Firefox Add-ons (AMO), right alongside the Chrome Web Store build. The important part: it ships from one dist/ and one merged manifest.json. There is no separate Firefox build — the same bundle serves both browsers and detects the platform at runtime, so every feature that can work on Firefox stays in lockstep with Chrome instead of drifting behind a fork.",
+          "Design Mode now installs on Firefox 121+ from Firefox Add-ons (AMO), right alongside the Chrome Web Store build. The important part: it ships from one dist/ and one merged manifest.json. There is no separate Firefox build — the same bundle serves both browsers and detects the platform at runtime, with browser-dependent controls gated at runtime. This describes the 2.0 release architecture, not a guarantee of permanent feature parity.",
           "On Firefox the panel renders as the browser's native sidebar; on Chrome it's the native side panel. Alt+D opens it on both. A few things are genuinely Chrome-only because Firefox has no equivalent API — the pop-out floating window, the always-on-top Picture-in-Picture window, and the screen eyedropper — and those controls are simply hidden on Firefox rather than shown broken.",
         ],
       },

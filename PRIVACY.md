@@ -2,13 +2,23 @@
 
 Design Mode's editor runs in your browser. Configured Cloud or Self-hosted MCP
 connections can transmit page data, edits and tool results through the selected
-relay; Local MCP uses your machine. Optional extension analytics is a separate,
-off-by-default opt-in and never includes page content or edits. The flows and
-exceptions are described below.
+relay; Local MCP uses your machine. Release builds send usage analytics to
+PostHog without an opt-in. Those events do not include page content or edits.
+An unconfigured source build sends nothing. The flows and exceptions are
+described below.
+
+Design Mode is free and MIT-licensed, with no paid version of the extension.
+It is a self-sustained project focused on features people regularly use.
+Coding-agent subscriptions, API usage and self-hosting costs are separate.
+This is not a promise of permanent free hosting.
+
+Safari on Mac installs from the latest GitHub release as a temporary Web
+Inspector extension, not from an extension store. See the
+[browser-support guide](https://designmode.app/docs/browser-support).
 
 ## What the extension stores, and where
 
-Editor data and preferences live on **your machine**, in the browser's extension storage. Optional usage analytics is described below.
+Editor data and preferences live on **your machine**, in the browser's extension storage. Release-build usage analytics is described below.
 
 | Storage area              | What's there                                                                        | Lifetime                       |
 | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ |
@@ -21,7 +31,9 @@ Site-wide change review reads saved routes only for the current exact origin
 existing session storage without extending its lifetime. Session reads and writes
 are brokered by the extension background in both browsers; read responses contain
 only the requesting page’s site-scoped sessions and clear-generation markers.
-Firefox content scripts do not fall back to a different local-storage copy.
+Firefox content scripts do not keep a second copy. The background uses
+`storage.session` when that area is available and `storage.local` otherwise.
+That choice is capability-based, not a blanket Firefox fallback.
 Delete route removes
 that route's saved records; Clear all removes the current origin's saved
 records. Copy as Prompt and Send to Agent include all saved routes for that
@@ -60,7 +72,7 @@ rounds reuse that Local connection and retain snapshots/session state only
 in process memory. No new external service or stored browser preference is
 introduced by these features.
 
-Apart from the optional usage analytics described below, the extension sends data through the MCP mode you configure. Fresh
+Apart from the release-build usage analytics described below, the extension sends data through the MCP mode you configure. Fresh
 installs select Cloud; existing installs retain their saved mode. Cloud and
 Self-hosted need a configured relay and bearer token. Local mode talks only to
 your machine.
@@ -135,30 +147,23 @@ network-level anonymity. Cookies and referrers are omitted; redirects are reject
 
 The sole sender is the background context. Events are best-effort, capped at 60
 per minute per live background context and four in flight; there is no disk queue,
-retry, beacon, or saved analytics identifier. Closing/restarting that context can
-lose events and resets its in-memory rate limit. An acknowledged opt-out stop blocks
-new sends in the live sender, invalidates pending checks and aborts in-flight
-requests. Opt-out removes `dm-analytics-consent-v1` from `storage.local`; on removal
-failure it attempts a durable disabled record under the same key. If both writes
-fail, the UI warns that old consent may resume sending after a worker restart.
-Browser storage failure means a permanent stop cannot be guaranteed. Already
-received requests cannot be recalled. Reset settings also opts out. Removing Firefox data
-permission stops the live sender and attempts the same durable opt-out. Once
-persisted, regranting native permission alone cannot enable analytics. If storage
-writes fail, old local consent may survive and become usable on a later restart
-with native permission granted.
+retry, beacon, or saved analytics identifier. Closing or restarting that context
+can lose events and resets its in-memory rate limit. The release build has no
+Settings off-switch. On Firefox, sending continues only when the browser does
+not report a data-collection permission list, or that list includes
+`locationInfo`. A reported list without `locationInfo` sends nothing. Already
+received requests cannot be recalled. The event payload does not include raw
+user agent, browser version or OS; ordinary HTTPS metadata may still disclose
+browser or device information.
 
-Firefox 140+ uses optional `technicalAndInteraction` and `locationInfo` permissions
-(the latter conservatively covers timezone/region) **in addition
-to** our explicit opt-in. Firefox 121–139 uses the same in-extension disclosure and
-unchecked/off consent control, detected via the absence of `data_collection` in
-`permissions.getAll()`. The minimum supported version remains 121. This declaration
-covers optional analytics, not a new authorization to transmit page/MCP content.
+Firefox declares `locationInfo` as required data collection and
+`technicalAndInteraction` as optional. That declaration covers analytics
+metadata, not a new authorization to transmit page or MCP content. The minimum
+supported Firefox version remains 121.
 
 No account, project, retention settings or billing plan is provisioned by this
-code. Before distributing an enabled build, its operator must verify free-only
-billing, publish the receiver/operator and retention/deletion policy, and update
-store disclosures. See [analytics activation and verification](packages/extension/ANALYTICS.md).
+code. This source does not verify the receiver's retention, deletion, region or
+billing settings. See [analytics activation and verification](packages/extension/ANALYTICS.md).
 MCP servers and CLI do not emit analytics. There is no remote update channel beyond
 the standard Chrome Web Store / addons.mozilla.org mechanisms.
 

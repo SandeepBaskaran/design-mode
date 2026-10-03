@@ -9,6 +9,7 @@ import {
 } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
 import { getPost, posts } from "@/content/blog";
+import { blogContextualLinks } from "@/content/contextual-links";
 
 export function generateStaticParams() {
   return posts.map((p) => ({ slug: p.slug }));
@@ -25,7 +26,7 @@ const socialCopy: Record<string, { title: string; description: string }> = {
   "redesigning-a-tailwind-landing-page-with-claude-code": {
     title: "Redesign a Tailwind page with Claude Code | Design Mode",
     description:
-      "A practical workflow for editing a rendered Tailwind page and handing the structured change set to Claude Code.",
+      "An illustrative workflow for editing a rendered Tailwind page, briefing Claude Code and reviewing its source changes. Not a measured case study.",
   },
   "design-mode-1-9-0-release": {
     title: "Design Mode 1.9.0 release notes",
@@ -133,9 +134,7 @@ export default async function BlogPostPage({
             <h1 className="mt-4 text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {p.title}
             </h1>
-            <p className="text-muted-foreground mt-4 text-base">
-              {p.excerpt}
-            </p>
+            <p className="text-muted-foreground mt-4 text-base">{p.excerpt}</p>
           </div>
         </section>
       </Background>
@@ -162,6 +161,7 @@ export default async function BlogPostPage({
         <RelatedLinks
           title="Keep reading"
           links={[
+            ...(blogContextualLinks[p.slug] ?? []),
             ...p.related
               .map((slug) => getPost(slug))
               .filter((r): r is NonNullable<typeof r> => Boolean(r))

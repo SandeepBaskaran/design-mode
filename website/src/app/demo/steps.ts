@@ -19,7 +19,7 @@ export const STEPS: Step[] = [
     id: "get-started",
     title: "Get started",
     body: [
-      "Design Mode is a browser extension (Chrome + Firefox) that turns any website into a live design surface. Edit layout, type, colour, and structure with visual controls — then ship the result to your AI coding agent.",
+      "Design Mode is a Chrome and Firefox extension for previewing visual changes on scriptable webpages. This practice canvas requires the extension; it is not an editor by itself. Start with one card: inspect it, change its padding, review Changes, then use Copy as prompt to copy the Markdown specification. An authorised developer or agent still implements the source.",
       "First time? Pin the extension to your toolbar, then click the Design Mode icon. Chrome opens the launch surface selected in Settings; Firefox opens its sidebar. Once it's open, every shortcut is listed in Settings. Alt+D and Alt+S are browser commands you can rebind through chrome://extensions/shortcuts on Chrome or about:addons on Firefox.",
     ],
     tryIt:
@@ -29,17 +29,17 @@ export const STEPS: Step[] = [
     id: "panel-modes",
     title: "Three panel modes",
     body: [
-      "The panel runs wherever you want it. Docked (the default) lives in Chrome's native side panel. Pop out (the external-link icon in the header) detaches it into a free-floating window you can move anywhere — it stays bound to the tab it came from, even while you browse other tabs.",
+      "These three panel modes are Chromium-only; Firefox uses its docked sidebar. Docked (the default) lives in Chrome's native side panel. Pop out (the external-link icon in the header) detaches it into a free-floating window you can move anywhere — it stays bound to the tab it came from, even while you browse other tabs.",
       "From the floating window, the picture-in-picture icon pins the panel on top of everything — a true always-on-top window (Chrome 116+), floating above the page and every other app, so you never Cmd-` between windows while editing. While pinned, the same icon renders in the accent style: click it to drop back to the floating window, or hit the side-panel icon to dock straight home. All three states are one click apart.",
     ],
     tryIt:
-      "Open the side panel, click the pop-out icon in its header, then click the picture-in-picture icon in the floating window. Drag the pinned panel over this page — it stays on top. Click the accent picture-in-picture icon to unpin, then the side-panel icon to dock back.",
+      "On Chromium, open the side panel, click the pop-out icon in its header, then click the picture-in-picture icon in the floating window. Drag the pinned panel over this page — it stays on top. Click the accent picture-in-picture icon to unpin, then the side-panel icon to dock back.",
   },
   {
     id: "local-files",
     title: "Local HTML files",
     body: [
-      "Design Mode also edits pages served from your disk — open any local HTML file via file:// and the whole toolkit works: inspect, restyle, comment, export the diff.",
+      "Local HTML editing depends on browser permissions and the page’s resources. On Chrome, allow file URL access before trying inspect, restyle, comment and copy on a file:// page. Some page features or resources may not work from a saved file.",
       "Chrome blocks extensions from file:// pages by default, so there's a one-time switch: enable 'Allow access to file URLs' for Design Mode in chrome://extensions. If it's off, the side panel detects it and walks you through exactly that step.",
     ],
     tryIt:
@@ -56,6 +56,10 @@ export const STEPS: Step[] = [
     tryIt:
       "Click the crosshair in the side panel header, then hover over the card below. Click the card to select it.",
     targetId: "inspector",
+    nextLink: {
+      label: "Check supported browsers and page limits →",
+      href: "/docs/browser-support",
+    },
   },
   {
     id: "multi-select",
@@ -240,10 +244,10 @@ export const STEPS: Step[] = [
     id: "design-tokens",
     title: "Design tokens",
     body: [
-      "The token-discovery engine finds every CSS custom property a page declares — not just :root. Theme scopes (`.dark`, `[data-theme]`), component scopes, matching @media / @supports blocks, and cascade layers are all picked up, so a design-heavy site can surface hundreds of tokens instead of the handful declared globally.",
+      "The token-discovery engine inspects accessible CSS custom-property declarations beyond :root. Browser restrictions can prevent access to some stylesheets. Theme scopes (`.dark`, `[data-theme]`), component scopes, matching @media / @supports blocks, and cascade layers are all picked up, so a design-heavy site can surface hundreds of tokens instead of the handful declared globally.",
       "Known systems — IBM Carbon, Material, MUI, Bootstrap, Polaris, Radix, shadcn/ui, Tailwind v4 — are recognised and labelled by name, with each system's own taxonomy driving how tokens group in the panel.",
       "Any Design-tab field whose value resolves from a variable shows a ◆ token badge naming it. Click the badge for Swap token… (a matched picker for colour, spacing, radius, typography, or shadow — not just colour), Edit token globally (jumps to the Tokens panel with that token's scope pre-selected), or Detach from token (writes the resolved literal instead).",
-      "Editing stays scope-aware — a token is one value per theme, so a change writes into a managed override stylesheet scoped to where the element actually resolves it, rather than clobbering every theme at once. The exported diff and Copy as Prompt carry the token name and scope, not a frozen value — your agent edits the token's definition, not the component.",
+      "Editing stays scope-aware — a token is one value per theme, so a change writes into a managed override stylesheet scoped to where the element actually resolves it, rather than clobbering every theme at once. The exported diff and Copy as Prompt carry the token name and scope, not a frozen value — ask your agent to review that scope before editing a shared token definition.",
     ],
     tryIt:
       "Select the swatch below and open its Fill colour picker to see the Tokens row, or look for a ◆ badge on an already token-backed field. Click the badge and try Swap token… or Edit token globally.",
@@ -271,13 +275,17 @@ export const STEPS: Step[] = [
     ],
     tryIt:
       "Switch to the Changes tab after making edits in the previous sections. Click 'View Original' to flip back. Try Batch apply (zap) on a style change, then Export to download the diff as JSON.",
+    nextLink: {
+      label: "Review Changes and handoff formats →",
+      href: "/docs/changes-tab",
+    },
   },
   {
     id: "action-row",
     title: "Action row",
     body: [
       "Above the tabs sits the toolbar — a row of contextual buttons that act on the current selection or the whole page: Parent / Child (walk the DOM up and down), Duplicate / Remove, Comment, Pause animations, Screenshot, the Design system panel (swatch-book), and Undo / Redo. Most need a layer selected; Pause, Screenshot, Design system, and Undo / Redo are always available.",
-      "Pause animations is just one of them — it freezes every running CSS animation and transition on the page so you can inspect a single frame. The pulsing badge below keeps animating until you hit it.",
+      "Pause animations is just one of them — it pauses supported page animations for inspection; do not assume it stops every JavaScript-driven effect. The pulsing badge below keeps animating until you hit it.",
     ],
     tryIt:
       "Select the badge below, then walk up to its group with Parent and back down with Child. Duplicate it, then Remove the copy. Finally hit Pause animations — the badge freezes; click again to resume.",
@@ -308,27 +316,31 @@ export const STEPS: Step[] = [
     body: [
       "Design Mode ships with an optional MCP companion that bridges the extension to your coding agent (Claude Code, Cursor, etc.). With MCP running and an agent connected, your changes can be sent live with one click instead of being copied through the clipboard.",
       "MCP configuration lives on its own dedicated page inside the extension — not in Settings. Click the MCP chip in the panel header (its trailing chevron opens the page) to pick a connection mode, watch status, and manage the token.",
-      "Three connection modes: Cloud (selected on a fresh install but disconnected until you create a credential), Local (a companion server on your machine, started with npm start), and Self-hosted (relay code on infrastructure you operate).",
+      "Three connection modes: Cloud (selected on a fresh install but disconnected until you create a credential), Local (a companion process started by your MCP client), and Self-hosted (relay code on infrastructure you operate).",
     ],
     tryIt:
-      "Click the MCP chip in the panel header to open the dedicated MCP page. From the repo root: `npm start --prefix packages/mcp-local` for Local mode. Watch the chip flip from offline (grey) to running to connected once your agent attaches.",
+      "Click the MCP chip to open connection settings. For Local mode, follow the setup guide to install the checkout’s dependencies and configure your client to launch `npm start --prefix /absolute/path/to/design-mode/packages/mcp-local`. Verify the connection with a read-only session call.",
     nextLink: { label: "Read the full MCP setup guide →", href: "/mcp" },
   },
   {
     id: "copy-prompt",
     title: "Copy as Prompt",
     body: [
-      "At the bottom of the side panel, Copy as Prompt builds a markdown summary of every tracked change — element selectors, before/after CSS, text edits as a compact word-diff (only the changed words, not the whole paragraph), DOM operations, and any comments — and copies it to the clipboard. Edits made at a mobile or tablet viewport are tagged with their breakpoint so the agent scopes them to a media query. Paste into your agent or chat of choice.",
-      "When source detection finds a React component, the prompt also includes a file:line hint so the agent can land on the right source.",
+      "At the bottom of the side panel, Copy as prompt builds a Markdown summary of tracked changes across the site’s recorded routes, including collapsed groups — element selectors, before/after CSS, text edits as a compact word-diff (only the changed words, not the whole paragraph), DOM operations, and any comments — and copies it to the clipboard. Edits made at a mobile or tablet viewport carry breakpoint context; ask the agent to verify the intended responsive scope rather than assuming the tag enforces a media query. Paste into your agent or chat of choice.",
+      "When source detection exposes a usable source path, the prompt can include that path and an available line number. Hints are conditional, not guaranteed source mappings; inspect them and other page-derived content before sharing.",
     ],
     tryIt:
-      "After making a few edits in this demo, click Copy as Prompt at the bottom of the panel. Paste into a text editor to see the markdown payload.",
+      "After making a few edits in this demo, click Copy as prompt at the bottom of the panel. Paste into a text editor to see the Markdown payload.",
+    nextLink: {
+      label: "Add intent, scope and acceptance checks →",
+      href: "/blog/turn-visual-edits-into-precise-ai-prompts",
+    },
   },
   {
     id: "send-to-agent",
     title: "Send to Agent",
     body: [
-      "Send to Agent opens a step-based guided modal — confirm the connection, review the session, then mark it ready over MCP. No clipboard round-trip. It is enabled when MCP is running and an agent is connected; the button's tooltip names the blocker if either is missing.",
+      "Send to Agent is available when there are recorded changes and Preview original is off, unless a send is in progress or a Local feedback round is being implemented. Without a connection or attached agent, clicking it opens setup instructions. With a connected client, review the session and mark it ready over MCP.",
       "Once you send, get_changes and get_session_summary expose a real handoff field, so the agent's next read knows this batch of edits is the one you just approved — an explicit 'these are ready' signal instead of the agent guessing.",
       "The connected client still needs separate repository access, and you must ask it to implement the changes and review its source diff.",
       "Haven't set up an agent yet? The MCP guide covers Local, Cloud and Self-hosted modes, with version-stamped instructions for Claude Code and Cursor and a warning to verify other clients separately.",

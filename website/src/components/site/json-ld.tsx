@@ -30,10 +30,10 @@ export const personSchema = {
   "@id": IDS.person,
   name: "Sandeep Baskaran",
   url: AUTHOR_URL,
-  jobTitle: "Design Engineer",
-  sameAs: [X_URL, REPO_URL, AUTHOR_URL],
+  jobTitle: "Senior UX Designer",
+  sameAs: [X_URL, AUTHOR_URL],
   description:
-    "Design engineer based in Bengaluru and creator of Design Mode, an open-source browser visual editor for AI coding agents.",
+    "Senior UX Designer based in Bengaluru and creator of Design Mode, a free open-source browser visual editor for AI coding agents.",
 };
 
 export const websiteSchema = {
@@ -41,6 +41,8 @@ export const websiteSchema = {
   "@type": "WebSite",
   "@id": IDS.website,
   name: "Design Mode",
+  alternateName: "DesignMode",
+  about: { "@id": IDS.software },
   url: SITE_URL,
   description:
     "A browser visual editor that captures changes to a rendered webpage and hands them to AI coding agents.",
@@ -53,13 +55,17 @@ export const softwareApplicationSchema = {
   "@id": IDS.software,
   name: "Design Mode",
   description:
-    "A Chrome and Firefox extension for visually editing a rendered webpage, recording the changes, and handing them to a coding agent.",
+    "A free browser extension for Chrome, Firefox and Safari on Mac. It edits a rendered webpage, records the changes, and hands them to a coding agent.",
   applicationCategory: "DesignApplication",
   applicationSubCategory: "BrowserExtension",
   softwareRequirements:
-    "Desktop Chromium browser with Manifest V3 side-panel support, or Firefox 121+",
+    "Desktop Chromium with Manifest V3 side panels, Firefox 121+, or Safari on Mac via the temporary Web Inspector extension from GitHub Releases",
   url: SITE_URL,
-  downloadUrl: [CHROME_URL, FIREFOX_URL],
+  downloadUrl: [
+    CHROME_URL,
+    FIREFOX_URL,
+    "https://github.com/SandeepBaskaran/design-mode/releases/latest",
+  ],
   installUrl: [CHROME_URL, FIREFOX_URL],
   sameAs: [REPO_URL, CHROME_URL, FIREFOX_URL],
   softwareVersion: "3.0.0",
