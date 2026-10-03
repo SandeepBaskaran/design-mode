@@ -47,7 +47,7 @@ Local MCP clients share one owner on port 9960 by default; a surviving client ta
 
 ## Privacy summary
 
-The extension has no product telemetry. A fresh install selects Cloud mode but does not contact the hosted relay until the user creates an anonymous device credential. Cloud queues request a 60-second Redis expiry and responses are normally deleted when consumed; the expiry operation is best-effort rather than a guaranteed maximum. The service retains a SHA-256 token hash, anonymous tenant identifier and created/last-seen timestamps until revocation. Operational logs contain bounded metadata rather than selectors, screenshots or payload bodies.
+Release builds send extension usage analytics to PostHog without an opt-in. The `browser` property is `chrome`, `firefox` or `safari`. Events do not include page content. An unconfigured source build sends nothing. A fresh install selects Cloud mode but does not contact the hosted relay until the user creates an anonymous device credential. Cloud queues request a 60-second Redis expiry and responses are normally deleted when consumed; the expiry operation is best-effort rather than a guaranteed maximum. The service retains a SHA-256 token hash, anonymous tenant identifier and created/last-seen timestamps until revocation. Operational logs contain bounded metadata rather than selectors, screenshots or payload bodies.
 
 When a user sends content to an external coding agent, that provider handles the content under its own account settings and privacy terms. The marketing site may load Google Analytics when its deployment ID is configured.
 

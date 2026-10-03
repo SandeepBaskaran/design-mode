@@ -33,8 +33,9 @@ test('explicit environment wins, including an empty invalid value', t => {
   assert.throws(() => analyticsBuildEnv(directory, { DM_POSTHOG_KEY: '' }), /Invalid DM_POSTHOG_KEY/);
 });
 
-test('missing file fails even with environment configuration', t => {
-  assert.throws(() => analyticsBuildEnv(fixture(t), { DM_POSTHOG_HOST: host, DM_POSTHOG_KEY: token }), /Cannot read packages\/extension\/\.env.analytics.local/);
+test('missing file uses a complete environment and still fails when neither source is valid', t => {
+  assert.equal(analyticsBuildEnv(fixture(t), { DM_POSTHOG_HOST: host, DM_POSTHOG_KEY: token }).DM_POSTHOG_KEY, token);
+  assert.throws(() => analyticsBuildEnv(fixture(t), {}), /Invalid DM_POSTHOG_HOST/);
 });
 
 test('optional distribution defaults to unknown', t => {

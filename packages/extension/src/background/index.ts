@@ -8,7 +8,7 @@ import '../platform/polyfill';
 import { IS_FIREFOX, IS_SAFARI } from '../platform/target';
 import { installInspectorBridge } from '../inspector/bridge-background';
 import { replaceUserStyles } from './user-styles';
-import { ANALYTICS_CONSENT_KEY, consentMatches, createAnalytics, isAnalyticsSender, persistAnalyticsDisabled, type DataPermissions } from '../platform/analytics';
+import { createAnalytics, isAnalyticsSender, type DataPermissions } from '../platform/analytics';
 import { analyticsConfig } from '../platform/analytics-config';
 import { createCommentStore, COMMENT_STORE_ERROR, COMMENT_PAGE_ERROR } from './comment-store';
 import { createSessionStore } from './session-store';
@@ -24,18 +24,12 @@ import {
 } from '../platform/launch-surface';
 
 const analytics = createAnalytics(analyticsConfig, {
-  readConsent: async () => (await browser.storage.local.get(ANALYTICS_CONSENT_KEY))[ANALYTICS_CONSENT_KEY],
+  readConsent: async () => undefined,
   permissions: () => IS_FIREFOX ? browser.permissions.getAll() as Promise<DataPermissions> : Promise.resolve({}),
-  firefox: IS_FIREFOX, manifest: browser.runtime.getManifest(), fetch: (...args) => fetch(...args),
-});
-browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes[ANALYTICS_CONSENT_KEY]) {
-    if (consentMatches(changes[ANALYTICS_CONSENT_KEY].newValue, analyticsConfig)) analytics.refresh(); else analytics.stop();
-  }
+  firefox: IS_FIREFOX, safari: IS_SAFARI, manifest: browser.runtime.getManifest(), fetch: (...args) => fetch(...args),
 });
 browser.permissions.onRemoved.addListener(() => {
-  analytics.stop();
-  void persistAnalyticsDisabled(browser.storage.local).catch(() => {});
+  if (IS_FIREFOX) analytics.stop();
 });
 const commentStore = createCommentStore(browser.storage.local, browser.storage.session || browser.storage.local);
 const sessionStore = createSessionStore(browser.storage.session || browser.storage.local);

@@ -97,7 +97,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "What data leaves my machine by default?",
         answer:
-          "The editor itself has no product telemetry. A fresh install selects Cloud mode but does not contact the relay until you create a Cloud credential. The marketing website may load Google Analytics when its deployment ID is configured. See the privacy page for storage, relay and website analytics details.",
+          "Release builds send usage analytics to PostHog without an opt-in. Events name the browser package as chrome, firefox or safari and do not include page content, selectors, comments or screenshots. An unconfigured source build sends nothing. See the privacy page.",
       },
       {
         question: "How does the Cloud relay store data?",

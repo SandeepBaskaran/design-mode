@@ -10,7 +10,7 @@ A free, open-source browser extension (Chrome + Firefox) that turns any website 
 
 ## 🎨 Install in 60 seconds
 
-**1. Add it to your browser:** **[Chrome Web Store →](https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih)** (Chrome, Edge, Brave, Arc) · **[Firefox Add-ons →](https://addons.mozilla.org/firefox/addon/design-mode-add-on/)** (Firefox) · **[Safari →](https://designmode.app/docs/browser-support)** (macOS Web Inspector, via GitHub Releases)
+**1. Download the latest release:** **[GitHub Releases →](https://github.com/SandeepBaskaran/design-mode/releases/latest)** — `design-mode-extension.zip` for Chrome, `design-mode-addon.zip` for Firefox, and `designmode-for-safari.zip` for Safari. · **[Safari →](https://designmode.app/docs/browser-support)** (macOS Web Inspector, via GitHub Releases)
 
 **2. Try it without installing:** [walk the interactive demo at designmode.app/demo](https://designmode.app/demo)
 

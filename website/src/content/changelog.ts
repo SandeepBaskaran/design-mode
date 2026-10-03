@@ -26,7 +26,7 @@ export const releases: Release[] = [
       "Connect a coding agent through Cloud, Local or your own relay, then copy the changes as a prompt or send them through MCP.",
       "Use Design Mode in Safari’s Web Inspector from the temporary extension on GitHub Releases. Re-add it after 24 hours or when Safari quits.",
       "Keep edits across Firefox reloads, and review every saved route on the current site before you share a hand-off.",
-      "Optional usage analytics stays off until you agree. It records feature activity only, never page content.",
+      "Usage analytics is on in release builds. It records feature activity by browser package and never page content.",
     ],
   },
   {

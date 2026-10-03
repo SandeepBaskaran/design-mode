@@ -17,7 +17,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run package:extension:all
+      - name: Package Chrome, Firefox and Safari releases
+        env:
+          DM_POSTHOG_HOST: ${{ secrets.DM_POSTHOG_HOST }}
+          DM_POSTHOG_KEY: ${{ secrets.DM_POSTHOG_KEY }}
+          DM_DISTRIBUTION: published_hint
+        run: npm run package:extension:release
       - name: Extract CHANGELOG section for this tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -35,4 +40,5 @@ jobs:
           files: |
             packages/extension/design-mode-extension.zip
             packages/extension/design-mode-addon.zip
+            packages/extension/designmode-for-safari.zip
           body_path: release-notes.md

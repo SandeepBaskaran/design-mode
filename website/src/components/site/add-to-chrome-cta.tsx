@@ -4,28 +4,21 @@ import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 import { useInstallTarget } from "@/hooks/use-install-target";
-import { withNavRef } from "@/lib/nav-ref";
 import { cn } from "@/lib/utils";
 
-// Browser-aware install CTA. Points at the Chrome Web Store on Chromium and
-// at addons.mozilla.org (AMO) on Firefox; label + icon follow suit. Named
-// AddToChromeCta for its (many) existing call sites — it covers both stores.
+// Both browser targets download the latest GitHub Release. The icon still follows the visitor's browser.
 const STORES = {
   chrome: {
     name: "Chrome",
-    label: "Add to Chrome",
-    href: withNavRef(
-      "https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih",
-    ),
+    label: "Download latest",
+    href: "https://github.com/SandeepBaskaran/design-mode/releases/latest",
     icon: "/chrome.svg",
     event: "add_to_chrome",
   },
   firefox: {
     name: "Firefox",
-    label: "Add to Firefox",
-    href: withNavRef(
-      "https://addons.mozilla.org/firefox/addon/design-mode-add-on/",
-    ),
+    label: "Download latest",
+    href: "https://github.com/SandeepBaskaran/design-mode/releases/latest",
     icon: "/firefox.svg",
     event: "add_to_firefox",
   },

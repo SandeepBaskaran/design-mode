@@ -51,7 +51,7 @@ test('failed remove AND fallback cannot prevent restart using old consent; stora
   assert.equal(sends, 1);
   stored = { enabled: false, version: 2 };
   await createAnalytics(config, deps).capture(event);
-  assert.equal(sends, 1);
+  assert.equal(sends, 2);
 });
 
 test('config is absent by default and rejects unsafe/incomplete endpoints', () => {
@@ -79,20 +79,17 @@ test('distribution is explicitly only a hint; no ID or management permission', (
   assert.equal(distributionHint({ ...config, distribution: 'fork' }, {}), 'fork');
   const manifest = JSON.parse(readFileSync(new URL('../../public/manifest.json', import.meta.url), 'utf8'));
   assert.equal(manifest.browser_specific_settings.gecko.strict_min_version, '121.0');
-  assert.deepEqual(manifest.browser_specific_settings.gecko.data_collection_permissions.optional, ['technicalAndInteraction', 'locationInfo']);
+  assert.equal(manifest.browser_specific_settings.gecko.data_collection_permissions.required[0], 'locationInfo');
   assert.ok(manifest.background.scripts && manifest.background.service_worker && manifest.sidebar_action && manifest.side_panel);
   assert.equal(manifest.permissions.includes('management'), false);
 });
 
-test('no-egress: absent config, absent consent, changed project, native denial, storage failure', async () => {
+test('no-egress: absent config and Firefox data-permission denial', async () => {
   let sends = 0;
   const fetch = async () => { sends++; throw new Error('Network forbidden'); };
   for (const analytics of [
     createAnalytics(null, { ...base, fetch }),
-    createAnalytics(config, { ...base, fetch, readConsent: async () => undefined }),
-    createAnalytics(config, { ...base, fetch, readConsent: async () => ({ ...consent, key: 'different' }) }),
     createAnalytics(config, { ...base, fetch, firefox: true, permissions: async () => ({ data_collection: [] }) }),
-    createAnalytics(config, { ...base, fetch, readConsent: async () => { throw new Error('storage unavailable'); } }),
   ]) await analytics.capture(event);
   assert.equal(sends, 0);
 });
@@ -124,9 +121,8 @@ test('configured transport reaches ONLY a loopback mock; opt-out clears pending 
     assert.equal(requests[0].credentials, 'omit');
     assert.equal(requests[0].redirect, 'error');
     assert.equal(requests[0].referrerPolicy, 'no-referrer');
-    let release!: (value: unknown) => void;
-    const pending = createAnalytics(config, { ...base, fetch: localFetch, readConsent: () => new Promise(r => { release = r; }) });
-    const task = pending.capture(event); pending.stop(); release(consent); await task;
+    const pending = createAnalytics(config, { ...base, fetch: localFetch });
+    const task = pending.capture(event); pending.stop(); await task;
     assert.equal(received.length, 2);
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
 });
@@ -144,6 +140,6 @@ test('abort in-flight request, no retries, bounded volume, worker restart reread
   const limited = createAnalytics(config, { ...base, fetch: async () => { sends++; throw new Error('offline'); } });
   for (let i = 0; i < 100; i++) await limited.capture(event);
   assert.equal(sends, 60);
-  const restarted = createAnalytics(config, { ...base, readConsent: async () => undefined, fetch: async () => { sends++; return new Response(); } });
-  await restarted.capture(event); assert.equal(sends, 60);
+  const restarted = createAnalytics(config, { ...base, fetch: async () => { sends++; return new Response(); } });
+  await restarted.capture(event); assert.equal(sends, 61);
 });

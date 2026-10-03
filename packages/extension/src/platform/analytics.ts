@@ -58,7 +58,7 @@ export function commandOutcome(response: any): Pick<AnalyticsEvent, 'outcome' | 
 }
 
 export function nativeConsentAllowed(firefox: boolean, permissions: DataPermissions): boolean {
-  return !firefox || (permissions.data_collection === undefined || ['technicalAndInteraction', 'locationInfo'].every(permission => permissions.data_collection!.includes(permission)));
+  return !firefox || permissions.data_collection === undefined || permissions.data_collection.includes('locationInfo');
 }
 
 export function distributionHint(config: AnalyticsConfig, manifest: { update_url?: string }): string {
@@ -86,11 +86,9 @@ export const messageFeatures: Readonly<Record<string, string>> = Object.freeze({
 
 type Environment = { language?: unknown; brands?: readonly { brand: string }[]; timeZone?: unknown };
 
-export function environmentProperties(firefox: boolean, environment: Environment) {
-  const brands = environment.brands;
-  const browser = firefox ? 'firefox' : brands?.some(b => b.brand === 'Google Chrome') ? 'chrome'
-    : brands?.some(b => b.brand === 'Chromium') ? 'chromium' : 'unknown';
-  const result: Record<string, string> = { browser, browser_vendor: firefox ? 'Mozilla' : browser === 'chrome' ? 'Google' : 'unknown' };
+export function environmentProperties(firefox: boolean, environment: Environment, safari = false) {
+  const browser = safari ? 'safari' : firefox ? 'firefox' : 'chrome';
+  const result: Record<string, string> = { browser, browser_vendor: safari ? 'Apple' : firefox ? 'Mozilla' : 'Google' };
   const language = environment.language;
   if (typeof language === 'string' && language.length <= 35 && /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(language)) {
     try {
@@ -118,6 +116,7 @@ type Dependencies = {
   readConsent: () => Promise<unknown>;
   permissions: () => Promise<DataPermissions>;
   firefox: boolean;
+  safari?: boolean;
   manifest: { version: string; update_url?: string };
   fetch: typeof fetch;
 };
@@ -140,7 +139,6 @@ export function createAnalytics(config: AnalyticsConfig | null, deps: Dependenci
     if (!config || !event || blocked || active.size >= 4) return;
     const epoch = generation;
     try {
-      if (!consentMatches(await deps.readConsent(), config)) return;
       if (!nativeConsentAllowed(deps.firefox, await deps.permissions())) return;
       if (epoch !== generation || blocked || active.size >= 4) return;
       const now = Date.now();
@@ -157,7 +155,7 @@ export function createAnalytics(config: AnalyticsConfig | null, deps: Dependenci
           headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
           body: JSON.stringify({ api_key: config.key, distinct_id: crypto.randomUUID(), event: eventNames[event.feature],
             properties: { ...event, schema_version: 2, surface: 'extension',
-              ...environmentProperties(deps.firefox, (deps.environment || runtimeEnvironment)()), version: deps.manifest.version,
+              ...environmentProperties(deps.firefox, (deps.environment || runtimeEnvironment)(), deps.safari), version: deps.manifest.version,
               distribution: distributionHint(config, deps.manifest), $process_person_profile: false, $geoip_disable: true } }),
         });
       } finally { clearTimeout(timeout); active.delete(controller); }

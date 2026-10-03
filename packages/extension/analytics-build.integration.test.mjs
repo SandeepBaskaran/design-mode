@@ -30,7 +30,7 @@ test('real builds isolate local config, validate failures, preserve environment 
     return output;
   }
   const bundle = () => readFileSync(resolve(directory, 'dist/background.js'), 'utf8');
-  assert.match(build(['--analytics'], {}, 1), /Cannot read/);
+  assert.match(build(['--analytics'], {}, 1), /Invalid DM_POSTHOG_HOST/);
   const config = resolve(directory, '.env.analytics.local');
   writeFileSync(config, 'private-config-marker');
   assert.match(build(['--analytics'], {}, 1), /Invalid analytics configuration/);

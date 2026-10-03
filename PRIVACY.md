@@ -98,25 +98,15 @@ at edit time and the derived breakpoint (mobile / tablet / desktop) so the agent
 can scope edits to a media query. This is window-size metadata, not personal
 data, and it only travels over the connection you've already opted into.
 
-### Optional extension usage analytics (off by default)
+### Extension usage analytics (on when the build is configured)
 
-Unconfigured builds send **no analytics requests**. A distributor must explicitly
-configure a PostHog project at build time; even then, nothing is sent until you
-choose **Settings → Optional usage analytics → I agree to enable**. Declining
-has no effect on editor or MCP functionality. The setting discloses the actual
-receiver. Consent is local, versioned and bound to that receiver and project;
-a different project or consent scope needs a fresh opt-in. Scope version 2 rejects
-older consent and requires a new explicit choice. Consent is not synced between
-devices. Project 629592 is the authorized extension-only destination for the
-maintainer's optional local configuration; no project token is committed. The
-opt-in build command and separately recorded live-receipt verification are
-described in [ANALYTICS.md](packages/extension/ANALYTICS.md). Building a configured
-extension does not enable consent or verify account billing/retention settings.
+A release build sends usage events to PostHog without a separate opt-in. It is not a paid feature and it does not change what the editor can do. The event names the browser package as `chrome`, `firefox` or `safari`.
 
-If enabled, the extension sends only a fixed event schema: bounded feature names,
+Release builds include the PostHog project and send these events without a settings opt-in. An ordinary source build with no project configuration still sends nothing. Project 629592 is the extension-only destination. The public project token is embedded in the release packages, not printed in documentation. See [ANALYTICS.md](packages/extension/ANALYTICS.md). This source does not verify the receiver's billing or retention settings.
+
+The extension sends only a fixed event schema: bounded feature names,
 attempt/command_acknowledged/failure or MCP-state outcomes, bounded friction
-reasons, MCP mode and state when applicable, best-effort browser name and vendor
-(Firefox/Mozilla, UA-CH-advertised Chrome/Google, or chromium/unknown), validated
+reasons, MCP mode and state when applicable, and the browser package (`chrome`, `firefox` or `safari`; Edge, Brave and Arc use the Chrome package), validated
 browser language and Intl timezone when available (which may suggest a region),
 extension version, schema version 2, `extension` surface, and a best-effort distribution label.
 Event names describe the action (for example `dm_style_edit`, `dm_send_to_agent`)

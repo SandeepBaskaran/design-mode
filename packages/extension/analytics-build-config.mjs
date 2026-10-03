@@ -4,11 +4,11 @@ import { resolve } from 'node:path';
 const keys = ['DM_POSTHOG_HOST', 'DM_POSTHOG_KEY', 'DM_DISTRIBUTION'];
 
 export function analyticsBuildEnv(directory, env = process.env) {
-  let source;
+  let source = '';
   try {
     source = readFileSync(resolve(directory, '.env.analytics.local'), 'utf8');
   } catch {
-    throw new Error('Cannot read packages/extension/.env.analytics.local');
+    source = '';
   }
   const config = {};
   for (const [index, line] of source.split(/\r?\n/).entries()) {

@@ -14,8 +14,8 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 - **Safari on Mac.** Design Mode can open as a Web Inspector tab. Install the Safari-specific ZIP from GitHub Releases as a temporary extension. It is not a sidebar, not an App Store install, and Safari removes temporary extensions after 24 hours or when Safari quits.
 - **Cloud and self-hosted agent connections.** A coding agent can reach the browser through the hosted relay or your own Redis relay, without a local companion.
-- **Optional usage analytics.** A configured build can send bounded feature events to PostHog only after explicit consent. Off by default. No page content, selectors, comments or screenshots. Each event has a fresh random ID, so this cannot measure unique users or retention.
-- **`@designmode-app/cli`.** Cloud-first command-line connection for Cloud, Local and Self-hosted MCP. The package stays private until publication is separately approved.
+- **Usage analytics.** Release builds send bounded feature events to PostHog without an opt-in. The `browser` property is `chrome`, `firefox` or `safari`. No page content, selectors, comments or screenshots. Each event has a fresh random ID, so this cannot measure unique users or retention.
+- **`@designmode-app/cli`.** Cloud-first command `designmode-app` for Cloud, Local and Self-hosted MCP. Published to npm as a public package.
 
 ### Changed
 

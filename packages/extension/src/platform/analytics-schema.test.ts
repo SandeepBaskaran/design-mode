@@ -24,10 +24,8 @@ for (const firefox of [false, true]) {
     const analytics = createAnalytics(config, deps);
     const input = { feature: 'style', outcome: 'attempt', language: 'private', timezone: 'private', url: 'private', userAgent: 'private' };
     await analytics.capture(input);
-    consent = { ...config, enabled: true, version: 1 };
     await analytics.capture(input);
-    assert.equal(received.length, 0); assert.equal(reads, 0);
-    consent = { ...config, enabled: true, version: 2 };
+    assert.equal(received.length, 2); assert.equal(reads, 2);
     for (const feature of Object.keys(names)) {
       await analytics.capture({ ...input, feature });
       assert.equal(received.at(-1).event, names[feature]);
@@ -49,16 +47,17 @@ for (const firefox of [false, true]) {
       permissions = ['technicalAndInteraction'];
       await analytics.capture(input); assert.equal(received.length, count);
     }
-    analytics.stop(); consent = undefined;
+    analytics.stop();
     await analytics.capture(input);
     await createAnalytics(config, deps).capture(input);
-    assert.equal(received.length, count);
+    assert.equal(received.length, firefox ? count : count + 1);
   });
 }
 
 test('browser signals are coarse, optional metadata is validated and bounded', () => {
-  assert.equal(environmentProperties(false, {}).browser, 'unknown');
-  assert.equal(environmentProperties(false, { brands: [{ brand: 'Chromium' }, { brand: 'Brave' }] }).browser, 'chromium');
+  assert.equal(environmentProperties(false, {}).browser, 'chrome');
+  assert.equal(environmentProperties(false, { brands: [{ brand: 'Chromium' }, { brand: 'Brave' }] }).browser, 'chrome');
+  assert.equal(environmentProperties(false, {}, true).browser, 'safari');
   assert.equal(environmentProperties(true, { brands: [{ brand: 'Google Chrome' }] }).browser_vendor, 'Mozilla');
   for (const language of ['x-private', 'en-x-private', 'https://private.invalid', 'a'.repeat(100), 123, 'en-INVALIDTAG']) {
     assert.equal(environmentProperties(false, { language }).language, undefined);

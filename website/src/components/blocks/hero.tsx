@@ -36,7 +36,7 @@ const features = [
   {
     title: "Free and open source",
     description:
-      "MIT-licensed, no account required, and no product telemetry in the extension.",
+      "MIT-licensed and free. Release builds include usage analytics; they do not collect page content.",
     icon: Heart,
   },
 ];

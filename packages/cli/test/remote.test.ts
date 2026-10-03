@@ -214,7 +214,7 @@ test('exact npm tarball metadata and standalone executable work in all three mod
     const metadata = JSON.parse(await readFile(resolve(f.dir, 'package/package.json'), 'utf8'));
     assert.deepEqual(metadata.bin, { 'designmode-app': 'dist/cli.cjs' });
     assert.deepEqual(metadata.publishConfig, { access: 'public' });
-    assert.equal(metadata.private, true);
+    assert.equal(metadata.private, false);
     const entry = resolve(f.dir, 'package/dist/cli.cjs');
     for (const env of [f.cloud, f.self, { DM_MODE: 'local' }]) {
       const list = await f.cli(['tools'], env, '', entry);

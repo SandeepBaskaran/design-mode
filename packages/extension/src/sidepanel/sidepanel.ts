@@ -11,7 +11,7 @@ import '../platform/polyfill';
 import { browser } from '../platform/panel-api';
 import { IS_CHROME, IS_FIREFOX, IS_SAFARI } from '../platform/target';
 import { commandOutcome, messageFeatures, type AnalyticsEvent } from '../platform/analytics';
-import { disableAnalytics, initAnalyticsSetting, renderAnalyticsSetting, toggleAnalytics } from './analytics-setting';
+import { renderAnalyticsSetting } from './analytics-setting';
 import { openPanel, preparePanelTarget } from '../platform/panel';
 import { detectLaunchCapabilities, supportedLaunchSurface, pipFailureMessage } from '../platform/launch-capabilities';
 import {
@@ -813,8 +813,6 @@ function resetInspectorTarget() {
 function beginInspectorOperation(): InspectorOperation {
   return createInspectorOperation(() => inspectorEpoch, IS_SAFARI);
 }
-
-initAnalyticsSetting(() => render(), browser);
 
 function trackFeature(event: AnalyticsEvent) {
   void browser.runtime.sendMessage({ type: 'DM_ANALYTICS_EVENT', event }).catch(() => {});
@@ -10671,9 +10669,7 @@ function setupDelegation() {
           }
           break;
         }
-        case 'toggle-analytics': void toggleAnalytics(); break;
         case 'reset-settings': {
-          void disableAnalytics().catch(() => showCaptureToast('error', 'Could not reset analytics consent. Please retry.'));
           theme = 'system'; resolveTheme();
           colorFormat = 'hex';
           captureMode = 'clipboard';
