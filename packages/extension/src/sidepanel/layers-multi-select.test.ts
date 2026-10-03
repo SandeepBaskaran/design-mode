@@ -1,3 +1,5 @@
+import { createInspectorOperation, runInspectorAction } from './inspector-operation';
+const beginInspectorOperation = () => createInspectorOperation(() => 0, false);
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,8 +9,8 @@ import ts from 'typescript';
 const source = fs.readFileSync(new URL('./sidepanel.ts', import.meta.url), 'utf8');
 function harness(mode = false) {
   const start = source.indexOf('async function handleLayerClick(');
-  const end = source.indexOf('async function selectParent()', start);
-  const state = { layerMultiSelectMode: mode, multiSelectIds: [] as string[], multiSelectAnchor: null as string | null, focused: '',
+  const end = source.indexOf('async function selectParent(', start);
+  const state = { beginInspectorOperation, runInspectorAction, layerMultiSelectMode: mode, multiSelectIds: [] as string[], multiSelectAnchor: null as string | null, focused: '',
     getVisibleLayers: () => ['a', 'b', 'c'].map(id => ({ id })),
     pushMultiSelectIds: async (ids: string[]) => { state.multiSelectIds = ids; },
     selectElement: async (id: string) => { state.focused = id; },
@@ -52,6 +54,6 @@ test('Shift range takes priority over standalone toggle', async () => {
 
 test('toggle is accessible and clear routes through the page synchronization path', () => {
   assert.match(source, /data-dm-action="toggle-layer-multi-select" aria-label="Multi-select layers" aria-pressed=/);
-  assert.match(source, /case 'clear-multi-select': \{\s+layerMultiSelectMode = false;\s+pushMultiSelectIds\(\[\]\)/);
-  assert.match(source, /action === 'clear-selection'\) \{ layerMultiSelectMode = false;[^\n]+pushMultiSelectIds\(\[\]\)/);
+  assert.match(source, /case 'clear-multi-select': \{\s+layerMultiSelectMode = false;\s+runInspectorAction\(pushMultiSelectIds\(\[\], operation\)/);
+  assert.match(source, /action === 'clear-selection'\) \{ layerMultiSelectMode = false;[^\n]+pushMultiSelectIds\(\[\], operation\)/);
 });

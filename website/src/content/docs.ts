@@ -1,3 +1,5 @@
+import { mcpClients } from "@/lib/mcp-guide";
+
 export type DocPage = {
   slug: string;
   title: string;
@@ -10,48 +12,6 @@ export type DocPage = {
 };
 
 export const docs: DocPage[] = [
-  {
-    slug: "install",
-    title: "Install Design Mode",
-    metaTitle: "Install Design Mode for Chrome or Firefox",
-    metaDescription:
-      "How to install the Design Mode browser extension in Chrome, Edge, Brave, Arc, or Firefox. Pin the side panel (sidebar on Firefox), open a scriptable webpage (not chrome:// or store pages), start designing. No account required.",
-    keywords: [
-      "install Design Mode",
-      "Design Mode Chrome extension",
-      "Design Mode Firefox add-on",
-      "install Chrome extension",
-      "install Firefox add-on",
-      "Edge extension install",
-      "Arc browser extension",
-    ],
-    intro:
-      "Install Design Mode from the Chrome Web Store or Firefox Add-ons, open it on a scriptable webpage, and make a local visual edit. No account or MCP setup is required for Copy as Prompt.",
-    sections: [
-      {
-        heading: "1. Install from your browser's store",
-        body: "On Chrome, Edge, Brave, Arc, or another Chromium browser, open the Chrome Web Store listing and click Add to Chrome. On Firefox, open the Firefox Add-ons (AMO) listing and click Add to Firefox.",
-      },
-      {
-        heading: "2. Pin the extension",
-        body: "Click the puzzle-piece icon in the browser toolbar and pin Design Mode so the side panel is one click away.",
-      },
-      {
-        heading: "3. Open a supported page and click the icon",
-        body: "Navigate to your dev server, staging deploy or another webpage that allows extension scripts, then click the Design Mode toolbar icon. Chrome opens the selected Launch surface (Side panel by default, Floating, or a Pin-on-top opener); Firefox opens the native sidebar. Alt+D follows the same choice. Browser-internal pages and extension stores are protected surfaces where no extension can inject the editor.",
-      },
-      {
-        heading: "4. (Optional) Set up MCP for AI agents",
-        body: "Use Copy as Prompt without MCP. For direct hand-off, follow the client-specific MCP setup guide. Cloud is selected on a fresh install but stays disconnected until you create a credential; Local requires the companion server.",
-      },
-    ],
-    related: [
-      "browser-support",
-      "mcp-setup",
-      "keyboard-shortcuts",
-      "troubleshooting",
-    ],
-  },
   {
     slug: "browser-support",
     title: "Browser support & parity",
@@ -85,7 +45,7 @@ export const docs: DocPage[] = [
         body: "Design Mode opens as Firefox's native sidebar rather than a right-docked panel; the toolbar button, the View → Sidebar menu, and Alt+D all toggle it. For local files, Firefox manages file:// access from about:addons (there's no per-extension “Allow access to file URLs” toggle like Chrome's).",
       },
     ],
-    related: ["install", "keyboard-shortcuts", "troubleshooting"],
+    related: ["keyboard-shortcuts", "troubleshooting"],
   },
   {
     slug: "keyboard-shortcuts",
@@ -120,68 +80,68 @@ export const docs: DocPage[] = [
         body: "Alt+D opens Design Mode on both Chrome and Firefox; Alt+S takes a screenshot using the same target and destination as the camera button. They are browser commands rather than page handlers, so both can be rebound at chrome://extensions/shortcuts on Chrome or about:addons › Manage Extension Shortcuts on Firefox. Browsers treat the supplied keys as suggestions and may leave either command unassigned after an update or conflict. The 12 in-page shortcuts above cannot be remapped from Settings — that list is read-only.",
       },
     ],
-    related: ["install", "changes-tab", "mcp-setup"],
+    related: ["changes-tab", "mcp-setup"],
   },
   {
     slug: "mcp-setup",
     title: "MCP setup",
-    metaTitle: "MCP setup for Claude Code and Cursor",
+    metaTitle: "MCP setup for AI apps — Cloud, Local and Self-hosted",
     metaDescription:
-      "Version-stamped Design Mode MCP setup for Claude Code and Cursor, including Cloud Streamable HTTP and the Local stdio companion server.",
+      "Connect Design Mode using anonymous bearer-token pairing, protected client configuration and read-only tests. Examples for Claude Code, Cursor and VS Code.",
     keywords: [
       "MCP setup",
-      "Claude Code MCP setup",
-      "Cursor MCP setup",
+      "Claude Code MCP",
+      "Cursor MCP",
+      "VS Code MCP",
       "Claude Desktop MCP",
-      "Windsurf MCP setup",
-      "Cline MCP setup",
     ],
     intro:
-      "Choose Copy as Prompt when you do not need a live connection. For MCP, use the client-specific configuration below. These instructions were checked against first-party Claude Code and Cursor documentation on 20 September 2026; client behaviour may change after that date.",
+      "Start with the copyable setup prompt at https://designmode.app/mcp, or configure your client below. Examples were checked against first-party documentation on 29 September 2026. MCP support, policy and reload behaviour vary by client version.",
     sections: [
       {
-        heading: "1. Choose the hand-off and transport",
-        body: "Copy as Prompt needs no connection. Cloud uses the hosted Streamable HTTP endpoint at https://mcp.designmode.app/mcp and a bearer token created in the extension. Local runs the repository's stdio companion server and bridges to the extension on ws://localhost:9960. Concurrent Local clients share one owner on that port; a surviving client takes ownership if the owner closes. Foreign occupants are never killed; DM_PORT selects a fallback port that must match the extension. Self-hosted uses infrastructure you operate.",
+        heading: "1. Cloud — the default",
+        body: "Open the extension's MCP page from its header chip. Select Cloud and create an anonymous credential. The agent endpoint is https://mcp.designmode.app/mcp (Streamable HTTP). The extension and agent use the same bearer token; there is no Design Mode OAuth login, account check or subscription verification. Enter the token locally through a protected client input or securely supplied environment variable, never in AI chat, shell history, screenshots or committed configuration.",
       },
       {
-        heading: "2. Claude Code — Cloud",
-        body: "Claude Code recommends HTTP for remote servers. Add the hosted endpoint at project scope and pass the token as an Authorization header. Keep the real token out of shell history, screenshots and committed files. Claude Code project MCP definitions live in .mcp.json; .claude/settings.json is not the server-definition file.",
-        code: [
-          "claude mcp add --transport http --scope project \\",
-          "  --header 'Authorization: Bearer <token>' \\",
-          "  design-mode https://mcp.designmode.app/mcp",
-        ].join("\n"),
+        heading: "2. Local — run from source",
+        body: 'Review and clone https://github.com/SandeepBaskaran/design-mode and run npm ci at the repository root. Configure your MCP client to launch the stdio command below with the absolute checkout path; then select Local in the extension. In JSON use command npm and args ["start", "--prefix", "/absolute/path/to/design-mode/packages/mcp-local"]. The agent CLI package is private; no published CLI installation is assumed. Clients share a bridge owner on localhost:9960. If another app owns that port, use DM_PORT and match the extension\'s Local port. Never kill a foreign process.',
+        code: "npm start --prefix /absolute/path/to/design-mode/packages/mcp-local",
       },
       {
-        heading: "3. Claude Code — Local",
-        body: "Clone the repository and install its locked dependencies first. The double dash separates Claude Code options from the stdio command. Use an absolute repository path. Run claude mcp list, claude mcp get design-mode or /mcp to inspect status; a project-scoped server may require workspace approval on first use.",
-        code: [
-          "claude mcp add --transport stdio --scope project design-mode -- \\",
-          "  npm start --prefix /absolute/path/to/design-mode/packages/mcp-local",
-        ].join("\n"),
+        heading: "3. Self-hosted — your relay",
+        body: "Deploy packages/mcp-cloud on a Node.js host with Redis and TLS. Use the extension's Self-hosted mode with your relay's base URL, create a credential on that relay and configure the agent with https://your-relay.example/mcp. Replace the Cloud endpoint in the examples, and supply that relay's token—not the hosted Cloud credential. See https://github.com/SandeepBaskaran/design-mode/tree/main/packages/mcp-cloud for deployment prerequisites.",
+      },
+      ...mcpClients.map((client) => ({
+        heading: client.name + " — " + client.location,
+        body: client.description + " Official reference: " + client.source,
+        code: client.code,
+      })),
+      {
+        heading: "Other apps and incompatible connectors",
+        body: "Cloud and Self-hosted need Streamable HTTP plus a custom Authorization header. An OAuth-only connector or a client without custom-header support cannot use this bearer token directly. For Claude Desktop, use the documented local stdio configuration via Settings → Developer → Edit Config, then fully quit and restart; see https://modelcontextprotocol.io/docs/develop/connect-local-servers. For Windsurf, Cline and other apps, inspect current first-party transport and credential support rather than reusing another client's JSON. If neither HTTP with headers nor local stdio works, use Copy as Prompt from the Changes tab.",
       },
       {
-        heading: "4. Cursor — project configuration",
-        body: 'Cursor reads project servers from .cursor/mcp.json and global servers from ~/.cursor/mcp.json. It supports stdio, SSE and Streamable HTTP. For Cloud, set url to https://mcp.designmode.app/mcp and pass Authorization in headers; use ${env:DESIGN_MODE_TOKEN} rather than committing the token. For Local, configure command npm with args ["start", "--prefix", "/absolute/path/to/design-mode/packages/mcp-local"]. Cursor asks before MCP tool use by default.',
-        code: '{\n  "mcpServers": {\n    "design-mode": {\n      "url": "https://mcp.designmode.app/mcp",\n      "headers": {\n        "Authorization": "Bearer ${env:DESIGN_MODE_TOKEN}"\n      }\n    }\n  }\n}',
+        heading: "Approve access and test safely",
+        body: "Merge configuration without replacing unrelated servers. Review and trust the endpoint or local command, start or reload the server, and restart the app if needed. Discover tools and schemas, then call get_session_summary with {}. Confirm the actual browser/session state; an MCP chip alone is not proof. With permission to read the page, call get_changes with {}. Empty edits are a valid result. Do not modify a page, clear changes or resolve comments during this test. Keep writes separately approved and revoke an exposed credential in the extension's MCP page.",
+        code: "get_session_summary({})\nget_changes({})",
       },
       {
-        heading: "5. Other MCP clients",
-        body: "Claude Desktop, VS Code, Windsurf, Cline and other clients use different files, wrappers, transports and authentication rules. Do not reuse the Claude Code command or Cursor JSON blindly. Use the client's current first-party documentation, select Streamable HTTP for Cloud where supported or stdio for Local, and verify header support before adding a credential.",
+        heading: "Available tools and progressive reads",
+        body: "All modes expose get_session_summary, get_changes, get_screenshot, export_changes, apply_changes, set_change_status, mark_comment_resolved and clear_changes. Start with the summary, then fetch changes once and select unresolved IDs locally: get_changes has no pagination, status filter or max_chars. Use get_screenshot with a returned selector, elementId or commentId (not a raw region argument). export_changes requires format css, tailwind, scss or jsx. Bound writes to explicit IDs; omitting ids in set_change_status affects all items. The icon-led reference is at https://designmode.app/mcp.",
       },
       {
-        heading: "6. Verify the connection",
-        body: "Open Design Mode on a supported page and make one harmless change. Confirm Cloud or Self-hosted reports the eight session tools: get_changes, apply_changes, set_change_status, clear_changes, get_session_summary, export_changes, get_screenshot and mark_comment_resolved. Local also exposes wait_for_handoff for opt-in feedback rounds with immutable per-Send snapshots and an explicit Stop. Call get_session_summary, then get_changes. A green MCP chip proves a client attached; it does not prove the agent updated source code correctly.",
+        heading: "Local live rounds and the agent skill",
+        body: "Only Local exposes wait_for_handoff. After explicit opt-in, start with exact pageUrl and timeoutMs up to 20000; resume using the returned sessionId and after cursor. Each feedback report is an immutable Send snapshot. Stop on stopped, busy or an error. Cloud and Self-hosted use one-shot reads, not automatic background polling. Download the canonical skill at https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md; its index is https://designmode.app/.well-known/agent-skills/index.json. A skill does not grant permissions or configure a connection by itself.",
       },
     ],
-    related: ["install", "troubleshooting", "changes-tab"],
+    related: ["troubleshooting", "changes-tab"],
   },
   {
     slug: "changes-tab",
     title: "The Changes tab",
     metaTitle: "Changes tab — Searchable, exportable design change history",
     metaDescription:
-      "Every edit in Design Mode lands in the Changes tab — style, text, DOM, comments. Search, filter by kind, group by element or component context, resolve, revert, export as Markdown or JSON.",
+      "Every edit in Design Mode lands in the Changes tab — style, text, DOM, comments. Search, filter, resolve, export or import JSON, and copy a Markdown prompt.",
     keywords: [
       "Design Mode Changes tab",
       "design change history",
@@ -205,10 +165,10 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Export & import",
-        body: "Export the change set as JSON (machine-readable) or Markdown (selector → property → value, perfect for Linear / Jira / GitHub). Import JSON to restore a session on another machine.",
+        body: "Export downloads the recorded changes as JSON. Import accepts JSON and replaces the current changes, so export a backup first. For a readable Markdown hand-off to a teammate, issue or agent, use Copy as Prompt; Markdown is not an import format.",
       },
     ],
-    related: ["mcp-setup", "install", "troubleshooting"],
+    related: ["mcp-setup", "troubleshooting"],
   },
   {
     slug: "troubleshooting",
@@ -248,7 +208,7 @@ export const docs: DocPage[] = [
         body: "Open the Help panel inside the extension (? icon) → Copy diagnostics → file an issue on GitHub. The diagnostics block has the environment metadata maintainers need.",
       },
     ],
-    related: ["install", "mcp-setup", "changes-tab"],
+    related: ["mcp-setup", "changes-tab"],
   },
 ];
 

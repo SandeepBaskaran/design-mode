@@ -22,7 +22,7 @@ const docDescriptions: Record<string, string> = {
   "browser-support":
     "Chrome, Chromium and Firefox support, including the three Chromium-only features and protected pages where extensions cannot run.",
   "mcp-setup":
-    "Version-stamped Cloud and Local MCP setup for Claude Code and Cursor, with client-specific files, transports and verification steps.",
+    "Bearer-token Cloud, Local and Self-hosted MCP setup for Claude Code, Cursor and VS Code, with protected configuration and read-only verification.",
   troubleshooting:
     "Fix common Design Mode installation, side-panel, editing, clipboard and MCP issues in Chrome, Chromium browsers and Firefox.",
 };
@@ -54,10 +54,10 @@ export async function generateMetadata({
       type: "article",
       images: [
         {
-          url: "/og-image.png",
+          url: "/og-design-mode-inter-v3.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode browser visual editor for AI coding agents",
+          alt: "Design Mode — The visual editor for all your agent’s work",
         },
       ],
     },
@@ -67,10 +67,10 @@ export async function generateMetadata({
       description,
       images: [
         {
-          url: "/og-image.png",
+          url: "/og-design-mode-inter-v3.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode browser visual editor for AI coding agents",
+          alt: "Design Mode — The visual editor for all your agent’s work",
         },
       ],
     },
@@ -87,7 +87,7 @@ export default async function DocPage({
   if (!d) notFound();
 
   const url = `https://designmode.app/docs/${d.slug}`;
-  const isHowTo = ["install", "mcp-setup"].includes(d.slug);
+  const isHowTo = d.slug === "mcp-setup";
 
   return (
     <>
@@ -115,7 +115,7 @@ export default async function DocPage({
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {d.title}
             </h1>
-            <p className="text-muted-foreground mt-4 text-base md:text-2xl">
+            <p className="text-muted-foreground mt-4 text-base">
               {d.intro}
             </p>
           </div>
@@ -124,7 +124,7 @@ export default async function DocPage({
 
       <section className="py-16 lg:py-20">
         <DashedLine className="container max-w-4xl" />
-        <article className="container mt-12 max-w-4xl space-y-10">
+        <article className="container mt-12 max-w-4xl space-y-10 break-words">
           {d.sections.map((s, i) => (
             <div key={i} id={`step-${i + 1}`}>
               <h2 className="text-2xl tracking-tight md:text-3xl">

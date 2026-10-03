@@ -25,10 +25,10 @@ export const metadata = {
     url: "https://designmode.app/faq",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -39,10 +39,10 @@ export const metadata = {
       "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome and Firefox, and handles storage and Cloud relay data.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -60,7 +60,7 @@ export default function FaqPage() {
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Frequently asked questions
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed md:text-2xl">
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed">
               Direct answers about browser editing, source-code hand-off, MCP,
               storage and privacy. For setup steps, use the{" "}
               <Link

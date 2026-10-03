@@ -195,7 +195,7 @@ sensitive tool results; take care where you store it. No CLI telemetry is added.
 
 The marketing/docs site is a separate concern from the extension. The site:
 
-- Uses Google Sans Flex fetched at build time and self-hosted by Next.js; a
+- Uses Inter fetched at build time and self-hosted by Next.js; a
   visit to the deployed site does not request the font from Google Fonts.
 - Loads **Google Analytics (gtag.js)** if the deployment sets the
   `NEXT_PUBLIC_GA_ID` environment variable. The upstream production deploy

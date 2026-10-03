@@ -63,10 +63,10 @@ export async function generateMetadata({
       publishedTime: p.datePublished,
       images: [
         {
-          url: "/og-image.png",
+          url: "/og-design-mode-inter-v3.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode browser visual editor for AI coding agents",
+          alt: "Design Mode — The visual editor for all your agent’s work",
         },
       ],
     },
@@ -76,10 +76,10 @@ export async function generateMetadata({
       description,
       images: [
         {
-          url: "/og-image.png",
+          url: "/og-design-mode-inter-v3.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode browser visual editor for AI coding agents",
+          alt: "Design Mode — The visual editor for all your agent’s work",
         },
       ],
     },
@@ -133,7 +133,7 @@ export default async function BlogPostPage({
             <h1 className="mt-4 text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {p.title}
             </h1>
-            <p className="text-muted-foreground mt-4 text-base md:text-2xl">
+            <p className="text-muted-foreground mt-4 text-base">
               {p.excerpt}
             </p>
           </div>

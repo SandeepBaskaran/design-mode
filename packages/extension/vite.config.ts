@@ -23,6 +23,11 @@ const entries: Record<string, { input: string; format: 'iife' | 'es'; name?: str
     format: 'iife',
     name: 'DesignModeSidePanel',
   },
+  devtools: {
+    input: resolve(__dirname, 'src/inspector/devtools.ts'),
+    format: 'iife',
+    name: 'DesignModeInspector',
+  },
 };
 
 const current = entries[entry]!;
@@ -34,7 +39,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: process.env.DM_BROWSER === 'safari' ? 'dist-safari' : 'dist',
     emptyOutDir: entry === 'content', // Only clear on first build
     rollupOptions: {
       input: current.input,
@@ -56,10 +61,11 @@ export default defineConfig({
     cssCodeSplit: false,
     sourcemap: process.env.NODE_ENV === 'development' ? 'inline' : false,
     // One bundle serves both browsers; downlevel to satisfy the older of the two.
-    target: ['chrome110', 'firefox121'],
+    target: ['chrome110', 'firefox121', 'safari18.4'],
     minify: process.env.NODE_ENV === 'development' ? false : 'esbuild',
   },
   define: {
+    __DM_SAFARI__: JSON.stringify(process.env.DM_BROWSER === 'safari'),
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
     __DM_ANALYTICS__: JSON.stringify({ host: process.env.DM_POSTHOG_HOST || '', key: process.env.DM_POSTHOG_KEY || '', distribution: process.env.DM_DISTRIBUTION || 'unknown' }),
   },

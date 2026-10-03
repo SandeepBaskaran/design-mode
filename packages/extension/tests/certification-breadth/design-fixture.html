@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Design control breadth certification</title>
+<style>
+:root { --cds-spacing-05: 16px; }
+body { margin: 0; padding: 24px; font: 16px sans-serif; background: white; }
+.target { width: 280px; min-height: 70px; padding: 12px; margin: 14px; background: rgb(220, 230, 240); color: rgb(20, 30, 40); }
+#border { border: 2px solid rgb(80, 90, 100); }
+#decorated { border: 3px solid black; box-shadow: 2px 3px 5px rgb(0 0 0 / 30%); }
+#radius { border-radius: 8px; }
+#layout, #auto { display: flex; width: 360px; height: 140px; gap: 8px; }
+#auto { justify-content: space-between; }
+#grid { display: grid; grid-template-columns: 70px 70px; grid-template-rows: 35px 35px; width: 360px; height: 160px; gap: 8px; }
+.child { width: 40px; height: 30px; background: #526b92; pointer-events: none; }
+#motion { position: absolute; top: 24px; left: 480px; }
+#parking { position: fixed; top: 0; left: 0; width: 12px; height: 12px; }
+#scroll { margin-top: 110vh; }
+footer { height: 160vh; }
+</style>
+<div id="parking"></div>
+<div id="plain" class="target">Plain fill</div>
+<div id="decorated" class="target">Border and effect</div>
+<div id="border" class="target">Four independent borders</div>
+<div id="radius" class="target">Radius</div>
+<div id="motion" class="target">Motion target</div>
+<div id="layout" class="target"><span class="child"></span><span class="child"></span><span class="child"></span></div>
+<div id="auto" class="target"><span class="child"></span><span class="child"></span></div>
+<div id="grid" class="target"><span class="child"></span><span class="child"></span><span class="child"></span><span class="child"></span></div>
+<div id="scroll" class="target">Scroll motion</div>
+<footer></footer>

@@ -8,10 +8,12 @@
 // ============================================================
 
 import '../platform/polyfill';
+import { browser } from '../platform/panel-api';
+import { IS_CHROME, IS_FIREFOX, IS_SAFARI } from '../platform/target';
 import { commandOutcome, messageFeatures, type AnalyticsEvent } from '../platform/analytics';
 import { disableAnalytics, initAnalyticsSetting, renderAnalyticsSetting, toggleAnalytics } from './analytics-setting';
-import { IS_FIREFOX } from '../platform/target';
-import { openPanel } from '../platform/panel';
+import { openPanel, preparePanelTarget } from '../platform/panel';
+import { detectLaunchCapabilities, supportedLaunchSurface, pipFailureMessage } from '../platform/launch-capabilities';
 import {
   DEFAULT_LAUNCH_SURFACE,
   LAUNCH_SURFACE_KEY,
@@ -20,6 +22,7 @@ import {
 } from '../platform/launch-surface';
 import morphdom from 'morphdom';
 import { openPresetDialog } from './preset-dialog';
+import { hasNativeColourPicker, pickColour, type EyeDropperHost } from './page-colour-picker';
 import { hasPresetStyles } from '../preset-styles';
 import type { ElementInfo as SharedElementInfo } from '@shared/types';
 import { icon, icons } from '../content/icons';
@@ -27,10 +30,13 @@ import { escapeAttr, rgbToHex } from '../content/helpers';
 import { sizeFieldView, type AuthoredDimension } from '../content/authored-sizing';
 import { AGENT_COMMAND_MARKDOWN, AGENT_TOOLS } from './agent-workflow';
 import { changeGroupKey, styleChangeGroupKey, collectGroupRevertIds } from './change-group';
+import { createInspectorOperation, InspectorOperationCancelled, runInspectorAction, type InspectorOperation } from './inspector-operation';
 import { componentGroup, groupByComponent, type ComponentContext } from '../component-group';
 import { parseFeedbackSession, type FeedbackSessionView } from './feedback-view';
-import { enableShortcuts, loadShortcuts, registerShortcut } from '../content/keyboard-shortcuts';
+import { configureShortcutStorage, enableShortcuts, loadShortcuts, registerShortcut } from '../content/keyboard-shortcuts';
 import { diffWords } from './word-diff';
+import { writeScreenshotClipboard } from './screenshot-clipboard';
+import { writeInspectorTextClipboard } from '../inspector/clipboard';
 import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, sanitizeRichTextHref, normalizeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
@@ -82,6 +88,7 @@ function safeCssColor(v: string): string {
 
 
 import {
+  APP_VERSION,
   ANIMATION_NAME_OPTIONS,
   ANIMATION_DIRECTION_OPTIONS,
   ANIMATION_FILL_OPTIONS,
@@ -639,6 +646,9 @@ let nudgeAmount = 10;
 // content script reads the same key via browser.storage.onChanged.
 let customCursor = true;
 let launchSurface: LaunchSurface = DEFAULT_LAUNCH_SURFACE;
+let inspectorError = '';
+let inspectorEpoch = 0;
+configureShortcutStorage(browser.storage);
 
 browser.storage?.local?.get?.([
   'dm-theme', 'dm-color-format', 'dm-capture-mode',
@@ -678,11 +688,10 @@ browser.storage?.local?.get?.([
   // consumes the click's user gesture, so the handler cannot await storage.
   const ps = result?.['dm-pip-size'];
   if (ps && typeof ps.width === 'number' && typeof ps.height === 'number') pipSavedSize = ps;
-  if (result?.['dm-pip-unsupported'] === true) pipUnsupported = true;
-  if (!IS_FIREFOX) launchSurface = parseLaunchSurface(result?.[LAUNCH_SURFACE_KEY]);
-  if (pipLaunchRequested && !IS_FIREFOX && (!pipAvailable || pipUnsupported)) {
+  if (!IS_SAFARI) launchSurface = supportedLaunchSurface(parseLaunchSurface(result?.[LAUNCH_SURFACE_KEY]), launchCapabilities);
+  if (pipLaunchRequested && !IS_SAFARI && !pipAvailable) {
     pipLaunchPending = false;
-    showCaptureToast('error', 'Pin on top isn’t available in this Chrome. Staying in a floating window.');
+    showCaptureToast('error', 'Pin on top isn’t available in this browser. Staying in a floating window.');
   }
   // Resolve the host page's rem root once so px → rem conversions are
   // accurate even when the page customises the root font-size.
@@ -738,15 +747,18 @@ const popoutTabParam = (() => {
   return Number.isInteger(t) ? t : null;
 })();
 const isPopout = popoutTabParam != null;
-let myTabId: number | null = popoutTabParam;
+const dockTabValue = IS_FIREFOX ? new URLSearchParams(location.search).get('dockTab') : null;
+const dockTab = dockTabValue && /^\d+$/.test(dockTabValue) && Number.isSafeInteger(Number(dockTabValue)) ? Number(dockTabValue) : null;
+let myTabId: number | null = popoutTabParam ?? dockTab;
 
-// Pin-on-top via Document Picture-in-Picture (Chrome 116+). The PiP window
+// Pin-on-top via the runtime's Document Picture-in-Picture API. The PiP window
 // hosts a fresh copy of this page in an iframe (`?pip=1`) instead of
 // migrating the live DOM — a PiP window dies the moment its opener document
 // unloads, so this page stays alive as the opener while pinned.
 const isPip = new URLSearchParams(location.search).get('pip') === '1';
 const pipLaunchRequested = new URLSearchParams(location.search).get('launch') === 'pip';
-const pipAvailable = 'documentPictureInPicture' in window;
+const launchCapabilities = detectLaunchCapabilities(IS_SAFARI, browser, window);
+const pipAvailable = launchCapabilities.pictureInPicture;
 // Floor matches the panel's own min-width (index.html); Chrome has no API to
 // stop the user shrinking a PiP window below this afterwards — content then
 // scrolls horizontally instead of breaking.
@@ -755,15 +767,54 @@ const PIP_MIN_HEIGHT = 400;
 let pipPinned = false;
 let pipWindow: Window | null = null;
 let pipMinimizedSelf = false;
-// Dock-back was requested from inside the PiP (side panel is taking over) —
-// on PiP close, this floating window must close itself instead of restoring.
+// Successful docking transfers ownership before either floating surface closes.
 let pipDockingBack = false;
-let pipChannel: BroadcastChannel | null = null;
-let pipUnsupported = false;
 let pipSavedSize: { width: number; height: number } | null = null;
-let pipLaunchPending = pipLaunchRequested && !IS_FIREFOX && pipAvailable;
+let pipLaunchPending = pipLaunchRequested && pipAvailable;
 
-initAnalyticsSetting(() => render());
+function resetInspectorTarget() {
+  inspectorEpoch++;
+  resetPageContext();
+  commentSubmitting = false;
+  layerMultiSelectMode = false;
+  routeGroups = []; activeRouteKey = ''; changesPageUrl = ''; deletingRouteKey = null;
+  routeEditingBlocked = false; computedLayoutOverlayOn = false;
+  document.querySelector('[data-dm-preset-dialog]')?.remove();
+  sendingFeedback = false;
+  info = null; hoverInfo = null; myTabId = null; pinnedDomain = '';
+  enabled = false; inspecting = false; mcpState = 'offline';
+  domTree = []; styleChanges = []; textChanges = []; domChanges = []; comments = [];
+  tokenChanges = []; componentContexts = {}; feedbackSession = null;
+  designTokens = []; pageFonts = []; designSystem = null; designSystemInflight = false;
+  mediaInfo = null; lastMediaElementId = null; pageContextInflight = false;
+  multiSelectActive = false; multiSelectIds = []; multiSelectAnchor = null;
+  hoveredLayerId = null; dragLayerId = null; undoCount = 0; redoCount = 0;
+  commentMode = false; commentText = ''; commentDirty = false;
+  awaitingRegionDraw = false; regionCommentPending = false;
+  editingCommentId = null; viewingCommentId = null; deletingCommentId = null;
+  inspectSuspendedForComment = false; inspectWasOnBeforeComment = false;
+  pageSealed = false; inspectWrapperOptedIn = false; hoverAvailable = true; hoverGuideProceeded = false;
+  motionForcedTrigger = null; pageForcedState = null; previewingOriginal = false; animationsFrozen = false;
+  computedCssOpen = false; computedCssText = ''; activeColorPickerProp = null;
+  tokensDropdownProp = null; tokenBadgeMenuProp = null; tokenPickerProp = null; shadowMenuProp = null;
+  tokenUsesActiveVar = null; matchingLayersChecked = false; clearAllConfirming = false; revertingGroupKey = null;
+  for (const cache of [effectiveBgCache, matchingCountCache, appliedPresetGroups, editedTokens,
+    strokeStyleByElement, previousStroke, previousFill, previousGapAlign, fillLayersByElement,
+    layoutGuidesByElement, guideSelectorsByElement, strokeLayersByElement, strokeActiveTab,
+    hiddenEffectsByElement, stashedEffectByKey, overlayEffectsByElement]) cache.clear();
+  for (const cache of [batchAppliedChanges, collapsedNodes, changesGroupCollapsed, changesSelected,
+    layoutGuidesSectionHidden]) cache.clear();
+  root.replaceChildren();
+}
+
+// Pass one operation through every awaited child call in a workflow. UI
+// entry points consume cancellation with runInspectorAction; nested work must
+// propagate it so loops and follow-up requests cannot retarget themselves.
+function beginInspectorOperation(): InspectorOperation {
+  return createInspectorOperation(() => inspectorEpoch, IS_SAFARI);
+}
+
+initAnalyticsSetting(() => render(), browser);
 
 function trackFeature(event: AnalyticsEvent) {
   void browser.runtime.sendMessage({ type: 'DM_ANALYTICS_EVENT', event }).catch(() => {});
@@ -775,20 +826,32 @@ function trackMcpState() {
   lastAnalyticsMcpState = current;
   trackFeature({ feature: 'mcp_state', outcome: 'state', mode: mcpMode, state: mcpState });
 }
-async function send(msg: any): Promise<any> {
+async function send(msg: any, operation = beginInspectorOperation()): Promise<any> {
+  operation.assertCurrent();
   const feature = Object.hasOwn(messageFeatures, msg?.type) ? messageFeatures[msg.type] : undefined;
   if (feature) trackFeature({ feature, outcome: 'attempt' });
   const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
     ? { ...msg, targetTabId: myTabId }
     : msg;
   try {
-    const r = await browser.runtime.sendMessage(stamped);
-    if (feature) {
-      trackFeature({ feature, ...commandOutcome(r) });
-    }
+    const r = await operation.wait(browser.runtime.sendMessage(stamped));
+    if (IS_SAFARI && r?.error) throw new Error(String(r.error));
+    if (feature) trackFeature({ feature, ...commandOutcome(r) });
     return r || {};
-  } catch {
+  } catch (error) {
+    operation.assertCurrent();
     if (feature) trackFeature({ feature, outcome: 'failure', reason: 'unavailable' });
+    if (IS_SAFARI) {
+      // Backpressure rejects this operation, not the live target binding.
+      if (error instanceof Error && error.message === 'Too many Inspector requests') {
+        showCaptureToast('error', 'Inspector is busy. Please retry the edit.');
+        throw error;
+      }
+      inspectorError = error instanceof Error ? error.message : String(error);
+      render();
+      throw error;
+    }
+    // Preserve the existing Chrome/Firefox disconnected-content fallback.
     return {};
   }
 }
@@ -808,13 +871,22 @@ function domainLabel(url: string): string {
 /* ── Chrome Port ── */
 // Popped-out windows announce their bound tab in the port name so the
 // background binds correctly even before INIT_STATE.
-const portName = isPopout
+const portName = dockTab != null ? `sidepanel:${dockTab}:panel` : isPopout
   ? `sidepanel:${popoutTabParam}:${isPip ? 'pip' : 'popout'}`
   : 'sidepanel';
 const port = browser.runtime.connect({ name: portName });
 port.onMessage.addListener((msg) => {
+  if (msg.type === 'FOCUS_FLOATING_SURFACE' && isPopout && !isPip) {
+    try { (pipWindow && !pipWindow.closed ? pipWindow : window).focus(); } catch {}
+    return;
+  }
+  if (IS_SAFARI && msg.type === 'INSPECTOR_ERROR') {
+    inspectorError = String(msg.error || 'Connection lost. Reopen the Design Mode tab.');
+    render();
+    return;
+  }
   if (msg.type === 'REQUEST_SCREENSHOT') {
-    void takeScreenshot();
+    void runInspectorAction(takeScreenshot());
     return;
   }
   if (msg.type === 'PAGE_NAVIGATING') {
@@ -825,6 +897,11 @@ port.onMessage.addListener((msg) => {
     render(); return;
   }
   if (msg.type === 'INIT_STATE') {
+    if (IS_SAFARI) {
+      inspectorError = msg.error || '';
+      if (msg.targetChanged) resetInspectorTarget();
+      myTabId = typeof msg.tabId === 'number' ? msg.tabId : null;
+    }
     if (msg.pinnedUrl !== boundPageUrl) resetPageContext();
     boundPageUrl = msg.pinnedUrl || '';
     pageNavigating = false;
@@ -832,39 +909,39 @@ port.onMessage.addListener((msg) => {
     enabled = msg.enabled ?? false; inspecting = msg.inspecting ?? true;
     changesRequest++;
     if (typeof msg.tabId === 'number' && msg.tabId !== myTabId) { activeRouteKey = ''; resetChangesRoute(msg.pinnedUrl || ''); }
-    if (typeof msg.tabId === 'number') myTabId = msg.tabId;
+    if (typeof msg.tabId === 'number') {
+      myTabId = msg.tabId;
+      void preparePanelTarget(msg.tabId).catch(() => {});
+    }
     if (msg.pinnedUrl) resetChangesRoute(msg.pinnedUrl);
     mcpState = !msg.connected ? 'offline' : msg.agentConnected ? 'connected' : 'running';
     if (msg.pinnedUrl) { pinnedDomain = domainLabel(msg.pinnedUrl); }
     fileAccessBlocked = !!msg.fileAccessBlocked;
-    if (fileAccessBlocked || pageUnavailable) { resetPageContext(); render(); return; }
-    render(); refreshMcpStatus(); refreshDomTree(); refreshChanges(); refreshDesignTokens(); refreshPageFonts();
+    if (fileAccessBlocked || pageUnavailable || (IS_SAFARI && (myTabId == null || inspectorError))) { render(); return; }
+    render(); runInspectorAction(refreshMcpStatus()); runInspectorAction(refreshDomTree()); runInspectorAction(refreshChanges()); runInspectorAction(refreshDesignTokens()); runInspectorAction(refreshPageFonts());
   }
 });
 
-// Immediately deactivate inspect mode when the side panel is closing.
-// We only listen to *unload* events — visibilitychange would fire when the
-// user switches tabs in the same window even though the panel itself is
-// still attached, and that prematurely killed the inspector.
-// `pagehide` covers panel close + browser-quit; `beforeunload` is a backup.
-// The background's port.onDisconnect handler is the third belt in case
-// either of these gets dropped while the service worker is spinning down.
+// Safari can retain a hidden Inspector document; docked Chrome/Firefox panels must survive tab visibility changes.
 function signalPanelClosing() {
-  try { browser.runtime.sendMessage({ type: 'SP_PANEL_CLOSING' }); } catch {}
+  try { void browser.runtime.sendMessage({ type: 'SP_PANEL_CLOSING' }).catch(() => {}); } catch {}
 }
 window.addEventListener('pagehide', signalPanelClosing);
 window.addEventListener('beforeunload', signalPanelClosing);
+if (IS_SAFARI) document.addEventListener('visibilitychange', () => {
+  if (document.hidden) signalPanelClosing();
+  else void browser.runtime.sendMessage({ type: 'SP_ACTIVATE' }).catch(() => {});
+});
 
 // Runs for every PiP close path — the PiP window's own ✕, the Unpin button,
 // or a dock-back from inside the iframe — via pagehide. Unpin/✕ restore this
-// floating window; dock-back (flagged over the BroadcastChannel) closes it,
+// floating window; an acknowledged dock-back closes it,
 // since the side panel is taking over (transition guard keeps design mode
 // alive across the swap).
 function onPipClosed() {
+  if (IS_FIREFOX && !pipDockingBack) void send({ type: 'SP_FIREFOX_DOCK_CANCEL' }).catch(() => {});
   pipWindow = null;
   pipPinned = false;
-  try { pipChannel?.close(); } catch {}
-  pipChannel = null;
   if (pipDockingBack) {
     pipDockingBack = false;
     try { window.close(); } catch {}
@@ -896,7 +973,18 @@ function savePipSizeDebounced() {
 // PiP's opener). requestWindow() consumes the click's user gesture, so
 // nothing may run before it — no await, no storage reads (pipSavedSize is
 // preloaded at boot for exactly this reason).
+function beginFirefoxDock() {
+  if (myTabId == null) return;
+  if (captureToastTimer) clearTimeout(captureToastTimer);
+  captureToast = { kind: 'success', text: 'In the page window, click the Design Mode toolbar button (or use its shortcut) to finish docking. This editor stays open until the sidebar is ready.' };
+  render();
+  void send({ type: 'SP_FIREFOX_DOCK_BEGIN' }).then(result => {
+    if (!result.ok) showCaptureToast('error', result.error || 'Could not prepare the sidebar. This editor is still open.');
+  }).catch(() => showCaptureToast('error', 'Could not prepare the sidebar. This editor is still open.'));
+}
+
 function openPipWindow() {
+  if (IS_FIREFOX) void send({ type: 'SP_FIREFOX_DOCK_CANCEL' }).catch(() => {});
   const dpip = (window as any).documentPictureInPicture;
   if (!dpip || myTabId == null || pipPinned) return;
   dpip.requestWindow({
@@ -912,10 +1000,13 @@ function openPipWindow() {
     pw.document.body.appendChild(frame);
     pw.addEventListener('pagehide', onPipClosed);
     pw.addEventListener('resize', savePipSizeDebounced);
-    try {
-      pipChannel = new BroadcastChannel('dm-pip-' + myTabId);
-      pipChannel.onmessage = (e) => { if (e.data === 'dock-back') pipDockingBack = true; };
-    } catch {}
+    // Authenticate the owned iframe directly; cross-window storage channels can be partitioned.
+    pw.addEventListener('message', (event) => {
+      if (event.source === frame.contentWindow && event.data === 'dm-pip-dock-back') {
+        pipDockingBack = true;
+        pw.close();
+      }
+    });
     pipPinned = true;
     pipLaunchPending = false;
     render();
@@ -926,38 +1017,40 @@ function openPipWindow() {
         await browser.windows.update(win.id, { state: 'minimized' });
       }
     } catch {}
-  }).catch(() => {
-    pipUnsupported = true;
+  }).catch((error: unknown) => {
     pipLaunchPending = false;
-    browser.storage?.local?.set?.({ 'dm-pip-unsupported': true });
-    showCaptureToast('error', 'Pin on top isn’t available in this Chrome.');
+    showCaptureToast('error', pipFailureMessage(error));
     render();
   });
 }
 
 /* ── Async actions ── */
 let mcpStatusRequest = 0;
-async function refreshMcpStatus(reping = false) {
+async function refreshMcpStatus(reping = false, operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   const request = ++mcpStatusRequest;
   const generation = pageGeneration;
-  const res = await send({ type: 'SP_GET_MCP_STATUS', reping });
+  const res = await operation.wait(send({ type: 'SP_GET_MCP_STATUS', reping }, operation));
   if (request !== mcpStatusRequest || generation !== pageGeneration) return;
   mcpState = !res.connected ? 'offline' : res.agentConnected ? 'connected' : 'running';
-  await refreshFeedbackSession();
+  await operation.wait(refreshFeedbackSession(operation));
   render();
 }
-async function refreshFeedbackSession() {
-  const res = mcpMode === 'local' && mcpState === 'connected' ? await send({ type: 'SP_GET_FEEDBACK_SESSION' }) : null;
+async function refreshFeedbackSession(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
+  const res = mcpMode === 'local' && mcpState === 'connected' ? await operation.wait(send({ type: 'SP_GET_FEEDBACK_SESSION' }, operation)) : null;
   feedbackSession = res?.supported ? parseFeedbackSession(res.session) : null;
 }
-async function refreshState() { const res = await send({ type: 'SP_GET_STATE' }); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; if (typeof res.hoverAvailable === 'boolean') applyHoverAvailable(res.hoverAvailable); undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
-async function refreshChanges() {
+async function refreshState(operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_GET_STATE' }, operation)); enabled = res.enabled ?? enabled; inspecting = res.inspecting ?? inspecting; if (typeof res.hoverAvailable === 'boolean') applyHoverAvailable(res.hoverAvailable); undoCount = res.undoCount ?? undoCount; redoCount = res.redoCount ?? redoCount; render(); }
+async function refreshChanges(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   const generation = pageGeneration;
   if (pageUnavailable || pageNavigating) return;
   const request = ++changesRequest;
   const targetTabId = myTabId;
   const route = activeRouteKey;
-  const res = await send({ type: 'SP_GET_CHANGES' });
+  const res = await operation.wait(send({ type: 'SP_GET_CHANGES' }, operation));
   if (generation !== pageGeneration || request !== changesRequest || targetTabId !== myTabId || route !== activeRouteKey) return;
   if (res.error || !Array.isArray(res.styleChanges) || !Array.isArray(res.comments)) { showCaptureToast('error', res.error || 'Comments could not be loaded. Please retry.'); return; }
   const url = res.url || res.pageUrl || changesPageUrl;
@@ -969,7 +1062,8 @@ async function refreshChanges() {
   routeEditingBlocked = !!res.routeEditingBlocked;
   render();
 }
-async function refreshDomTree() { const res = await send({ type: 'SP_GET_DOM_TREE' }); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
+async function refreshDomTree(operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_GET_DOM_TREE' }, operation)); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
 // morphdom hasn't placed the element by the next microtask.
@@ -998,18 +1092,22 @@ function scrollFocusedTokenIntoView() {
   requestAnimationFrame(() => tryScroll(5));
 }
 
-async function refreshDesignTokens() { const res = await send({ type: 'SP_GET_DESIGN_TOKENS' }); designTokens = res.tokens || []; }
-async function refreshPageFonts() { const res = await send({ type: 'SP_GET_PAGE_FONTS' }); pageFonts = res.fonts || []; render(); }
-async function refreshMedia() {
+async function refreshDesignTokens(operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_GET_DESIGN_TOKENS' }, operation)); designTokens = res.tokens || []; }
+async function refreshPageFonts(operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_GET_PAGE_FONTS' }, operation)); pageFonts = res.fonts || []; render(); }
+async function refreshMedia(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   if (!info) { mediaInfo = null; lastMediaElementId = null; return; }
   if (info.id === lastMediaElementId) return;
   lastMediaElementId = info.id;
-  const res = await send({ type: 'SP_GET_MEDIA' });
+  const res = await operation.wait(send({ type: 'SP_GET_MEDIA' }, operation));
   mediaInfo = res?.media || null;
   render();
 }
-async function refreshCustomPresets(): Promise<void> {
-  const res = await send({ type: 'SP_GET_PRESETS' });
+async function refreshCustomPresets(operation = beginInspectorOperation()): Promise<void> {
+  operation.assertCurrent();
+  const res = await operation.wait(send({ type: 'SP_GET_PRESETS' }, operation));
   customPresets = (res && Array.isArray(res.presets)) ? res.presets : [];
   render();
 }
@@ -1018,15 +1116,16 @@ async function refreshCustomPresets(): Promise<void> {
 // (spacing, radius, font-size, shadow histograms from viewport-visible
 // elements). Cached in `designSystem` until the user reloads or
 // re-opens the Tokens panel.
-async function refreshDesignSystem(force = false) {
+async function refreshDesignSystem(force = false, operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   if (designSystemInflight) return;
   designSystemInflight = true;
   try {
-    const res = await send({ type: 'SP_GET_DESIGN_SYSTEM', force });
+    const res = await operation.wait(send({ type: 'SP_GET_DESIGN_SYSTEM', force }, operation));
     designSystem = (res && res.tokens) ? res as DesignSystemPayload : { tokens: [], scales: { spacing: [], radius: [], fontSize: [], shadow: [] }, systems: [], scopes: [] };
     render();
   } finally {
-    designSystemInflight = false;
+    if (operation.isCurrent()) designSystemInflight = false;
   }
 }
 
@@ -1041,13 +1140,13 @@ function applyTransformComponentFromFields(group: 'translate' | 'scale') {
     const y = yRaw === '' ? '0' : yRaw;
     // Append px when input is a bare number; users can also paste 'em'/'%' and we honor it.
     const fmt = (v: string) => /^-?\d+(?:\.\d+)?$/.test(v) ? v + 'px' : v;
-    applyStyle('translate', `${fmt(x)} ${fmt(y)}`);
+    runInspectorAction(applyStyle('translate', `${fmt(x)} ${fmt(y)}`));
   } else {
     const x = xRaw === '' ? '1' : xRaw;
     const y = yRaw === '' ? '1' : yRaw;
     // CSS scale accepts unitless numbers — strip any accidental units.
     const num = (v: string) => v.replace(/[^0-9.\-]/g, '') || (group === 'scale' ? '1' : '0');
-    applyStyle('scale', `${num(x)} ${num(y)}`);
+    runInspectorAction(applyStyle('scale', `${num(x)} ${num(y)}`));
   }
 }
 
@@ -1090,15 +1189,40 @@ function applyFilterComponentsFromFields(group: 'filter' | 'bfilter') {
     parts.push(`${fn}(${arg})`);
   });
   const value = parts.length === 0 ? 'none' : parts.join(' ');
-  applyStyle(group === 'filter' ? 'filter' : 'backdropFilter', value);
+  runInspectorAction(applyStyle(group === 'filter' ? 'filter' : 'backdropFilter', value));
 }
 
 // Color-picker pointer drag handlers + input wiring. Single shared
 // `pointermove`/`pointerup` listener kept on `window` while the user is
 // dragging — we set a `currentDrag` ref on pointerdown and clear it on
 // pointerup so we never accumulate listeners.
-type ColorDrag = { kind: 'sv' | 'hue'; prop: string; el: HTMLElement } | null;
+type ColorDrag = { kind: 'sv' | 'hue'; prop: string; el: HTMLElement; elementId: string; operation: InspectorOperation } | null;
 let colorDrag: ColorDrag = null;
+const pendingColors: Array<{ prop: string; value: string; elementId: string; operation: InspectorOperation }> = [];
+let colorWriteRunning = false;
+
+// Input can arrive faster than Safari can paint and acknowledge a mutation.
+// Keep one live transaction and only the newest unsent colour, including the
+// release coordinate. Never cancel an acknowledged write or bypass history.
+async function drainColorWrites() {
+  if (colorWriteRunning) return;
+  colorWriteRunning = true;
+  try {
+    while (pendingColors.length) {
+      const next = pendingColors.shift()!;
+      if (!next.operation.isCurrent() || info?.id !== next.elementId) continue;
+      try {
+        await applyStyle(next.prop, next.value, false, next.operation);
+      } catch (error) {
+        if (!(error instanceof InspectorOperationCancelled)) {
+          showCaptureToast('error', error instanceof Error ? error.message : String(error));
+        }
+      }
+    }
+  } finally {
+    colorWriteRunning = false;
+  }
+}
 
 function getDragHueFromAttr(prop: string): number {
   // The current hue is stashed on the SV gradient as `data-dm-color-h`
@@ -1121,7 +1245,12 @@ function applyColorFromHsv(prop: string, h: number, sv: number, v: number) {
   } else {
     value = rgbToHexStr(r, g, b);
   }
-  applyStyle(prop, value);
+  if (!colorDrag) return;
+  const next = { prop, value, elementId: colorDrag.elementId, operation: colorDrag.operation };
+  // A new drag must not overwrite the preceding drag's queued release.
+  if (pendingColors.at(-1)?.operation === next.operation) pendingColors[pendingColors.length - 1] = next;
+  else pendingColors.push(next);
+  void drainColorWrites();
 }
 
 function handleColorPointer(e: PointerEvent) {
@@ -1148,7 +1277,7 @@ function handleColorPointer(e: PointerEvent) {
 }
 
 window.addEventListener('pointermove', handleColorPointer);
-window.addEventListener('pointerup', () => { colorDrag = null; });
+window.addEventListener('pointerup', (e) => { handleColorPointer(e); colorDrag = null; });
 window.addEventListener('pointercancel', () => { colorDrag = null; });
 
 // Pointerdown delegation for the inline color picker — the SV (saturation
@@ -1161,20 +1290,20 @@ window.addEventListener('pointerdown', (e) => {
   const sv = target.closest<HTMLElement>('[data-dm-color-sv]');
   if (sv) {
     const prop = sv.dataset.dmColorSv!;
-    colorDrag = { kind: 'sv', prop, el: sv };
+    colorDrag = { kind: 'sv', prop, el: sv, elementId: info?.id || '', operation: beginInspectorOperation() };
     handleColorPointer(e);
     return;
   }
   const hue = target.closest<HTMLElement>('[data-dm-color-hue]');
   if (hue) {
     const prop = hue.dataset.dmColorHue!;
-    colorDrag = { kind: 'hue', prop, el: hue };
+    colorDrag = { kind: 'hue', prop, el: hue, elementId: info?.id || '', operation: beginInspectorOperation() };
     handleColorPointer(e);
     return;
   }
 });
 
-function applyTextShadowFromFields() {
+function applyTextShadowFromFields(operation = beginInspectorOperation()) {
   const get = (field: string, fallback: string) => {
     const el = root.querySelector<HTMLInputElement>('[data-dm-textshadow-field="' + field + '"]');
     return el ? el.value : fallback;
@@ -1193,10 +1322,10 @@ function applyTextShadowFromFields() {
     color = colorEl.value;
   }
   const css = `${x}px ${y}px ${blur}px ${color}`;
-  applyStyle('textShadow', css);
+  return runInspectorAction(applyStyle('textShadow', css, false, operation));
 }
 
-function applyShadowFromFields() {
+function applyShadowFromFields(operation = beginInspectorOperation()) {
   const get = (field: string, fallback: string) => {
     const el = root.querySelector<HTMLInputElement>('[data-dm-shadow-field="' + field + '"]');
     return el ? el.value : fallback;
@@ -1211,7 +1340,7 @@ function applyShadowFromFields() {
   const a = (opacity/100).toFixed(2);
   const colorStr = 'rgba(' + r + ', ' + g + ', ' + b + ', ' + a + ')';
   const insetStr = type === 'inset' ? 'inset ' : '';
-  applyStyle('boxShadow', insetStr + x + 'px ' + y + 'px ' + blur + 'px ' + spread + 'px ' + colorStr);
+  return runInspectorAction(applyStyle('boxShadow', insetStr + x + 'px ' + y + 'px ' + blur + 'px ' + spread + 'px ' + colorStr, false, operation));
 }
 // The single dispatcher for every style edit triggered from the Design tab.
 // Every input/select/button/picker in the panel ends up calling this with
@@ -1220,25 +1349,25 @@ function applyShadowFromFields() {
 // content script's APPLY_STYLE handler does the multi-select fan-out, undo
 // bookkeeping, and stylesheet write — keeping all of it on one path is what
 // makes Changes-tab grouping and reverts predictable.
-async function applyStyle(property: string, value: string, preserveEffectSlots = false) {
+async function applyStyle(property: string, value: string, preserveEffectSlots = false, operation = beginInspectorOperation()): Promise<void> {
+  operation.assertCurrent();
   if (property === 'lineHeight' && value && !CSS.supports('line-height', value)) return;
   if (property === 'borderRadius' || (cornerRadiusLinked && CORNER_RADIUS_PROPS.has(property))) {
     return applyStylesBatch(
       [...CORNER_RADIUS_PROPS].filter(prop => prop !== 'borderRadius').map(property => ({ property, value })),
-      'Corner radius',
+      'Corner radius', undefined, operation
     );
   }
   const borderWidths = ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth'];
   if (borderWidthLinked && borderWidths.includes(property)) {
-    return applyStylesBatch(borderWidths.map(property => ({ property, value })), 'Border widths');
+    return applyStylesBatch(borderWidths.map(property => ({ property, value })), 'Border widths', undefined, operation);
   }
   // Route virtual stroke props (`__stroke_color`, `__stroke_weight`,
   // `__stroke_style`) to their real CSS targets based on the active
   // stroke position (Inside / Outside / Center). This keeps the Stroke
   // section's UI mode-agnostic — fields write through one helper.
   if (property === '__stroke_color' || property === '__stroke_weight' || property === '__stroke_style') {
-    applyStrokeProperty(property, value);
-    return;
+    return applyStrokeProperty(property, value, operation);
   }
   // Motion interaction target: `__motion_<trigger>__<cssProp>` writes the
   // CSS prop into a state-variant rule (`:hover` etc.) rather than the base
@@ -1247,7 +1376,7 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
   if (motionMatch) {
     const state = MOTION_TRIGGER_STATE[motionMatch[1]];
     if (state) {
-      const res = await send({ type: 'SP_APPLY_STYLE', property: motionMatch[2], value, state });
+      const res = await operation.wait(send({ type: 'SP_APPLY_STYLE', property: motionMatch[2], value, state }, operation));
       if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
     }
     return;
@@ -1260,7 +1389,7 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
   if (property === 'margin' || property === 'padding') {
     return applyStylesBatch(
       ['Top', 'Right', 'Bottom', 'Left'].map((side) => ({ property: property + side, value })),
-      property === 'margin' ? 'Margin' : 'Padding',
+      property === 'margin' ? 'Margin' : 'Padding', undefined, operation
     );
   }
   // Aspect-ratio lock: when the W:H ratio is pinned (the link2 icon is
@@ -1315,7 +1444,7 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
           // Use SP_APPLY_STYLE directly so we don't recursively re-enter
           // this lock branch (the partner's own dispatch would try to
           // ping the original prop again, ad infinitum).
-          await send({ type: 'SP_APPLY_STYLE', property: partnerProp, value: partnerNum.toFixed(2).replace(/\.?0+$/, '') + unit });
+          await operation.wait(send({ type: 'SP_APPLY_STYLE', property: partnerProp, value: partnerNum.toFixed(2).replace(/\.?0+$/, '') + unit }, operation));
         }
       }
     }
@@ -1337,9 +1466,7 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
     if (hexEl) hexEl.value = hex;
     const colorEl = root.querySelector<HTMLInputElement>('[data-dm-' + fieldKind + '-field="color"]');
     if (colorEl) colorEl.value = '#' + hex;
-    if (fieldKind === 'shadow') applyShadowFromFields();
-    else applyTextShadowFromFields();
-    return;
+    return fieldKind === 'shadow' ? applyShadowFromFields(operation) : applyTextShadowFromFields(operation);
   }
   // Fill virtual colour props. The inline colour picker (HSV drag, hue
   // strip, hex / RGB / HSL inputs, eyedropper) calls applyStyle directly
@@ -1350,24 +1477,21 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
   // colour silently never moves. Route to the same fill-layer update
   // path the change-handler uses for text edits.
   if (property.startsWith('__fill_color__') || property.startsWith('__fill_stop_color__')) {
-    applyFillColorProperty(property, value);
-    return;
+    return applyFillColorProperty(property, value, operation);
   }
   // Per-layer stroke colour / weight. Same intercept reason as fill: the
   // inline picker's drag dispatches applyStyle directly without going
   // through the change handler. Route to the in-memory stash + chain
   // re-dispatch so each row's swatch / weight input edits its own layer.
   if (property.startsWith('__stroke_color__') || property.startsWith('__stroke_weight__')) {
-    applyStrokeLayerProperty(property, value);
-    return;
+    return applyStrokeLayerProperty(property, value, operation);
   }
   // Layout guide per-layer edits. Same intercept reason — picker drag
   // bypasses the change handler. Routes to the in-memory stash and
   // dispatches the overlay write directly to content (bypassing the
   // change-tracker so it never lands in the Changes tab).
   if (property.startsWith('__guide_')) {
-    applyLayoutGuideProperty(property, value);
-    return;
+    return applyLayoutGuideProperty(property, value, operation);
   }
   // Shadow-row colour picker drag. The shadow editor's swatch dispatches
   // `applyStyle('__effd_box_0_color', '#…')` directly during HSV drag
@@ -1387,7 +1511,7 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
         const parsed = parseShadowEntry(cur);
         if (parsed) {
           entries[idx] = formatShadowEntry({ ...parsed, color: value });
-          applyStyle('boxShadow', entries.join(', '));
+          await operation.wait(applyStyle('boxShadow', entries.join(', '), false, operation));
         }
       }
     } else if (chain === 'fx') {
@@ -1398,13 +1522,13 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
         const parsed = parseShadowEntry(inner);
         if (parsed) {
           list[idx] = formatFilterDropShadow({ ...parsed, color: value });
-          applyStyle('filter', list.join(' '));
+          await operation.wait(applyStyle('filter', list.join(' '), false, operation));
         }
       }
     } else if (chain === 'text') {
       const parsed = parseShadowEntry(cs.textShadow || '');
       if (parsed) {
-        applyStyle('textShadow', formatTextShadow({ ...parsed, color: value }));
+        await operation.wait(applyStyle('textShadow', formatTextShadow({ ...parsed, color: value }), false, operation));
       }
     }
     return;
@@ -1441,14 +1565,13 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
     }
     list[idx] = entry;
     setOverlayEntries(id, list);
-    dispatchOverlayEntries(id, list);
-    return;
+    return applyStyle('__effect_overlay', serializeOverlayEntries(list), false, operation);
   }
   // Keep single-property edits on the selection-aware path. Content owns
   // each target's hidden metadata and records CSS + metadata as one gesture.
-  const res = await send(preserveEffectSlots
+  const res = await operation.wait(send(preserveEffectSlots
     ? { type: 'SP_APPLY_STYLES', changes: withHiddenEffects([{ property, value }], true) }
-    : { type: 'SP_APPLY_STYLE', property, value });
+    : { type: 'SP_APPLY_STYLE', property, value }, operation));
   if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; render();
 }
 
@@ -1459,10 +1582,11 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
 // its own send + content-side apply + response, and the panel
 // re-rendered after each — visible flicker plus the "tab moves through
 // every state" feeling. One message, one re-paint, one render.
-async function applyStylesBatch(changes: Array<{ property: string; value: string }>, groupLabel?: string, removedEffect?: { chain: CssEffectChain; index: number }) {
+async function applyStylesBatch(changes: Array<{ property: string; value: string }>, groupLabel?: string, removedEffect?: { chain: CssEffectChain; index: number }, operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   if (changes.length === 0) return;
   changes = withHiddenEffects(changes, false, removedEffect);
-  const res = await send({ type: 'SP_APPLY_STYLES', changes, groupLabel });
+  const res = await operation.wait(send({ type: 'SP_APPLY_STYLES', changes, groupLabel }, operation));
   if (res.info) info = res.info;
   if (res.styleChanges) styleChanges = res.styleChanges;
   if (res.textChanges) textChanges = res.textChanges;
@@ -1476,7 +1600,7 @@ async function applyStylesBatch(changes: Array<{ property: string; value: string
 // row). Solid fills preserve the existing alpha so a swatch swap from
 // the picker doesn't silently zero the opacity field next to it;
 // gradient stops update in place and re-build the gradient string.
-function applyFillColorProperty(prop: string, value: string) {
+async function applyFillColorProperty(prop: string, value: string, operation = beginInspectorOperation()) {
   const id = info?.id || '';
   if (!id) return;
   const layers = getFillLayers(id, info?.computedStyles || {});
@@ -1487,7 +1611,7 @@ function applyFillColorProperty(prop: string, value: string) {
       const { opacity } = splitColorOpacity(layers[i].raw);
       layers[i].raw = combineColorOpacity(value, opacity);
       fillLayersByElement.set(id, layers);
-      dispatchFillLayers(layers, applyStyle);
+      return applyStylesBatch(Object.entries(serializeFillLayers(layers)).map(([property, value]) => ({ property, value })), 'Fill colour', undefined, operation);
     }
     return;
   }
@@ -1502,7 +1626,7 @@ function applyFillColorProperty(prop: string, value: string) {
         parsed.stops[sIdx].color = value;
         layer.raw = buildGradient(layer.kind, parsed.prefix, parsed.stops);
         fillLayersByElement.set(id, layers);
-        dispatchFillLayers(layers, applyStyle);
+        return applyStylesBatch(Object.entries(serializeFillLayers(layers)).map(([property, value]) => ({ property, value })), 'Fill colour', undefined, operation);
       }
     }
     return;
@@ -1514,7 +1638,7 @@ function applyFillColorProperty(prop: string, value: string) {
 // pair scoped to its layer index; this routes through the in-memory
 // stash so the picker drag, the colour-code input, and the weight
 // stepper all converge on the same dispatch.
-function applyStrokeLayerProperty(prop: string, value: string) {
+function applyStrokeLayerProperty(prop: string, value: string, operation = beginInspectorOperation()) {
   const id = info?.id || '';
   if (!id) return;
   const s = info?.computedStyles || {};
@@ -1537,7 +1661,7 @@ function applyStrokeLayerProperty(prop: string, value: string) {
   const styleNow = intent || (s.borderTopStyle && s.borderTopStyle !== 'none' ? s.borderTopStyle : 'solid');
   const batch: Array<{ property: string; value: string }> = [];
   dispatchStrokeLayers(layers, pos, s, (p, v) => batch.push({ property: p, value: v }), styleNow);
-  applyStylesBatch(batch, field === 'color' ? 'Stroke colour' : 'Stroke weight');
+  return runInspectorAction(applyStylesBatch(batch, field === 'color' ? 'Stroke colour' : 'Stroke weight', undefined, operation));
 }
 
 // Per-layer Layout Guide edit. Routes virtual `__guide_<field>__N`
@@ -1545,7 +1669,7 @@ function applyStrokeLayerProperty(prop: string, value: string) {
 // to content via dispatchLayoutGuides for the overlay paint. Never
 // hits the change-tracker — layout guides are a session-only design
 // aid, not a CSS edit.
-function applyLayoutGuideProperty(prop: string, value: string) {
+function applyLayoutGuideProperty(prop: string, value: string, operation = beginInspectorOperation()) {
   const id = info?.id || '';
   if (!id) return;
   const m = prop.match(/^__guide_(kind|count|color|opacity|align|size|margin|gutter)__(\d+)$/);
@@ -1588,8 +1712,9 @@ function applyLayoutGuideProperty(prop: string, value: string) {
   }
   layers[idx] = layer;
   setLayoutGuides(id, layers);
-  dispatchLayoutGuides(id, layers);
+  const pending = dispatchLayoutGuides(id, layers, operation);
   render();
+  return pending;
 }
 
 // Map the stroke section's virtual props to actual CSS targets. With the
@@ -1597,7 +1722,7 @@ function applyLayoutGuideProperty(prop: string, value: string) {
 // `dispatchStrokeLayers` (which picks the right CSS path: border-* for
 // Outside-single, box-shadow chain for Inside or Outside-multi, outline-*
 // for Center). Style stays uniform across the chain (CSS limitation).
-function applyStrokeProperty(prop: string, value: string) {
+function applyStrokeProperty(prop: string, value: string, operation = beginInspectorOperation()) {
   const s = info?.computedStyles || {};
   const id = info?.id || '';
   const pos = getStrokeActiveTab(id, s);
@@ -1636,8 +1761,7 @@ function applyStrokeProperty(prop: string, value: string) {
     const batch: Array<{ property: string; value: string }> = [];
     const collect = (p: string, v: string) => batch.push({ property: p, value: v });
     dispatchStrokeLayers(layers, pos, s, collect, styleNow);
-    applyStylesBatch(batch, prop === '__stroke_color' ? 'Stroke colour' : 'Stroke weight');
-    return;
+    return runInspectorAction(applyStylesBatch(batch, prop === '__stroke_color' ? 'Stroke colour' : 'Stroke weight', undefined, operation));
   }
 
   if (prop === '__stroke_style') {
@@ -1646,7 +1770,8 @@ function applyStrokeProperty(prop: string, value: string) {
     if (value === 'auto' && pos !== 'center') {
       applyStrokePosition('center');
       // Defer the auto write so it lands after the mode switch.
-      setTimeout(() => applyStyle('outlineStyle', 'auto'), 0);
+      const operation = beginInspectorOperation();
+      setTimeout(() => runInspectorAction(applyStyle('outlineStyle', 'auto', false, operation)), 0);
       return;
     }
     // Track user's intent regardless of mode so the dashed panel toggles
@@ -1656,7 +1781,7 @@ function applyStrokeProperty(prop: string, value: string) {
     // not pushed to CSS.
     if (id) strokeStyleByElement.set(id, value as 'solid' | 'dashed');
     if (pos === 'center') {
-      applyStyle('outlineStyle', value);
+      runInspectorAction(applyStyle('outlineStyle', value));
     } else {
       render();
     }
@@ -1679,8 +1804,8 @@ function applyPositionAlign(
   // Auto-margin recipe pushing a single item to start / center / end along one
   // axis. `a`/`b` are the two margin sides for that axis.
   const marginAlign = (a: string, b: string, pos: 'start' | 'center' | 'end') => {
-    applyStyle(a, pos === 'start' ? '0px' : 'auto');
-    applyStyle(b, pos === 'end' ? '0px' : 'auto');
+    runInspectorAction(applyStyle(a, pos === 'start' ? '0px' : 'auto'));
+    runInspectorAction(applyStyle(b, pos === 'end' ? '0px' : 'auto'));
   };
   const horiz = which.startsWith('h-');
   const pos: 'start' | 'center' | 'end' =
@@ -1688,7 +1813,7 @@ function applyPositionAlign(
       : which.endsWith('-left') || which.endsWith('-top') ? 'start' : 'end';
 
   if (ctx.isGrid) {
-    applyStyle(horiz ? 'justifySelf' : 'alignSelf', pos);
+    runInspectorAction(applyStyle(horiz ? 'justifySelf' : 'alignSelf', pos));
     return;
   }
   if (ctx.isFlex) {
@@ -1699,17 +1824,17 @@ function applyPositionAlign(
       if (horiz) marginAlign('marginLeft', 'marginRight', pos);
       else marginAlign('marginTop', 'marginBottom', pos);
     } else {
-      applyStyle('alignSelf', pos === 'start' ? 'flex-start' : pos === 'end' ? 'flex-end' : 'center');
+      runInspectorAction(applyStyle('alignSelf', pos === 'start' ? 'flex-start' : pos === 'end' ? 'flex-end' : 'center'));
     }
     return;
   }
   if (ctx.isAbs) {
-    if (which === 'h-left') { applyStyle('left', '0px'); applyStyle('right', 'auto'); applyStyle('translate', '0px 0px'); }
-    else if (which === 'h-center') { applyStyle('left', '50%'); applyStyle('right', 'auto'); applyStyle('translate', '-50% 0px'); }
-    else if (which === 'h-right') { applyStyle('left', 'auto'); applyStyle('right', '0px'); applyStyle('translate', '0px 0px'); }
-    else if (which === 'v-top') { applyStyle('top', '0px'); applyStyle('bottom', 'auto'); }
-    else if (which === 'v-middle') { applyStyle('top', '50%'); applyStyle('bottom', 'auto'); applyStyle('translate', '-50% -50%'); }
-    else if (which === 'v-bottom') { applyStyle('top', 'auto'); applyStyle('bottom', '0px'); }
+    if (which === 'h-left') { runInspectorAction(applyStyle('left', '0px')); runInspectorAction(applyStyle('right', 'auto')); runInspectorAction(applyStyle('translate', '0px 0px')); }
+    else if (which === 'h-center') { runInspectorAction(applyStyle('left', '50%')); runInspectorAction(applyStyle('right', 'auto')); runInspectorAction(applyStyle('translate', '-50% 0px')); }
+    else if (which === 'h-right') { runInspectorAction(applyStyle('left', 'auto')); runInspectorAction(applyStyle('right', '0px')); runInspectorAction(applyStyle('translate', '0px 0px')); }
+    else if (which === 'v-top') { runInspectorAction(applyStyle('top', '0px')); runInspectorAction(applyStyle('bottom', 'auto')); }
+    else if (which === 'v-middle') { runInspectorAction(applyStyle('top', '50%')); runInspectorAction(applyStyle('bottom', 'auto')); runInspectorAction(applyStyle('translate', '-50% -50%')); }
+    else if (which === 'v-bottom') { runInspectorAction(applyStyle('top', 'auto')); runInspectorAction(applyStyle('bottom', '0px')); }
     return;
   }
   // Plain block parent — horizontal centering via auto-margins (vertical has
@@ -1736,12 +1861,16 @@ function applyStrokePosition(pos: StrokePos) {
   activeStrokeIdx = 0;
   render();
 }
-async function applyText(text: string) { const res = await send({ type: 'SP_SET_TEXT', text }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
-async function applyHtml(elementId: string, html: string) { const res = await send({ type: 'SP_SET_HTML', elementId, html }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
-async function applyAttribute(elementId: string, attributeName: string, value: string) { const res = await send({ type: 'SP_SET_ATTRIBUTE', elementId, attributeName, value }); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
-async function domAction(action: string) {
+async function applyText(text: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_SET_TEXT', text }, operation)); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
+async function applyHtml(elementId: string, html: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_SET_HTML', elementId, html }, operation)); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
+async function applyAttribute(elementId: string, attributeName: string, value: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_SET_ATTRIBUTE', elementId, attributeName, value }, operation)); if (res.info) info = res.info; if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.undoCount != null) undoCount = res.undoCount; if (res.redoCount != null) redoCount = res.redoCount; render(); }
+async function domAction(action: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   const elementIds = action === 'delete' && multiSelectIds.length > 0 ? [...multiSelectIds] : undefined;
-  const res = await send({ type: 'SP_DOM_ACTION', action, elementIds });
+  const res = await operation.wait(send({ type: 'SP_DOM_ACTION', action, elementIds }, operation));
   if (res.info) info = res.info;
   else if (action === 'delete' || action === 'cut') info = null;
   if (action === 'delete' && elementIds) {
@@ -1755,11 +1884,12 @@ async function domAction(action: string) {
   undoCount = res.undoCount ?? undoCount;
   redoCount = res.redoCount ?? redoCount;
   render();
-  await refreshDomTree();
-  await refreshChanges();
+  await operation.wait(refreshDomTree(operation));
+  await operation.wait(refreshChanges(operation));
 }
-async function selectElement(elementId: string) {
-  const res = await send({ type: 'SP_SELECT_ELEMENT', elementId });
+async function selectElement(elementId: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent();
+  const res = await operation.wait(send({ type: 'SP_SELECT_ELEMENT', elementId }, operation));
   if (res.payload || res.info) info = res.payload || res.info;
   hydrateLayoutGuidesFromPayload(info);
   hoverInfo = null; render();
@@ -1772,10 +1902,11 @@ async function selectElement(elementId: string) {
 // Push the panel's intended multi-select set to the content script so the
 // page-side overlays and the APPLY_STYLE fan-out stay in sync. An empty
 // array deactivates multi-select mode.
-async function pushMultiSelectIds(ids: string[]) {
+async function pushMultiSelectIds(ids: string[], operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   multiSelectIds = ids;
   multiSelectActive = ids.length > 0;
-  await send({ type: 'SP_SET_MULTI_SELECT_IDS', ids });
+  await operation.wait(send({ type: 'SP_SET_MULTI_SELECT_IDS', ids }, operation));
 }
 
 // Modifier-driven layer click dispatcher. Plain click is single-select,
@@ -1784,7 +1915,8 @@ async function pushMultiSelectIds(ids: string[]) {
 // element (its properties show in the Design tab) regardless of the
 // modifier, so users can fan an edit out while keeping the row they
 // just clicked as the "primary" target.
-async function handleLayerClick(id: string, e: MouseEvent) {
+async function handleLayerClick(id: string, e: MouseEvent, operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   const isShift = !!e.shiftKey;
   const isToggle = !isShift && (layerMultiSelectMode || e.metaKey || e.ctrlKey);
   if (isShift && multiSelectAnchor) {
@@ -1795,8 +1927,8 @@ async function handleLayerClick(id: string, e: MouseEvent) {
       const [start, end] = ai <= bi ? [ai, bi] : [bi, ai];
       const rangeIds = visible.slice(start, end + 1).map(n => n.id);
       const merged = Array.from(new Set([...multiSelectIds, ...rangeIds]));
-      await pushMultiSelectIds(merged);
-      await selectElement(id);
+      await operation.wait(pushMultiSelectIds(merged, operation));
+      await operation.wait(selectElement(id, operation));
       return;
     }
     // No anchor / one of the endpoints missing — fall through to a
@@ -1815,20 +1947,25 @@ async function handleLayerClick(id: string, e: MouseEvent) {
       }
       set.add(id);
     }
-    await pushMultiSelectIds(Array.from(set));
-    await selectElement(id);
+    await operation.wait(pushMultiSelectIds(Array.from(set), operation));
+    await operation.wait(selectElement(id, operation));
     return;
   }
   // Plain click: drop any existing multi-select, set anchor, focus.
   multiSelectAnchor = id;
-  if (multiSelectIds.length > 0) await pushMultiSelectIds([]);
-  await selectElement(id);
+  if (multiSelectIds.length > 0) await operation.wait(pushMultiSelectIds([], operation));
+  await operation.wait(selectElement(id, operation));
 }
-async function selectParent() { const res = await send({ type: 'SP_SELECT_PARENT' }); if (res.payload || res.info) info = res.payload || res.info; hydrateLayoutGuidesFromPayload(info); render(); }
-async function selectChild() { const res = await send({ type: 'SP_SELECT_CHILD' }); if (res.payload || res.info) info = res.payload || res.info; hydrateLayoutGuidesFromPayload(info); render(); }
-async function undoAction() { const res = await send({ type: 'SP_UNDO' }); if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; if (res.info) info = res.info; undoCount = res.undoCount ?? Math.max(0, undoCount - 1); redoCount = res.redoCount ?? redoCount + 1; render(); await refreshDomTree(); await refreshChanges(); }
-async function redoAction() { const res = await send({ type: 'SP_REDO' }); if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; if (res.info) info = res.info; undoCount = res.undoCount ?? undoCount + 1; redoCount = res.redoCount ?? Math.max(0, redoCount - 1); render(); await refreshDomTree(); await refreshChanges(); }
-async function moveLayer(dir: 'up' | 'down') { const res = await send({ type: 'SP_DOM_ACTION', action: 'move-' + dir }); if (res.domChanges) domChanges = res.domChanges; await refreshDomTree(); }
+async function selectParent(operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_SELECT_PARENT' }, operation)); if (res.payload || res.info) info = res.payload || res.info; hydrateLayoutGuidesFromPayload(info); render(); }
+async function selectChild(operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_SELECT_CHILD' }, operation)); if (res.payload || res.info) info = res.payload || res.info; hydrateLayoutGuidesFromPayload(info); render(); }
+async function undoAction(operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_UNDO' }, operation)); if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; if (res.info) info = res.info; undoCount = res.undoCount ?? Math.max(0, undoCount - 1); redoCount = res.redoCount ?? redoCount + 1; render(); await operation.wait(refreshDomTree(operation)); await operation.wait(refreshChanges(operation)); }
+async function redoAction(operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_REDO' }, operation)); if (res.styleChanges) styleChanges = res.styleChanges; if (res.textChanges) textChanges = res.textChanges; if (res.domChanges) domChanges = res.domChanges; if (res.comments) comments = res.comments; if (res.info) info = res.info; undoCount = res.undoCount ?? undoCount + 1; redoCount = res.redoCount ?? Math.max(0, redoCount - 1); render(); await operation.wait(refreshDomTree(operation)); await operation.wait(refreshChanges(operation)); }
+async function moveLayer(dir: 'up' | 'down', operation = beginInspectorOperation()) {
+  operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_DOM_ACTION', action: 'move-' + dir }, operation)); if (res.domChanges) domChanges = res.domChanges; await operation.wait(refreshDomTree(operation)); }
 // Briefly swap an action button's contents to a check + confirmation label,
 // then re-render to restore it — the same transient feedback the screenshot
 // button uses. Restores automatically because render() rebuilds from state.
@@ -1837,7 +1974,8 @@ function flashActionButton(action: string, html: string, ms = 1200) {
   if (btn) { btn.innerHTML = html; setTimeout(() => render(), ms); }
 }
 
-async function downloadMedia() {
+async function downloadMedia(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   if (!mediaInfo) return;
   const m = mediaInfo;
   let ok = false;
@@ -1849,23 +1987,25 @@ async function downloadMedia() {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       ok = true;
     } else {
-      const resp = await fetch(m.src);
-      const blob = await resp.blob();
+      const resp = await operation.wait(fetch(m.src));
+      const blob = await operation.wait(resp.blob());
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = m.filename || (m.kind + '-' + Date.now()); a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       ok = true;
     }
   } catch (err) {
+    operation.assertCurrent();
     console.error('[DM] Media download failed:', err);
     const a = document.createElement('a'); a.href = m.src; a.download = m.filename || ''; a.target = '_blank'; a.click();
   }
   if (ok) flashActionButton('download-media', icon('check', 11) + ' Downloaded');
 }
-async function copySvgMarkup() {
+async function copySvgMarkup(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   if (!mediaInfo?.markup) return;
   let ok = false;
-  try { await navigator.clipboard.writeText(mediaInfo.markup); ok = true; } catch {}
+  try { await operation.wait(navigator.clipboard.writeText(mediaInfo.markup)); ok = true; } catch { operation.assertCurrent(); }
   if (ok) flashActionButton('copy-svg-markup', icon('check', 9) + ' Copied');
 }
 function showCaptureToast(kind: 'success' | 'error', text: string) {
@@ -1875,27 +2015,33 @@ function showCaptureToast(kind: 'success' | 'error', text: string) {
   render();
 }
 
-async function takeScreenshot() {
+async function takeScreenshot(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   // The panel auto-selects <body> as the "Page" context, which isn't a real
   // selection — capture the current viewport (no scroll) rather than crop+scroll
   // to body. Only a real element selection takes the element-crop path.
   const isPage = !info || classifyTag((info.tagName || '').toLowerCase()) === 'page';
   const target = isPage ? 'viewport' : 'element';
-  const res = await send({ type: 'SP_SCREENSHOT', target });
-  if (!res.dataUrl) { showCaptureToast('error', 'Capture failed'); return; }
-  const filename = target + '-' + Date.now() + '.png';
   const wantClipboard = captureMode === 'clipboard' || captureMode === 'both';
   const wantDownload = captureMode === 'download' || captureMode === 'both';
+  const capture = send({ type: 'SP_SCREENSHOT', target }, operation);
+  const safariClipboard = IS_SAFARI && wantClipboard ? writeScreenshotClipboard(capture) : null;
+  const res = await operation.wait(capture);
+  if (!res.dataUrl) { showCaptureToast('error', 'Capture failed'); return; }
+  const filename = target + '-' + Date.now() + '.png';
   let clipboardOk = !wantClipboard;
   let downloadOk = !wantDownload;
-  if (wantClipboard) {
+  if (safariClipboard) {
+    clipboardOk = await operation.wait(safariClipboard);
+  } else if (wantClipboard) {
     try {
-      const resp = await fetch(res.dataUrl);
-      const blob = await resp.blob();
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      const resp = await operation.wait(fetch(res.dataUrl));
+      const blob = await operation.wait(resp.blob());
+      await operation.wait(navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]));
       clipboardOk = true;
       trackFeature({ feature: 'screenshot', outcome: 'clipboard_completed' });
     } catch (err) {
+    operation.assertCurrent();
       console.warn('[DM] Clipboard write failed', err);
       clipboardOk = false;
       trackFeature({ feature: 'screenshot', outcome: 'clipboard_failed' });
@@ -1914,27 +2060,28 @@ async function takeScreenshot() {
   if (clipboardOk && downloadOk && wantClipboard && wantDownload) showCaptureToast('success', 'Copied & download requested: ' + filename);
   else if (clipboardOk && wantClipboard) showCaptureToast('success', 'Copied to clipboard');
   else if (downloadOk && wantDownload) showCaptureToast('success', 'Download requested: ' + filename);
-  else showCaptureToast('error', 'Capture failed');
+  else showCaptureToast('error', IS_SAFARI ? 'Clipboard unavailable. Choose Download in Screenshot Capture settings and retry.' : 'Capture failed');
 }
 let commentSubmitting = false;
-async function submitComment() {
+async function submitComment(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   const text = commentText.trim(); if (!text || commentSubmitting) return;
   commentSubmitting = true;
   try {
-    const response = await send(editingCommentId
+    const response = await operation.wait(send(editingCommentId
       ? { type: 'SP_UPDATE_COMMENT', commentId: editingCommentId, text }
-      : { type: regionCommentPending ? 'SP_ADD_REGION_COMMENT' : 'SP_ADD_COMMENT', text });
+      : { type: regionCommentPending ? 'SP_ADD_REGION_COMMENT' : 'SP_ADD_COMMENT', text }, operation));
     if (!response.comment || response.error) {
       showCaptureToast('error', response.error || 'Comment was not saved. Please retry.');
       return;
     }
     editingCommentId = null; regionCommentPending = false;
-    commentMode = false; commentText = ''; await refreshChanges();
-  } finally { commentSubmitting = false; }
+    commentMode = false; commentText = ''; await operation.wait(refreshChanges(operation));
+  } finally { if (operation.isCurrent()) commentSubmitting = false; }
 }
 function cancelComment() {
   // If we're composing for a freshly-drawn region, drop it on the content side.
-  if (regionCommentPending) { void send({ type: 'SP_CANCEL_REGION_COMMENT' }); }
+  if (regionCommentPending) { void runInspectorAction(send({ type: 'SP_CANCEL_REGION_COMMENT' })); }
   commentMode = false; commentText = ''; editingCommentId = null; viewingCommentId = null;
   commentDirty = false; regionCommentPending = false; awaitingRegionDraw = false; render();
 }
@@ -1942,14 +2089,15 @@ function startComment() { if (!info) return; commentMode = true; commentText = '
 // Region comment: ask the content script to enter draw mode. The composer
 // opens later, when the REGION_DRAWN message arrives.
 function startRegionComment() {
-  if (awaitingRegionDraw) { awaitingRegionDraw = false; void send({ type: 'SP_CANCEL_REGION_COMMENT' }); render(); return; }
+  if (awaitingRegionDraw) { awaitingRegionDraw = false; void runInspectorAction(send({ type: 'SP_CANCEL_REGION_COMMENT' })); render(); return; }
   commentMode = false; regionCommentPending = false; awaitingRegionDraw = true;
-  void send({ type: 'SP_START_REGION_COMMENT' });
+  void runInspectorAction(send({ type: 'SP_START_REGION_COMMENT' }));
   render();
 }
 function editComment(comment: CommentEntry) { commentMode = true; commentText = comment.text; editingCommentId = comment.id; viewingCommentId = null; commentDirty = false; render(); }
-async function deleteCommentEntry(commentId: string) {
-  const response = await send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + commentId });
+async function deleteCommentEntry(commentId: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent();
+  const response = await operation.wait(send({ type: 'SP_REMOVE_CHANGE', changeId: 'comment-' + commentId }, operation));
   if (!response.ok || response.error) {
     showCaptureToast('error', response.error || 'Comment was not deleted. Please retry.');
     return;
@@ -1957,16 +2105,18 @@ async function deleteCommentEntry(commentId: string) {
   comments = comments.filter(c => c.id !== commentId);
   viewingCommentId = viewingCommentId === commentId ? null : viewingCommentId;
   render();
-  await refreshChanges();
+  await operation.wait(refreshChanges(operation));
 }
-async function removeChange(changeId: string) { styleChanges = styleChanges.filter(c => (c.id || 'style-' + styleChanges.indexOf(c)) !== changeId); textChanges = textChanges.filter(c => c.id !== changeId); domChanges = domChanges.filter(c => (c.id || 'dom-' + c.action) !== changeId); batchAppliedChanges.delete(changeId); render(); await send({ type: 'SP_REMOVE_CHANGE', changeId }); await refreshChanges(); await refreshDomTree(); await refreshState(); }
-async function clearAllChanges() {
+async function removeChange(changeId: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent(); styleChanges = styleChanges.filter(c => (c.id || 'style-' + styleChanges.indexOf(c)) !== changeId); textChanges = textChanges.filter(c => c.id !== changeId); domChanges = domChanges.filter(c => (c.id || 'dom-' + c.action) !== changeId); batchAppliedChanges.delete(changeId); render(); await operation.wait(send({ type: 'SP_REMOVE_CHANGE', changeId }, operation)); await operation.wait(refreshChanges(operation)); await operation.wait(refreshDomTree(operation)); await operation.wait(refreshState(operation)); }
+async function clearAllChanges(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   const target = myTabId, route = activeRouteKey;
-  const res = await send({ type: 'SP_CLEAR_SITE_CHANGES' });
+  const res = await operation.wait(send({ type: 'SP_CLEAR_SITE_CHANGES' }, operation));
   if (target !== myTabId || route !== activeRouteKey) return;
   if (!res.ok && !res.success) { showCaptureToast('error', res.error || 'Could not clear site changes.'); return; }
   editedTokens.clear(); batchAppliedChanges.clear();
-  await refreshChanges(); await refreshDomTree(); await refreshState();
+  await operation.wait(refreshChanges(operation)); await operation.wait(refreshDomTree(operation)); await operation.wait(refreshState(operation));
 }
 
 // Tiny markdown-ish renderer for comment bodies. Supports inline code,
@@ -1990,7 +2140,11 @@ function renderCommentMarkdown(s: string): string {
   return h;
 }
 
-async function revertGroup(groupKey: string) {
+// Revert every change in a single group (one element). The group key is
+// either the element id or, when the tracker couldn't capture one, the
+// selector — match against the same fallback the renderer uses.
+async function revertGroup(groupKey: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   const inGroup = (c: { elementId?: string; selector?: string }) => changeGroupKey(c) === groupKey;
   const ids = collectGroupRevertIds(groupKey, {
     styles: styleChanges,
@@ -1999,7 +2153,7 @@ async function revertGroup(groupKey: string) {
     comments,
   }, changesGrouping);
   for (const id of ids) {
-    await send({ type: 'SP_REMOVE_CHANGE', changeId: id });
+    await operation.wait(send({ type: 'SP_REMOVE_CHANGE', changeId: id }, operation));
   }
   styleChanges = styleChanges.filter(c => styleChangeGroupKey(c, changesGrouping) !== groupKey);
   textChanges  = textChanges.filter(c => !inGroup(c));
@@ -2008,24 +2162,37 @@ async function revertGroup(groupKey: string) {
   // Token edits live under the synthetic ':root' group — reset each via the
   // root-var path so the page repaints and the prompt drops them too.
   if (groupKey === ':root') {
-    for (const t of tokenChanges) { editedTokens.delete(tokenEditKey(t.scopeSelector || ':root', t.cssVar)); await send({ type: 'SP_RESET_ROOT_VAR', cssVar: t.cssVar, scopeSelector: t.scopeSelector || ':root' }); }
+    for (const t of tokenChanges) { editedTokens.delete(tokenEditKey(t.scopeSelector || ':root', t.cssVar)); await operation.wait(send({ type: 'SP_RESET_ROOT_VAR', cssVar: t.cssVar, scopeSelector: t.scopeSelector || ':root' }, operation)); }
     tokenChanges = [];
     designSystem = null;
   }
   render();
-  await refreshChanges();
-  await refreshState();
+  await operation.wait(refreshChanges(operation));
+  await operation.wait(refreshState(operation));
 }
 
-async function copyPrompt() { const res = await send({ type: 'SP_EXPORT', format: 'markdown', scope: 'site' }); const output = res.output || res.markdown || ''; if (output) { await navigator.clipboard.writeText(output); const btn = root.querySelector('#dm-copy-prompt-btn'); if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); } } }
-async function sendToAgent() {
+async function copyPrompt(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
+  const output = operation.wait(send({ type: 'SP_EXPORT', format: 'markdown', scope: 'site' }, operation))
+    .then(res => res.output || res.markdown || '');
+  const safariCopy = IS_SAFARI ? writeInspectorTextClipboard(output) : null;
+  const text = await operation.wait(output);
+  if (!text) return;
+  if (safariCopy) {
+    if (!await operation.wait(safariCopy)) { showCaptureToast('error', 'Could not copy prompt'); return; }
+  } else await operation.wait(navigator.clipboard.writeText(text));
+  const btn = root.querySelector('#dm-copy-prompt-btn');
+  if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); }
+}
+async function sendToAgent(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   if (sendingFeedback || previewingOriginal) return;
   sendingFeedback = true;
   try {
-  await refreshMcpStatus();
+  await operation.wait(refreshMcpStatus(undefined, operation));
   if (mcpState !== 'connected') { trackFeature({ feature: 'send_to_agent', outcome: 'failure', reason: mcpState === 'offline' ? 'offline' : 'waiting_for_agent', mode: mcpMode }); sendAgentHelpOpen = true; render(); return; }
   if (feedbackSession?.state === 'implementing') return;
-  const res = await send({ type: 'SP_SEND_TO_AGENT', scope: 'site' });
+  const res = await operation.wait(send({ type: 'SP_SEND_TO_AGENT', scope: 'site' }, operation));
   if (res?.ok) {
     feedbackSession = res.supported ? parseFeedbackSession(res.session) : null;
     feedbackSentUntil = Date.now() + 1500;
@@ -2034,10 +2201,11 @@ async function sendToAgent() {
   } else {
     showCaptureToast('error', 'Could not reach the agent — check the MCP status and retry.');
   }
-  } finally { sendingFeedback = false; render(); }
+  } finally { if (operation.isCurrent()) { sendingFeedback = false; render(); } }
 }
-async function stopLiveFeedback() {
-  const res = await send({ type: 'SP_STOP_FEEDBACK_SESSION' });
+async function stopLiveFeedback(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
+  const res = await operation.wait(send({ type: 'SP_STOP_FEEDBACK_SESSION' }, operation));
   if (res?.ok && res.supported) {
     feedbackSession = parseFeedbackSession(res.session);
     showCaptureToast('success', 'Feedback loop stopped. Already-running agent commands may still finish.');
@@ -2047,14 +2215,15 @@ async function stopLiveFeedback() {
 function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); browser.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
 
 /* ── Select matching layers ── */
-async function toggleMatchingLayers(next: boolean) {
+async function toggleMatchingLayers(next: boolean, operation = beginInspectorOperation()) {
+  operation.assertCurrent();
   matchingLayersChecked = next;
-  if (!next) { await pushMultiSelectIds([]); render(); return; }
+  if (!next) { await operation.wait(pushMultiSelectIds([], operation)); render(); return; }
   if (!info) { matchingLayersChecked = false; return; }
-  const res = await send({ type: 'SP_FIND_MATCHING', elementId: info.id });
+  const res = await operation.wait(send({ type: 'SP_FIND_MATCHING', elementId: info.id }, operation));
   const ids: string[] = Array.isArray(res?.ids) ? res.ids : [];
   if (ids.length >= 2) {
-    await pushMultiSelectIds(ids);
+    await operation.wait(pushMultiSelectIds(ids, operation));
     showCaptureToast('success', 'Editing ' + ids.length + ' matching layers — changes apply to all.');
   } else {
     matchingLayersChecked = false;
@@ -2075,16 +2244,20 @@ function scrollToComment(comment: CommentEntry) {
     editingCommentId = null;
     commentMode = false;
   }
-  send({ type: 'SP_SELECT_ELEMENT', elementId: comment.elementId });
+  runInspectorAction(send({ type: 'SP_SELECT_ELEMENT', elementId: comment.elementId }));
   render();
 }
-async function toggleLayerVisibility(layerId: string) { await send({ type: 'SP_TOGGLE_VISIBILITY', elementId: layerId }); await refreshDomTree(); }
-async function deleteLayer(layerId: string) { await send({ type: 'SP_DOM_ACTION', action: 'delete', elementId: layerId }); if (info?.id === layerId) info = null; await refreshDomTree(); await refreshChanges(); }
-async function duplicateLayer(layerId: string) { await send({ type: 'SP_DOM_ACTION', action: 'duplicate', elementId: layerId }); await refreshDomTree(); await refreshChanges(); }
-async function reorderLayer(sourceId: string, targetId: string, position: 'before' | 'after' | 'inside' = 'before') {
-  await send({ type: 'SP_REORDER_LAYER', sourceId, targetId, position });
-  await refreshDomTree();
-  await refreshChanges();
+async function toggleLayerVisibility(layerId: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent(); await operation.wait(send({ type: 'SP_TOGGLE_VISIBILITY', elementId: layerId }, operation)); await operation.wait(refreshDomTree(operation)); }
+async function deleteLayer(layerId: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent(); await operation.wait(send({ type: 'SP_DOM_ACTION', action: 'delete', elementId: layerId }, operation)); if (info?.id === layerId) info = null; await operation.wait(refreshDomTree(operation)); await operation.wait(refreshChanges(operation)); }
+async function duplicateLayer(layerId: string, operation = beginInspectorOperation()) {
+  operation.assertCurrent(); await operation.wait(send({ type: 'SP_DOM_ACTION', action: 'duplicate', elementId: layerId }, operation)); await operation.wait(refreshDomTree(operation)); await operation.wait(refreshChanges(operation)); }
+async function reorderLayer(sourceId: string, targetId: string, position: 'before' | 'after' | 'inside' = 'before', operation = beginInspectorOperation()) {
+  operation.assertCurrent();
+  await operation.wait(send({ type: 'SP_REORDER_LAYER', sourceId, targetId, position }, operation));
+  await operation.wait(refreshDomTree(operation));
+  await operation.wait(refreshChanges(operation));
 }
 
 // Walk parent ids up the visible tree until we hit either `ancestorId` or
@@ -2155,11 +2328,11 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     // applied to the previously-selected element and must come off when the
     // selection moves, or it stays stuck in that state on the page.
     if (motionForcedTrigger && info?.id) {
-      send({ type: 'SP_FORCE_STATE', elementId: info.id, state: MOTION_TRIGGER_STATE[motionForcedTrigger] || '', on: false });
+      runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: info.id, state: MOTION_TRIGGER_STATE[motionForcedTrigger] || '', on: false }));
       motionForcedTrigger = null;
     }
     if (pageForcedState && info?.id) {
-      send({ type: 'SP_FORCE_STATE', elementId: info.id, state: pageForcedState, on: false });
+      runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: info.id, state: pageForcedState, on: false }));
       pageForcedState = null;
     }
     const selectedElementChanged = info?.id !== msg.payload?.id;
@@ -2171,15 +2344,15 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     shadowMenuProp = null;
     effectiveBgCache.clear();
     maybeFetchEffectiveBg();
-    send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: computedLayoutOverlayOn, elementId: info?.id });
+    runInspectorAction(send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: computedLayoutOverlayOn, elementId: info?.id }));
     // Covers pages that hydrated after INIT_STATE fired (SPA nav): without
     // the token cache the badges and swap pickers have nothing to offer.
-    if (designTokens.length === 0) refreshDesignTokens();
+    if (designTokens.length === 0) runInspectorAction(refreshDesignTokens());
     // Style commits refresh the same selection. Keep the matching checkbox
     // in sync with its active multi-selection until another element is picked.
     if (selectedElementChanged) matchingLayersChecked = false;
     render();
-    refreshMedia();
+    runInspectorAction(refreshMedia());
     setTimeout(() => {
       const layerEl = root.querySelector('[data-dm-layer="' + info?.id + '"]');
       if (layerEl) layerEl.scrollIntoView({ block: 'nearest' });
@@ -2221,7 +2394,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   // handles the command so one shortcut produces one capture.
   if (msg.type === 'REQUEST_SCREENSHOT') {
     if (pipPinned && !isPip) return;
-    void takeScreenshot();
+    void runInspectorAction(takeScreenshot());
   }
   if (msg.type === 'OPEN_COMMENT_FOR_SELECTED') {
     if (!info) return;
@@ -2265,8 +2438,8 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     render();
     // Re-sync the layers tree + pageSealed after a reload / SPA nav so the
     // sealed-frame notice appears (or clears) for the page now in the tab.
-    void refreshDomTree();
-    void refreshChanges();
+    void runInspectorAction(refreshDomTree());
+    void runInspectorAction(refreshChanges());
   }
   if (msg.type === 'MULTI_SELECT_UPDATE') {
     multiSelectIds = msg.payload?.ids || [];
@@ -2283,19 +2456,19 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   // Page cleared its selection (Escape on the page) — drop the Design tab back
   // to the hovering / page state so the panel matches the page.
   if (msg.type === 'ELEMENT_DESELECTED') {
-    if (info?.id) send({ type: 'SP_FORCE_STATE', elementId: info.id, state: '', on: false });
+    if (info?.id) runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: info.id, state: '', on: false }));
     computedLayoutOverlayOn = false;
-    send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: false });
+    runInspectorAction(send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: false }));
     motionForcedTrigger = null;
     pageForcedState = null;
     info = null; hoverInfo = null; render();
   }
   if (msg.type === 'STYLE_OVERRIDE_ERROR') showCaptureToast('error', msg.error);
   if (msg.type === 'COMMENT_ERROR') showCaptureToast('error', msg.error || 'Comment was not saved. Please retry.');
-  if (msg.type === 'CHANGES_UPDATE') { if (typeof msg.routeEditingBlocked === 'boolean') routeEditingBlocked = msg.routeEditingBlocked; styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; componentContexts = msg.componentContexts || {}; if (msg.routeGroups) routeGroups = msg.routeGroups; render(); if (!msg.routeGroups) void refreshChanges(); }
+  if (msg.type === 'CHANGES_UPDATE') { if (typeof msg.routeEditingBlocked === 'boolean') routeEditingBlocked = msg.routeEditingBlocked; styleChanges = msg.styleChanges || styleChanges; textChanges = msg.textChanges || textChanges; domChanges = msg.domChanges || domChanges; comments = msg.comments || comments; tokenChanges = msg.tokenChanges || tokenChanges; componentContexts = msg.componentContexts || {}; if (msg.routeGroups) routeGroups = msg.routeGroups; render(); if (!msg.routeGroups) void runInspectorAction(refreshChanges()); }
   if (msg.type === 'AGENT_PRESENCE_UPDATE') {
     // Presence may arrive after INIT_STATE observed a still-opening transport.
-    void refreshMcpStatus();
+    void runInspectorAction(refreshMcpStatus());
   }
 });
 
@@ -3083,12 +3256,12 @@ function maybeFetchEffectiveBg() {
   if (!isTransparent(s.backgroundColor || '')) return;
   const id = info.id;
   if (!id || effectiveBgCache.has(id)) return;
-  send({ type: 'SP_GET_EFFECTIVE_BG', elementId: id }).then(r => {
+  runInspectorAction(send({ type: 'SP_GET_EFFECTIVE_BG', elementId: id }).then(r => {
     if (r?.ok && r.color) {
       effectiveBgCache.set(id, r.color);
       if (activeColorPickerProp) render();
     }
-  });
+  }));
 }
 
 // Lazily resolve how many layers match the selected element so the design
@@ -3099,11 +3272,11 @@ function maybeFetchMatchingCount() {
   if (!info) return;
   const id = info.id;
   if (!id || matchingCountCache.has(id)) return;
-  send({ type: 'SP_FIND_MATCHING', elementId: id }).then(r => {
+  runInspectorAction(send({ type: 'SP_FIND_MATCHING', elementId: id }).then(r => {
     const ids: string[] = Array.isArray(r?.ids) ? r.ids : [];
     matchingCountCache.set(id, ids.length);
     render();
-  });
+  }));
 }
 
 function renderContrastSettingsPopover(resolved: A11yResolvedCategory): string {
@@ -3242,17 +3415,16 @@ function renderInlineColorPicker(prop: string, value: string, compact = false): 
     // effective background (or its text colour when the prop is a fill).
     (compact ? '' : renderContrastRow(prop, value)) +
     // Essentials row (always visible): live swatch, hex field (focused on
-    // open), eyedropper (Chrome only), and the HEX/RGB/HSL format cycle.
+    // open), colour sampler, and the HEX/RGB/HSL format cycle.
     '<div style="display:flex;align-items:flex-end;gap:6px;">' +
       '<span style="width:28px;height:28px;border-radius:5px;flex-shrink:0;background:' + safeCssColor(swatchBg) + ';border:1px solid var(--dm-separator);"></span>' +
       '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">' +
         '<label style="font-size:9px;color:var(--dm-text-dim);text-transform:uppercase;letter-spacing:0.4px;">Hex</label>' +
         '<input type="text" class="dm-input" data-dm-color-hex="' + escapeAttr(prop) + '" value="' + escapeAttr(hex.slice(1)) + '" style="padding:5px 6px;font-size:10px;font-family:inherit;text-transform:uppercase;"/>' +
       '</div>' +
-      (IS_FIREFOX ? '' :
-        '<button data-dm-eyedropper="' + escapeAttr(prop) + '" title="Eyedropper — pick a colour from anywhere on screen" style="display:flex;align-items:center;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;">' +
-          icon('penTool', 11) +
-        '</button>') +
+      '<button data-dm-eyedropper="' + escapeAttr(prop) + '" aria-label="' + (hasNativeColourPicker(window as EyeDropperHost) ? 'Pick a screen colour' : 'Pick a page colour') + '" title="' + (hasNativeColourPicker(window as EyeDropperHost) ? 'Eyedropper — pick a colour from anywhere on screen' : 'Page colours — pick from a visible viewport snapshot only') + '" style="display:flex;align-items:center;gap:4px;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;">' +
+        icon('penTool', 11) + (hasNativeColourPicker(window as EyeDropperHost) ? '' : ' Page') +
+      '</button>' +
       '<button data-dm-cycle-color-format style="display:flex;align-items:center;gap:3px;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:4px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;letter-spacing:0.4px;text-transform:uppercase;" title="Cycle color format">' +
         '<span>' + (colorFormat === 'hex' ? 'HEX' : colorFormat === 'rgba' ? 'RGB' : 'HSL') + '</span>' +
         icon('chevronsUpDown', 11) +
@@ -4086,7 +4258,7 @@ function defaultLayoutGuide(): LayoutGuideLayer {
 // authoritative map (`layoutGuidesByElement`); content keeps the same
 // state for rendering and exposes it back to the panel on selection so
 // closing/reopening the panel doesn't drop the user's config.
-function dispatchLayoutGuides(elementId: string, layers: LayoutGuideLayer[]): void {
+function dispatchLayoutGuides(elementId: string, layers: LayoutGuideLayer[], operation = beginInspectorOperation()) {
   if (!elementId) return;
   // Stamp the selector at write time so a later restore (after page
   // reload while panel is open) can resolve the element by selector
@@ -4096,13 +4268,13 @@ function dispatchLayoutGuides(elementId: string, layers: LayoutGuideLayer[]): vo
   if (info?.id === elementId && (info as any).selector) {
     guideSelectorsByElement.set(elementId, (info as any).selector);
   }
-  send({
+  return runInspectorAction(send({
     type: 'SP_SET_LAYOUT_GUIDES',
     elementId,
     selector: guideSelectorsByElement.get(elementId) || '',
     layers,
     sectionVisible: !layoutGuidesSectionHidden.has(elementId),
-  });
+  }, operation));
 }
 
 // Re-push every known guide to content after a page reload. STATE_UPDATE
@@ -4334,14 +4506,14 @@ function getFillLayers(id: string, s: Record<string, string>): FillLayer[] {
 }
 
 // After a mutation, dispatch the four CSS properties at once.
-function dispatchFillLayers(layers: FillLayer[], applyStyle: (p: string, v: string) => void): void {
+function dispatchFillLayers(layers: FillLayer[], applyStyle: (p: string, v: string) => Promise<void>): void {
   const css = serializeFillLayers(layers);
-  applyStyle('backgroundColor', css.backgroundColor);
-  applyStyle('backgroundImage', css.backgroundImage);
-  applyStyle('backgroundSize', css.backgroundSize);
-  applyStyle('backgroundRepeat', css.backgroundRepeat);
-  applyStyle('backgroundPosition', css.backgroundPosition);
-  applyStyle('backgroundBlendMode', css.backgroundBlendMode);
+  runInspectorAction(applyStyle('backgroundColor', css.backgroundColor));
+  runInspectorAction(applyStyle('backgroundImage', css.backgroundImage));
+  runInspectorAction(applyStyle('backgroundSize', css.backgroundSize));
+  runInspectorAction(applyStyle('backgroundRepeat', css.backgroundRepeat));
+  runInspectorAction(applyStyle('backgroundPosition', css.backgroundPosition));
+  runInspectorAction(applyStyle('backgroundBlendMode', css.backgroundBlendMode));
 }
 
 // Gradient stop parsing — split the function args, peel off the angle/shape
@@ -4983,7 +5155,7 @@ function setOverlayEntries(elementId: string, entries: OverlayEntry[]): void {
 // recognises `__effect_overlay` and emits a `::after` rule.
 function dispatchOverlayEntries(elementId: string, entries: OverlayEntry[]): void {
   if (!elementId) return;
-  applyStyle('__effect_overlay', serializeOverlayEntries(entries));
+  runInspectorAction(applyStyle('__effect_overlay', serializeOverlayEntries(entries)));
 }
 
 // Filter functions are space-separated, each call wrapped in parens. A
@@ -5253,7 +5425,7 @@ function flipDropShadowChain(srcChain: 'box' | 'fx' | 'text', srcIdx: number, ch
   batch.push({ property: 'boxShadow', value: boxEntries.length ? boxEntries.join(', ') : 'none' });
   batch.push({ property: 'filter', value: filterEntries.length ? filterEntries.join(' ') : 'none' });
   batch.push({ property: 'textShadow', value: textShadowVal || 'none' });
-  applyStylesBatch(batch, 'Show behind transparent areas', { chain: srcChain === 'fx' ? 'filter' : srcChain, index: srcIdx });
+  runInspectorAction(applyStylesBatch(batch, 'Show behind transparent areas', { chain: srcChain === 'fx' ? 'filter' : srcChain, index: srcIdx }));
 }
 
 // Per-shadow editor. Writes via virtual props that encode (chain,
@@ -5871,7 +6043,7 @@ function renderTokensView(): string {
   // Token data is fetched lazily when the panel opens. Until it arrives
   // we render an empty-state with a small spinner-like message.
   if (!designSystem) {
-    refreshDesignSystem();
+    runInspectorAction(refreshDesignSystem());
   }
   const ds: DesignSystemPayload = designSystem || { tokens: [], scales: { spacing: [], radius: [], fontSize: [], shadow: [] }, systems: [], scopes: [] };
 
@@ -6562,24 +6734,22 @@ function renderHeader(): string {
   const domain = pinnedDomain ? '<span style="font-size:11px;color:var(--dm-text-secondary);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeAttr(pinnedDomain) + '</span>' : '';
   const themeIcon = resolvedTheme === 'dark' ? 'sun' : 'moon';
   return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--dm-separator-strong);flex-shrink:0;background:var(--dm-bg);position:sticky;top:0;z-index:10;">' +
-    domain + '<div style="flex:1;"></div>' + renderMcpStatus() +
+    domain + (IS_SAFARI ? '<span title="Safari Web Inspector" style="font-size:10px;color:var(--dm-text-dim);">v' + APP_VERSION + ' · Safari</span>' : '') + '<div style="flex:1;"></div>' + renderMcpStatus() +
     '<button data-dm-action="toggle-theme" title="Toggle theme" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon(themeIcon as keyof typeof icons, 15) + '</button>' +
     '<button data-dm-action="contribute" title="Contribute" aria-label="Open contribute panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('heartHandshake', 15) + '</button>' +
     '<button data-dm-action="help" title="Help" aria-label="Open help" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('helpCircle', 15) + '</button>' +
     '<button data-dm-action="settings" title="Settings" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('settings', 16) + '</button>' +
     // Docking controls (pop-out / pin-on-top / dock-back) sit last — they
     // manage the panel window itself, not the page, so they read as a
-    // separate group after Settings. Firefox has neither the sidePanel API
-    // nor Document Picture-in-Picture, so the whole group is hidden there
-    // (the docked sidebar is the only surface) — this tree-shakes out.
-    (IS_FIREFOX ? '' : isPip
+    // separate group after Settings. Safari remains Inspector-only.
+    (!launchCapabilities.floating ? '' : isPip
       ? '<button data-dm-action="pip-unpin" title="Pinned on top — click to unpin back to the floating window" aria-label="Pinned on top — click to unpin back to the floating window" style="background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>' +
-        '<button data-dm-action="pip-dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
+        '<button data-dm-action="pip-dock-back" title="' + (IS_FIREFOX ? 'Focus the page, then click Design Mode there to finish docking' : 'Dock back to the side panel') + '" aria-label="' + (IS_FIREFOX ? 'Prepare docking; finish from the page toolbar' : 'Dock back to side panel') + '" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
       : isPopout
-        ? (pipAvailable && !pipUnsupported
+        ? (pipAvailable
             ? '<button data-dm-action="pip-pin" title="Pin on top of every window" aria-label="Pin on top of every window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>'
             : '') +
-          '<button data-dm-action="dock-back" title="Dock back to the side panel" aria-label="Dock back to side panel" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
+          '<button data-dm-action="dock-back" title="' + (IS_FIREFOX ? 'Focus the page, then click Design Mode there to finish docking' : 'Dock back to the side panel') + '" aria-label="' + (IS_FIREFOX ? 'Prepare docking; finish from the page toolbar' : 'Dock back to side panel') + '" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
         : '<button data-dm-action="pop-out" title="Pop out into a floating window" aria-label="Pop out into a floating window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('externalLink', 15) + '</button>') +
     '</div>';
 }
@@ -7019,14 +7189,14 @@ function renderDesignTab(): string {
   if (!displayInfo) {
     if (!pageContextInflight) {
       pageContextInflight = true;
-      send({ type: 'SP_INSPECT_PAGE' }).then(r => {
+      runInspectorAction(send({ type: 'SP_INSPECT_PAGE' }).then(r => {
         pageContextInflight = false;
         if (r?.payload && !info && !hoverInfo) {
           info = r.payload;
           hydrateLayoutGuidesFromPayload(info);
           render();
         }
-      });
+      }));
     }
     return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;"><div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('crosshair', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">Loading page context…</div><div style="font-size:11px;margin-top:4px;color:var(--dm-text-dim);">Hover any element to focus on it.</div></div>';
   }
@@ -9433,13 +9603,13 @@ function renderSettingsView(): string {
     '<button data-dm-custom-cursor="on" style="' + (customCursor ? activeBtn : inactiveBtn) + '">On</button>' +
     '<button data-dm-custom-cursor="off" style="' + (!customCursor ? activeBtn : inactiveBtn) + '">Off</button>' +
     '</div></div>' +
-    (IS_FIREFOX ? '' :
+    (!launchCapabilities.floating ? '' :
     '<div style="' + sS + '"><div style="' + sT + '">Launch</div>' +
-    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Where the toolbar icon and Alt+D open Design Mode. Pin on top starts a floating opener — Chrome needs a click in that window to pin.</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Where the toolbar icon and Alt+D open Design Mode. Pin on top starts a floating opener — your browser needs a click in that window to pin.</div>' +
     '<div role="group" aria-label="Launch surface" style="display:flex;gap:4px;">' +
     '<button data-dm-launch-surface="side-panel" aria-pressed="' + (launchSurface === 'side-panel') + '" style="' + (launchSurface === 'side-panel' ? activeBtn : inactiveBtn) + '">Side panel</button>' +
     '<button data-dm-launch-surface="floating" aria-pressed="' + (launchSurface === 'floating') + '" style="' + (launchSurface === 'floating' ? activeBtn : inactiveBtn) + '">Floating</button>' +
-    '<button data-dm-launch-surface="picture-in-picture" aria-pressed="' + (launchSurface === 'picture-in-picture') + '" style="' + (launchSurface === 'picture-in-picture' ? activeBtn : inactiveBtn) + '">Pin on top</button>' +
+    (pipAvailable ? '<button data-dm-launch-surface="picture-in-picture" aria-pressed="' + (launchSurface === 'picture-in-picture') + '" style="' + (launchSurface === 'picture-in-picture' ? activeBtn : inactiveBtn) + '">Pin on top</button>' : '') +
     '</div></div>') +
     '<div style="' + sS + '"><div style="' + sT + '">Screenshot Capture</div>' +
     '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button and Alt+S do — viewport when nothing real is selected, otherwise the selected element.</div>' +
@@ -9473,17 +9643,7 @@ function renderPipLaunchInterstitial(): string {
     '</div>';
 }
 
-// Read the live manifest version so the Settings footer stays in lockstep
-// with the published build — no more hard-coded strings drifting from the
-// actual release. Guards for the (impossible in MV3 but cheap) case where
-// browser.runtime is missing so dev / fixture pages don't crash.
-function extensionVersion(): string {
-  try {
-    return chrome?.runtime?.getManifest?.()?.version || '';
-  } catch {
-    return '';
-  }
-}
+function extensionVersion(): string { return APP_VERSION; }
 
 // Pad each label so values line up in the resulting block — the bug template
 // placeholder renders this verbatim, so column alignment matters visually.
@@ -9506,7 +9666,7 @@ function detectBrowser(): string {
 function buildDiagnostics(): string {
   const lines = [
     pad('Design Mode') + (extensionVersion() || 'dev'),
-    pad('Chrome') + detectBrowser(),
+    pad('Browser') + detectBrowser(),
     pad('Platform') + (navigator.platform || 'unknown') + ', ' + (navigator.language || 'unknown'),
     pad('Theme') + resolvedTheme,
   ];
@@ -9643,7 +9803,9 @@ function renderHoverGuideView(): string {
   const b = (t: string) => '<strong style="color:var(--dm-text);">' + t + '</strong>';
   const li = (t: string) => '<li style="margin:0 0 6px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">' + t + '</li>';
 
-  const steps = IS_FIREFOX
+  const steps = IS_SAFARI
+    ? li('Leave touch emulation and return to a normal macOS Safari webpage for mouse hover. Dock Web Inspector and use Design Mode’s own picker.')
+    : IS_FIREFOX
     ? li('In the ' + b('Responsive Design Mode') + ' toolbar, click the ' + b('touch simulation') + ' button (the finger / pointer icon) to turn it ' + b('off') + '.') +
       li('Keep any width you like — only touch simulation matters for hover.')
     : li('Click the ' + b('⋮') + ' menu in the device toolbar, then ' + b('Add device type') + ' (skip if you see ' + b('Remove device type') + ' already there).') +
@@ -9702,7 +9864,7 @@ function renderContributeView(): string {
     '<div><div style="' + sectionLabel + '">Spread the word</div>' +
     '<div style="' + card + '"><div style="display:flex;flex-direction:column;gap:8px;">' +
     row('star', 'Star the repo on GitHub', 'https://github.com/SandeepBaskaran/design-mode') +
-    (IS_FIREFOX
+    (IS_SAFARI ? '' : IS_FIREFOX
       ? row('messageSquare', 'Review on Firefox Add-ons', 'https://addons.mozilla.org/firefox/addon/design-mode-add-on/')
       : row('messageSquare', 'Review on the Chrome Web Store', 'https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih')) +
     row('productHunt', 'Upvote on Product Hunt', 'https://www.producthunt.com/products/design-mode') +
@@ -9815,10 +9977,10 @@ function reconcileInspectWithComment() {
   if (composerOpen && !inspectSuspendedForComment) {
     inspectSuspendedForComment = true;
     inspectWasOnBeforeComment = inspecting;
-    if (inspecting) { inspecting = false; void send({ type: 'SP_SET_INSPECT', on: false }); }
+    if (inspecting) { inspecting = false; void runInspectorAction(send({ type: 'SP_SET_INSPECT', on: false })); }
   } else if (!composerOpen && inspectSuspendedForComment) {
     inspectSuspendedForComment = false;
-    if (inspectWasOnBeforeComment) { inspecting = true; void send({ type: 'SP_SET_INSPECT', on: true }); }
+    if (inspectWasOnBeforeComment) { inspecting = true; void runInspectorAction(send({ type: 'SP_SET_INSPECT', on: true })); }
   }
 }
 
@@ -9842,7 +10004,7 @@ function render() {
     html = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:12px;color:var(--dm-text-secondary);">' +
       '<span style="display:flex;color:var(--dm-text-dim);">' + icon('pictureInPicture2', 24) + '</span>' +
       '<div style="font-size:12px;">Panel is pinned on top</div>' +
-      '<button data-dm-action="pip-dock-back-from-launcher" style="background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);padding:5px 12px;cursor:pointer;font-family:inherit;font-size:11px;">Back to side panel</button>' +
+      '<button data-dm-action="pip-dock-back-from-launcher" style="background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);padding:5px 12px;cursor:pointer;font-family:inherit;font-size:11px;">' + (IS_FIREFOX ? 'Prepare docking — finish from page toolbar' : 'Back to side panel') + '</button>' +
       '</div>';
   } else if (pipLaunchPending && !isPip) {
     html = renderPipLaunchInterstitial() + renderCaptureToast();
@@ -9854,6 +10016,12 @@ function render() {
     html = renderHeader() + renderHelpView() + renderCaptureToast();
   } else if (contributeOpen) {
     html = renderHeader() + renderContributeView() + renderCaptureToast();
+  } else if (IS_SAFARI && inspectorError) {
+    html = renderHeader() + '<section style="padding:20px;line-height:1.5;"><h2 style="font-size:15px;">Reconnect to the active page</h2>' +
+      '<p role="alert" style="margin:12px 0;">' + escapeAttr(inspectorError) + '</p>' +
+      '<p style="margin-bottom:12px;">Keep Web Inspector docked. Select a normal HTTP/HTTPS page, then pick an element again. Website access is managed in Safari Settings → Extensions.</p>' +
+      '<button class="dm-btn" data-dm-action="inspector-repick">Pick element on active tab</button>' +
+      '<button class="dm-btn" style="margin-top:8px;" data-dm-action="inspector-reload">Reload editor connection</button></section>';
   } else if (tokensOpen) {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
       renderHeader() + renderTokensView() + renderCaptureToast() + '</div>';
@@ -10063,7 +10231,8 @@ function setupDelegation() {
 
   // Click handler — async because the eyedropper awaits Chrome's
   // EyeDropper.open() promise.
-  root.addEventListener('click', async (e) => {
+  root.addEventListener('click', (e) => { void runInspectorAction((async () => {
+    const operation = beginInspectorOperation();
     const target = e.target as HTMLElement;
 
     if (cornerShapePickerOpen && !target.closest('[data-dm-corner-shape-popover], [data-dm-corner-shape-trigger]')) {
@@ -10095,9 +10264,9 @@ function setupDelegation() {
       if (savedScroll !== undefined) pendingTabScrollRestore = savedScroll;
       tab = newTab;
       if (newTab === 'layers') {
-        refreshDomTree().then(() => scrollSelectedLayerIntoView());
+        runInspectorAction(refreshDomTree(operation).then(() => scrollSelectedLayerIntoView()));
       } else if (newTab === 'changes') {
-        refreshChanges();
+        runInspectorAction(refreshChanges(operation));
       } else {
         render();
       }
@@ -10109,30 +10278,39 @@ function setupDelegation() {
     if (actionBtn) {
       const act = actionBtn.dataset.dmAction!;
       switch (act) {
-        case 'select-parent': selectParent(); break;
-        case 'select-child': selectChild(); break;
+        case 'inspector-repick': {
+          if (!IS_SAFARI) break;
+          void runInspectorAction(send({ type: 'SP_SET_INSPECT', on: true }, operation).then(result => {
+            if (typeof result.inspecting !== 'boolean') return;
+            inspectorError = ''; inspecting = result.inspecting; render();
+          }));
+          break;
+        }
+        case 'inspector-reload': if (IS_SAFARI) location.reload(); break;
+        case 'select-parent': runInspectorAction(selectParent(operation)); break;
+        case 'select-child': runInspectorAction(selectChild(operation)); break;
         case 'toggle-inspect': {
           if (commentMode) break;
-          void send({ type: 'SP_SET_INSPECT', on: !inspecting }).then(res => {
+          void runInspectorAction(send({ type: 'SP_SET_INSPECT', on: !inspecting }, operation).then(res => {
             if (typeof res.inspecting !== 'boolean') return;
             inspecting = res.inspecting;
             render();
-          });
+          }));
           break;
         }
-        case 'duplicate': domAction('duplicate'); break;
-        case 'delete': domAction('delete'); break;
+        case 'duplicate': runInspectorAction(domAction('duplicate', operation)); break;
+        case 'delete': runInspectorAction(domAction('delete', operation)); break;
         case 'comment': startComment(); break;
         case 'region-comment': startRegionComment(); break;
-        case 'screenshot': takeScreenshot(); break;
-        case 'download-media': downloadMedia(); break;
-        case 'copy-svg-markup': copySvgMarkup(); break;
-        case 'undo': undoAction(); break;
-        case 'redo': redoAction(); break;
-        case 'connect-mcp': send({ type: 'SP_RECONFIGURE_TRANSPORT' }); break;
+        case 'screenshot': runInspectorAction(takeScreenshot(operation)); break;
+        case 'download-media': runInspectorAction(downloadMedia(operation)); break;
+        case 'copy-svg-markup': runInspectorAction(copySvgMarkup(operation)); break;
+        case 'undo': runInspectorAction(undoAction(operation)); break;
+        case 'redo': runInspectorAction(redoAction(operation)); break;
+        case 'connect-mcp': runInspectorAction(send({ type: 'SP_RECONFIGURE_TRANSPORT' }, operation)); break;
         case 'refresh-mcp': {
           const before = mcpState;
-          refreshMcpStatus(true).then(() => {
+          runInspectorAction(refreshMcpStatus(true, operation).then(() => {
             // Toast only when state actually changed — avoids noise on
             // routine clicks. The renderMcpStatus tooltip explains the
             // current state regardless.
@@ -10141,25 +10319,25 @@ function setupDelegation() {
               else if (mcpState === 'running') showCaptureToast('success', 'MCP running — waiting for agent');
               else showCaptureToast('error', 'MCP offline');
             }
-          });
+          }));
           break;
         }
-        case 'inspect-wrapper': inspectWrapperOptedIn = true; refreshDomTree(); break;
+        case 'inspect-wrapper': inspectWrapperOptedIn = true; runInspectorAction(refreshDomTree(operation)); break;
         case 'hover-guide-proceed': hoverGuideProceeded = true; render(); break;
-        case 'copy-prompt': copyPrompt(); break;
-        case 'send-to-agent': sendToAgent(); break;
-        case 'stop-live-feedback': void stopLiveFeedback(); break;
+        case 'copy-prompt': runInspectorAction(copyPrompt(operation)); break;
+        case 'send-to-agent': runInspectorAction(sendToAgent(operation)); break;
+        case 'stop-live-feedback': void runInspectorAction(stopLiveFeedback(operation)); break;
         case 'send-agent-help-close': sendAgentHelpOpen = false; render(); break;
         case 'send-agent-help-mcp': sendAgentHelpOpen = false; helpOpen = false; contributeOpen = false; settingsOpen = false; mcpOpen = true; render(); break;
         case 'toggle-theme': toggleTheme(); break;
-        case 'submit-comment': submitComment(); break;
+        case 'submit-comment': runInspectorAction(submitComment(operation)); break;
         case 'cancel-comment': cancelComment(); break;
         case 'close-viewing-comment': viewingCommentId = null; render(); break;
 
         case 'open-route': {
           const group = currentRouteGroups().find(group => group.routeKey === actionBtn.dataset.dmRouteKey);
           if (!group || group.routeKey === activeRouteKey) break;
-          const res = await send({ type: 'SP_OPEN_ROUTE', routeKey: group.routeKey, url: group.url });
+          const res = await operation.wait(send({ type: 'SP_OPEN_ROUTE', routeKey: group.routeKey, url: group.url }, operation));
           if (!res.ok && !res.success) showCaptureToast('error', res.error || 'Could not open this route.');
           break;
         }
@@ -10170,16 +10348,16 @@ function setupDelegation() {
           if (!key || key !== deletingRouteKey) break;
           deletingRouteKey = null;
           const target = myTabId, route = activeRouteKey;
-          const res = await send({ type: 'SP_CLEAR_ROUTE_CHANGES', routeKey: key });
+          const res = await operation.wait(send({ type: 'SP_CLEAR_ROUTE_CHANGES', routeKey: key }, operation));
           if (target !== myTabId || route !== activeRouteKey) break;
           if (!res.ok && !res.success) { showCaptureToast('error', res.error || 'Could not delete route changes.'); render(); break; }
-          await refreshChanges();
-          if (key === activeRouteKey) { await refreshDomTree(); await refreshState(); }
+          await operation.wait(refreshChanges(operation));
+          if (key === activeRouteKey) { await operation.wait(refreshDomTree(operation)); await operation.wait(refreshState(operation)); }
           break;
         }
         case 'clear-all-changes': clearAllConfirming = true; render(); break;
         case 'cancel-clear-all': clearAllConfirming = false; render(); break;
-        case 'confirm-clear-all': clearAllConfirming = false; clearAllChanges(); break;
+        case 'confirm-clear-all': clearAllConfirming = false; runInspectorAction(clearAllChanges(operation)); break;
         case 'toggle-changes-sort': {
           changesSortMenuOpen = !changesSortMenuOpen;
           render();
@@ -10196,22 +10374,22 @@ function setupDelegation() {
           if (!elId || !state) break;
           if (pageForcedState === state) {
             pageForcedState = null;
-            send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: false });
+            runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: false }, operation));
           } else {
             if (motionForcedTrigger) {
-              send({ type: 'SP_FORCE_STATE', elementId: elId, state: MOTION_TRIGGER_STATE[motionForcedTrigger] || '', on: false });
+              runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: elId, state: MOTION_TRIGGER_STATE[motionForcedTrigger] || '', on: false }, operation));
               motionForcedTrigger = null;
             }
-            if (pageForcedState) send({ type: 'SP_FORCE_STATE', elementId: elId, state: pageForcedState, on: false });
+            if (pageForcedState) runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: elId, state: pageForcedState, on: false }, operation));
             pageForcedState = state;
-            send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: true });
+            runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: true }, operation));
           }
           render();
           break;
         }
         case 'toggle-computed-layout-overlay': {
           computedLayoutOverlayOn = !computedLayoutOverlayOn;
-          send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: computedLayoutOverlayOn, elementId: info?.id });
+          runInspectorAction(send({ type: 'SP_SET_COMPUTED_LAYOUT_OVERLAY', on: computedLayoutOverlayOn, elementId: info?.id }, operation));
           render();
           break;
         }
@@ -10226,7 +10404,7 @@ function setupDelegation() {
             'dm-overlay-margin-color': overlayMarginColor,
             'dm-overlay-padding-color': overlayPaddingColor,
           });
-          send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
+          runInspectorAction(send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor }, operation));
           render();
           break;
         }
@@ -10251,7 +10429,7 @@ function setupDelegation() {
         }
         case 'export-changes': {
           const target = myTabId, route = activeRouteKey;
-          await refreshChanges();
+          await operation.wait(refreshChanges(operation));
           if (target !== myTabId || route !== activeRouteKey) break;
           // Build a portable JSON payload from the in-memory state. The
           // shape mirrors content/change-tracker's session payload plus a
@@ -10275,7 +10453,10 @@ function setupDelegation() {
           // revert path so undo state and overlay updates flow correctly.
           const ids = [...changesSelected];
           changesSelected.clear();
-          (async () => { for (const id of ids) await removeChange(id); })();
+          runInspectorAction((async () => {
+            const operation = beginInspectorOperation();
+            for (const id of ids) await operation.wait(removeChange(id, operation));
+          })());
           break;
         }
         case 'clear-selected-changes': changesSelected.clear(); render(); break;
@@ -10296,11 +10477,15 @@ function setupDelegation() {
         case 'back-from-settings': settingsOpen = false; render(); break;
         case 'settings': helpOpen = false; contributeOpen = false; mcpOpen = false; settingsOpen = !settingsOpen; render(); break;
         case 'back-from-mcp': mcpOpen = false; render(); break;
-        case 'mcp': settingsOpen = false; helpOpen = false; contributeOpen = false; mcpOpen = !mcpOpen; if (mcpOpen) refreshMcpStatus(true); render(); break;
+        case 'mcp': settingsOpen = false; helpOpen = false; contributeOpen = false; mcpOpen = !mcpOpen; if (mcpOpen) runInspectorAction(refreshMcpStatus(true, operation)); render(); break;
         case 'back-from-help': helpOpen = false; render(); break;
         case 'help': settingsOpen = false; contributeOpen = false; mcpOpen = false; helpOpen = !helpOpen; render(); break;
         case 'back-from-contribute': contributeOpen = false; render(); break;
         case 'open-file-access-settings': {
+          if (IS_SAFARI) {
+            showCaptureToast('error', 'Use an HTTP/HTTPS page and allow access in Safari Settings → Extensions.');
+            break;
+          }
           // Chrome: the per-extension "Allow access to file URLs" toggle lives
           // at chrome://extensions. Firefox has no such URL — about:addons is
           // the equivalent management page. Best-effort (Firefox may refuse to
@@ -10326,7 +10511,9 @@ function setupDelegation() {
           break;
         }
         case 'copy-share-text': {
-          const payload = IS_FIREFOX
+          const payload = IS_SAFARI
+            ? 'I’ve been using Design Mode in Safari Web Inspector to live-edit CSS and send changes to coding agents. Free + open source.\nhttps://designmode.app'
+            : IS_FIREFOX
             ? 'I’ve been using Design Mode — a Firefox sidebar add-on that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://addons.mozilla.org/firefox/addon/design-mode-add-on/'
             : 'I’ve been using Design Mode — a Chrome side-panel extension that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih';
           const flash = (msg: string) => {
@@ -10355,7 +10542,7 @@ function setupDelegation() {
           // Open the floating window (background does windows.create), then
           // close this side panel. The tab keeps design mode — background
           // guards the swap so the close doesn't deactivate it.
-          send({ type: 'SP_POP_OUT' }).then((r) => { if (r && r.ok) { try { window.close(); } catch {} } });
+          runInspectorAction(send({ type: 'SP_POP_OUT' }, operation).then((r) => { if (r && r.ok) { try { window.close(); } catch {} } }));
           break;
         }
         case 'pip-pin': {
@@ -10376,29 +10563,34 @@ function setupDelegation() {
           break;
         }
         case 'dock-back': {
+          if (IS_FIREFOX) { beginFirefoxDock(); break; }
           // browser.sidePanel.open needs the click's user gesture, so call it
           // FIRST (synchronously, before any await). Then guard the swap and
           // close this floating window.
-          if (myTabId != null) openPanel({ tabId: myTabId }).catch(() => {});
-          send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { window.close(); } catch {} });
+          if (myTabId == null) break;
+          const opening = openPanel({ tabId: myTabId });
+          runInspectorAction(opening.then(() => send({ type: 'SP_TRANSITION_BEGIN' }, operation))
+            .then(() => window.close())
+            .catch(() => showCaptureToast('error', 'Could not dock the panel. The floating window is still open.')));
           break;
         }
         case 'pip-dock-back': {
-          // Runs inside the PiP iframe. sidePanel.open needs the gesture, so
-          // it goes first. The broadcast tells the floating-window opener to
-          // close itself instead of restoring when the PiP dies; the small
-          // delay lets that flag land before pagehide fires.
-          if (myTabId != null) openPanel({ tabId: myTabId }).catch(() => {});
-          try { new BroadcastChannel('dm-pip-' + myTabId).postMessage('dock-back'); } catch {}
-          send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => {
-            setTimeout(() => { try { window.parent.close(); } catch {} }, 50);
-          });
+          if (IS_FIREFOX) { beginFirefoxDock(); break; }
+          if (myTabId == null) break;
+          const opening = openPanel({ tabId: myTabId });
+          runInspectorAction(opening.then(() => send({ type: 'SP_TRANSITION_BEGIN' }, operation)).then(() => {
+            window.parent.postMessage('dm-pip-dock-back', '*');
+          }).catch((error: Error) => showCaptureToast('error', 'Could not dock the panel: ' + error.message + '. The pinned window is still open.')));
           break;
         }
         case 'pip-dock-back-from-launcher': {
-          if (myTabId != null) openPanel({ tabId: myTabId }).catch(() => {});
-          pipDockingBack = true;
-          send({ type: 'SP_TRANSITION_BEGIN' }).finally(() => { try { pipWindow?.close(); } catch {} });
+          if (IS_FIREFOX) { beginFirefoxDock(); break; }
+          if (myTabId == null) break;
+          const opening = openPanel({ tabId: myTabId });
+          runInspectorAction(opening.then(() => send({ type: 'SP_TRANSITION_BEGIN' }, operation)).then(() => {
+            pipDockingBack = true;
+            pipWindow?.close();
+          }).catch((error: Error) => showCaptureToast('error', 'Could not dock the panel: ' + error.message + '. The pinned window is still open.')));
           break;
         }
         case 'show-shortcuts': shortcutsOpen = true; render(); break;
@@ -10411,7 +10603,7 @@ function setupDelegation() {
           if (!mcpCloudUrl) { showCaptureToast('error', 'Set a server URL first.'); break; }
           mcpCloudRegistering = true;
           render();
-          send({ type: 'SP_MCP_REGISTER_TOKEN', cloudUrl: mcpCloudUrl }).then(r => {
+          runInspectorAction(send({ type: 'SP_MCP_REGISTER_TOKEN', cloudUrl: mcpCloudUrl }, operation).then(r => {
             mcpCloudRegistering = false;
             if (!r?.ok || !r.token) {
               showCaptureToast('error', r?.error || 'Failed to register.');
@@ -10426,10 +10618,10 @@ function setupDelegation() {
               'dm-mcp-cloud-url': mcpCloudUrl,
               'dm-mcp-mode': mcpMode,
             });
-            send({ type: 'SP_RECONFIGURE_TRANSPORT' });
+            runInspectorAction(send({ type: 'SP_RECONFIGURE_TRANSPORT' }, operation));
             showCaptureToast('success', 'Cloud token ready. Paste a config snippet into your agent.');
             render();
-          });
+          }));
           break;
         }
         case 'mcp-cloud-copy-token':
@@ -10450,14 +10642,14 @@ function setupDelegation() {
         }
         case 'mcp-cloud-revoke': {
           if (!mcpCloudToken) break;
-          send({ type: 'SP_MCP_REVOKE_TOKEN', cloudUrl: mcpCloudUrl, token: mcpCloudToken }).then(r => {
+          runInspectorAction(send({ type: 'SP_MCP_REVOKE_TOKEN', cloudUrl: mcpCloudUrl, token: mcpCloudToken }, operation).then(r => {
             mcpCloudToken = '';
             mcpCloudTenantId = '';
             browser.storage?.local?.remove?.(['dm-mcp-cloud-token', 'dm-mcp-cloud-tenant']);
-            send({ type: 'SP_RECONFIGURE_TRANSPORT' });
+            runInspectorAction(send({ type: 'SP_RECONFIGURE_TRANSPORT' }, operation));
             showCaptureToast(r?.ok ? 'success' : 'error', r?.ok ? 'Token revoked.' : 'Local token cleared (server may be unreachable).');
             render();
-          });
+          }));
           break;
         }
         // Comment delete-confirm flow.
@@ -10466,7 +10658,7 @@ function setupDelegation() {
           if (deletingCommentId) {
             const id = deletingCommentId;
             deletingCommentId = null;
-            deleteCommentEntry(id);
+            runInspectorAction(deleteCommentEntry(id, operation));
           }
           break;
         }
@@ -10475,7 +10667,7 @@ function setupDelegation() {
           if (revertingGroupKey) {
             const key = revertingGroupKey;
             revertingGroupKey = null;
-            revertGroup(key);
+            runInspectorAction(revertGroup(key, operation));
           }
           break;
         }
@@ -10493,7 +10685,7 @@ function setupDelegation() {
           inputUnit = 'px';
           customCursor = true;
           launchSurface = DEFAULT_LAUNCH_SURFACE;
-          pipSavedSize = null; pipUnsupported = false;
+          pipSavedSize = null;
           browser.storage?.local?.remove?.([
             'dm-theme', 'dm-color-format', 'dm-capture-mode',
             'dm-mcp-port', 'dm-mcp-auto-connect',
@@ -10521,12 +10713,12 @@ function setupDelegation() {
           // Force a refetch each time the panel opens — the page may have
           // changed (theme switch, route nav) since the last open.
           designSystem = null;
-          refreshDesignSystem(true);
-          refreshCustomPresets();
+          runInspectorAction(refreshDesignSystem(true, operation));
+          runInspectorAction(refreshCustomPresets(operation));
           render();
           break;
         case 'toggle-matching-layers':
-          void toggleMatchingLayers((actionBtn as HTMLInputElement).checked);
+          void runInspectorAction(toggleMatchingLayers((actionBtn as HTMLInputElement).checked, operation));
           break;
         case 'close-tokens':
           tokensOpen = false;
@@ -10535,7 +10727,7 @@ function setupDelegation() {
           break;
         case 'refresh-tokens':
           designSystem = null;
-          refreshDesignSystem(true);
+          runInspectorAction(refreshDesignSystem(true, operation));
           render();
           break;
         case 'switch-tokens-tab': {
@@ -10544,7 +10736,7 @@ function setupDelegation() {
             tokensTab = next;
             browser.storage?.session?.set?.({ 'dm-tokens-tab': tokensTab });
             // Lazy-fetch the Defined list the first time the user opens it.
-            if (next === 'defined') refreshCustomPresets();
+            if (next === 'defined') runInspectorAction(refreshCustomPresets(operation));
             render();
           }
           break;
@@ -10583,15 +10775,15 @@ function setupDelegation() {
             break;
           }
           const props: string[] = (SECTION_PROPS as Record<string, string[]>)[kind] || [];
-          send({ type: 'SP_SAVE_PRESET', name, kind, props }).then((res: any) => {
+          runInspectorAction(send({ type: 'SP_SAVE_PRESET', name, kind, props }, operation).then((res: any) => {
             if (res?.error) {
               showCaptureToast('error', res.error);
               return;
             }
             showCaptureToast('success', 'Saved "' + name + '".');
             presetAddingKind = null;
-            refreshCustomPresets();
-          });
+            return refreshCustomPresets(operation);
+          }));
           break;
         }
         case 'apply-preset': {
@@ -10599,7 +10791,7 @@ function setupDelegation() {
           const pid = actionBtn.dataset.presetId;
           const preset = customPresets.find(p => p.id === pid);
           if (!preset || !pid) break;
-          send({ type: 'SP_APPLY_PRESET', preset }).then((r: any) => {
+          runInspectorAction(send({ type: 'SP_APPLY_PRESET', preset }, operation).then((r: any) => {
             if (r?.info) info = r.info;
             if (r?.styleChanges) styleChanges = r.styleChanges;
             if (r?.domChanges) domChanges = r.domChanges;
@@ -10608,7 +10800,7 @@ function setupDelegation() {
             if (r?.redoCount != null) redoCount = r.redoCount;
             if (r?.groupId) appliedPresetGroups.set(pid, r.groupId);
             render();
-          });
+          }));
           break;
         }
         case 'unapply-preset': {
@@ -10623,10 +10815,10 @@ function setupDelegation() {
             .filter(c => (c as any).groupId === gid)
             .map(c => c.id)
             .filter((x): x is string => !!x);
-          Promise.all(ids.map(id => removeChange(id))).then(() => {
+          runInspectorAction(Promise.all(ids.map(id => removeChange(id, operation))).then(() => {
             appliedPresetGroups.delete(pid);
             render();
-          });
+          }));
           break;
         }
         case 'edit-preset':
@@ -10634,7 +10826,7 @@ function setupDelegation() {
           const preset = customPresets.find(p => p.id === actionBtn.dataset.presetId);
           if (!preset) break;
           openPresetDialog(preset, actionBtn.dataset.dmAction === 'edit-preset' ? 'edit' : 'delete', actionBtn,
-            refreshCustomPresets, showCaptureToast);
+            () => refreshCustomPresets(operation), showCaptureToast, browser);
           break;
         }
         case 'tokens-export': {
@@ -10660,70 +10852,70 @@ function setupDelegation() {
         }
         // v1.2: Computed CSS
         case 'view-computed-css': {
-          send({ type: 'SP_GET_COMPUTED_CSS' }).then(r => { computedCssText = r?.css || ''; computedCssOpen = true; render(); });
+          runInspectorAction(send({ type: 'SP_GET_COMPUTED_CSS' }, operation).then(r => { computedCssText = r?.css || ''; computedCssOpen = true; render(); }));
           break;
         }
         case 'close-computed-css': computedCssOpen = false; render(); break;
         case 'copy-computed-css': navigator.clipboard.writeText(computedCssText).catch(() => {}); break;
         // v1.2: Before/After
         case 'preview-original': {
-          send({ type: 'SP_PREVIEW_ORIGINAL' }).then(() => { previewingOriginal = true; render(); });
+          runInspectorAction(send({ type: 'SP_PREVIEW_ORIGINAL' }, operation).then(() => { previewingOriginal = true; render(); }));
           break;
         }
         case 'restore-changes': {
-          send({ type: 'SP_RESTORE_CHANGES' }).then(() => { previewingOriginal = false; render(); });
+          runInspectorAction(send({ type: 'SP_RESTORE_CHANGES' }, operation).then(() => { previewingOriginal = false; render(); }));
           break;
         }
         // v1.2: Shadow actions
-        case 'add-shadow': applyStyle('boxShadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.12)'); break;
-        case 'clear-shadow': applyStyle('boxShadow', 'none'); break;
+        case 'add-shadow': runInspectorAction(applyStyle('boxShadow', '0px 4px 12px 0px rgba(0, 0, 0, 0.12)', undefined, operation)); break;
+        case 'clear-shadow': runInspectorAction(applyStyle('boxShadow', 'none', undefined, operation)); break;
         case 'preview-animation':
-          send({ type: 'SP_PREVIEW_ANIMATION' }).then(() => showCaptureToast('success', 'Animation previewed'));
+          runInspectorAction(send({ type: 'SP_PREVIEW_ANIMATION' }, operation).then(() => showCaptureToast('success', 'Animation previewed')));
           break;
         case 'open-in-vscode': {
           const src = (info as any)?.sourceLocation;
-          if (src) send({ type: 'SP_OPEN_VSCODE', source: src });
+          if (src) runInspectorAction(send({ type: 'SP_OPEN_VSCODE', source: src }, operation));
           break;
         }
         case 'toggle-layer-multi-select': {
           layerMultiSelectMode = !layerMultiSelectMode;
           if (layerMultiSelectMode) {
             multiSelectAnchor = info?.id || multiSelectAnchor;
-            pushMultiSelectIds(multiSelectIds.length ? multiSelectIds : info ? [info.id] : []).then(() => render());
+            pushMultiSelectIds(multiSelectIds.length ? multiSelectIds : info ? [info.id] : [], operation).then(() => render());
           } else {
-            pushMultiSelectIds([]).then(() => render());
+            pushMultiSelectIds([], operation).then(() => render());
           }
           break;
         }
         case 'clear-multi-select': {
           layerMultiSelectMode = false;
-          pushMultiSelectIds([]).then(() => render());
+          runInspectorAction(pushMultiSelectIds([], operation).then(() => render()));
           break;
         }
         case 'toggle-freeze': {
-          send({ type: 'SP_TOGGLE_FREEZE' }).then(res => {
+          runInspectorAction(send({ type: 'SP_TOGGLE_FREEZE' }, operation).then(res => {
             animationsFrozen = !!res.frozen;
             render();
-          });
+          }));
           break;
         }
         case 'preview-transition':
-          send({ type: 'SP_PREVIEW_TRANSITION_RULE' }).then(() => showCaptureToast('success', 'Transition previewed'));
+          runInspectorAction(send({ type: 'SP_PREVIEW_TRANSITION_RULE' }, operation).then(() => showCaptureToast('success', 'Transition previewed')));
           break;
         case 'toggle-aspect-ratio': {
           const cur = (info?.computedStyles?.aspectRatio || 'auto').trim();
           const isSet = cur && cur !== 'auto';
           if (isSet) {
-            applyStyle('aspectRatio', 'auto');
+            runInspectorAction(applyStyle('aspectRatio', 'auto', undefined, operation));
           } else {
             const w = parseFloat(info?.computedStyles?.width || '0') || 0;
             const h = parseFloat(info?.computedStyles?.height || '0') || 0;
-            if (w > 0 && h > 0) applyStyle('aspectRatio', (w / h).toFixed(4));
-            else applyStyle('aspectRatio', '1 / 1');
+            if (w > 0 && h > 0) runInspectorAction(applyStyle('aspectRatio', (w / h).toFixed(4), undefined, operation));
+            else runInspectorAction(applyStyle('aspectRatio', '1 / 1', undefined, operation));
           }
           break;
         }
-        case 'clear-text-shadow': applyStyle('textShadow', 'none'); break;
+        case 'clear-text-shadow': runInspectorAction(applyStyle('textShadow', 'none', undefined, operation)); break;
         // v1.2: Viz
         case 'close-viz': vizProp = null; render(); break;
         case 'apply-viz': {
@@ -10735,7 +10927,7 @@ function setupDelegation() {
               const dur = Math.max(0.1, 2*Math.PI*Math.sqrt(Math.max(sprMass,0.1)/Math.max(sprStiffness,1))).toFixed(2);
               cssVal = 'all ' + dur + 's ease-in-out';
             }
-            applyStyle(vizProp, cssVal);
+            runInspectorAction(applyStyle(vizProp, cssVal, undefined, operation));
             vizProp = null; render();
           }
           break;
@@ -10758,11 +10950,11 @@ function setupDelegation() {
         .filter(c => propSet.has(c.property) && (!targetId || c.elementId === targetId))
         .map(c => c.id || '');
       if (ids.length === 0) return;
-      Promise.all(ids.map(id => send({ type: 'SP_REMOVE_CHANGE', changeId: id }))).then(() => {
-        refreshChanges();
-        send({ type: 'SP_GET_STATE' }); // refresh selected element's computed styles via the next ELEMENT_SELECTED roundtrip
-        if (info?.id) selectElement(info.id);
-      });
+      runInspectorAction(Promise.all(ids.map(id => send({ type: 'SP_REMOVE_CHANGE', changeId: id }, operation))).then(() => {
+        runInspectorAction(refreshChanges(operation));
+        runInspectorAction(send({ type: 'SP_GET_STATE' }, operation)); // refresh selected element's computed styles via the next ELEMENT_SELECTED roundtrip
+        if (info?.id) runInspectorAction(selectElement(info.id, operation));
+      }));
       return;
     }
 
@@ -10798,7 +10990,7 @@ function setupDelegation() {
     const visBtn = target.closest<HTMLElement>('[data-dm-toggle-vis]');
     if (visBtn) {
       e.stopPropagation();
-      toggleLayerVisibility(visBtn.dataset.dmToggleVis!);
+      runInspectorAction(toggleLayerVisibility(visBtn.dataset.dmToggleVis!, operation));
       return;
     }
 
@@ -10807,7 +10999,7 @@ function setupDelegation() {
     if (scrollToBtn) {
       e.stopPropagation();
       const id = scrollToBtn.dataset.dmScrollTo!;
-      send({ type: 'SP_SCROLL_TO_ELEMENT', elementId: id });
+      runInspectorAction(send({ type: 'SP_SCROLL_TO_ELEMENT', elementId: id }, operation));
       return;
     }
 
@@ -10826,11 +11018,11 @@ function setupDelegation() {
       e.stopPropagation();
       const action = bulkBtn.dataset.dmBulkAction!;
       const ids = [...multiSelectIds];
-      if (action === 'show-all') ids.forEach(id => { if (!domTree.find(n => n.id === id)?.isVisible) toggleLayerVisibility(id); });
-      else if (action === 'hide-all') ids.forEach(id => { if (domTree.find(n => n.id === id)?.isVisible) toggleLayerVisibility(id); });
-      else if (action === 'duplicate-all') ids.forEach(id => duplicateLayer(id));
-      else if (action === 'delete-all') void domAction('delete');
-      else if (action === 'clear-selection') { layerMultiSelectMode = false; tokenUsesActiveVar = null; pushMultiSelectIds([]).then(() => render()); }
+      if (action === 'show-all') ids.forEach(id => { if (!domTree.find(n => n.id === id)?.isVisible) runInspectorAction(toggleLayerVisibility(id, operation)); });
+      else if (action === 'hide-all') ids.forEach(id => { if (domTree.find(n => n.id === id)?.isVisible) runInspectorAction(toggleLayerVisibility(id, operation)); });
+      else if (action === 'duplicate-all') ids.forEach(id => runInspectorAction(duplicateLayer(id, operation)));
+      else if (action === 'delete-all') void runInspectorAction(domAction('delete', operation));
+      else if (action === 'clear-selection') { layerMultiSelectMode = false; tokenUsesActiveVar = null; runInspectorAction(pushMultiSelectIds([], operation).then(() => render())); }
       return;
     }
 
@@ -10838,7 +11030,7 @@ function setupDelegation() {
     const delLayerBtn = target.closest<HTMLElement>('[data-dm-delete-layer]');
     if (delLayerBtn) {
       e.stopPropagation();
-      deleteLayer(delLayerBtn.dataset.dmDeleteLayer!);
+      runInspectorAction(deleteLayer(delLayerBtn.dataset.dmDeleteLayer!, operation));
       return;
     }
 
@@ -10856,7 +11048,7 @@ function setupDelegation() {
     const layerEl = target.closest<HTMLElement>('[data-dm-layer]');
     if (layerEl && !target.closest('[data-dm-toggle-collapse]') && !target.closest('[data-dm-toggle-vis]') && !target.closest('[data-dm-scroll-to]') && !target.closest('[data-dm-delete-layer]')) {
       const id = layerEl.dataset.dmLayer!;
-      handleLayerClick(id, e as MouseEvent);
+      runInspectorAction(handleLayerClick(id, e as MouseEvent, operation));
       return;
     }
 
@@ -10887,14 +11079,14 @@ function setupDelegation() {
       const c = comments.find(cc => cc.id === cid);
       if (c) {
         const next = !c.resolved;
-        send({ type: 'SP_SET_COMMENT_RESOLVED', commentId: cid, resolved: next })
+        runInspectorAction(send({ type: 'SP_SET_COMMENT_RESOLVED', commentId: cid, resolved: next }, operation)
           .then(response => {
             if (!response.ok || response.error) {
               showCaptureToast('error', response.error || 'Comment was not saved. Please retry.');
               return;
             }
-            return refreshChanges();
-          });
+            return refreshChanges(operation);
+          }));
       }
       return;
     }
@@ -10955,14 +11147,14 @@ function setupDelegation() {
       e.stopPropagation();
       const gid = revertSubgroupBtn.dataset.dmRevertSubgroup!;
       const ids = styleChanges.filter(c => (c as any).groupId === gid).map(c => c.id).filter((x): x is string => !!x);
-      Promise.all(ids.map(id => removeChange(id))).then(() => render());
+      runInspectorAction(Promise.all(ids.map(id => removeChange(id, operation))).then(() => render()));
       return;
     }
 
     // Remove change
     const removeChangeBtn = target.closest<HTMLElement>('[data-dm-remove-change]');
     if (removeChangeBtn) {
-      removeChange(removeChangeBtn.dataset.dmRemoveChange!);
+      runInspectorAction(removeChange(removeChangeBtn.dataset.dmRemoveChange!, operation));
       return;
     }
 
@@ -11020,7 +11212,7 @@ function setupDelegation() {
         // section after selection so the user lands on the property
         // they clicked. Lookup uses SECTION_PROPS as the source of truth.
         const propAttr = selectChangeEl.getAttribute('data-dm-change-prop');
-        selectElement(elementId).then(() => {
+        runInspectorAction(selectElement(elementId, operation).then(() => {
           if (!propAttr) return;
           let sectionKey: string | null = null;
           for (const [k, props] of Object.entries(SECTION_PROPS)) {
@@ -11035,7 +11227,7 @@ function setupDelegation() {
             const headerEl = root.querySelector<HTMLElement>('[data-dm-toggle-section="dm-sec-' + sectionKey + '"]');
             if (headerEl) headerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }, 100);
-        });
+        }));
       }
       return;
     }
@@ -11051,8 +11243,8 @@ function setupDelegation() {
     }
 
     const launchBtn = target.closest<HTMLElement>('[data-dm-launch-surface]');
-    if (launchBtn && !IS_FIREFOX) {
-      launchSurface = parseLaunchSurface(launchBtn.dataset.dmLaunchSurface);
+    if (launchBtn && launchCapabilities.floating) {
+      launchSurface = supportedLaunchSurface(parseLaunchSurface(launchBtn.dataset.dmLaunchSurface), launchCapabilities);
       browser.storage?.local?.set?.({ [LAUNCH_SURFACE_KEY]: launchSurface });
       render();
       return;
@@ -11066,7 +11258,7 @@ function setupDelegation() {
         mcpMode = next;
         browser.storage?.local?.set?.({ 'dm-mcp-mode': mcpMode });
         // Tell the content script to swap transports.
-        send({ type: 'SP_RECONFIGURE_TRANSPORT' });
+        runInspectorAction(send({ type: 'SP_RECONFIGURE_TRANSPORT' }, operation));
       }
       render();
       return;
@@ -11118,7 +11310,7 @@ function setupDelegation() {
     if (propBtn) {
       const prop = propBtn.dataset.dmProp!;
       const val = propBtn.dataset.dmValue;
-      if (val !== undefined) applyStyle(prop, val);
+      if (val !== undefined) runInspectorAction(applyStyle(prop, val, undefined, operation));
       return;
     }
 
@@ -11152,11 +11344,11 @@ function setupDelegation() {
       const cssVar = resetTokenBtn.dataset.dmTokenReset!;
       const scopeSelector = resetTokenBtn.dataset.dmTokenScope || ':root';
       editedTokens.delete(tokenEditKey(scopeSelector, cssVar));
-      send({ type: 'SP_RESET_ROOT_VAR', cssVar, scopeSelector }).then((r: any) => {
+      runInspectorAction(send({ type: 'SP_RESET_ROOT_VAR', cssVar, scopeSelector }, operation).then((r: any) => {
         if (r?.tokenChanges) tokenChanges = r.tokenChanges;
         designSystem = null;
-        refreshDesignSystem();
-      });
+        return refreshDesignSystem(undefined, operation);
+      }));
       return;
     }
     // Tokens panel — "uses" badge highlights every element on the page that
@@ -11169,23 +11361,23 @@ function setupDelegation() {
         tokenUsesActiveVar = null;
         multiSelectIds = [];
         multiSelectActive = false;
-        send({ type: 'SP_SET_MULTI_SELECT_IDS', ids: [] }).then(() => render());
+        runInspectorAction(send({ type: 'SP_SET_MULTI_SELECT_IDS', ids: [] }, operation).then(() => render()));
         return;
       }
-      send({ type: 'SP_GET_TOKEN_USAGES', cssVar, scopeSelector: tokenScopeFilter === 'all' ? undefined : tokenScopeFilter }).then((r: { ids?: string[] }) => {
+      runInspectorAction(send({ type: 'SP_GET_TOKEN_USAGES', cssVar, scopeSelector: tokenScopeFilter === 'all' ? undefined : tokenScopeFilter }, operation).then((r: { ids?: string[] }) => {
         const ids: string[] = r?.ids || [];
         if (!ids.length) {
           showCaptureToast('error', 'No on-page consumers of ' + cssVar);
           return;
         }
-        send({ type: 'SP_SET_MULTI_SELECT_IDS', ids }).then(() => {
+        runInspectorAction(send({ type: 'SP_SET_MULTI_SELECT_IDS', ids }, operation).then(() => {
           multiSelectActive = true;
           multiSelectIds = ids;
           tokenUsesActiveVar = cssVar;
           showCaptureToast('success', ids.length + ' element' + (ids.length === 1 ? '' : 's') + ' using ' + cssVar);
           render();
-        });
-      });
+        }));
+      }));
       return;
     }
 
@@ -11198,7 +11390,7 @@ function setupDelegation() {
       colorAdvancedProp = null;
       tokensDropdownProp = null;
       colorPickerSearch = '';
-      applyStyle(prop, val);
+      runInspectorAction(applyStyle(prop, val, undefined, operation));
       return;
     }
 
@@ -11209,7 +11401,7 @@ function setupDelegation() {
       const prop = pickTokenBtn.dataset.dmPickProp!;
       tokenPickerProp = null;
       tokenBadgeMenuProp = null;
-      applyStyle(prop, val);
+      runInspectorAction(applyStyle(prop, val, undefined, operation));
       return;
     }
 
@@ -11242,7 +11434,7 @@ function setupDelegation() {
         tokenUsedOnlyFilter = false;
         componentTokensOpen = true;
         designSystem = null;
-        refreshDesignSystem().then(() => scrollFocusedTokenIntoView());
+        runInspectorAction(refreshDesignSystem(undefined, operation).then(() => scrollFocusedTokenIntoView()));
       } else if (action === 'detach') {
         // computedStyles only carries longhands, so the uniform shorthand
         // fields (padding / margin / border-radius) rebuild their value from
@@ -11252,7 +11444,7 @@ function setupDelegation() {
         const resolved = uni
           ? uni.map(k => cs?.[k] || '').filter(Boolean).join(' ')
           : (cs?.[prop] || '');
-        if (resolved) applyStyle(prop, resolved);
+        if (resolved) runInspectorAction(applyStyle(prop, resolved, undefined, operation));
       }
       render();
       return;
@@ -11283,7 +11475,7 @@ function setupDelegation() {
       const prop = shadowDetachBtn.dataset.dmShadowDetach!;
       const resolved = info?.computedStyles?.[prop] || '';
       shadowMenuProp = null;
-      if (resolved && resolved !== 'none') applyStyle(prop, resolved);
+      if (resolved && resolved !== 'none') runInspectorAction(applyStyle(prop, resolved, undefined, operation));
       else render();
       return;
     }
@@ -11305,7 +11497,7 @@ function setupDelegation() {
       tokenUsedOnlyFilter = false;
       componentTokensOpen = true;
       designSystem = null;
-      refreshDesignSystem().then(() => scrollFocusedTokenIntoView());
+      runInspectorAction(refreshDesignSystem(undefined, operation).then(() => scrollFocusedTokenIntoView()));
       render();
       return;
     }
@@ -11393,23 +11585,27 @@ function setupDelegation() {
       return;
     }
 
-    // Eyedropper — the EyeDropper API. The button is hidden on Firefox
-    // (IS_FIREFOX, no EyeDropper there), so this alert only ever shows on a
-    // Chromium browser too old to have the API (< Chrome 95).
     const eyedropBtn = target.closest<HTMLElement>('[data-dm-eyedropper]');
     if (eyedropBtn) {
       e.stopPropagation();
       const prop = eyedropBtn.dataset.dmEyedropper!;
-      const ED = (window as any).EyeDropper;
-      if (typeof ED !== 'function') {
-        alert('Eyedropper requires Chrome 95+ or any Chromium-based browser.');
-        return;
-      }
+      const operation = beginInspectorOperation();
+      const generation = pageGeneration;
+      const tabId = myTabId;
+      const route = activeRouteKey;
+      const elementId = info?.id;
+      const picker = activeColorPickerProp;
+      const isCurrent = () => operation.isCurrent() && generation === pageGeneration && tabId === myTabId && route === activeRouteKey && elementId === info?.id && picker === activeColorPickerProp && !pageUnavailable && !pageNavigating;
       try {
-        const result = await new ED().open();
-        if (result?.sRGBHex) applyStyle(prop, result.sRGBHex);
-      } catch {
-        // User dismissed the picker — silently ignore.
+        const colour = await pickColour({
+          host: window as EyeDropperHost,
+          document,
+          isCurrent,
+          capture: () => send({ type: 'SP_SCREENSHOT', target: 'viewport' }, operation),
+        });
+        if (colour && isCurrent()) runInspectorAction(applyStyle(prop, colour, false, operation));
+      } catch (error) {
+        if (isCurrent()) showCaptureToast('error', error instanceof Error ? error.message : 'Colour picker unavailable');
       }
       return;
     }
@@ -11471,7 +11667,7 @@ function setupDelegation() {
       // the row already closed), so we avoid a second, stale synchronous
       // render that dropped the first click.
       cornerShapePickerOpen = false;
-      applyStyle('cornerShape', cornerShapeOpt.dataset.dmCornerShape!);
+      runInspectorAction(applyStyle('cornerShape', cornerShapeOpt.dataset.dmCornerShape!, undefined, operation));
       return;
     }
 
@@ -11519,7 +11715,7 @@ function setupDelegation() {
       let sx = parseFloat(parts[0] || '1') || 1;
       let sy = parseFloat(parts[1] || parts[0] || '1') || sx;
       if (axis === 'h') sx = -sx; else if (axis === 'v') sy = -sy;
-      applyStyle('scale', sx + ' ' + sy);
+      runInspectorAction(applyStyle('scale', sx + ' ' + sy, undefined, operation));
       return;
     }
 
@@ -11530,19 +11726,19 @@ function setupDelegation() {
       const mode = layoutModeBtn.dataset.dmLayoutMode!;
       const cur = info?.computedStyles || {};
       if (mode === 'free') {
-        applyStyle('display', 'block');
+        runInspectorAction(applyStyle('display', 'block', undefined, operation));
       } else if (mode === 'hstack') {
-        applyStyle('display', 'flex');
-        applyStyle('flexDirection', 'row');
+        runInspectorAction(applyStyle('display', 'flex', undefined, operation));
+        runInspectorAction(applyStyle('flexDirection', 'row', undefined, operation));
       } else if (mode === 'vstack') {
-        applyStyle('display', 'flex');
-        applyStyle('flexDirection', 'column');
+        runInspectorAction(applyStyle('display', 'flex', undefined, operation));
+        runInspectorAction(applyStyle('flexDirection', 'column', undefined, operation));
       } else if (mode === 'grid') {
-        applyStyle('display', 'grid');
+        runInspectorAction(applyStyle('display', 'grid', undefined, operation));
         // Prefill `grid-template-columns: 1fr 1fr` so the grid is visible
         // immediately. Only seeded when no template exists — never clobbers.
         const cols = cur.gridTemplateColumns || 'none';
-        if (!cols || cols === 'none') applyStyle('gridTemplateColumns', '1fr 1fr');
+        if (!cols || cols === 'none') runInspectorAction(applyStyle('gridTemplateColumns', '1fr 1fr', undefined, operation));
       }
       return;
     }
@@ -11555,7 +11751,7 @@ function setupDelegation() {
       const step = parseFloat(rotateStepBtn.dataset.dmRotateStep || '0');
       const cur = parseFloat((info?.computedStyles?.rotate || '0').replace('deg','')) || 0;
       const next = ((cur + step) % 360 + 360) % 360;
-      applyStyle('rotate', next + 'deg');
+      runInspectorAction(applyStyle('rotate', next + 'deg', undefined, operation));
       return;
     }
 
@@ -11564,7 +11760,7 @@ function setupDelegation() {
     if (tOriginBtn) {
       e.stopPropagation();
       const val = tOriginBtn.dataset.dmTransformOrigin!;
-      applyStyle('transformOrigin', val);
+      runInspectorAction(applyStyle('transformOrigin', val, undefined, operation));
       return;
     }
 
@@ -11575,7 +11771,7 @@ function setupDelegation() {
       const dir = zStepBtn.dataset.dmZStep === 'up' ? 1 : -1;
       const raw = info?.computedStyles?.zIndex || 'auto';
       const cur = (raw === 'auto' || raw === '') ? 0 : (parseInt(raw, 10) || 0);
-      applyStyle('zIndex', String(cur + dir));
+      runInspectorAction(applyStyle('zIndex', String(cur + dir), undefined, operation));
       return;
     }
 
@@ -11587,9 +11783,9 @@ function setupDelegation() {
     if (posDistBtn) {
       e.stopPropagation();
       const which = posDistBtn.dataset.dmPosDistribute!;
-      send({ type: 'SP_APPLY_PARENT_STYLE',
+      runInspectorAction(send({ type: 'SP_APPLY_PARENT_STYLE',
         property: which === 'horizontal' ? 'justifyContent' : 'alignContent',
-        value: 'space-between' });
+        value: 'space-between' }, operation));
       return;
     }
 
@@ -11604,8 +11800,8 @@ function setupDelegation() {
       const hMap: Record<string, string> = { left: 'flex-start', center: 'center', right: 'flex-end' };
       const vMap: Record<string, string> = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
       const { xProp, yProp } = axesForContainer(info?.computedStyles || {});
-      applyStyle(xProp, hMap[h] || 'flex-start');
-      applyStyle(yProp, vMap[v] || 'flex-start');
+      runInspectorAction(applyStyle(xProp, hMap[h] || 'flex-start', undefined, operation));
+      runInspectorAction(applyStyle(yProp, vMap[v] || 'flex-start', undefined, operation));
       return;
     }
 
@@ -11619,19 +11815,19 @@ function setupDelegation() {
       if (which === 'bold') {
         const cur = s.fontWeight || '400';
         const isBold = cur === '700' || cur === 'bold' || (parseInt(cur, 10) || 400) >= 600;
-        applyStyle('fontWeight', isBold ? '400' : '700');
+        runInspectorAction(applyStyle('fontWeight', isBold ? '400' : '700', undefined, operation));
       } else if (which === 'italic') {
-        applyStyle('fontStyle', s.fontStyle === 'italic' ? 'normal' : 'italic');
+        runInspectorAction(applyStyle('fontStyle', s.fontStyle === 'italic' ? 'normal' : 'italic', undefined, operation));
       } else if (which === 'underline') {
         const cur = s.textDecorationLine || 'none';
         const has = cur.includes('underline');
         const next = has ? cur.replace('underline','').trim() || 'none' : (cur === 'none' ? 'underline' : (cur + ' underline').trim());
-        applyStyle('textDecorationLine', next);
+        runInspectorAction(applyStyle('textDecorationLine', next, undefined, operation));
       } else if (which === 'strikethrough') {
         const cur = s.textDecorationLine || 'none';
         const has = cur.includes('line-through');
         const next = has ? cur.replace('line-through','').trim() || 'none' : (cur === 'none' ? 'line-through' : (cur + ' line-through').trim());
-        applyStyle('textDecorationLine', next);
+        runInspectorAction(applyStyle('textDecorationLine', next, undefined, operation));
       }
       return;
     }
@@ -11641,7 +11837,7 @@ function setupDelegation() {
     if (listStyleBtn) {
       e.stopPropagation();
       const v = listStyleBtn.dataset.dmListStyle!;
-      applyStyle('listStyleType', v);
+      runInspectorAction(applyStyle('listStyleType', v, undefined, operation));
       return;
     }
 
@@ -11654,9 +11850,9 @@ function setupDelegation() {
         // Single-line truncate preset. Three writes that together produce
         // the standard "ellipsis when overflowed" behaviour on a one-line
         // text container.
-        applyStyle('textOverflow', 'ellipsis');
-        applyStyle('whiteSpace', 'nowrap');
-        applyStyle('overflow', 'hidden');
+        runInspectorAction(applyStyle('textOverflow', 'ellipsis', undefined, operation));
+        runInspectorAction(applyStyle('whiteSpace', 'nowrap', undefined, operation));
+        runInspectorAction(applyStyle('overflow', 'hidden', undefined, operation));
       }
       return;
     }
@@ -11837,7 +12033,7 @@ function setupDelegation() {
       const pts = cur.kind === 'polygon' ? cur.points : '';
       const parts = pts.split(',').map(p => p.trim()).filter(Boolean);
       parts.push('50% 50%');
-      applyStyle('clipPath', 'polygon(' + parts.join(', ') + ')');
+      runInspectorAction(applyStyle('clipPath', 'polygon(' + parts.join(', ') + ')', undefined, operation));
       return;
     }
     const polyRemoveBtn = target.closest<HTMLElement>('[data-dm-clippath-polygon-remove]');
@@ -11849,7 +12045,7 @@ function setupDelegation() {
       const parts = cur.points.split(',').map(p => p.trim()).filter(Boolean);
       if (idx < 0 || idx >= parts.length) return;
       parts.splice(idx, 1);
-      applyStyle('clipPath', parts.length ? 'polygon(' + parts.join(', ') + ')' : 'none');
+      runInspectorAction(applyStyle('clipPath', parts.length ? 'polygon(' + parts.join(', ') + ')' : 'none', undefined, operation));
       return;
     }
 
@@ -11957,7 +12153,7 @@ function setupDelegation() {
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
       const batch: Array<{ property: string; value: string }> = [];
       dispatchStrokeLayers(layers, pos, cs, (p, v) => batch.push({ property: p, value: v }), styleNow);
-      applyStylesBatch(batch, 'Add stroke');
+      runInspectorAction(applyStylesBatch(batch, 'Add stroke', undefined, operation));
       return;
     }
 
@@ -11979,7 +12175,7 @@ function setupDelegation() {
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
       const batch: Array<{ property: string; value: string }> = [];
       dispatchStrokeLayers(layers, pos, cs, (p, v) => batch.push({ property: p, value: v }), styleNow);
-      applyStylesBatch(batch, 'Remove stroke');
+      runInspectorAction(applyStylesBatch(batch, 'Remove stroke', undefined, operation));
       return;
     }
 
@@ -11999,7 +12195,7 @@ function setupDelegation() {
       const styleNow = intent || (cs.borderTopStyle && cs.borderTopStyle !== 'none' ? cs.borderTopStyle : 'solid');
       const batch: Array<{ property: string; value: string }> = [];
       dispatchStrokeLayers(layers, pos, cs, (p, v) => batch.push({ property: p, value: v }), styleNow);
-      applyStylesBatch(batch, 'Toggle stroke');
+      runInspectorAction(applyStylesBatch(batch, 'Toggle stroke', undefined, operation));
       return;
     }
 
@@ -12010,10 +12206,10 @@ function setupDelegation() {
     if (fillActionBtn) {
       e.stopPropagation();
       if (fillActionBtn.dataset.dmFillAction === 'gradient-text') {
-        applyStyle('backgroundClip', 'text');
-        applyStyle('webkitBackgroundClip', 'text');
-        applyStyle('webkitTextFillColor', 'transparent');
-        applyStyle('color', 'transparent');
+        runInspectorAction(applyStyle('backgroundClip', 'text', undefined, operation));
+        runInspectorAction(applyStyle('webkitBackgroundClip', 'text', undefined, operation));
+        runInspectorAction(applyStyle('webkitTextFillColor', 'transparent', undefined, operation));
+        runInspectorAction(applyStyle('color', 'transparent', undefined, operation));
       }
       return;
     }
@@ -12061,22 +12257,22 @@ function setupDelegation() {
           hidden.add(key);
           stashedEffectByKey.set(id + '::' + key, entry.raw);
         }
-        if (wasHidden) { applyStyle('__effect_hidden', serializeHiddenEffects(id)); return; }
+        if (wasHidden) { runInspectorAction(applyStyle('__effect_hidden', serializeHiddenEffects(id), undefined, operation)); return; }
       } else hidden?.delete(target2.id);
       if (t2chain === 'box') {
         const entries = parseCssCommaList(cs.boxShadow || '');
         entries.splice(target2.chainIdx, 1);
-        applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none', true);
+        runInspectorAction(applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none', true, operation));
       } else if (t2chain === 'filter') {
         const list2 = splitFilterFunctions(cs.filter || '');
         list2.splice((target2 as any).chainIdx, 1);
-        applyStyle('filter', list2.length ? list2.join(' ') : 'none', true);
+        runInspectorAction(applyStyle('filter', list2.length ? list2.join(' ') : 'none', true, operation));
       } else if (t2chain === 'backdrop') {
         const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
         list2.splice(target2.chainIdx, 1);
-        applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none', true);
+        runInspectorAction(applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none', true, operation));
       } else if (t2chain === 'text') {
-        applyStyle('textShadow', 'none', true);
+        runInspectorAction(applyStyle('textShadow', 'none', true, operation));
       } else if (t2chain === 'overlay') {
         const list3 = getOverlayEntries(id).slice();
         list3.splice(target2.chainIdx, 1);
@@ -12114,17 +12310,17 @@ function setupDelegation() {
           if (t2chain2 === 'box' && stashed) {
             const entries = parseCssCommaList(cs.boxShadow || '');
             entries.splice(target2.chainIdx, 0, stashed);
-            applyStyle('boxShadow', entries.join(', '), true);
+            runInspectorAction(applyStyle('boxShadow', entries.join(', '), true, operation));
           } else if (t2chain2 === 'filter' && stashed) {
             const list2 = splitFilterFunctions(cs.filter || '');
             list2.splice((target2 as any).chainIdx, 0, stashed);
-            applyStyle('filter', list2.join(' '), true);
+            runInspectorAction(applyStyle('filter', list2.join(' '), true, operation));
           } else if (t2chain2 === 'backdrop' && stashed) {
             const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
             list2.splice(target2.chainIdx, 0, stashed);
-            applyStyle('backdropFilter', list2.join(' '), true);
+            runInspectorAction(applyStyle('backdropFilter', list2.join(' '), true, operation));
           } else if (t2chain2 === 'text' && stashed) {
-            applyStyle('textShadow', stashed, true);
+            runInspectorAction(applyStyle('textShadow', stashed, true, operation));
           } else if (t2chain2 === 'overlay') {
             const list3 = getOverlayEntries(id).slice();
             const entry3 = list3[target2.chainIdx];
@@ -12144,17 +12340,17 @@ function setupDelegation() {
         if (t2chain3 === 'box') {
           const entries = parseCssCommaList(cs.boxShadow || '');
           entries.splice(target2.chainIdx, 1);
-          applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none', true);
+          runInspectorAction(applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none', true, operation));
         } else if (t2chain3 === 'filter') {
           const list2 = splitFilterFunctions(cs.filter || '');
           list2.splice((target2 as any).chainIdx, 1);
-          applyStyle('filter', list2.length ? list2.join(' ') : 'none', true);
+          runInspectorAction(applyStyle('filter', list2.length ? list2.join(' ') : 'none', true, operation));
         } else if (t2chain3 === 'backdrop') {
           const list2 = splitFilterFunctions((cs as any).backdropFilter || '');
           list2.splice(target2.chainIdx, 1);
-          applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none', true);
+          runInspectorAction(applyStyle('backdropFilter', list2.length ? list2.join(' ') : 'none', true, operation));
         } else if (t2chain3 === 'text') {
-          applyStyle('textShadow', 'none', true);
+          runInspectorAction(applyStyle('textShadow', 'none', true, operation));
         } else if (t2chain3 === 'overlay') {
           const list3 = getOverlayEntries(id).slice();
           const entry3 = list3[target2.chainIdx];
@@ -12197,7 +12393,7 @@ function setupDelegation() {
       fnRe.lastIndex = 0;
       let next = (cur === 'none' ? '' : cur).replace(fnRe, '').replace(/\s+/g, ' ').trim();
       if (!hasFn) next = (next + ' ' + (defaults[which] || (which + '(1)'))).trim();
-      applyStyle(cssProp, next || 'none');
+      runInspectorAction(applyStyle(cssProp, next || 'none', undefined, operation));
       return;
     }
 
@@ -12221,20 +12417,20 @@ function setupDelegation() {
       const w = (cur > 0 ? cur : 1) + 'px';
       const zero = '0px';
       if (side === 'all') {
-        applyStyle('borderTopWidth', w); applyStyle('borderRightWidth', w);
-        applyStyle('borderBottomWidth', w); applyStyle('borderLeftWidth', w);
+        runInspectorAction(applyStyle('borderTopWidth', w, undefined, operation)); runInspectorAction(applyStyle('borderRightWidth', w, undefined, operation));
+        runInspectorAction(applyStyle('borderBottomWidth', w, undefined, operation)); runInspectorAction(applyStyle('borderLeftWidth', w, undefined, operation));
       } else if (side === 'top') {
-        applyStyle('borderTopWidth', w); applyStyle('borderRightWidth', zero);
-        applyStyle('borderBottomWidth', zero); applyStyle('borderLeftWidth', zero);
+        runInspectorAction(applyStyle('borderTopWidth', w, undefined, operation)); runInspectorAction(applyStyle('borderRightWidth', zero, undefined, operation));
+        runInspectorAction(applyStyle('borderBottomWidth', zero, undefined, operation)); runInspectorAction(applyStyle('borderLeftWidth', zero, undefined, operation));
       } else if (side === 'bottom') {
-        applyStyle('borderTopWidth', zero); applyStyle('borderRightWidth', zero);
-        applyStyle('borderBottomWidth', w); applyStyle('borderLeftWidth', zero);
+        runInspectorAction(applyStyle('borderTopWidth', zero, undefined, operation)); runInspectorAction(applyStyle('borderRightWidth', zero, undefined, operation));
+        runInspectorAction(applyStyle('borderBottomWidth', w, undefined, operation)); runInspectorAction(applyStyle('borderLeftWidth', zero, undefined, operation));
       } else if (side === 'left') {
-        applyStyle('borderTopWidth', zero); applyStyle('borderRightWidth', zero);
-        applyStyle('borderBottomWidth', zero); applyStyle('borderLeftWidth', w);
+        runInspectorAction(applyStyle('borderTopWidth', zero, undefined, operation)); runInspectorAction(applyStyle('borderRightWidth', zero, undefined, operation));
+        runInspectorAction(applyStyle('borderBottomWidth', zero, undefined, operation)); runInspectorAction(applyStyle('borderLeftWidth', w, undefined, operation));
       } else if (side === 'right') {
-        applyStyle('borderTopWidth', zero); applyStyle('borderRightWidth', w);
-        applyStyle('borderBottomWidth', zero); applyStyle('borderLeftWidth', zero);
+        runInspectorAction(applyStyle('borderTopWidth', zero, undefined, operation)); runInspectorAction(applyStyle('borderRightWidth', w, undefined, operation));
+        runInspectorAction(applyStyle('borderBottomWidth', zero, undefined, operation)); runInspectorAction(applyStyle('borderLeftWidth', zero, undefined, operation));
       }
       sidesPopoverOpen = false;
       return;
@@ -12251,17 +12447,17 @@ function setupDelegation() {
       const appendBoxShadow = (newEntry: string) => {
         const cur = cs.boxShadow || 'none';
         const next = cur === 'none' || !cur ? newEntry : (cur + ', ' + newEntry);
-        applyStyle('boxShadow', next);
+        runInspectorAction(applyStyle('boxShadow', next, undefined, operation));
       };
       const appendFilter = (newFn: string) => {
         const list = splitFilterFunctions(cs.filter || '');
         list.push(newFn);
-        applyStyle('filter', list.join(' '));
+        runInspectorAction(applyStyle('filter', list.join(' '), undefined, operation));
       };
       const appendBackdrop = (newFn: string) => {
         const list = splitFilterFunctions((cs as any).backdropFilter || '');
         list.push(newFn);
-        applyStyle('backdropFilter', list.join(' '));
+        runInspectorAction(applyStyle('backdropFilter', list.join(' '), undefined, operation));
       };
       // Single-effect adds — always APPEND so multi-shadow / multi-filter
       // stacks naturally instead of overwriting an existing effect.
@@ -12271,7 +12467,7 @@ function setupDelegation() {
       // the user flip chains afterwards.
       const isTextLayer = info ? classifyTag((info.tagName || '').toLowerCase()) === 'text' : false;
       if (kind === 'drop-shadow') {
-        if (isTextLayer) applyStyle('textShadow', '0px 2px 4px rgba(0, 0, 0, 0.25)');
+        if (isTextLayer) runInspectorAction(applyStyle('textShadow', '0px 2px 4px rgba(0, 0, 0, 0.25)', undefined, operation));
         else appendBoxShadow('0px 4px 12px 0px rgba(0, 0, 0, 0.12)');
       }
       else if (kind === 'inner-shadow') appendBoxShadow('inset 0px 2px 6px 0px rgba(0, 0, 0, 0.18)');
@@ -12290,33 +12486,33 @@ function setupDelegation() {
         setOverlayEntries(id, list);
         dispatchOverlayEntries(id, list);
       }
-      else if (kind === 'transition') applyStyle('transition', 'all 0.2s ease');
-      else if (kind === 'animation') applyStyle('animation', 'dm-fade-in 0.4s ease both');
-      else if (kind === 'transform') applyStyle('translate', '0px 0px');
+      else if (kind === 'transition') runInspectorAction(applyStyle('transition', 'all 0.2s ease', undefined, operation));
+      else if (kind === 'animation') runInspectorAction(applyStyle('animation', 'dm-fade-in 0.4s ease both', undefined, operation));
+      else if (kind === 'transform') runInspectorAction(applyStyle('translate', '0px 0px', undefined, operation));
       // Motion path — seed an oval for the preset; user customises via
       // the inline editor that appears in the Motion subsection.
       else if (kind === 'motion-path') {
-        applyStyle('offsetPath', 'path("M 0,50 a 50,50 0 1,1 100,0 a 50,50 0 1,1 -100,0")');
-        applyStyle('offsetDistance', '0%');
-        applyStyle('offsetRotate', 'auto');
+        runInspectorAction(applyStyle('offsetPath', 'path("M 0,50 a 50,50 0 1,1 100,0 a 50,50 0 1,1 -100,0")', undefined, operation));
+        runInspectorAction(applyStyle('offsetDistance', '0%', undefined, operation));
+        runInspectorAction(applyStyle('offsetRotate', 'auto', undefined, operation));
       }
       // View transition — seed a unique-ish name so the user has
       // something concrete to bind to in their startViewTransition() call.
       else if (kind === 'view-transition') {
         const seed = 'vt-' + Math.random().toString(36).slice(2, 7);
-        applyStyle('viewTransitionName', seed);
+        runInspectorAction(applyStyle('viewTransitionName', seed, undefined, operation));
       }
       // Scroll-driven animation — seed an animation-timeline + range so
       // the user has a working scroll-progress binding immediately. They
       // pair it with the existing animation-* properties on this element.
       else if (kind === 'scroll-driven') {
-        applyStyle('animationTimeline', 'scroll(root block)');
-        applyStyle('animationRange', 'entry 0% exit 100%');
+        runInspectorAction(applyStyle('animationTimeline', 'scroll(root block)', undefined, operation));
+        runInspectorAction(applyStyle('animationRange', 'entry 0% exit 100%', undefined, operation));
         // If there's no animation set yet, seed one so something visible
         // happens when the user scrolls. dm-fade-in is harmless.
         const cur = (info?.computedStyles?.animationName || 'none').trim();
         if (cur === 'none' || !cur) {
-          applyStyle('animation', 'dm-fade-in 1s linear both');
+          runInspectorAction(applyStyle('animation', 'dm-fade-in 1s linear both', undefined, operation));
         }
       }
       // Raw motion kinds now live under the Motion → Advanced disclosure;
@@ -12338,28 +12534,28 @@ function setupDelegation() {
       const trig = motionAddTriggerBtn.dataset.dmMotionAddTrigger!;
       const s = info?.computedStyles || {};
       if (trig === 'loop') {
-        applyStyle('animationName', 'dm-pulse');
-        applyStyle('animationDuration', '1s');
-        applyStyle('animationTimingFunction', 'ease-in-out');
-        applyStyle('animationIterationCount', 'infinite');
+        runInspectorAction(applyStyle('animationName', 'dm-pulse', undefined, operation));
+        runInspectorAction(applyStyle('animationDuration', '1s', undefined, operation));
+        runInspectorAction(applyStyle('animationTimingFunction', 'ease-in-out', undefined, operation));
+        runInspectorAction(applyStyle('animationIterationCount', 'infinite', undefined, operation));
       } else if (trig === 'scroll') {
-        applyStyle('animationName', 'dm-fade-in');
-        applyStyle('animationDuration', '1s');
-        applyStyle('animationFillMode', 'both');
-        applyStyle('animationTimeline', 'view()');
-        applyStyle('animationRange', 'entry 0% cover 40%');
+        runInspectorAction(applyStyle('animationName', 'dm-fade-in', undefined, operation));
+        runInspectorAction(applyStyle('animationDuration', '1s', undefined, operation));
+        runInspectorAction(applyStyle('animationFillMode', 'both', undefined, operation));
+        runInspectorAction(applyStyle('animationTimeline', 'view()', undefined, operation));
+        runInspectorAction(applyStyle('animationRange', 'entry 0% cover 40%', undefined, operation));
       } else {
         // State-transition family (hover/press/focus/appear). Seed the base
         // transition only if absent so a second trigger shares the curve.
         if ((s.transitionDuration || '0s').split(',')[0].trim() === '0s') {
-          applyStyle('transitionProperty', 'all');
-          applyStyle('transitionDuration', '0.2s');
-          applyStyle('transitionTimingFunction', 'ease');
+          runInspectorAction(applyStyle('transitionProperty', 'all', undefined, operation));
+          runInspectorAction(applyStyle('transitionDuration', '0.2s', undefined, operation));
+          runInspectorAction(applyStyle('transitionTimingFunction', 'ease', undefined, operation));
         }
         // Appear needs allow-discrete so an @starting-style transition fires.
-        if (trig === 'appear') applyStyle('transitionBehavior', 'allow-discrete');
+        if (trig === 'appear') runInspectorAction(applyStyle('transitionBehavior', 'allow-discrete', undefined, operation));
         const seed = motionPresetsFor(trig).fade;
-        applyStyle('__motion_' + trig + '__' + seed.prop, seed.value);
+        runInspectorAction(applyStyle('__motion_' + trig + '__' + seed.prop, seed.value, undefined, operation));
       }
       return;
     }
@@ -12369,7 +12565,7 @@ function setupDelegation() {
       e.stopPropagation();
       const [trig, key] = motionAddChangeBtn.dataset.dmMotionAddChange!.split(':');
       const preset = motionPresetsFor(trig)[key];
-      if (preset) applyStyle('__motion_' + trig + '__' + preset.prop, preset.value);
+      if (preset) runInspectorAction(applyStyle('__motion_' + trig + '__' + preset.prop, preset.value, undefined, operation));
       return;
     }
     // Remove one change from a trigger card ('' clears the variant rule).
@@ -12377,7 +12573,7 @@ function setupDelegation() {
     if (motionRemoveChangeBtn) {
       e.stopPropagation();
       const [trig, prop] = motionRemoveChangeBtn.dataset.dmMotionRemoveChange!.split(':');
-      applyStyle('__motion_' + trig + '__' + prop, '');
+      runInspectorAction(applyStyle('__motion_' + trig + '__' + prop, '', undefined, operation));
       return;
     }
     // Remove a whole trigger. State-family clears its variant changes; the
@@ -12388,18 +12584,18 @@ function setupDelegation() {
       const trig = motionRemoveTriggerBtn.dataset.dmMotionRemoveTrigger!;
       const elId = info?.id || '';
       if (trig === 'loop') {
-        applyStyle('animationName', 'none');
-        applyStyle('animationIterationCount', '1');
-        applyStyle('animationDuration', '0s');
+        runInspectorAction(applyStyle('animationName', 'none', undefined, operation));
+        runInspectorAction(applyStyle('animationIterationCount', '1', undefined, operation));
+        runInspectorAction(applyStyle('animationDuration', '0s', undefined, operation));
       } else if (trig === 'scroll') {
-        applyStyle('animationTimeline', 'auto');
-        applyStyle('animationRange', 'normal');
-        applyStyle('animationName', 'none');
+        runInspectorAction(applyStyle('animationTimeline', 'auto', undefined, operation));
+        runInspectorAction(applyStyle('animationRange', 'normal', undefined, operation));
+        runInspectorAction(applyStyle('animationName', 'none', undefined, operation));
       } else {
         const state = MOTION_TRIGGER_STATE[trig];
-        if (motionForcedTrigger === trig) { motionForcedTrigger = null; send({ type: 'SP_FORCE_STATE', elementId: elId, state: '', on: false }); }
+        if (motionForcedTrigger === trig) { motionForcedTrigger = null; runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: elId, state: '', on: false }, operation)); }
         for (const c of styleChanges.filter(c => c.elementId === elId && c.state === state)) {
-          applyStyle('__motion_' + trig + '__' + c.property, '');
+          runInspectorAction(applyStyle('__motion_' + trig + '__' + c.property, '', undefined, operation));
         }
       }
       return;
@@ -12412,17 +12608,17 @@ function setupDelegation() {
       e.stopPropagation();
       const trig = motionPreviewBtn.dataset.dmMotionPreview!;
       const elId = info?.id || '';
-      if (trig === 'appear') { send({ type: 'SP_REPLAY_APPEAR', elementId: elId }); return; }
-      if (trig === 'loop') { send({ type: 'SP_PREVIEW_ANIMATION' }); return; }
+      if (trig === 'appear') { runInspectorAction(send({ type: 'SP_REPLAY_APPEAR', elementId: elId }, operation)); return; }
+      if (trig === 'loop') { runInspectorAction(send({ type: 'SP_PREVIEW_ANIMATION' }, operation)); return; }
       const state = MOTION_TRIGGER_STATE[trig];
       if (motionForcedTrigger === trig) {
         motionForcedTrigger = null;
-        send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: false });
+        runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: false }, operation));
       } else {
-        if (pageForcedState) { send({ type: 'SP_FORCE_STATE', elementId: elId, state: pageForcedState, on: false }); pageForcedState = null; }
-        if (motionForcedTrigger) send({ type: 'SP_FORCE_STATE', elementId: elId, state: MOTION_TRIGGER_STATE[motionForcedTrigger], on: false });
+        if (pageForcedState) { runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: elId, state: pageForcedState, on: false }, operation)); pageForcedState = null; }
+        if (motionForcedTrigger) runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: elId, state: MOTION_TRIGGER_STATE[motionForcedTrigger], on: false }, operation));
         motionForcedTrigger = trig;
-        send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: true });
+        runInspectorAction(send({ type: 'SP_FORCE_STATE', elementId: elId, state, on: true }, operation));
       }
       render();
       return;
@@ -12434,26 +12630,26 @@ function setupDelegation() {
       e.stopPropagation();
       const action = effectActionBtn.dataset.dmEffectAction!;
       if (action === 'clear-motion-path') {
-        applyStyle('offsetPath', 'none');
-        applyStyle('offsetDistance', '0%');
-        applyStyle('offsetRotate', 'auto');
-        applyStyle('offsetAnchor', 'auto');
-        applyStyle('offsetPosition', 'auto');
+        runInspectorAction(applyStyle('offsetPath', 'none', undefined, operation));
+        runInspectorAction(applyStyle('offsetDistance', '0%', undefined, operation));
+        runInspectorAction(applyStyle('offsetRotate', 'auto', undefined, operation));
+        runInspectorAction(applyStyle('offsetAnchor', 'auto', undefined, operation));
+        runInspectorAction(applyStyle('offsetPosition', 'auto', undefined, operation));
       } else if (action === 'clear-view-transition') {
-        applyStyle('viewTransitionName', 'none');
-        applyStyle('viewTransitionClass', 'none');
+        runInspectorAction(applyStyle('viewTransitionName', 'none', undefined, operation));
+        runInspectorAction(applyStyle('viewTransitionClass', 'none', undefined, operation));
       } else if (action === 'clear-scroll-driven') {
-        applyStyle('animationTimeline', 'auto');
-        applyStyle('animationRange', 'normal');
-        applyStyle('scrollTimelineName', 'none');
-        applyStyle('scrollTimelineAxis', 'block');
-        applyStyle('viewTimelineName', 'none');
-        applyStyle('viewTimelineAxis', 'block');
-        applyStyle('viewTimelineInset', 'auto');
-        applyStyle('timelineScope', 'none');
+        runInspectorAction(applyStyle('animationTimeline', 'auto', undefined, operation));
+        runInspectorAction(applyStyle('animationRange', 'normal', undefined, operation));
+        runInspectorAction(applyStyle('scrollTimelineName', 'none', undefined, operation));
+        runInspectorAction(applyStyle('scrollTimelineAxis', 'block', undefined, operation));
+        runInspectorAction(applyStyle('viewTimelineName', 'none', undefined, operation));
+        runInspectorAction(applyStyle('viewTimelineAxis', 'block', undefined, operation));
+        runInspectorAction(applyStyle('viewTimelineInset', 'auto', undefined, operation));
+        runInspectorAction(applyStyle('timelineScope', 'none', undefined, operation));
       } else if (action === 'preset-scroll-progress') {
-        applyStyle('animationTimeline', 'scroll(root block)');
-        applyStyle('animationRange', 'entry 0% exit 100%');
+        runInspectorAction(applyStyle('animationTimeline', 'scroll(root block)', undefined, operation));
+        runInspectorAction(applyStyle('animationRange', 'entry 0% exit 100%', undefined, operation));
       }
       return;
     }
@@ -12466,8 +12662,8 @@ function setupDelegation() {
       const s = info?.computedStyles || {};
       const off = (s.borderTopStyle || 'none') === 'none';
       const next = off ? 'solid' : 'none';
-      applyStyle('borderTopStyle', next); applyStyle('borderRightStyle', next);
-      applyStyle('borderBottomStyle', next); applyStyle('borderLeftStyle', next);
+      runInspectorAction(applyStyle('borderTopStyle', next, undefined, operation)); runInspectorAction(applyStyle('borderRightStyle', next, undefined, operation));
+      runInspectorAction(applyStyle('borderBottomStyle', next, undefined, operation)); runInspectorAction(applyStyle('borderLeftStyle', next, undefined, operation));
       return;
     }
 
@@ -12483,16 +12679,16 @@ function setupDelegation() {
       }
       batchAppliedChanges.add(cid);
       render();
-      send({ type: 'SP_BATCH_APPLY_CHANGE', changeId: cid }).then(r => {
+      runInspectorAction(send({ type: 'SP_BATCH_APPLY_CHANGE', changeId: cid }, operation).then(r => {
         if (r?.styleChanges) styleChanges = r.styleChanges;
         if (r?.textChanges) textChanges = r.textChanges;
         if (r?.domChanges) domChanges = r.domChanges;
         if (r?.comments) comments = r.comments;
         render();
-      });
+      }));
       return;
     }
-  });
+  })()); });
 
   // Change handler (selects)
   root.addEventListener('change', (e) => {
@@ -12509,21 +12705,21 @@ function setupDelegation() {
       const index = linkUrlInput.dataset.dmRichLinkUrl;
       if (index === 'host') {
         linkUrlInput.setCustomValidity('');
-        void applyAttribute(editor.dataset.dmElementId || '', 'href', value);
+        void runInspectorAction(applyAttribute(editor.dataset.dmElementId || '', 'href', value));
         return;
       }
       const link = editor.querySelector<HTMLAnchorElement>(`a[${RICH_TEXT_LINK_NODE_ATTR}="${index}"]`);
       if (!link) return;
       linkUrlInput.setCustomValidity('');
       if (value) link.setAttribute('href', value); else link.removeAttribute('href');
-      void applyHtml(editor.dataset.dmElementId || '', editor.innerHTML);
+      void runInspectorAction(applyHtml(editor.dataset.dmElementId || '', editor.innerHTML));
       return;
     }
     const groupingSelect = target.closest<HTMLSelectElement>('[data-dm-changes-grouping]');
     if (groupingSelect) {
       changesGrouping = groupingSelect.value === 'component' ? 'component' : 'element';
       render();
-      if (changesGrouping === 'component') void refreshChanges();
+      if (changesGrouping === 'component') void runInspectorAction(refreshChanges());
       return;
     }
 
@@ -12533,7 +12729,7 @@ function setupDelegation() {
       tokenScopeFilter = scopeFilterSel.value;
       if (tokenUsesActiveVar) {
         tokenUsesActiveVar = null;
-        send({ type: 'SP_SET_MULTI_SELECT_IDS', ids: [] });
+        runInspectorAction(send({ type: 'SP_SET_MULTI_SELECT_IDS', ids: [] }));
       }
       render();
       return;
@@ -12565,7 +12761,7 @@ function setupDelegation() {
       // Reset the dropdown selection regardless of outcome.
       replaceSel.value = '';
       if (!payload) return;
-      send({ type: 'SP_CONSOLIDATE_DETECTED', scale: payload.scale, rawValue: payload.rawValue, cssVar: payload.cssVar }).then((r: any) => {
+      runInspectorAction(send({ type: 'SP_CONSOLIDATE_DETECTED', scale: payload.scale, rawValue: payload.rawValue, cssVar: payload.cssVar }).then((r: any) => {
         if (!r?.ok) {
           showCaptureToast('error', 'Nothing to consolidate.');
           return;
@@ -12577,8 +12773,8 @@ function setupDelegation() {
           'Replaced ' + r.touched + ' occurrence' + (r.touched === 1 ? '' : 's') + ' of ' + payload!.rawValue + ' with var(' + payload!.cssVar + ').');
         // Refresh the design system so updated value-counts roll in.
         designSystem = null;
-        refreshDesignSystem();
-      });
+        return refreshDesignSystem();
+      }));
       return;
     }
 
@@ -12597,8 +12793,10 @@ function setupDelegation() {
     const tokensImportInp = target.closest<HTMLInputElement>('[data-dm-tokens-import]');
     if (tokensImportInp && tokensImportInp.files?.[0]) {
       const file = tokensImportInp.files[0];
+      const operation = beginInspectorOperation();
       const reader = new FileReader();
       reader.onload = (ev) => {
+        if (!operation.isCurrent()) return;
         tokensImportInp.value = '';
         let parsed: any = null;
         try { parsed = JSON.parse(ev.target?.result as string); }
@@ -12616,14 +12814,14 @@ function setupDelegation() {
           if (!declared.has(t.cssVar)) { skipped++; continue; }
           const scopeSelector = (designSystem?.tokens || []).find(d => d.cssVar === t.cssVar)?.scope.selector || ':root';
           editedTokens.set(tokenEditKey(scopeSelector, t.cssVar), t.resolvedValue || t.value);
-          send({ type: 'SP_SET_ROOT_VAR', cssVar: t.cssVar, value: t.resolvedValue || t.value, scopeSelector });
+          runInspectorAction(send({ type: 'SP_SET_ROOT_VAR', cssVar: t.cssVar, value: t.resolvedValue || t.value, scopeSelector }));
           applied++;
         }
         showCaptureToast(applied > 0 ? 'success' : 'error',
           'Applied ' + applied + ' token' + (applied === 1 ? '' : 's') +
           (skipped > 0 ? ' (' + skipped + ' skipped — not declared on this page)' : ''));
         designSystem = null;
-        refreshDesignSystem();
+        runInspectorAction(refreshDesignSystem());
       };
       reader.readAsText(file);
       return;
@@ -12635,9 +12833,11 @@ function setupDelegation() {
     const importChangesInput = target.closest<HTMLInputElement>('[data-dm-import-changes]');
     if (importChangesInput && importChangesInput.files?.[0]) {
       const file = importChangesInput.files[0];
+      const operation = beginInspectorOperation();
       if (file.size > 5 * 1024 * 1024) { showCaptureToast('error', 'Import exceeds 5 MiB limit.'); importChangesInput.value = ''; return; }
       const reader = new FileReader();
       reader.onload = (ev) => {
+        if (!operation.isCurrent()) return;
         importChangesInput.value = '';
         let parsed: any = null;
         try { parsed = JSON.parse(ev.target?.result as string); }
@@ -12652,7 +12852,7 @@ function setupDelegation() {
           domChanges: parsed.domChanges,
           comments: parsed.comments,
         };
-        send({ type: 'SP_IMPORT_CHANGES', payload }).then(r => {
+        runInspectorAction(send({ type: 'SP_IMPORT_CHANGES', payload }).then(r => {
           if (!r?.ok) { showCaptureToast('error', r?.error || 'Import failed.'); return; }
           if (r.styleChanges) styleChanges = r.styleChanges;
           if (r.textChanges) textChanges = r.textChanges;
@@ -12665,12 +12865,12 @@ function setupDelegation() {
           batchAppliedChanges.clear();
           componentContexts = r.componentContexts || {};
           changesSelected.clear();
-          void refreshChanges();
+          void runInspectorAction(refreshChanges());
           render();
           const groups = Array.isArray(payload.routeGroups) ? payload.routeGroups : [payload];
           const total = groups.reduce((count: number, group: any) => count + group.styleChanges.length + group.textChanges.length + group.domChanges.length + group.comments.length, 0);
           showCaptureToast('success', `Imported ${total} change${total === 1 ? '' : 's'}.`);
-        });
+        }));
       };
       reader.readAsText(file);
       return;
@@ -12687,29 +12887,29 @@ function setupDelegation() {
       const prop = sizeModeSel.dataset.dmSizeMode!;
       const mode = sizeModeSel.value;
       if (mode === 'unknown') return;
-      if (mode === 'hug') applyStyle(prop, 'fit-content');
-      else if (mode === 'fill') applyStyle(prop, '100%');
-      else if (mode === 'auto') applyStyle(prop, 'auto');
+      if (mode === 'hug') runInspectorAction(applyStyle(prop, 'fit-content'));
+      else if (mode === 'fill') runInspectorAction(applyStyle(prop, '100%'));
+      else if (mode === 'auto') runInspectorAction(applyStyle(prop, 'auto'));
       else if (mode === 'fixed') {
         const dim = prop === 'width' ? info?.authoredWidth : info?.authoredHeight;
         const current = sizeFieldView({ dim, override: info ? lastStyleChangeFor(info.id, prop) : null, computed: info?.computedStyles?.[prop] || '' });
         if (current.mode === 'fixed' && current.authoredText) {
-          applyStyle(prop, current.authoredText);
+          runInspectorAction(applyStyle(prop, current.authoredText));
           return;
         }
         const resolved = (info?.computedStyles?.[prop] || '').trim();
         if (!resolved || resolved === 'auto') {
-          applyStyle(prop, inputUnit === 'rem' ? (Math.round((100 / remRootPx) * 10000) / 10000) + 'rem' : '100px');
+          runInspectorAction(applyStyle(prop, inputUnit === 'rem' ? (Math.round((100 / remRootPx) * 10000) / 10000) + 'rem' : '100px'));
         } else if (inputUnit === 'rem') {
           const parsed = parseNumeric(resolved);
           if (parsed && (parsed.unit === 'px' || !parsed.unit)) {
             const rem = Math.round((parsed.num / remRootPx) * 10000) / 10000;
-            applyStyle(prop, rem + 'rem');
+            runInspectorAction(applyStyle(prop, rem + 'rem'));
           } else {
-            applyStyle(prop, resolved);
+            runInspectorAction(applyStyle(prop, resolved));
           }
         } else {
-          applyStyle(prop, resolved);
+          runInspectorAction(applyStyle(prop, resolved));
         }
       }
       return;
@@ -12734,10 +12934,10 @@ function setupDelegation() {
         if (curAlign && curAlign !== 'space-between' && curAlign !== 'space-around' && curAlign !== 'space-evenly') {
           previousGapAlign.set(stashKey, curAlign);
         }
-        applyStylesBatch([
+        runInspectorAction(applyStylesBatch([
           { property: distProp, value: 'space-between' },
           { property: gapProp, value: 'normal' },
-        ], 'Auto gap');
+        ], 'Auto gap'));
       } else {
         const measured = field === 'col' ? info?.childGap?.col : info?.childGap?.row;
         let px: number;
@@ -12752,10 +12952,10 @@ function setupDelegation() {
         // so the 9-pad isn't reset to 'normal'.
         const restored = previousGapAlign.get(stashKey) || 'flex-start';
         previousGapAlign.delete(stashKey);
-        applyStylesBatch([
+        runInspectorAction(applyStylesBatch([
           { property: distProp, value: restored },
           { property: gapProp, value: val },
-        ], 'Fixed gap');
+        ], 'Fixed gap'));
       }
       return;
     }
@@ -12767,23 +12967,23 @@ function setupDelegation() {
       const val = propSelect.value;
       const borderStyles = ['borderTopStyle','borderRightStyle','borderBottomStyle','borderLeftStyle'];
       if (borderStyleLinked && borderStyles.includes(prop)) {
-        Promise.all(borderStyles.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
+        runInspectorAction(Promise.all(borderStyles.map(p => send({ type: 'SP_APPLY_STYLE', property: p, value: val }))).then(rs => {
           const last = rs[rs.length-1]; if (last?.info) info = last.info; if (last?.styleChanges) styleChanges = last.styleChanges; render();
-        }); return;
+        })); return;
       }
       // Position dropdown — prefill sensible offsets so the layer is
       // visible immediately. Only fills when the user hasn't already set
       // the offset (top/left still 'auto'), so we never clobber intent.
       if (prop === 'position') {
         const cur = info?.computedStyles || {};
-        applyStyle('position', val);
+        runInspectorAction(applyStyle('position', val));
         const topAuto = !cur.top || cur.top === 'auto';
         const leftAuto = !cur.left || cur.left === 'auto';
         if ((val === 'absolute' || val === 'fixed') && topAuto && leftAuto) {
-          applyStyle('top', '0px');
-          applyStyle('left', '0px');
+          runInspectorAction(applyStyle('top', '0px'));
+          runInspectorAction(applyStyle('left', '0px'));
         } else if (val === 'sticky' && topAuto) {
-          applyStyle('top', '0px');
+          runInspectorAction(applyStyle('top', '0px'));
         }
         return;
       }
@@ -12791,7 +12991,7 @@ function setupDelegation() {
       // editor fields below populate immediately.
       if (prop === '__clippath_shape') {
         const next = defaultClipPathFor(val as ClipPathDef['kind']);
-        applyStyle('clipPath', serializeClipPath(next));
+        runInspectorAction(applyStyle('clipPath', serializeClipPath(next)));
         return;
       }
       // Per-shadow inset <select> change — flips a box-shadow entry between
@@ -12807,7 +13007,7 @@ function setupDelegation() {
         if (!parsed) return;
         const sh: ShadowParts = { inset: val === 'inset', x: parsed.x, y: parsed.y, blur: parsed.blur, spread: parsed.spread, color: parsed.color };
         entries[idx] = formatShadowEntry(sh);
-        applyStyle('boxShadow', entries.join(', '));
+        runInspectorAction(applyStyle('boxShadow', entries.join(', ')));
         return;
       }
       // Per-layer Layout Guide <select> changes (kind / align).
@@ -12837,7 +13037,7 @@ function setupDelegation() {
         }
         return;
       }
-      applyStyle(prop, val); return;
+      runInspectorAction(applyStyle(prop, val)); return;
     }
 
     // Shadow field select change
@@ -12866,7 +13066,7 @@ function setupDelegation() {
       // var(--token) passes through verbatim — the non-negative clamp
       // below would otherwise flatten a token reference to 0.
       if (/^var\(\s*--/.test(raw)) {
-        applyStyle(prop, raw);
+        runInspectorAction(applyStyle(prop, raw));
         return;
       }
       // Non-negative numeric guard — corner radius and stroke weight
@@ -12877,7 +13077,7 @@ function setupDelegation() {
         const n = parseFloat(raw);
         const clamped = !isFinite(n) || n < 0 ? 0 : n;
         propInput.value = String(clamped);
-        applyStyle(prop, clamped + (unit || 'px'));
+        runInspectorAction(applyStyle(prop, clamped + (unit || 'px')));
         return;
       }
       // Opacity percent input — display 0-100 with a locked `%` chip,
@@ -12889,7 +13089,7 @@ function setupDelegation() {
         if (!isNaN(n)) {
           const clamped = Math.max(0, Math.min(100, n));
           propInput.value = String(clamped);
-          applyStyle('opacity', String(Math.round(clamped) / 100));
+          runInspectorAction(applyStyle('opacity', String(Math.round(clamped) / 100)));
         }
         return;
       }
@@ -12902,14 +13102,14 @@ function setupDelegation() {
         if (!isFinite(num) || num <= 0) {
           // Clear clamp — leave display alone (don't fight the user) but reset
           // the clamp-specific properties so the line limit is removed.
-          applyStyle('webkitLineClamp', 'none');
-          applyStyle('webkitBoxOrient', 'horizontal');
+          runInspectorAction(applyStyle('webkitLineClamp', 'none'));
+          runInspectorAction(applyStyle('webkitBoxOrient', 'horizontal'));
           return;
         }
-        applyStyle('display', '-webkit-box');
-        applyStyle('webkitBoxOrient', 'vertical');
-        applyStyle('webkitLineClamp', String(num));
-        applyStyle('overflow', 'hidden');
+        runInspectorAction(applyStyle('display', '-webkit-box'));
+        runInspectorAction(applyStyle('webkitBoxOrient', 'vertical'));
+        runInspectorAction(applyStyle('webkitLineClamp', String(num)));
+        runInspectorAction(applyStyle('overflow', 'hidden'));
         return;
       }
       // Elliptical corner-radius composer — virtual __corner_<key>_<axis>
@@ -12928,7 +13128,7 @@ function setupDelegation() {
         const [curX, curY] = parseRadiusXY(cur);
         const nextX = axis === 'x' ? (val || '0px') : curX;
         const nextY = axis === 'y' ? (val || '0px') : curY;
-        applyStyle(cssProp, nextX === nextY ? nextX : nextX + ' ' + nextY);
+        runInspectorAction(applyStyle(cssProp, nextX === nextY ? nextX : nextX + ' ' + nextY));
         return;
       }
       // clip-path composer — virtual __clippath_* props splice into the
@@ -12944,7 +13144,7 @@ function setupDelegation() {
           const next: ClipPathDef = cp.kind === 'inset'
             ? { ...cp, [edge]: val } as any
             : { kind: 'inset', top: val, right: val, bottom: val, left: val };
-          applyStyle('clipPath', serializeClipPath(next));
+          runInspectorAction(applyStyle('clipPath', serializeClipPath(next)));
           return;
         }
         m = prop.match(/^__clippath_circle_(r|x|y)$/);
@@ -12952,7 +13152,7 @@ function setupDelegation() {
           const f = m[1];
           const base: any = cp.kind === 'circle' ? cp : { kind: 'circle', r: '50%', x: '50%', y: '50%' };
           base[f] = val;
-          applyStyle('clipPath', serializeClipPath(base));
+          runInspectorAction(applyStyle('clipPath', serializeClipPath(base)));
           return;
         }
         m = prop.match(/^__clippath_ellipse_(rx|ry|x|y)$/);
@@ -12960,11 +13160,11 @@ function setupDelegation() {
           const f = m[1];
           const base: any = cp.kind === 'ellipse' ? cp : { kind: 'ellipse', rx: '50%', ry: '50%', x: '50%', y: '50%' };
           base[f] = val;
-          applyStyle('clipPath', serializeClipPath(base));
+          runInspectorAction(applyStyle('clipPath', serializeClipPath(base)));
           return;
         }
         if (prop === '__clippath_polygon') {
-          applyStyle('clipPath', val.trim() ? `polygon(${val.trim()})` : 'none');
+          runInspectorAction(applyStyle('clipPath', val.trim() ? `polygon(${val.trim()})` : 'none'));
           return;
         }
         // Per-vertex polygon inputs — `__clippath_polygon_<x|y>_<idx>`.
@@ -12980,15 +13180,15 @@ function setupDelegation() {
             const yv = (ys[i]?.value || '0%').trim() || '0%';
             pairs.push(xv + ' ' + yv);
           }
-          applyStyle('clipPath', pairs.length ? `polygon(${pairs.join(', ')})` : 'none');
+          runInspectorAction(applyStyle('clipPath', pairs.length ? `polygon(${pairs.join(', ')})` : 'none'));
           return;
         }
         if (prop === '__clippath_path') {
-          applyStyle('clipPath', val.trim() ? `path('${val.trim()}')` : 'none');
+          runInspectorAction(applyStyle('clipPath', val.trim() ? `path('${val.trim()}')` : 'none'));
           return;
         }
         if (prop === '__clippath_url') {
-          applyStyle('clipPath', val.trim() ? `url(#${val.trim().replace(/^#/, '')})` : 'none');
+          runInspectorAction(applyStyle('clipPath', val.trim() ? `url(#${val.trim().replace(/^#/, '')})` : 'none'));
           return;
         }
         return;
@@ -13011,7 +13211,7 @@ function setupDelegation() {
           .replace(/\s+/g, ' ')
           .trim();
         const next = (stripped ? stripped + ' ' : '') + fn;
-        applyStyle('transform', next || 'none');
+        runInspectorAction(applyStyle('transform', next || 'none'));
         return;
       }
       // Overlay-chain per-field edits (Noise / Texture). Shape:
@@ -13089,7 +13289,7 @@ function setupDelegation() {
           if (idx < 0 || idx >= list.length) return;
           const num = parseFloat(raw) || 0;
           list[idx] = 'blur(' + num + 'px)';
-          applyStyle(cssProp, list.length ? list.join(' ') : 'none');
+          runInspectorAction(applyStyle(cssProp, list.length ? list.join(' ') : 'none'));
           return;
         }
 
@@ -13120,9 +13320,9 @@ function setupDelegation() {
         }
         const next = isFx ? formatFilterDropShadow(sh) : formatShadowEntry(sh);
         entries[idx] = next;
-        if (cssProp === 'boxShadow') applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none');
-        else if (cssProp === 'filter') applyStyle('filter', entries.length ? entries.join(' ') : 'none');
-        else applyStyle('textShadow', next);
+        if (cssProp === 'boxShadow') runInspectorAction(applyStyle('boxShadow', entries.length ? entries.join(', ') : 'none'));
+        else if (cssProp === 'filter') runInspectorAction(applyStyle('filter', entries.length ? entries.join(' ') : 'none'));
+        else runInspectorAction(applyStyle('textShadow', next));
         return;
       }
       // Per-layer fill edits via virtual prop names. The expanded body
@@ -13244,13 +13444,13 @@ function setupDelegation() {
         return;
       }
 
-      applyStyle(prop, val); return;
+      runInspectorAction(applyStyle(prop, val)); return;
     }
 
     // Textarea text change
     const textArea = target.closest<HTMLTextAreaElement>('[data-dm-text]');
     if (textArea) {
-      applyText(textArea.value);
+      runInspectorAction(applyText(textArea.value));
       return;
     }
   });
@@ -13279,7 +13479,7 @@ function setupDelegation() {
       const currentUrl = (info as any).attributes?.href || '';
       const input = window.prompt('Link URL:', currentUrl);
       const url = input === null ? null : normalizeRichTextHref(input);
-      if (url !== null) void applyAttribute(editor.dataset.dmElementId || '', 'href', url);
+      if (url !== null) void runInspectorAction(applyAttribute(editor.dataset.dmElementId || '', 'href', url));
       return;
     }
     editor.focus();
@@ -13298,7 +13498,7 @@ function setupDelegation() {
       document.execCommand(cmd, false);
     }
     // Save immediately so the change shows in the Changes tab + page.
-    applyHtml(editor.dataset.dmElementId || '', editor.innerHTML);
+    runInspectorAction(applyHtml(editor.dataset.dmElementId || '', editor.innerHTML));
   }, true);
 
   const richTextEnterCommits = new WeakSet<HTMLElement>();
@@ -13308,7 +13508,7 @@ function setupDelegation() {
     e.preventDefault();
     e.stopPropagation();
     richTextEnterCommits.add(editor);
-    void applyHtml(editor.dataset.dmElementId || '', editor.innerHTML);
+    void runInspectorAction(applyHtml(editor.dataset.dmElementId || '', editor.innerHTML));
     editor.blur();
   }, true);
 
@@ -13318,11 +13518,13 @@ function setupDelegation() {
     if (!editor) return;
     // Defer one tick so a click landing on a toolbar button (which
     // re-focuses the editor) doesn't trigger a save mid-action.
+    const operation = beginInspectorOperation();
     setTimeout(() => {
+      if (!operation.isCurrent()) return;
       if (richTextEnterCommits.delete(editor)) return;
       const stillFocused = document.activeElement && (document.activeElement as HTMLElement).closest('[data-dm-richtext]');
       if (stillFocused) return;
-      applyHtml(editor.dataset.dmElementId || '', editor.innerHTML);
+      runInspectorAction(applyHtml(editor.dataset.dmElementId || '', editor.innerHTML, operation));
     }, 0);
   }, true);
 
@@ -13532,12 +13734,12 @@ function setupDelegation() {
       const scopeSelector = tokenEditInput.dataset.dmTokenScope || ':root';
       const newValue = tokenEditInput.value;
       editedTokens.set(tokenEditKey(scopeSelector, cssVar), newValue);
-      send({ type: 'SP_SET_ROOT_VAR', cssVar, value: newValue, scopeSelector }).then((r: any) => {
+      runInspectorAction(send({ type: 'SP_SET_ROOT_VAR', cssVar, value: newValue, scopeSelector }).then((r: any) => {
         if (r?.tokenChanges) tokenChanges = r.tokenChanges;
         if (r?.undoCount != null) undoCount = r.undoCount;
         if (r?.redoCount != null) redoCount = r.redoCount;
         render();
-      });
+      }));
       return;
     }
 
@@ -13569,14 +13771,14 @@ function setupDelegation() {
       if (key === 'hoverColor') {
         inspectorHoverColor = settingInput.value;
         browser.storage?.local?.set?.({ 'dm-inspector-hover-color': inspectorHoverColor });
-        send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
+        runInspectorAction(send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor }));
         settingInput.previousElementSibling!.textContent = inspectorHoverColor.toUpperCase();
         return;
       }
       if (key === 'selectColor') {
         inspectorSelectColor = settingInput.value;
         browser.storage?.local?.set?.({ 'dm-inspector-select-color': inspectorSelectColor });
-        send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor });
+        runInspectorAction(send({ type: 'SP_SET_INSPECTOR_COLORS', hover: inspectorHoverColor, select: inspectorSelectColor }));
         settingInput.previousElementSibling!.textContent = inspectorSelectColor.toUpperCase();
         return;
       }
@@ -13640,7 +13842,7 @@ function setupDelegation() {
       let v = hexEl.value.trim().replace(/^#/, '');
       if (/^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$|^[0-9a-fA-F]{8}$/.test(v)) {
         colorPickerSearch = '';
-        applyStyle(prop, '#' + v);
+        runInspectorAction(applyStyle(prop, '#' + v));
       } else {
         colorPickerSearch = v;
         render();
@@ -13656,7 +13858,7 @@ function setupDelegation() {
       inputs.forEach(inp => { vals[inp.dataset.c!] = parseInt(inp.value, 10) || 0; });
       const r = clampInt(vals.r), g = clampInt(vals.g), b = clampInt(vals.b);
       const value = colorFormat === 'rgba' ? `rgb(${r}, ${g}, ${b})` : rgbToHexStr(r, g, b);
-      applyStyle(prop, value);
+      runInspectorAction(applyStyle(prop, value));
       return;
     }
     // Color picker — HSL inputs (H, S, L) when format is HSL. Reads all
@@ -13670,7 +13872,7 @@ function setupDelegation() {
       const hh = ((vals.h % 360) + 360) % 360;
       const ss = Math.max(0, Math.min(100, vals.s));
       const ll = Math.max(0, Math.min(100, vals.l));
-      applyStyle(prop, `hsl(${hh}, ${ss}%, ${ll}%)`);
+      runInspectorAction(applyStyle(prop, `hsl(${hh}, ${ss}%, ${ll}%)`));
       return;
     }
 
@@ -13770,7 +13972,7 @@ function setupDelegation() {
     // Comment textarea: Enter submits, Shift+Enter inserts a newline,
     // Escape cancels. (Ctrl/Cmd+Enter still submits — it has no Shift.)
     if (target.matches('[data-dm-comment-input]')) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment(); }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runInspectorAction(submitComment()); }
       else if (e.key === 'Escape') cancelComment();
       return;
     }
@@ -13807,7 +14009,7 @@ function setupDelegation() {
         colorAdvancedProp = null;
         colorPickerSearch = '';
         colorTriggerKey.blur();
-        if (val) applyStyle(prop, val); else render();
+        if (val) runInspectorAction(applyStyle(prop, val)); else render();
         return;
       }
     }
@@ -13867,7 +14069,7 @@ function setupDelegation() {
         const step = current.unit ? (e.shiftKey ? nudgeAmount : 1) : (e.shiftKey ? 1 : 0.1);
         const value = Math.max(0, Math.round((current.num + (e.key === 'ArrowUp' ? step : -step)) * 100) / 100) + current.unit;
         propInput.value = value;
-        applyStyle(propName, value);
+        runInspectorAction(applyStyle(propName, value));
         return;
       }
 
@@ -13878,7 +14080,7 @@ function setupDelegation() {
         if (isNaN(n)) return;
         const clamped = Math.max(0, Math.min(100, n));
         propInput.value = String(clamped);
-        applyStyle('opacity', String(Math.round(clamped) / 100));
+        runInspectorAction(applyStyle('opacity', String(Math.round(clamped) / 100)));
       };
       // Solid-fill opacity input — same shape as Appearance > Opacity
       // but the value is baked into the colour's alpha channel rather
@@ -13931,7 +14133,7 @@ function setupDelegation() {
         if (fillOpacityMatch) { commitFillOpacityPct(String(rounded)); return; }
         propInput.value = String(rounded);
         const val = unit ? rounded + unit : String(rounded);
-        applyStyle(propName, val);
+        runInspectorAction(applyStyle(propName, val));
         return;
       }
 
@@ -14083,7 +14285,7 @@ function setupDelegation() {
     render();
     const batch: Array<{ property: string; value: string }> = [];
     dispatchStrokeLayers(layers, pos, cs, (p, v) => batch.push({ property: p, value: v }), styleNow);
-    applyStylesBatch(batch, 'Reorder stroke');
+    runInspectorAction(applyStylesBatch(batch, 'Reorder stroke'));
   });
 
   // ─── HTML5 drag-and-drop for Layout Guide layer reordering ─────────────
@@ -14206,7 +14408,7 @@ function setupDelegation() {
       });
       hiddenEffectsByElement.set(id, hidden);
       const visible = entries.filter(entry => !entry.hiddenId).map(entry => entry.raw);
-      applyStyle(property, visible.join(chain === 'box' ? ', ' : ' ') || 'none', true);
+      runInspectorAction(applyStyle(property, visible.join(chain === 'box' ? ', ' : ' ') || 'none', true));
     } else if (dragSrc.chain === 'overlay') {
       // Overlay chain reorder — swap entries inside the in-memory
       // stash and re-dispatch the JSON. Later entries paint on top,
@@ -14231,7 +14433,7 @@ function setupDelegation() {
       const layerId = layerEl.dataset.dmLayer!;
       if (hoveredLayerId !== layerId) {
         hoveredLayerId = layerId;
-        send({ type: 'SP_HOVER_ELEMENT', elementId: layerId });
+        runInspectorAction(send({ type: 'SP_HOVER_ELEMENT', elementId: layerId }));
         render();
       }
     }
@@ -14243,7 +14445,7 @@ function setupDelegation() {
     if (commentRowEl && (commentRowEl as any).__dmHoverScrolled !== true) {
       (commentRowEl as any).__dmHoverScrolled = true;
       const c = comments.find(cc => cc.id === commentRowEl.dataset.dmCommentItem);
-      if (c?.elementId) send({ type: 'SP_SCROLL_TO_ELEMENT', elementId: c.elementId });
+      if (c?.elementId) runInspectorAction(send({ type: 'SP_SCROLL_TO_ELEMENT', elementId: c.elementId }));
     }
   });
 
@@ -14256,7 +14458,7 @@ function setupDelegation() {
       const newLayer = relatedTarget?.closest<HTMLElement>('[data-dm-layer]');
       if (!newLayer && hoveredLayerId) {
         hoveredLayerId = null;
-        send({ type: 'SP_UNHOVER_ELEMENT' });
+        runInspectorAction(send({ type: 'SP_UNHOVER_ELEMENT' }));
         render();
       }
     }
@@ -14354,7 +14556,7 @@ function setupDelegation() {
       const zone = dropZoneAt(target, (e as DragEvent).clientY);
       hideDropIndicator();
       if (dragLayerId && targetId && dragLayerId !== targetId && !isLayerAncestor(dragLayerId, targetId)) {
-        reorderLayer(dragLayerId, targetId, zone);
+        runInspectorAction(reorderLayer(dragLayerId, targetId, zone));
       }
       dragLayerId = null;
     } else {
@@ -14383,15 +14585,15 @@ document.addEventListener('keydown', (e) => {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
   // Undo/Redo
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undoAction(); }
-  if ((e.ctrlKey || e.metaKey) && ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y')) { e.preventDefault(); redoAction(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); runInspectorAction(undoAction()); }
+  if ((e.ctrlKey || e.metaKey) && ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y')) { e.preventDefault(); runInspectorAction(redoAction()); }
 
   // Escape to deselect. Also tell the PAGE to clear its selection + resize
   // dots and drop back to hover — the page never receives this keydown when
   // the panel has focus, so without the message the orange select box lingers.
   if (e.key === 'Escape') {
     if (commentMode) { cancelComment(); return; }
-    if (info) { info = null; hoverInfo = null; send({ type: 'SP_DESELECT' }); render(); return; }
+    if (info) { info = null; hoverInfo = null; runInspectorAction(send({ type: 'SP_DESELECT' })); render(); return; }
   }
 
   // Arrow keys in layers tab
@@ -14407,7 +14609,7 @@ document.addEventListener('keydown', (e) => {
     } else {
       nextIdx = currentIdx >= visible.length - 1 ? 0 : currentIdx + 1;
     }
-    selectElement(visible[nextIdx].id);
+    runInspectorAction(selectElement(visible[nextIdx].id));
     // Scroll into view
     setTimeout(() => {
       const el = root.querySelector('[data-dm-layer="' + visible[nextIdx].id + '"]');
@@ -14432,15 +14634,24 @@ document.addEventListener('keydown', (e) => {
 for (const action of ['toggle-inspect', 'add-annotation', 'region-comment', 'freeze-animations', 'tab-layers', 'tab-design', 'tab-changes']) {
   registerShortcut(action, () => {
     if (action === 'toggle-inspect' && commentMode) return;
-    void send({ type: 'SP_TRIGGER_SHORTCUT', action });
+    void runInspectorAction(send({ type: 'SP_TRIGGER_SHORTCUT', action }));
   });
 }
 registerShortcut('export-css', async () => {
+  const operation = beginInspectorOperation();
   try {
-    const res = await send({ type: 'SP_EXPORT', format: 'css' });
-    if (typeof res.output !== 'string') { showCaptureToast('error', 'Could not export CSS'); return; }
-    await navigator.clipboard.writeText(res.output);
-  } catch { showCaptureToast('error', 'Could not copy CSS'); }
+    const output = operation.wait(send({ type: 'SP_EXPORT', format: 'css' }, operation)).then(res => {
+      if (typeof res.output !== 'string') throw new Error('Could not export CSS');
+      return res.output;
+    });
+    const safariCopy = IS_SAFARI ? writeInspectorTextClipboard(output) : null;
+    const text = await operation.wait(output);
+    if (safariCopy) {
+      if (!await operation.wait(safariCopy)) throw new Error('Could not copy CSS');
+    } else await operation.wait(navigator.clipboard.writeText(text));
+  } catch {
+    if (operation.isCurrent()) showCaptureToast('error', 'Could not copy CSS');
+  }
 });
 void loadShortcuts().then(enableShortcuts);
 setupDelegation();

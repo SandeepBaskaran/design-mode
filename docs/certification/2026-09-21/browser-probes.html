@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><title>Read-only-source certification fixture</title>
+<script>
+const memory = {};
+window.browser = {runtime:{lastError:null,sendMessage:async()=>({})},storage:{local:{get:async key=>({[key]:structuredClone(memory[key])}),set:async data=>Object.assign(memory,structuredClone(data))},session:{get:(key,cb)=>cb({[key]:structuredClone(memory[key])}),set:(data,cb)=>{Object.assign(memory,structuredClone(data));cb?.()}},onChanged:{addListener(){}}}};
+window.chrome = window.browser;
+</script>
+<script src="probe-bundle.js"></script><main id="fixture"></main><pre id="results">pending</pre>
+<script>
+(async()=>{
+const {tracker:T,helpers:H,comments:C,tokens:V} = Probe;
+const results=[];
+const test=async(id,fn)=>{try{const data=await fn();results.push({id,...data})}catch(e){results.push({id,error:String(e),stack:e.stack})}};
+const fixture=document.getElementById('fixture');
+const reset=(html)=>{T.clearAllChanges();C.hideAllPins();V.clearAllTokenEdits();fixture.innerHTML=html;};
+const style=(id,selector,property,newValue)=>({id:'change-'+id,elementId:id,selector,property,newValue,oldValue:'',timestamp:1});
+await test('P01-normal-style-target-isolation',()=>{reset('<div id="a">A</div><div id="b">B</div>');T.applyChangesPayload({styleChanges:[style('dm-301','#a','opacity','0.5')],textChanges:[],domChanges:[]});return {expected:'a=0.5 b=1',actual:[getComputedStyle(a).opacity,getComputedStyle(b).opacity]}});
+await test('P02-import-html-event-handler',async()=>{reset('<div id="a">A</div>');T.applyChangesPayload({styleChanges:[],domChanges:[],textChanges:[{id:'text1',elementId:'dm-302',selector:'#a',isHtml:true,oldText:'A',newText:'<img src="data:image/png,not-valid" onerror="document.documentElement.dataset.certInjection=\'executed\'">',timestamp:1}]});await new Promise(r=>setTimeout(r,100));return {expected:'no execution',actual:document.documentElement.dataset.certInjection||'not executed',scope:'page context only; benign local DOM marker, no network'}});
+await test('P03-import-css-rule-breakout',()=>{reset('<div id="a">A</div><div id="b">B</div>');T.applyChangesPayload({styleChanges:[style('dm-303','#a','color','red; } #b { opacity: 0.123; } /*')],textChanges:[],domChanges:[]});return {expected:'b opacity=1',actual:getComputedStyle(b).opacity,emitted:document.getElementById('dm-applied-styles').textContent}});
+await test('P04-replay-forward-sibling-move',()=>{reset('<div id="parent"><span id="a">A</span><span id="b">B</span><span id="c">C</span></div>');T.applyChangesPayload({styleChanges:[],textChanges:[],domChanges:[{id:'move1',elementId:'dm-304',selector:'#a',action:'move',tagName:'span',destination:{parentSelector:'#parent',index:2},origin:{parentSelector:'#parent',index:0},timestamp:1}]});return {expected:'BCA',actual:document.getElementById('parent').textContent}});
+await test('P05-css-important-specificity',()=>{reset('<style>#a {opacity:0.9 !important}</style><div id="a">A</div>');T.applyChangesPayload({styleChanges:[style('dm-305','#a','opacity','0.5')],textChanges:[],domChanges:[]});return {expected:'0.5',actual:getComputedStyle(a).opacity}});
+await test('P06-spa-node-recreation-style',()=>{reset('<div id="a">A</div>');T.applyChangesPayload({styleChanges:[style('dm-306','#a','opacity','0.5')],textChanges:[],domChanges:[]});a.outerHTML='<div id="a">A refreshed</div>';T.scheduleRestamp();return {expected:'0.5 per FEATURES persistence promise',actual:getComputedStyle(a).opacity}});
+await test('P07-comment-reload-anchor',async()=>{reset('<div id="a">A</div>');await browser.storage.local.set({'dm-comments':[{id:'comment-1',elementId:'dm-307',selector:'#a',text:'Saved on earlier load',pageUrl:location.href,timestamp:1,updatedAt:1}]});await C.restoreCommentPins();return {expected:'1 visible pin',actual:document.querySelectorAll('.dm-comment-pin').length,comments:(await C.getPageComments()).length}});
+await test('P08-malformed-import-id',()=>{reset('<div id="a">A</div>');let error=null;try{T.applyChangesPayload({styleChanges:[style('invalid"[','#a','color','red')],textChanges:[],domChanges:[]})}catch(e){error=String(e)}return {expected:'validated rejection before any replacement',actual:error}});
+await test('P09-token-rule-value-boundary',()=>{reset('<div id="a">A</div><div id="b">B</div>');V.setTokenEdit('--safe','red; } #b { opacity: 0.123; } /*');return {expected:'b opacity=1',actual:getComputedStyle(b).opacity}});
+await test('P10-token-preview-original',()=>{reset('<style>:root {--cert-color:rgb(0,0,255)} #a { color:var(--cert-color) }</style><div id="a">A</div>');V.setTokenEdit('--cert-color','rgb(255,0,0)');T.setOverridesEnabled(false);return {expected:'blue if same preview-original toggle owns tokens',actual:getComputedStyle(a).color,scope:'tracker API only; check content toggle for additional token handling'}});
+await test('P11-unsafe-direct-href-import',()=>{reset('<a id="a" href="/safe">A</a>');T.applyChangesPayload({styleChanges:[],domChanges:[],textChanges:[{id:'link1',elementId:'dm-309',selector:'#a',attributeName:'href',oldText:'/safe',newText:'javascript:void(0)',timestamp:1}]});return {expected:'/safe; 0 tracked unsafe changes',actual:a.getAttribute('href'),tracked:T.getTextChanges().length}});
+document.getElementById('results').textContent=JSON.stringify({browser:navigator.userAgent,extensionInstalled:false,messaging:'mocked',probes:results},null,2);
+})().catch(e=>document.getElementById('results').textContent=JSON.stringify({fatal:String(e),stack:e.stack}));
+</script>

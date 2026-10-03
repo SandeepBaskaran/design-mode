@@ -1,8 +1,9 @@
 import { Background } from "@/components/background";
+import { AgentWorkflow } from "@/components/blocks/agent-workflow";
+import { BrowserHandoff } from "@/components/blocks/browser-handoff";
+import { ClosingCta } from "@/components/blocks/closing-cta";
 import { FAQ, homepageFaqQA } from "@/components/blocks/faq";
-import { Features } from "@/components/blocks/features";
-import { Hero, HeroShowcase } from "@/components/blocks/hero";
-import { HeroImage } from "@/components/blocks/hero-image";
+import { Hero } from "@/components/blocks/hero";
 import { PanelAnatomy } from "@/components/blocks/panel-anatomy";
 import {
   JsonLd,
@@ -26,10 +27,10 @@ export const metadata = {
     url: "https://designmode.app/",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -39,10 +40,10 @@ export const metadata = {
     description: homeDescription,
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -56,14 +57,14 @@ export default function Home() {
       <Background>
         <Hero />
       </Background>
-      <HeroShowcase />
-      <Features />
+      <AgentWorkflow />
       <PanelAnatomy />
       {/* <Testimonials /> — hidden until we have real quotes */}
+      <FAQ />
+      <BrowserHandoff />
       <Background variant="bottom">
-        <FAQ />
+        <ClosingCta />
       </Background>
-      <HeroImage />
     </>
   );
 }

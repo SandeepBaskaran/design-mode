@@ -14,17 +14,16 @@ function fixture(protocol = 'chrome-extension:') {
   let handler: any;
   let storageReads = 0;
   const store = createCommentStore({ get: async () => { storageReads++; return {}; }, set: async () => {} });
-  const statement = ast.statements.find(n => ts.isExpressionStatement(n) && ts.isCallExpression(n.expression)
-    && n.expression.expression.getText(ast) === 'browser.runtime.onMessage.addListener');
+  const statement = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'dispatchPanelMessage');
   assert.ok(statement);
-  const context = vm.createContext({
+  const context = vm.createContext({ IS_SAFARI: false,
     URL, Error, isAnalyticsSender, currentTargetTab: null, COMMENT_STORE_ERROR: 'rejected', COMMENT_PAGE_ERROR: 'damaged',
     commentStore: async (operation: unknown, senderUrl: string) => { calls.push([operation, senderUrl]); return store(operation, senderUrl); },
     forwardToPinnedTab: (message: any, reply: any) => { calls.push({ message, tabId: context.currentTargetTab }); reply({ ok: true }); },
     browser: { runtime: { ...runtime, onMessage: { addListener: (fn: any) => { handler = fn; } } },
       tabs: { sendMessage: async (tabId: number, message: any) => { calls.push({ tabId, message }); return { ok: true }; } } },
   });
-  vm.runInContext(ts.transpile(statement.getText(ast), { target: ts.ScriptTarget.ES2022 }), context);
+  vm.runInContext(ts.transpile(statement.getText(ast) + (ts.isFunctionDeclaration(statement) ? '\nbrowser.runtime.onMessage.addListener(dispatchPanelMessage);' : ''), { target: ts.ScriptTarget.ES2022 }), context);
   return { calls, runtime, get storageReads() { return storageReads; },
     request: (msg: any, sender: any) => new Promise<any>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`No acknowledgement for ${msg.type}`)), 500);
@@ -76,13 +75,13 @@ it('panel ports validate sender and full tab syntax without rejecting popout/PiP
     const runtime = { id: 'extension', getURL: (path: string) => `${protocol}//extension/${path}` };
     const panelPorts = new Map();
     let connect: any;
-    const context = vm.createContext({ URL, isAnalyticsSender, panelPorts, panelSurfaces: new Map(),
+    const context = vm.createContext({ IS_SAFARI: false, URL, isAnalyticsSender, panelPorts, panelSurfaces: new Map(),
       transitioningTabs: new Set(), pinnedTabId: null, pinnedTabUrl: null, isScriptableUrl: () => false,
       browser: { runtime: { ...runtime, onConnect: { addListener: (fn: any) => { connect = fn; } } },
         tabs: { get: async (id: number) => ({ id, url: 'https://page.test/' }),
           query: async () => [{ id: 7, url: 'https://page.test/' }] } },
     });
-    vm.runInContext(ts.transpile(statement.getText(ast), { target: ts.ScriptTarget.ES2022 }), context);
+    vm.runInContext(ts.transpile(statement.getText(ast) + (ts.isFunctionDeclaration(statement) ? '\nbrowser.runtime.onMessage.addListener(dispatchPanelMessage);' : ''), { target: ts.ScriptTarget.ES2022 }), context);
     const port = (name: string, url = runtime.getURL('sidepanel/index.html')) => ({ name,
       sender: { id: runtime.id, url, tab: { id: 99 } }, postMessage() {}, onDisconnect: { addListener() {} } });
     for (const name of ['sidepanel:7evil', 'sidepanel:-1', 'sidepanel:1.5', 'sidepanel:Infinity', 'sidepanel:7:other']) connect(port(name));

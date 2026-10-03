@@ -22,10 +22,10 @@ export const metadata = {
     url: "https://designmode.app/compare",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -35,10 +35,10 @@ export const metadata = {
     description: pageDescription,
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -73,7 +73,7 @@ export default function ComparisonsIndex() {
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Which browser visual editor fits your workflow?
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed md:text-2xl">
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed">
               There is no single best tool for every job. Choose a direct
               live-page editor when you need to make the intended visual change,
               an annotation tool when feedback is enough, browser automation for

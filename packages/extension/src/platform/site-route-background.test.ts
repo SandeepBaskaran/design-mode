@@ -58,6 +58,7 @@ function harness() {
       if (path.endsWith('/launch-surface')) return {
         DEFAULT_LAUNCH_SURFACE: 'side-panel', LAUNCH_SURFACE_KEY: 'dm-launch-surface', parseLaunchSurface: () => 'side-panel',
       };
+      if (path === '../inspector/bridge-background') return { installInspectorBridge() {} };
       throw new Error(`Unexpected import: ${path}`);
     },
   });

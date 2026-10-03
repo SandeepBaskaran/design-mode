@@ -24,10 +24,10 @@ export const metadata = {
     url: "https://designmode.app/about",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -38,10 +38,10 @@ export const metadata = {
       "Why Sandeep Baskaran built an open-source browser visual editor that turns rendered-page changes into precise coding-agent instructions.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },

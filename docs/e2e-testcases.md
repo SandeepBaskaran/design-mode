@@ -20,12 +20,24 @@ before ticking.
 
 ---
 
+## Required native checks before merge
+
+These checks remain **pending** until exercised against the installed final build in disposable Chrome and Firefox profiles. Unit tests, mocked messaging and synthetic keyboard events do not establish a native pass. Record browser/OS versions, artifact hash and evidence for each result.
+
+- [ ] Physical keyboard delivery with page and panel focus: Option/Alt shortcuts, Undo/Redo, Enter/Shift+Enter, Escape, editable targets, IME/AltGr and the accepted Firefox comment-focus limitation below.
+- [ ] Actual clipboard write and read-back for Copy as Prompt, computed CSS, diagnostics and screenshot PNG; record denied-permission behaviour without granting personal-profile permissions.
+- [ ] Toolbar activation, close/reopen and bound-tab switching in Chrome's side panel and Firefox's native sidebar; verify no duplicate content listeners.
+- [ ] Chrome floating window: open, edit, keyboard shortcuts, tab binding, close and dock back without losing edits.
+- [ ] Chrome Picture-in-Picture: click-driven opening, focus, edit, close and dock-back lifecycle; confirm floating/PiP controls are absent on Firefox.
+- [ ] Tooltip visibility and accessible names using pointer hover and keyboard focus, including narrow sidebars, floating windows and PiP; no clipping or stale tooltips after rerender.
+- [ ] Changes Appearance filter retains style-only grouping and counts; the Design Appearance section remains named Appearance. Do not relabel CSS style values or API fields.
+
 ## Phase 0 — Activation & lifecycle
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 0.1  | Extension loads | Load unpacked → check the icon in the toolbar | Design Mode icon appears, no error in `chrome://extensions` |
-| 0.2  | Side panel opens | Click the toolbar icon | Side panel slides in on the right |
+| 0.2  | Side panel opens | Click the toolbar icon | Chrome opens its side panel; Firefox opens its native sidebar on the browser-configured side |
 | 0.3  | Auto-activate inspect | Open the side panel for the first time | The page cursor becomes the **Design Mode app icon** (the default; Settings → Page cursor → Off falls back to a plain crosshair); Design tab shows the page-context view (`<body>` selected with a "Page" indicator chip) |
 | 0.4  | Pinned-tab behaviour | Open the panel on tab A, switch to tab B | The panel keeps showing data for tab A (it pins to the tab where it was opened) |
 | 0.5  | Side-panel close → inspect off | Close the side panel | The Design Mode page cursor disappears within ~50ms; hover overlays don't follow the mouse anymore |
@@ -33,7 +45,7 @@ before ticking.
 | 0.7  | Page reload preserves changes | Make 3 style edits + 1 hide + 1 delete, reload | All 5 are re-applied automatically when the panel re-opens |
 | 0.8  | URL navigation isolates | Navigate to a different URL in the same tab | Changes from URL A do **not** apply to URL B; Changes tab resets |
 | 0.9  | Browser-session boundary | Close & reopen browser | Session storage is cleared (per `chrome.storage.session` semantics) — fresh state |
-| 0.10 | Theme toggle | Click sun/moon in header | Side panel + page overlays switch theme; persists across reloads |
+| 0.10 | Theme toggle | Click sun/moon in header; compare panel and configured page-overlay colours, then reload | Side panel switches theme and persists across reloads; page overlay colours retain the configured overlay colours rather than following panel theme |
 | 0.11 | Side-panel toggle shortcut | Check `chrome://extensions/shortcuts`, assigning `Alt+D` if Chrome left the manifest suggestion blank; press it | Opens Design Mode on the current launch surface (default: side panel). Firefox: sidebar |
 | 0.12 | Unscriptable page | Open the panel on a `chrome://` page, the Chrome Web Store, or a devtools page (on Firefox: an `about:` page such as `about:addons`) | No "cannot be scripted" / "could not establish connection" error spam in the background console; the panel shows a disabled / empty state, not a crash |
 
@@ -48,7 +60,7 @@ it lives on its own MCP page (Phase 0.7), opened from the header MCP chip.**
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
 | 0.5.1 | Open / close | Click gear → click gear again | Settings view replaces the tabs; clicking again returns to the previous tab |
-| 0.5.2 | Theme picker (system / dark / light) | Pick each | Side panel + page overlays update; persists across reloads |
+| 0.5.2 | Theme picker (system / dark / light) | Pick System, Dark and Light; compare panel and configured page-overlay colours; reload each mode | Side panel follows the selected system/dark/light theme and persists across reloads; configured page overlay colours remain independent |
 | 0.5.3 | Color format (HEX / RGBA / HSL) | Switch each option | All colour text inputs in the Design tab re-render in the chosen format on next selection; existing rules keep their stored format |
 | 0.5.4 | Screenshot capture mode | Switch among Clipboard / Download / Both | Subsequent camera-button screenshots respect the mode |
 | 0.5.5 | Inspector hover colour | Pick a custom colour (e.g. green) | Hover overlay repaints **live** (no reload) in the new colour; the swatch shows its hex |
@@ -73,7 +85,7 @@ any one closes the other three.
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
 | 0.6.1 | Open / close Help | Click `?` icon → click `?` again | Help overlay replaces the tabs; second click closes |
-| 0.6.2 | Help links | From Help, click Report an issue / Read the docs / Privacy / Security disclosure | Each opens the right page in a new tab via `target="_blank"` |
+| 0.6.2 | Help links | From Help, inspect and activate Report an issue / Read the docs / Privacy; inspect Security disclosure without sending email | Report / docs / Privacy use HTTPS and open their documented destinations in a new tab via `target="_blank"`. Security disclosure uses `mailto:hello@sandeepbaskaran.com` per SECURITY.md (the configured mail handler, not an HTTPS page); never send a test disclosure |
 | 0.6.3 | Copy diagnostics | In Help, click Copy diagnostics | Clipboard contains `Design Mode: x.y.z` + Chrome + Platform + Theme; button label flashes "Copied ✓" then reverts after ~1.5s |
 | 0.6.4 | Open / close Contribute | Click heart-handshake icon → click again | Contribute overlay replaces the tabs; second click closes |
 | 0.6.5 | Contribute links | Click each row in Contribute (Star repo, Review, Report issue, Start a discussion, Open a pull request, Sponsor on GitHub) | Each opens the right URL in a new tab. The Review row is browser-aware: "Review on the Chrome Web Store" (CWS listing) on Chromium; "Review on Firefox Add-ons" (AMO listing `design-mode-add-on`) on Firefox |
@@ -93,7 +105,7 @@ Replaces the old "MCP" section inside Settings. All values persist via `chrome.s
 | 0.7.2 | Auto-refresh on open | Click the chip and watch the status card | Opening the page re-pings the server; the status card's dot + label (Offline / Running / Connected) reflect the live state |
 | 0.7.3 | Refresh status button | On the MCP page, click **Refresh status** | Re-pings the content script + server; a toast appears only when the state actually changed |
 | 0.7.4 | Back button | Click the ‹ back chevron | Returns to the previously active tab |
-| 0.7.5 | MCP — mode (Cloud / Local / Self-hosted) | Switch each | Cloud (default for fresh installs) uses `https://mcp.designmode.app` (or the configured URL); Local uses `ws://localhost:<port>`; Self-hosted exposes a URL field |
+| 0.7.5 | MCP — mode (Cloud / Local / Self-hosted) | On a fresh install confirm Cloud default; switch Cloud / Local / Self-hosted and inspect actual connection endpoints | Cloud (fresh-install default) uses the configured Cloud endpoint; Local uses authenticated ws://127.0.0.1:<port> with its capability query; Self-hosted exposes a URL field |
 | 0.7.6 | MCP — port (Local) | In Local mode, change to e.g. `9970` | Persists; affects the WebSocket URL the extension dials on next connect |
 | 0.7.7 | MCP — auto-connect (Local) | Toggle off | Side panel doesn't auto-dial on open; the indicator stays grey until manually connected |
 | 0.7.8 | MCP — cloud token & tenant | Register / enter a token + tenant ID | Stored in `chrome.storage.local`; shown masked; Copy MCP config / Copy token / Revoke work; clearing re-disconnects |
@@ -116,7 +128,7 @@ limit on suggested command bindings does not apply to in-page handlers.
 
 | #      | Test | Steps | Expected |
 |--------|------|-------|----------|
-| 0.10.0 | Shortcuts popover | Help (`?`) → **Keyboard shortcuts** | A popover card opens listing every shortcut grouped by category (General / Annotations / Animation / Editing / Export / Navigation), keys as `<kbd>` chips. Backdrop click, ✕, and `Esc` each close it; clicking inside the card does not |
+| 0.10.0 | Shortcuts popover | Help (`?`) → **Keyboard shortcuts** | A popover card opens listing every shortcut grouped by category (General / Annotations / Animation / Export / Navigation, plus **Fixed** for built-in Deselect / Delete Element / Undo / Redo), keys as `<kbd>` chips. Backdrop click, ✕, and `Esc` each close it; clicking inside the card does not |
 | 0.10.1 | Alt+I — Toggle inspect | Press | Inspect crosshair toggles on/off |
 | 0.10.1a | macOS Option shortcuts | On macOS, press Option+I/C/R/P/X and Option+1/2/3 with page focus | Each action fires even when macOS produces an alternate glyph or dead key; extra modifiers do not trigger unrelated bindings |
 | 0.10.1b | Inspect button without selection | Enable Design Mode with no selection; toggle Inspect off/on, then repeat with a selection | Button stays available, exposes pressed state, and controls only inspection; edits and Design Mode remain active |
@@ -124,7 +136,7 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 0.10.1d | Keyboard layout and composition | Use a non-QWERTY layout; exercise logical-letter shortcuts, AltGr text entry and IME composition | Logical-letter shortcuts remain usable; AltGr/IME text entry is not intercepted |
 | 0.10.1e | Incomplete saved shortcuts | In a disposable test profile, try empty, partial and malformed `dm-shortcuts` values, then reload or update storage live | Default actions remain available; valid custom bindings are preserved; invalid entries do not disable other shortcuts |
 | 0.10.1f | Side-panel shortcut focus | Focus a non-editable panel area, then use Option+I/C/R/P/X and Option+1/2/3; repeat in a panel text field | Editor shortcuts reach the pinned page; text fields retain normal typing behaviour |
-| 0.10.2 | Alt+C — Comment on selected element | Select an element → press | Side panel switches to comment-add mode with the textarea focused; if nothing is selected, no-op |
+| 0.10.2 | Alt+C — Comment on selected element | Select an element → press; verify actual typing without clicking the composer | Side panel switches to comment-add mode with the textarea focused; if nothing is selected, no-op. **Known Firefox/macOS limitation:** keyboard-only focus is not a pass; use the click-to-focus workaround below |
 | 0.10.2b | Alt+R — Comment on a region | Press | Crosshair draw mode activates; drag a rectangle → side panel opens the comment composer in "region" mode; Esc mid-draw cancels |
 | 0.10.3 | Alt+P — Pause motion | Press | Toggles a global freeze: CSS animations + transitions + Web-Animations API instances + `<video>` elements pause; press again to resume |
 | 0.10.4 | Alt+S — Screenshot | Check `chrome://extensions/shortcuts`, assigning `Alt+S` if Chrome left the manifest suggestion blank; select an element or leave on Page → press | Same as the camera button: viewport vs element from selection, destination from Settings → Capture mode (clipboard / download / both) |
@@ -138,11 +150,12 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 0.10.12 | Shortcut suppression in inputs | Focus a page `<input>` / `<textarea>` / contenteditable, then press Alt+1/2/3 (or any other shortcut except Escape) | The page input receives the keystroke as normal; the side-panel action does NOT fire |
 | 0.10.13 | Cmd/Ctrl+click on a Layers row | In Layers tab, Cmd-click 3 layer rows in turn | Each toggles into the multi-select set; the "N selected" chip in the action row updates; page-side overlay outlines all 3 |
 | 0.10.14 | Shift+click on a Layers row (range) | Click layer A with no modifier → Shift+click layer C three rows down | All visible rows from A to C are selected; the multi-select badge reflects the count |
+| 0.10.14c | Standalone Layers multi-select toggle | Turn on Multi-select beside Layers search; plain-click two rows; remove both; add another; toggle off. Repeat with Shift-click, then bulk Clear and edit one property | Pressed state survives an empty set; ordinary row clicks toggle membership; Shift range works in either mode; toggle off and Clear exit and synchronize the page, so later edits do not fan out. Controls remain reachable in a narrow sidebar. |
 | 0.10.14b | Delete a Layers multi-selection | Shift-select several sibling layers, click Delete in the action row, inspect Changes, then Undo/Redo each deletion | Every selected layer is deleted and receives one correctly targeted DOM change; the multi-selection clears; Undo/Redo restores/removes the layers in structural order without duplicates |
 | 0.10.15 | Arrow Up/Down in Layers | Switch to Layers tab → press ↓ several times | Selection moves down one visible row per press, wraps at the end; the row stays in view (`scrollIntoView` keeps it visible) |
 | 0.10.16 | Enter to collapse/expand a container row | In Layers tab, select a container row with children → Enter | Children collapse; press Enter again → re-expand |
 | 0.10.17 | Numeric Arrow stepping (px props) | Click any pixel input (e.g. font-size) → ↑ | Value increments by 1; Shift+↑ by the Settings → Nudge amount (default 10) |
-| 0.10.18 | Numeric Arrow stepping (unitless props) | Click a unitless input (e.g. line-height) → ↑ | Value increments by 0.1; Shift+↑ by 1 |
+| 0.10.18 | Numeric Arrow stepping (unitless props) | Set line-height to `1.5` → ↑ → Shift+↑; repeat with explicit `24px`; also try `1.5em`, `150%`, and `normal` | Unitless value becomes 1.6, then 2.6 (0.1 / Shift+1). Explicit 24px becomes 25px, then 35px with default Nudge amount 10. Authored units survive panel refresh; em/% and normal apply without px coercion |
 | 0.10.19 | Esc priority | With a multi-selection active, press Esc twice | First press clears the multi-selection; second clears the single selection back to hover. Esc never turns inspection off. |
 | 0.10.20 | Esc with panel focused | Select an element, click into the side panel (panel has focus), press Esc | The page selection + resize handles clear and the Design tab drops to the page/hover view (the panel forwards a deselect to the page). |
 | 0.10.21 | Multi-select plain-click collapse | Multi-select 3 elements, then plain-click (no Shift) a 4th element | The whole set clears and **only the 4th** is selected (Figma parity); Shift-click still adds/toggles set membership. |
@@ -153,6 +166,12 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 0.10.25 | Enter on colour-picker hex input | Type a hex value (e.g. `#abc123`) in the picker → Enter | Value applied; picker dropdown closes |
 
 ---
+
+### Accepted release limitation — Firefox comment focus
+
+On Firefox **156.0 on macOS**, a shortcut can open one selected-element comment composer without transferring keyboard focus from the page. Click the composer textarea before typing. This workaround is accepted for this release; it does **not** make keyboard-only case **0.10.2** pass. No alternate composer UI or default binding change is included.
+
+The user's reported **Raycast global Option+C conflict is separate**: native tests saw no KeyC delivered to Firefox, but did not independently identify the intercepting process. A conflict-free disposable binding delivered the action and still reproduced the sidebar focus failure. Settings lists shortcuts read-only; there is no custom shortcut editor in this build. Firefox's extension-shortcut manager exposes registered Toggle/Capture commands, not Comment.
 
 ## Phase 1 — Inspect & select
 
@@ -176,7 +195,7 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 1.16 | Resize follows scroll | Resize, then scroll | All eight handles stay anchored to the element |
 | 1.17 | Shift-select pairwise distances | Select an element, then Shift+click a second | Both outline (dashed); pairwise distance pills render between them; Shift+click more to extend |
 | 1.18 | Pairwise distances persist on hover/scroll | With ≥2 shift-selected, move the mouse away and scroll | Pairwise pills remain and stay anchored (not cleared by mouse-out) |
-| 1.19 | Move cursor over selection | Select an element, then hover its body (not a handle) | Cursor swaps to `move`; cursor returns to crosshair when hovering any non-selected element |
+| 1.19 | Move cursor over selection | Select an element; hover its body (not a handle), then a non-selected element; repeat with custom cursor Off | Selected body uses move; non-selected elements use the configured Design Mode cursor (crosshair only when custom cursor is Off) |
 | 1.20 | Drag-to-move is live + guided | Select a non-static element, drag its body | Element moves live; orange outline + handles follow the cursor; Design-tab **X** / **Y** fields tick during the drag; magenta alignment guides appear when edges/centres line up with siblings (see 1.28) |
 | 1.21 | Move persists + exports | Release the drag, open Changes tab + Export CSS | New `left`/`top` appear as a single **Move** group in Changes and in the exported CSS; Cmd/Ctrl+Z reverts both offsets together |
 | 1.22 | Move under-threshold = click | Mousedown on the selected element, release without moving | No drag fires; no Changes entry; selection stays as-is |
@@ -199,18 +218,18 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 2.1  | Rich-text editor — leaf text | Select a `<p>` / `<h1>` with no element children | "Text Content" contenteditable shows the element's HTML; B / I / U / S / list / link toolbar above it |
 | 2.1a | Rich-text editor — text layer with children | Select a layer that shows the T (type) icon in Layers (h1-h6, p, span, a, button, li, etc.) | Editor still renders, seeded with the element's `innerHTML` |
 | 2.2  | No editor for non-text containers | Select a generic `<div>` / `<section>` (icon is layoutGrid / layoutDashboard, not T) | No "Text Content" field |
-| 2.3  | Toolbar Bold / Italic / Underline / Strike | Select text in editor → click each | Formatting wraps the selection (`<b>`, `<i>`, `<u>`, `<s>`); applies to the live page on blur |
+| 2.3  | Toolbar Bold / Italic / Underline / Strike | Select text in editor → click each | Formatting wraps the selection (`<b>`, `<i>`, `<u>`; strike uses browser-native serialization rather than requiring literal `<s>`); each applies to the live page on blur |
 | 2.4  | Toolbar lists | Click bulleted / numbered list | `<ul>` / `<ol>` inserted into editor; markers visible (CSS in `index.html` keeps them shown) |
 | 2.5  | Toolbar link | Select text → click link → enter URL | Wraps selection in `<a href="…">`; renders in accent colour with underline |
 | 2.6  | Toolbar Strip formatting | Select text → click `⨯ fmt` | All inline formatting removed |
 | 2.7  | Save on blur | Edit text → click outside the editor | Element updates; **text-change row appears in Changes tab** with `isHtml: true` so the HTML round-trips on reload |
 | 2.8  | Native shortcuts | While editing, press `⌘B` / `⌘I` / `⌘U` | Browser's contenteditable shortcuts work (B/I/U toggle selection) |
 | 2.8a | Enter commits and leaves the field | Edit a single-line value or Text Content, then press Enter/Return | The value is applied and keyboard focus leaves the field; Shift+Enter still inserts a newline in multiline fields |
-| 2.8b | Mixed text and media preservation | In `test-fixtures/index.html`, select `#class-icon-btn`, `#svg-icon-btn`, and `#css-media-btn`; confirm the inert media chip is visible, edit only their text, and press Enter, then Undo and Redo | Enter commits and leaves the editor; text updates normally; the empty class icon, attributed SVG wrapper, and nested CSS-image span remain in their original position with their original attributes, without duplication through edit/Undo/Redo, and no page markup executes in the panel |
+| 2.8b | Mixed text and media preservation | In `test-fixtures/index.html`, retain each attributed parent and media unchanged. Edit existing text in `#class-icon-btn`, the existing text-bearing child of `#svg-icon-btn`, and the editable text of `#css-media-btn`; confirm inert media chips, then Enter, Undo and Redo without rewriting fixture markup | Enter commits and leaves the editor; text updates at its original position; empty class icon, attributed SVG wrapper and nested CSS-image span preserve their original node identity, position and attributes without duplication through edit/Undo/Redo; no page markup executes in the panel |
 | 2.8c | Nested text-layer preservation | Select `#nested-text-layer`, replace the parent's editable text, then select its `.bg-primary` child and edit that child directly | The attributed child appears as an inert chip while its parent is edited and survives unchanged; selecting the child exposes its own text for editing |
 | 2.8d | Link destination editing | Select `#rich-link`, change the URL in the Markdown-style `[label](URL)` row, then try `javascript:alert(1)` | The safe URL updates the link and its Changes entry without exposing the hidden accessibility span or SVG; the active-protocol URL is rejected |
 | 2.9  | Font weight named dropdown | Click weight | Options shown as `Thin (100)`, `Light (300)`, `Regular (400)`, `Medium (500)`, `Semi Bold (600)`, `Bold (700)`, etc. |
-| 2.10 | Strict numeric inputs | Type `abc` in font size | Characters are blocked; only digits / single minus / one decimal up to 2 places allowed |
+| 2.10 | Strict numeric inputs | In font size, try letters, minus, digits, a second decimal point and more than two fractional digits | Font size accepts non-negative numeric values, at most one decimal point and two fractional digits; letters and minus are rejected |
 | 2.11 | Arrow stepping | Click size, press ↑ | Increments by 1 (px appended automatically) |
 | 2.12 | Shift + arrow stepping | `Shift+↑` | Increments by 10 |
 | 2.13 | Bold / italic / underline / strike toggles in Typography section | Click each B / I / U / S below the rich text editor | Toggles apply visually; toggle again to remove |
@@ -239,35 +258,35 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 3.0  | Empty sections default collapsed | Select a plain `<div>` with a background but no border/shadow/filter | **Stroke**, **Effects**, and **Layout guide** open collapsed (nothing to show); **Fill** opens expanded (it has a background). Select an element that *does* have a border/shadow and those sections open expanded. Manually toggling a section pins it (overrides the content default) until the next selection of an untoggled section |
 | 3.1  | Computed box layout | Select an element with margin and padding → expand Layout → Advanced | Chrome-DevTools box shown: outer dashed (margin) → inner solid (padding) → centre dimension pill (`W × H`) |
 | 3.2  | Edit padding via computed box | In Layout → Advanced, click padding-top in the box, type `24`, blur | Element padding-top becomes `24px`; change recorded |
-| 3.2a | Figma margin/padding expand | In Layout, type a uniform Margin value; click the expand (scan) button on the Margin row | Uniform writes the `margin` shorthand; expand reveals 4 side inputs (↑→↓←) writing `margin-top/right/bottom/left`; per-side edits land in Changes. Same for Padding |
+| 3.2a | Figma margin/padding expand | In Layout, set uniform Margin, expand to four sides, then edit each side; repeat for Padding | Uniform margin/padding writes four longhands; expand reveals 4 independent side inputs (↑→↓←) for top/right/bottom/left; per-side edits land in Changes |
 | 3.3  | Border width 4 sides | Set top / right / bottom / left widths | All 4 borders update independently |
 | 3.4  | Border link button | Click the round link icon in the centre of the 2×2 grid | Icon turns blue (linked); editing one side updates all four |
 | 3.5  | Border unlink | Click again | Icon reverts to grey outline; edits are independent |
 | 3.6  | Radius linkable | Same flow with the radius grid | All four corners can be linked / unlinked |
-| 3.7  | Stroke position (Inside / Outside / Center) | Change in Stroke section | Inside renders via inset box-shadow chain; Outside via `border-*` (single) or outer box-shadow (multi); Center via `outline-*` |
+| 3.7  | Stroke position (Inside / Outside / Center) | Exercise Inside, Outside and Center for single and multiple strokes; compare element geometry before/after Outside paint | Inside renders via inset box-shadow; Outside via outer box-shadow for single and multiple strokes without changing layout geometry; Center via outline |
 | 3.8  | Display flex sub-controls | Set display to flex | Flex direction / wrap / justify / align / gap controls appear |
-| 3.9  | Display grid sub-controls | Set display to grid | Grid template columns/rows + gap controls appear |
+| 3.9  | Display grid sub-controls | Set display to grid; open Layout → Advanced | Gap controls appear; grid template columns/rows are available in Layout Advanced |
 | 3.9a | Gap Fixed / Auto mode | On a flex/grid container, Col/Row gap shows a Fixed/Auto dropdown. Type a px value in Fixed; switch to Auto | Fixed writes `column-gap`/`row-gap`; Auto spreads children via `space-between` (justify-content, or align-content for grid rows), field goes read-only showing the measured gap; switching back to Fixed restores an editable px value. Container whose CSS already has `space-between` opens in Auto |
 | 3.9b | Gap Auto preserves 9-pad alignment | Set a Children-align 9-pad position (e.g. center), switch gap to Auto, then back to Fixed | While Auto is active no 9-pad dot is falsely highlighted; switching back to Fixed restores the previously chosen alignment instead of resetting it |
 | 3.10 | Position offsets | Set position to `relative`, top `10` | Element shifts down 10px |
-| 3.11 | Z-index strict numeric | Type `10.5` in z-index | Allowed (2 decimals); type letters → blocked |
+| 3.11 | Z-index strict numeric | In z-index, try an integer, `10.5`, and letters | Z-index accepts integers; fractional and letter input is rejected |
 | 3.12 | Opacity / transform | Set `opacity: 0.5`, transform `rotate(3deg)` | Both apply visually |
 | 3.13 | Box shadow builder | Use shadow inputs | Shadow appears; values reflect in Changes tab |
 | 3.14 | Animation easing visualizer | In Motion → Advanced, edit a `transition` value, click the curve preview icon | Bézier panel opens with adjustable control points; spring mode toggles to stiffness / damping / mass sliders |
 | 3.15 | Motion: add Hover interaction | Motion section → **When:** → **Hover** | A Hover card appears seeded with a Fade change + shared Curve; hovering the element on the page fades it |
 | 3.16 | Motion: real preview | On the Hover card, click ▶ Preview | Element plays the transition (forced `.dm-force-hover`); button toggles to pause; click again to stop |
 | 3.17 | Motion: add change preset | On a Hover card, click the **Lift** chip | A `translate` change row is added; hovering lifts the element |
-| 3.18 | Motion: Appear (@starting-style) | **When:** → **Appear**, then click ▶ | Element re-mounts and animates in from the seeded start state |
+| 3.18 | Motion: Appear (@starting-style) | **When:** → **Appear**, then click ▶ | Replay retains the DOM node and cycles display to animate from the seeded starting state |
 | 3.19 | Motion: Loop | **When:** → **Loop**, pick `dm-pulse` | Element pulses continuously; ▶ restarts the animation |
 | 3.20 | Motion: Scroll | **When:** → **Scroll** | `animation-timeline: view()` seeded; scrolling the element through the viewport drives the animation |
-| 3.21 | Motion: variant export | Add a Hover interaction, open Copy CSS | Output has a base rule + a real `.selector:hover { … }` rule (SCSS same; Tailwind uses `hover:`) |
+| 3.21 | Motion: variant export | Add a base edit and a Hover interaction; open Computed CSS and exercise Copy with clipboard readback; request CSS, SCSS and Tailwind through installed export messaging | CSS output contains the base rule and a real `.selector:hover { … }` rule; SCSS preserves the hover variant and Tailwind uses `hover:`. Computed CSS/Copy is exercised through its actual UI; clipboard readback is separate from export-message proof, and no format-selection UI is required |
 | 3.22 | Motion: Advanced disclosure | Toggle the Motion **sliders** icon | Raw Transition / Animation / Transform / Motion-path / View-transition / Scroll-driven editors appear below the cards |
 | 3.23 | Appearance: icon-first fields | Select an element → expand Appearance | Opacity field is led by a blend icon (no visible "Opacity" label — name shows on hover); Corner radius field is led by a maximize icon (no visible "Corner radius" label). Blend mode and Isolation are not in the main row — open Appearance → Advanced to find them |
 | 3.23a | Appearance: Corner shape | Select an element with a non-zero border-radius → in the Opacity/Corner-radius row, click the **corner-shape icon** (between the radius field and the `scan` expand icon) → pick `squircle` (or bevel/scoop/notch) | A single inline row of six shape icons expands below the row (icon-coloured, name on hover), round highlighted by default, not clipped by the next section; picking one applies `corner-shape` and closes the row. On newest Chromium the corners reshape live; the change appears in the Changes tab under Appearance and in Export CSS. Reselecting shows the trigger reflecting the set shape. Clicking outside also closes the row. On browsers without support the property is recorded but has no visual effect |
 | 3.24 | Corner radius: Mixed → forced uniform | Click the corner-expand (`scan`) toggle, set each of the 4 corners to a different value, collapse back to the primary row, then type a number into the primary field (showing `Mixed`) | Collapsed primary field shows a `Mixed` placeholder before the edit; typing over it writes the `border-radius` shorthand and all four corners snap to the typed value — re-expanding shows all 4 corners equal |
 | 3.25 | Layout guide: section eye visibility gating | Add one layout guide to an element, then add a second | With one guide, no section-level eye appears next to the Layout guide header — only the row's own eye. Once 2+ guides exist, a section eye appears top-right of the section header |
 | 3.26 | Layout guide: parent/child hide | With 2+ guides on an element, click the section eye to hide all guides, then click one dimmed row's own eye | Every guide disappears from the page; each row's own eye dims (~40% opacity) but still reflects and can toggle its individual on/off state; re-enabling the section eye reveals only the rows currently marked visible |
-| 3.27 | Layout guide: compact color panel | On a layout guide's expanded row, click the Colour swatch | The color panel opens with the essentials row (swatch + hex + eyedropper + format) and the HSV picker inline (compact mode keeps Custom expanded — no disclosure toggle) — no WCAG contrast row and no Site Colors token list |
+| 3.27 | Layout guide: compact color panel | On a layout guide's expanded row, click the Colour swatch in Chrome and Firefox | The color panel opens with the essentials row (swatch + hex + format, plus eyedropper on Chrome; Firefox omits the unsupported eyedropper) and the HSV picker inline (compact mode keeps Custom expanded — no disclosure toggle) — no WCAG contrast row and no Site Colors token list |
 | 3.28 | Computed flex/grid overlay | Select a flex or grid container → click **Show computed layout** | A session-only overlay paints computed tracks / children on the element. It is not a layout guide and does not appear in Changes. Toggle off, deselect, or disable Design Mode removes it |
 
 ---
@@ -282,8 +301,8 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 4.4 | Copy SVG markup | Click "Copy SVG markup" | SVG `outerHTML` ends up in the clipboard (paste into a text file to verify); the button briefly shows a check + "Copied" (~1.2s) then restores |
 | 4.5 | Video element | Select a `<video>` | Embedded `<video>` controls + Download button |
 | 4.6 | Background image | Select a div with `background-image: url(...)` | Media section detects the URL, offers download |
-| 4.7 | Icon library detection | Select a Lucide / Heroicons / Remix icon | Icon section appears showing library + name only; no package/CDN is loaded and no replacement control appears |
-| 4.8 | Media file size — cross-origin | Select a cross-origin image whose response is opaque | Meta line shows resolution + kind but omits the size (no error) |
+| 4.7 | Icon library detection | Select genuine Lucide / Heroicons / Remix icons, including stock inline Heroicons without identity metadata | Show library and name only when library-specific identity metadata supports them. Stock inline Heroicons without provenance remains an unidentified SVG; SVG/media inspection still works. Do not infer provenance from geometry or accessibility labels. No package/CDN is loaded and no replacement control appears |
+| 4.8 | Media file size — cross-origin | Select a loaded cross-origin image without page-readable byte metadata; compare a same-origin image with resource timing | Meta line shows resolution + kind but omits cross-origin byte size (no error); same-origin timing may provide size. Metadata inspection does not fetch the image again |
 
 ---
 
@@ -297,9 +316,9 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 5.4  | Layer click | Click a layer row | Element selected on the page, Design tab populates |
 | 5.5  | Layer hover | Hover a row | Hover overlay appears on the corresponding page element |
 | 5.6  | Drag to reorder | Drag a row over a sibling | Source DOM updates; "move" entry appears in Changes tab |
-| 5.7  | Visibility toggle | Click the eye icon on a row | Element becomes `display: none`; row dims; eye icon flips to eyeOff |
+| 5.7  | Visibility toggle | Click the eye icon on a row | Element becomes display:none; row dims and eye icon changes to eyeClosed |
 | 5.8  | Trash icon | Click the trash icon | Element removed; "delete" entry appears in Changes tab |
-| 5.9  | Duplicate marker | Duplicate an element | Layers row of the duplicate carries the `dm-clone` marker class and shows a "(copy)" suffix label |
+| 5.9  | Duplicate marker | Duplicate an element | The page clone carries the `dm-clone` marker class; its Layers row shows the "(copy)" suffix label. The DOM marker class is not required on the Layers row |
 | 5.10 | DM elements excluded | Inspect the tree | No `dm-hover`, `dm-select`, `dm-comment-pin`, or `dm-applied-styles` rows |
 | 5.11 | Horizontal pan on deep trees | On a deeply nested page (10+ levels), scroll the tree horizontally | Full layer names become visible while panning; search/filter header stays pinned top-left; the crosshair/eye hover actions stay pinned at the right edge of every hovered row; panned position survives re-renders (e.g. hovering rows) |
 
@@ -312,7 +331,7 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 6.1 | Add a comment | Select element → comment icon → type → Add | Yellow pin appears on the element; comment row in Changes tab |
 | 6.2 | Add via Alt+C | Select element → press `Alt+C` | Comment textarea appears focused (same as clicking the comment icon) |
 | 6.3 | Pin position | Add a comment | Pin sits at the top-right of the element |
-| 6.4 | Pin click | Click the pin on the page | Side panel switches to Changes tab and opens the comment for editing |
+| 6.4 | Pin click | Click the pin on the page | Side panel switches to Changes and reveals the existing comment; entering its editor is a separate action |
 | 6.5 | Edit / delete | Edit text and Save / Delete | Updates / removes the comment + pin |
 | 6.6 | Mark as resolved | Click the resolved toggle on a comment row | `resolved: true` set; row moves under the Resolved sub-filter (Phase 7) |
 | 6.7 | Persistence | Reload page | Comment + pin re-appear (resolved state preserved) |
@@ -338,23 +357,23 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 7.3   | Comment sub-filter | While Comment chip active | Open / Resolved / All sub-chips appear, with their own counts |
 | 7.4   | Search | Type a property name (e.g. `padding`) in the search bar | List filters by free-text match across selector, property, value, and comment text |
 | 7.5   | Sort | Click the sort icon → pick Oldest / Newest / By element | Order updates accordingly |
-| 7.6   | Bulk select | Tick the checkboxes on 3 rows → click "Delete selected" | All 3 changes reverted on the page; counts drop |
+| 7.6   | Bulk select | Tick the checkboxes on 3 rows → click "Revert selected" | All 3 changes reverted on the page; counts drop |
 | 7.7   | Style change recorded | Edit any CSS property | Row appears with `prop: old → new` and the element selector |
 | 7.8   | Text change recorded | Edit text content (rich-text) | Text-change row appears; storing as HTML so reload round-trips formatting |
 | 7.8a  | Word-level text diff | Change `Add to Mozilla` to `Add to Chrome` | `Mozilla` is fully red and struck, `Chrome` is fully green, and unchanged `Add to ` stays grey; no shared character inside a replaced word is treated as unchanged |
 | 7.9   | DOM change recorded | Duplicate / delete / move / hide | Row appears with the action label |
 | 7.10  | No double-record on duplicate | Click Duplicate **once** | Exactly **one** "duplicate" row appears (regression: previously logged twice) |
-| 7.11  | Comment recorded | Add a comment | Yellow note row appears with selector |
+| 7.11  | Comment recorded | Add a comment | Purple comment row appears with selector; the page pin remains distinct |
 | 7.12  | Group by element | Make multiple edits to the same `.card` | Changes tab groups them under one selector header with a count |
 | 7.13  | Preset group label | Apply a preset to an element | Multiple property changes collapse into one row labelled with the preset name (`groupKind: 'preset'`) |
-| 7.14  | Multi-select group label | With multi-select on N elements, edit a property | Single row labelled `multi-select` with count `N elements` |
-| 7.15  | Visibility group label | Hide → Show toggling | Single row labelled per-element with `groupKind: 'visibility'` |
+| 7.14  | Multi-select group label | With multi-select on N elements, edit a property | A multi-select group header identifies `N elements` and contains per-element child rows |
+| 7.15  | Visibility group label | Hide → Show toggling | Hide records one per-element visibility change with `groupKind: 'visibility'`; Show restores the original value and cancels the net-zero change |
 | 7.16  | Single revert | Hover a row → click trash | Style/text/DOM change is **actually reversed** on the page (not just removed from the list) |
 | 7.17  | Revert duplicate | Trash a duplicate row | The duplicated element is removed from the DOM |
 | 7.18  | Revert delete | Trash a delete row | The deleted element is re-inserted from saved outerHTML |
-| 7.19  | View Original | Click **View Original** | Page visually reverts to its initial state — styles, text, deleted elements re-appear, duplicates hide, comment pins hide. Banner: "Viewing original — click View Changes to see your edits" |
-| 7.20  | View Changes | Click **View Changes** | Edits + duplicated elements + comment pins re-appear |
-| 7.21  | Toggle button states | While viewing one mode | Active button is filled accent; inactive button is outline |
+| 7.19  | View Original | With style/text edits, a deletion, a duplicate and a comment present, click the single **Changes** preview toggle | Page reverts to original styles and text; deleted elements re-appear; duplicates and comment pins hide. Banner reads "Previewing original — click Changes to see your edits". The single Changes toggle replaces the old View Original/View Changes buttons |
+| 7.20  | View Changes | While previewing original, click the single **Changes** toggle again | Edits + duplicated elements + comment pins re-appear |
+| 7.21  | Toggle button states | Observe the single Changes toggle before and after entering original preview | The single Changes toggle reflects whether changes or original are being previewed; no two-button filled/outline contract |
 | 7.22  | Clear All confirmation | Click **Clear All** | Inline overlay modal "Clear all changes?" with Cancel / Clear; Cancel keeps state |
 | 7.23  | Clear All reverts everything | Confirm Clear All | Every style / text / DOM / comment is undone on the page; Changes tab empties; persistence cleared; deleted elements re-inserted; `dm-clone` markers stripped |
 | 7.24  | Batch apply (zap) — outline | Edit a property on a recurring class (e.g. `.btn`) | Zap icon next to the row is grey outline by default |
@@ -370,7 +389,7 @@ limit on suggested command bindings does not apply to in-page handlers.
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 8.1  | Open Tokens panel | Click the swatch-book icon in the action row | Panel opens with three tabs: **Declared**, **Detected**, **Defined**; last-active tab is restored from `dm-tokens-tab` |
-| 8.2  | Declared — grouping | Switch to Declared | Every CSS variable the page declares is listed — not just `:root` — grouped by purpose (Colour / Typography / Spacing / Radius / Shadow / Other), each row with swatch/preview + current value + inline editor |
+| 8.2  | Declared — grouping | Switch to Declared | Every declared CSS variable is listed, including non-root scopes; root variables remain grouped by purpose (Colour / Typography / Spacing / Radius / Shadow / Other), and non-root variables are grouped under Component tokens. Each row retains swatch/preview, current value and inline editor |
 | 8.3  | Declared — live repaint | Type a new value (e.g. change a colour token's hex) | The page repaints live via the `dm-token-overrides` stylesheet without a reload |
 | 8.4  | Declared — reset | Click the reset button on an edited row | Value restores to the original captured on the first edit |
 | 8.5  | `×N uses` preview | Click the `×N uses` badge on a token | On-page consumers light up via the multi-select overlay system |
@@ -381,10 +400,10 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 8.10 | Defined — save | Select an element, choose a Kind (only kinds with non-default values on this element are listed), name, **Save** | Preset appears in the list under the chosen kind |
 | 8.11 | Defined — apply | Click **Apply** on a preset | Styles applied with `groupKind: 'preset'`; rows in Changes tab collapse to a single labelled row; an **↶ Applied** button appears on the preset row |
 | 8.12 | Defined — ↶ Applied revert | Click the **↶ Applied** button | Every change in that application's `groupId` reverts |
-| 8.13 | Defined — edit | Pencil → editor; rename + tweak values (kind is a locked badge) → save | Updates; invalid CSS dropped silently with a toast |
+| 8.13 | Defined — edit | Edit → editor; rename + tweak values (kind is a locked badge) → save | Updates; invalid CSS dropped silently with a toast |
 | 8.14 | Defined — delete | Trash → confirmation overlay → confirm | Removed from list and storage |
 | 8.15 | Export / Import | **Export** → file downloads with kind marker `design-mode-design-system`; **Import** the same file | Re-imports cleanly; a foreign JSON (missing the marker) is rejected with a toast |
-| 8.16 | Cross-tab filters + search | Click filter chips (All / Colours / Type / Spacing / Radius / Shadow / Other) and type in the search box | Filters and search filter the active tab's rows; semantics adapt per tab |
+| 8.16 | Cross-tab filters + search | Choose the group dropdown (All / Colours / Type / Spacing / Radius / Shadow / Other) and type in the search box | The group dropdown (All / Colours / Type / Spacing / Radius / Shadow / Other) and search filter the active tab with tab-appropriate semantics |
 | 8.17 | "Used on this page" toggle | Toggle on | Active tab filters to entries actually consumed by viewport-visible elements |
 | 8.18 | Markdown exporter — Tokens changed | Edit a `:root` var → Copy as Prompt | Output contains a focused **`## Tokens changed`** section listing only edited tokens (original → current). With no root-var edits, the section is omitted |
 | 8.18a | Token edits show in Changes tab | Edit a `:root` var → open the Changes tab | A row appears under a `:root` / Design-tokens group showing `--var: original → current`; the **Tokens** filter chip counts it; the row's Revert restores the original; "Clear all" removes it. Parity with the Copy as Prompt's Tokens-changed section |
@@ -418,14 +437,14 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
-| 9.1  | Parent / child / duplicate / delete / comment / screenshot / multi-select | Each button in the action row | All work as labelled |
-| 9.2  | Disable when no selection | Deselect | Parent, child, duplicate, delete, comment, multi-select dim out; screenshot stays enabled |
+| 9.1  | Parent / child / duplicate / delete / comment / screenshot / multi-select | Exercise parent / child / duplicate / delete / comment / screenshot in the action row, and Multi-select in Layers | All work as labelled |
+| 9.2  | Disable when no selection | Deselect | Parent, child, duplicate, delete and comment actions dim when no element is selected; screenshot stays enabled. The independent Layers Multi-select mode remains available without a selection |
 | 9.3  | Screenshot — viewport | No selection (and no hover) → click camera | Full viewport PNG copied to clipboard (or downloaded, depending on Settings → Screenshot mode) |
 | 9.4  | Screenshot — element only | **Select** an element → click camera | PNG copied to clipboard contains **only that element** (cropped from viewport, not the surrounding page) |
 | 9.4a | Screenshot — element scrolled into view | Select an element below the fold → camera | Page scrolls element into view first, then captures cropped image — never returns a blank or off-screen capture |
 | 9.5  | Computed CSS overlay | Click `</>` | Slide-up overlay shows the element's computed CSS block; **Copy** copies the full block to clipboard (paste into a text file → 10+ properties) |
-| 9.6  | Multi-select toggle | Click multi-select icon → click 3 elements on the page | Each selected element gets a dashed outline; header shows `3 selected` chip |
-| 9.7  | Multi-select fan-out | With 3 selected, edit a property | Property applied to all 3 elements; Changes tab shows ONE row labelled `multi-select` with count `3 elements` |
+| 9.6  | Multi-select toggle | Turn on Layers Multi-select → click 3 layer rows | Layers Multi-select enables modifier-free row membership; selecting three rows shows three dashed outlines and the `3 selected` count chip. Shift/Cmd/Ctrl gestures remain available |
+| 9.7  | Multi-select fan-out | With 3 selected, edit a property | Property applies to all three elements; Changes shows a multi-select group header with per-element child rows |
 | 9.8  | Multi-select Esc | Press Esc with multi-select active | Multi-select tears down first; second Esc deselects |
 | 9.9  | Freeze animations | Select an element → Design tab → **Motion** section header → click the circle-pause toggle (or `Alt+P` from anywhere) | The Motion-section toggle shows active state; CSS animations + transitions + WAAPI instances + `<video>` pause across the page; toggle again to resume |
 | 9.10 | Undo / Redo | Make change → `Ctrl/⌘+Z` → `Ctrl/⌘+⇧+Z` | Reverts then re-applies (style, DOM, text, visibility all reversible) |
@@ -439,10 +458,10 @@ Run on a Carbon site (carbondesignsystem.com) and a shadcn site (ui.shadcn.com).
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 10.1 | Disabled with no changes | Open a fresh page | Both buttons disabled |
-| 10.2 | Disabled while previewing | Click View Original | Both buttons disabled (banner explains) |
+| 10.2 | Disabled while previewing | Click the Changes toggle to preview original | Both buttons disabled (banner explains) |
 | 10.3 | Copy as Prompt format — header | Make any change → Copy as Prompt | Clipboard opens with `# Visual changes — {{page title}}` then `<{{page url}}>` on the next line (title falls back to `untitled` when the page has none). No boilerplate above the heading |
 | 10.4 | Copy as Prompt format — body | Make 3 style + 1 text + 1 DOM change → Copy as Prompt | Changes sit under a `## Changes` heading, one bullet `- {label}: {detail}` each, ordered chronologically. Only the documented sections appear (`## Tokens changed`, `## Comments`, `## Design tokens used` — each omitted when empty); no code fences, no "How to apply" prose, no framework section |
-| 10.5 | Style grouping per element | Edit two properties on the same `.btn` | Single bullet groups them: `- button.btn: padding 8px → 12px; border-radius 4px → 8px` |
+| 10.5 | Style grouping per element | On the same element, change padding from 8px to 12px and border-radius from 4px to 8px; export the Changes prompt | A single bullet groups both property changes using the actual element selector; before/after values are preserved (padding 8px → 12px and border-radius 4px → 8px). Expanded padding-top/right/bottom/left longhands are valid serialization |
 | 10.6 | Text change format — inline diff | Edit part of a paragraph's text | Bullet reads `- {label} text: {inline diff}` in git word-diff notation — `[-removed-]`, `{+added+}`, unmarked = unchanged, `…` = elided unchanged run (a few words of context each side). A one-line legend under `## Changes` explains the markers (and says not to write them into the text). A total rewrite (no shared words) or an oversized edit falls back to `text → "{new}"` |
 | 10.7 | DOM change format | Duplicate / delete / move an element | Bullet reads `- {label} duplicated` (or `deleted` / `moved` / `inserted`) |
 | 10.7a | Move conveys origin → destination + chronology | Edit a style on `.card` → drag it to another parent in Layers → edit another style → Copy as Prompt | Move bullet reads `- {label} moved: {oldParent}[i] → {newParent}[j]`; the pre-move style bullet appears BEFORE the move line and the post-move one AFTER it; ambiguous labels (e.g. `div.card` matching several nodes) carry the full post-move selector in parens; MCP `get_changes` shows the same `origin`/`destination` on the move record and live (post-move) selectors on every change |
@@ -469,7 +488,7 @@ at `https://mcp.designmode.app`). Both expose the **same eight MCP tools**.
 
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
-| 11.1  | Server starts | `cd packages/mcp-local && npm start` | ASCII banner; eight tools listed: `get_changes`, `apply_changes`, `set_change_status`, `mark_comment_resolved`, `clear_changes`, `get_session_summary`, `export_changes`, `get_screenshot`; WebSocket bridge on `ws://localhost:9960` (or the configured port) |
+| 11.1  | Server starts | `cd packages/mcp-local && npm start` | ASCII banner; nine tools listed: `get_changes`, `apply_changes`, `set_change_status`, `mark_comment_resolved`, `clear_changes`, `get_session_summary`, `export_changes`, `get_screenshot`, `wait_for_handoff`; WebSocket bridge on `ws://localhost:9960` (or the configured port) |
 | 11.2  | Port conflict — foreign occupant | Another (non-Design Mode) process on 9960 | Clean error that the occupant is not Design Mode; process is left running; suggests stopping it yourself or `DM_PORT=9961`. Never auto-killed |
 | 11.2a | Second MCP client attaches | Start a second `npm start` while the first is still running | Second process attaches to the owner (does not exit on EADDRINUSE); MCP tools proxy to the owner; WebSocket stays on the first process |
 | 11.2b | Owner survival + shared state | Stop the second process; call `get_changes` from a third client | Owner still listens on 9960; extension stays connected; session state is the owner's |
@@ -491,16 +510,16 @@ at `https://mcp.designmode.app`). Both expose the **same eight MCP tools**.
 | 11.11 | `get_screenshot` — element | Pass `selector` or `elementId` (`dm-*`) | Returns base64 PNG of just that element; ambiguous selectors fail with a candidate list |
 | 11.11b | `get_screenshot` — comment region | Draw a region comment → from `get_changes` take its `id` → `get_screenshot({ commentId })` | Returns a PNG cropped to the region rectangle (or the element for element comments), as an image block, with **no DM overlays/bands/pins**. Off-screen region → friendly "scroll into view" error |
 | 11.11c | `get_screenshot` — clean capture | Select an element with margin/padding (bands showing) → `get_screenshot` | The PNG contains no red/green bands, selection outline, guides, or pins |
-| 11.12 | `get_changes` — comments carry id/region | Add an element comment + a region comment, then invoke | `comments[]` entries include `id`; the region comment has a `region: {x,y,w,h}` and `selector: "region"` |
-| 11.13 | `mark_comment_resolved` | Pass a comment `id` from `get_changes` with `resolved: true` | Returns success; the page pin turns grey + struck-through, the Changes-tab row shows Resolved, with no panel reload |
+| 11.12 | `get_changes` — comments carry id/region | Add an element comment + a region comment, then invoke | Comments include id; region comments include region:{x,y,w,h} and their anchored-element selector rather than the literal region sentinel |
+| 11.13 | `mark_comment_resolved` | Pass a comment `id` from `get_changes` with `resolved: true` | Returns success; pin becomes grey and struck-through; Changes offers Reopen live without panel reload |
 | 11.14 | `mark_comment_resolved` — unknown id | Pass a non-existent id | `isError` with "No comment found with id …" |
 
 ### 11.B — Cloud mode
 
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
-| 11.20 | Mode switch | MCP page → mode "Cloud" | URL field defaults to `https://mcp.designmode.app`; tenant + token fields appear |
-| 11.21 | Register token | Open the cloud landing page → register → copy token + tenant ID | Token + tenant ID stored locally; indicator turns green when both present |
+| 11.20 | Mode switch | Select Cloud with no stored token, then with a stored synthetic token; compare Server display, Connect to Cloud, masked token and tenant badge; select Self-hosted to check editable URL | Cloud shows a read-only Server endpoint; without a token it offers Connect to Cloud, with a stored token it shows a masked token and tenant badge. Editable server URL belongs to Self-hosted |
+| 11.21 | Register token | Use installed Connect to Cloud; verify stored token + tenant ID and green connected indicator; independently exercise Copy token and tenant-ID copy/readback | Token + tenant ID stored locally; indicator turns green when both present |
 | 11.22 | Send to Agent | With agent connected to the cloud relay → click Send to Agent | Agent receives changes via the cloud bridge |
 | 11.23 | Self-hosted | Mode "Self-hosted" → enter your Vercel URL | Same protocol as Cloud; works against any deployment of the `mcp-cloud` package |
 | 11.24 | Cloud `get_changes` items[] | Make a style + comment, then cloud `get_changes` | Response includes `items[]` with stable `id` + `kind` + `status`, matching local |
@@ -578,7 +597,7 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 16.1 | Blocked guidance card | Open a local `.html` file (`file://`) and open the side panel | A "Local file" card with numbered steps replaces the editing UI (no Layers/Design/Changes tabs); Settings/Help still open from the header |
-| 16.2 | Settings shortcut button | Click **Open extension settings** on the card | A new tab opens at `chrome://extensions/?id=<extension id>` |
+| 16.2 | Settings shortcut button | Chrome: click **Open extension settings** on the disabled-file card. Firefox: inspect the manual settings guidance | Chrome opens a new tab at `chrome://extensions/?id=<extension id>`. Firefox omits that button and instructs opening `about:addons` → Design Mode → Permissions manually; no permission is granted by this check |
 | 16.3 | Editing after enabling | Turn the toggle ON (extension reloads), reopen the panel on the file tab | Full editing UI; inspect/select/edit/undo work; header shows the file name (e.g. `test.html`) |
 | 16.4 | Navigate pinned tab to file:// | Toggle OFF again. Open the panel on an http(s) tab, then navigate that tab to the file URL | The guidance card appears; navigating back to the http(s) page restores the editing UI |
 | 16.5 | Pop-out parity | Repeat 16.1 in the floating pop-out window | Same guidance card behaviour |
@@ -594,7 +613,7 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | 17.2 | Fan-out | With the box ticked, change a style (e.g. color) | Every match updates; Changes tab shows one row per element (grouped) |
 | 17.3 | Uncheck | Untick the box | Overlays clear; back to single selection |
 | 17.4 | Reset on reselect | Tick the box, then select a different element | Checkbox resets to unticked for the new element |
-| 17.5 | No matches | Select a unique element (e.g. the only `h1`) and tick | Error toast "No other matching layers"; checkbox stays unticked |
+| 17.5 | No matches | Select a unique element and verify Matching layers is hidden. Separately select an element with peers, remove its peers while its checkbox is exposed, then activate that stale checkbox | Unique elements hide Matching layers. If previously exposed peers disappear, activating the stale checkbox reports No other matching layers on this page., resets unchecked, and adds no changes |
 
 ---
 
@@ -603,18 +622,18 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 14.1 | Build clean | `npm run build:website` | No type errors |
-| 14.2 | Landing page | Visit `/` | Header (icon + "Design Mode" + GitHub button + browser-adaptive install button — "Add to Chrome" / "Add to Firefox"), divider, hero, then sections: How you use it, Three panels, Other features, Copy as Prompt, MCP, Install, Licensing |
+| 14.2 | Landing page | Visit `/` | Header retains Design Mode icon/name, GitHub button and browser-adaptive install CTA (Add to Chrome / Add to Firefox), followed by divider, hero and the current landing-page sections in their approved rendered order; the historical section sequence is not required |
 | 14.3 | Demo route | Visit `/demo` at widths below and above 768px | Mobile shows desktop-extension guidance after the hero and hides the walkthrough; desktop shows the interactive left nav and step targets; neither viewport has page-level horizontal overflow |
 | 14.4 | MCP route | Visit `/mcp` | MCP setup / docs page |
-| 14.5 | Anchor scroll | Click the install button ("Add to Chrome" / "Add to Firefox") | Page scrolls to `#install` |
+| 14.5 | Browser store install CTA | Click the install button ("Add to Chrome" / "Add to Firefox") | The browser-adaptive install CTA targets its browser store rather than scrolling to #install |
 | 14.6 | GitHub button | Click GitHub icon | Opens repo in a new tab |
 | 14.7 | Favicon | Hard reload | Browser tab icon is the Design Mode logo (matches `/icon.png`) |
-| 14.8 | 720px column | Inspect at desktop width | Article + footer are both 720px wide and centered |
-| 14.9 | Manrope font | Inspect any text | `font-family` resolves to Manrope first |
-| 14.10 | Static OG image | View `/`'s `<head>` (or unfurl the URL in Slack/iMessage) | `og:image` and `twitter:image` resolve to the static `/og-image.png` (not the old dynamic `opengraph-image` route) |
-| 14.11 | New content routes | Visit `/about`, `/faq`, `/contact`, `/use-cases`, `/compare`, `/docs`, `/blog` | Each returns 200 and renders (hero + related-links / persona blocks); no console errors |
+| 14.8 | Responsive centered columns | Inspect article and footer at representative desktop and narrow viewport widths | Article and footer use the current responsive centered columns, not a fixed 720px requirement |
+| 14.9 | Inter font | Inspect any text | font-family resolves to Inter first |
+| 14.10 | Static OG image | View `/`'s `<head>` (or unfurl the URL in Slack/iMessage) | `og:image` and `twitter:image` resolve to the static `/og-design-mode-inter-v3.png`, not a dynamic `opengraph-image` route |
+| 14.11 | New content routes | Visit `/about`, `/faq`, `/contact`, `/use-cases`, `/compare`, `/docs`, `/blog` | All seven routes return 200 with rendered heroes and no scoped console errors; related-links/persona blocks are template-specific |
 | 14.12 | Dynamic detail routes | Open one `/use-cases/<slug>`, `/compare/<slug>`, `/docs/<slug>`, `/blog/<slug>` (slugs listed in `sitemap.ts`) | Renders the entry sourced from `content/*.ts`; an unknown slug 404s |
-| 14.13 | sitemap.xml | Visit `/sitemap.xml` | Lists the 12 root routes + every use-cases / compare / docs / blog slug, all under `https://designmode.app` |
+| 14.13 | sitemap.xml | Visit `/sitemap.xml` | Lists 13 root routes and indexable comparison routes plus other indexable content slugs under https://designmode.app |
 | 14.14 | robots.txt | Visit `/robots.txt` | `Allow: /` for `*`; LLM crawlers explicitly allowed (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, …); `Sitemap:` points to `/sitemap.xml` |
 | 14.15 | llms.txt | Visit `/llms.txt` and `/llms-full.txt` | Both serve plain-text site / product summaries |
 | 14.16 | Web app manifest | Visit `/manifest.webmanifest` | Serves valid JSON (name, icons, theme) |
@@ -635,14 +654,14 @@ everything not listed here must behave exactly as on Chrome.
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | F.1  | Add-on loads | Load the temporary add-on | Icon appears in the toolbar; no manifest error in the Browser Console (`data_collection_permissions` may log the advisory `KEY_FIREFOX_UNSUPPORTED_BY_MIN_VER` — expected) |
-| F.2  | Sidebar opens (toolbar) | Click the Design Mode toolbar button | The panel opens as Firefox's **native sidebar** (left-docked), not a right-side panel |
+| F.2  | Sidebar opens (toolbar) | Click the Design Mode toolbar button | The panel opens as Firefox's **native sidebar** on the browser-configured side |
 | F.3  | Sidebar opens (View menu) | View → Sidebar → Design Mode | Toggles the same sidebar |
 | F.4  | `Alt+D` toggles sidebar | Press `Alt+D` | Sidebar opens / closes (routed through `sidebarAction.open()`, not `sidePanel`) |
 | F.5  | Core editing parity | Inspect an element, edit a style, add a comment, check the Changes tab | Identical to Chrome — selection, live style apply, comment pin, and change rows all work |
 | F.6  | Pop-out absent | Look at the sidebar header | The **external-link** (pop-out) icon is **not present** (Chrome-only; no `sidePanel`/`windows` popup surface on Firefox) |
 | F.7  | Pin-on-top absent | Look at the sidebar header | The **picture-in-picture** icon is **not present** (Chrome-only; no Document PiP on Firefox) |
 | F.8  | Eyedropper hidden | Open Fill / a colour control | The whole-screen **Pick** (eyedropper) button is **absent**; HSV picker, site-token list, and hex/RGB input still work (no `EyeDropper` API on Firefox) |
-| F.9  | File-access button target | Help / local-file guidance → the settings button | Opens **`about:addons`** (not `chrome://extensions`) |
+| F.9  | File-access guidance | Help / local-file guidance | Instructs the user to type **`about:addons`** in the address bar; no direct settings button (Firefox forbids extensions opening this privileged URL). |
 | F.10 | Contribute review link | Open the Contribute panel → the store review link | Points at the **AMO** listing (`addons.mozilla.org/firefox/addon/design-mode-add-on/`), not the Chrome Web Store |
 | F.11 | Share text is Firefox-flavoured | Contribute panel → share action | Share copy references Firefox / AMO, not Chrome |
 | F.12 | Unscriptable `about:` page | Open the sidebar on `about:addons` | Disabled / empty state, no "could not establish connection" console spam (mirrors Phase 0.12) |

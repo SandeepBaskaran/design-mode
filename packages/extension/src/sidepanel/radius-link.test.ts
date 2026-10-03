@@ -1,3 +1,5 @@
+import { createInspectorOperation, runInspectorAction } from './inspector-operation';
+const beginInspectorOperation = () => createInspectorOperation(() => 0, false);
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -10,7 +12,7 @@ const js = ts.transpile(body + '\nreturn "independent"; }', {target: ts.ScriptTa
 for (const linked of [false, true]) for (const prop of [...props, 'borderRadius']) {
   test(`radius dispatch ${linked ? 'linked' : 'unlinked'} ${prop}`, async () => {
     let batch: unknown;
-    const context = {cornerRadiusLinked: linked, CORNER_RADIUS_PROPS: new Set(['borderRadius', ...props]), borderWidthLinked: false,
+    const context = {beginInspectorOperation, cornerRadiusLinked: linked, CORNER_RADIUS_PROPS: new Set(['borderRadius', ...props]), borderWidthLinked: false,
       applyStylesBatch: (changes: unknown, label: string) => { batch = JSON.parse(JSON.stringify({changes, label})); }};
     const result = await runInNewContext(js + `; applyStyle('${prop}', '13px');`, context);
     if (linked || prop === 'borderRadius') assert.deepEqual(batch, {changes: props.map(property => ({property, value:'13px'})), label:'Corner radius'});

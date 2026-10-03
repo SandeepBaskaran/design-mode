@@ -43,12 +43,12 @@ const features = [
 
 export const Hero = () => {
   return (
-    <section className="py-16 sm:py-24">
+    <section className="py-32">
       {/* Hero — vertical stack, centred */}
       <div className="container max-w-[1200px] text-center max-sm:px-4">
         <HeroHeadline />
 
-        <p className="text-muted-foreground mx-auto mt-8 max-w-[848px] text-[14px] sm:text-[20px]">
+        <p className="text-muted-foreground mx-auto mt-8 max-w-[848px] text-base">
           <span className="sm:hidden">Edit</span>
           <span className="max-sm:hidden">
             Design Mode is a free, open-source Chrome and Firefox extension that
@@ -62,12 +62,12 @@ export const Hero = () => {
         <div className="mt-16 grid grid-cols-2 items-stretch gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-4">
           <AddToChromeCta
             size="lg"
-            className="h-14 max-sm:w-full max-sm:px-2 max-sm:py-1 max-sm:text-[14px]"
+            className="h-14 max-sm:w-full max-sm:px-2 max-sm:py-1 max-sm:whitespace-normal text-base"
           />
           <Button
             variant="outline"
             size="lg"
-            className="h-14 max-sm:w-full max-sm:px-2 max-sm:py-1 max-sm:text-[14px]"
+            className="h-14 max-sm:w-full max-sm:px-2 max-sm:py-1 max-sm:whitespace-normal text-base"
             asChild
           >
             <Link href="/demo">Try by yourself</Link>
@@ -80,8 +80,8 @@ export const Hero = () => {
 
 export const HeroShowcase = () => {
   return (
-    <section className="pb-12 lg:pb-16">
-      <div className="container flex flex-col gap-10 py-12 lg:flex-row lg:items-center lg:gap-16">
+    <section className="py-32">
+      <div className="container flex flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
         {/* Left — cover image */}
         <div className="flex-1">
           <div className="relative mx-auto aspect-square w-full max-w-[400px]">
@@ -108,7 +108,7 @@ export const HeroShowcase = () => {
               <div key={feature.title} className="flex gap-2 lg:gap-8">
                 <Icon className="text-foreground mt-2 size-4 shrink-0 lg:size-6" />
                 <div>
-                  <h2 className="font-text text-foreground font-semibold">
+                  <h2 className="font-text text-foreground text-base font-semibold">
                     {feature.title}
                   </h2>
                   <p className="text-muted-foreground max-w-76 text-base">

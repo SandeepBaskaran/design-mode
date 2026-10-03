@@ -17,7 +17,7 @@ export function validatePresetStyles(styles: Record<string, string>, supports = 
   return { styles: valid, dropped };
 }
 
-export async function persistPresetChange(id: string, edit?: { name: string; styles: Record<string, string> }): Promise<void> {
+export async function persistPresetChange(id: string, edit?: { name: string; styles: Record<string, string> }, browser = globalThis.browser): Promise<void> {
   const key = 'dm_custom_presets';
   const data = await browser.storage.sync.get(key);
   const presets: EditablePreset[] = Array.isArray(data[key]) ? data[key] : [];
@@ -34,6 +34,7 @@ export function openPresetDialog(
   trigger: HTMLElement,
   refresh: () => Promise<void>,
   toast: (kind: 'success' | 'error', message: string) => void,
+  browser = globalThis.browser,
 ): void {
   if (document.querySelector('[data-dm-preset-dialog]')) return;
   const dialog = document.createElement('dialog');
@@ -133,7 +134,7 @@ export function openPresetDialog(
     // Keep a focusable control while storage is pending, without allowing dismissal.
     cancel.onclick = () => {};
     try {
-      await persistPresetChange(preset.id, mode === 'edit' ? { name: trimmedName!, styles: validated.styles } : undefined);
+      await persistPresetChange(preset.id, mode === 'edit' ? { name: trimmedName!, styles: validated.styles } : undefined, browser);
       await refresh();
       toast(validated.dropped.length ? 'error' : 'success', validated.dropped.length
         ? `Saved preset. Dropped invalid CSS: ${validated.dropped.join(', ')}.`

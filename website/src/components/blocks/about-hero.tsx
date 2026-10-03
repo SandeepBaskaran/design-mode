@@ -5,7 +5,7 @@ export function AboutHero() {
         <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
           About Sandeep
         </h1>
-        <p className="text-muted-foreground mt-4 max-w-5xl text-base md:text-2xl">
+        <p className="text-muted-foreground mt-4 max-w-5xl text-base">
           Sandeep Baskaran is a Senior UX Designer based in Bengaluru, currently
           working in IBM&apos;s Z Infrastructure organisation where he helps
           enterprises modernize legacy systems. He builds in the open —

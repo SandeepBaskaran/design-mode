@@ -27,10 +27,10 @@ export const metadata = {
     url: "https://designmode.app/demo",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -41,10 +41,10 @@ export const metadata = {
       "Install Design Mode, then use this guided canvas to inspect demo targets, change styles and copy the exact change specification.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -60,7 +60,7 @@ export default function DemoPage() {
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Live demo
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
               <span className="md:hidden">
                 Try this guided walkthrough in a desktop browser with the Design
                 Mode extension installed.

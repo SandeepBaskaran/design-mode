@@ -5,16 +5,18 @@
 // Auto-activates design mode (with inspect) on open.
 // ============================================================
 import '../platform/polyfill';
+import { IS_FIREFOX, IS_SAFARI } from '../platform/target';
+import { installInspectorBridge } from '../inspector/bridge-background';
 import { replaceUserStyles } from './user-styles';
 import { ANALYTICS_CONSENT_KEY, consentMatches, createAnalytics, isAnalyticsSender, persistAnalyticsDisabled, type DataPermissions } from '../platform/analytics';
 import { analyticsConfig } from '../platform/analytics-config';
 import { createCommentStore, COMMENT_STORE_ERROR, COMMENT_PAGE_ERROR } from './comment-store';
 import { createSessionStore } from './session-store';
 import type { OpenRouteResponse } from '@shared/messages';
-import { IS_FIREFOX } from '../platform/target';
 import { readPageComponentContexts } from '../content/page-component-context';
-import { openPanel, setActionOpensPanel } from '../platform/panel';
+import { openPanel, setActionOpensPanel, createFirefoxDock } from '../platform/panel';
 import {
+  detectLaunchCapabilities, supportedLaunchSurface,
   DEFAULT_LAUNCH_SURFACE,
   LAUNCH_SURFACE_KEY,
   parseLaunchSurface,
@@ -38,6 +40,11 @@ browser.permissions.onRemoved.addListener(() => {
 const commentStore = createCommentStore(browser.storage.local, browser.storage.session || browser.storage.local);
 const sessionStore = createSessionStore(browser.storage.session || browser.storage.local);
 const tabStates = new Map<number, { enabled: boolean; connected: boolean }>();
+const captureGenerations = new Map<number, number>();
+browser.tabs.onUpdated.addListener((id, info) => {
+  if (info.url || info.status === 'loading') captureGenerations.set(id, (captureGenerations.get(id) ?? 0) + 1);
+});
+browser.tabs.onRemoved.addListener(id => captureGenerations.delete(id));
 let pinnedTabId: number | null = null;
 let pinnedTabUrl: string | null = null;
 
@@ -61,6 +68,7 @@ function panelsForTab(tabId: number): number {
 const transitioningTabs = new Set<number>();
 // windowId → bound tabId, for floating pop-out windows we created.
 const popoutWindows = new Map<number, number>();
+const firefoxDock = IS_FIREFOX ? createFirefoxDock(browser) : null;
 
 // The target tab for the message currently being handled. Set synchronously
 // at the top of the onMessage listener from `msg.targetTabId` (the panel
@@ -81,7 +89,7 @@ browser.storage.onChanged.addListener((changes, area) => {
 });
 
 browser.runtime.onInstalled.addListener((details) => {
-  if (!IS_FIREFOX && details.reason === 'install') setActionOpensPanel(true);
+  if (!IS_FIREFOX && !IS_SAFARI && details.reason === 'install') setActionOpensPanel(true);
 });
 
 function restoreLaunchSurfaceFromGesture(tab?: chrome.tabs.Tab): void {
@@ -95,8 +103,9 @@ function restoreLaunchSurfaceFromGesture(tab?: chrome.tabs.Tab): void {
 }
 
 browser.action.onClicked.addListener((tab) => {
+  if (IS_SAFARI) return;
   if (IS_FIREFOX) {
-    openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
+    handleActionOrCommand(tab);
     return;
   }
   if (!launchSurfaceReady) {
@@ -156,15 +165,16 @@ async function isFileAccessBlocked(url: string | undefined | null): Promise<bool
 // the current window). A popped-out floating window connects as
 // `sidepanel:<tabId>` (binds to the tab it was popped out from).
 browser.runtime.onConnect.addListener((port) => {
+  if (IS_SAFARI) return;
   if (!port.sender || !isAnalyticsSender(port.sender, browser.runtime)
-    || !/^sidepanel(?::\d+(?::(?:pip|popout))?)?$/.test(port.name)) return;
+    || !/^sidepanel(?::\d+(?::(?:pip|popout|panel))?)?$/.test(port.name)) return;
 
   let disconnected = false;
   let activationTimer: ReturnType<typeof setTimeout> | undefined;
   const [, explicitTabValue, explicitSurface] = port.name.split(':');
   const explicitTab = explicitTabValue ? Number(explicitTabValue) : NaN;
   if (explicitTabValue && !Number.isSafeInteger(explicitTab)) return;
-  const panelSurface: PanelSurface = explicitSurface === 'pip'
+  const panelSurface: PanelSurface = explicitSurface === 'panel' ? 'panel' : explicitSurface === 'pip'
     ? 'pip'
     : Number.isInteger(explicitTab) ? 'popout' : 'panel';
 
@@ -172,7 +182,7 @@ browser.runtime.onConnect.addListener((port) => {
     let tabId: number | null = Number.isInteger(explicitTab) ? explicitTab : null;
     let tabUrl: string | null = null;
     if (tabId != null) {
-      try { tabUrl = (await browser.tabs.get(tabId)).url || null; } catch { tabId = null; }
+      try { tabUrl = (await browser.tabs.get(tabId)).url || null; } catch { return; }
     }
     if (disconnected) return;
     if (tabId == null) {
@@ -210,6 +220,7 @@ browser.runtime.onConnect.addListener((port) => {
         const state = await browser.tabs.sendMessage(tabId!, { type: 'GET_STATE' });
         if (disconnected) return;
         try { port.postMessage({ type: 'INIT_STATE', ...state, pinnedUrl: tabUrl, tabId }); } catch {}
+        if (explicitSurface === 'panel') void firefoxDock?.ready(tabId!, () => !disconnected && panelPorts.get(port) === tabId).catch(() => {});
       } catch (err) {
         const m = String((err as any)?.message || err);
         if (!/Could not establish connection|Receiving end does not exist/i.test(m)) {
@@ -228,6 +239,7 @@ browser.runtime.onConnect.addListener((port) => {
     disconnected = true;
     clearTimeout(activationTimer);
     const tabId = panelPorts.get(port);
+    if (explicitSurface === 'panel' && tabId != null) void firefoxDock?.destinationClosed(tabId);
     panelPorts.delete(port);
     panelSurfaces.delete(port);
     // Only deactivate the tab when its LAST surface closes AND it isn't
@@ -248,6 +260,15 @@ browser.runtime.onConnect.addListener((port) => {
 // (it targets the active window, no tab lookup needed) before any await.
 browser.commands.onCommand.addListener((command, tab) => {
   if (command === 'capture-screenshot') {
+    if (IS_SAFARI) {
+      void browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([active]) => {
+        if (active?.id == null) return;
+        for (const [port, bound] of panelPorts) {
+          if (bound === active.id) { try { port.postMessage({ type: 'REQUEST_SCREENSHOT' }); } catch {} }
+        }
+      }).catch(() => {});
+      return;
+    }
     const boundTabId = tab?.id != null && panelsForTab(tab.id) > 0 ? tab.id : pinnedTabId;
     if (boundTabId == null) return;
     const surfaces = [...panelPorts.entries()].filter(([, tabId]) => tabId === boundTabId);
@@ -257,9 +278,9 @@ browser.commands.onCommand.addListener((command, tab) => {
     try { selected?.[0].postMessage({ type: 'REQUEST_SCREENSHOT' }); } catch {}
     return;
   }
-  if (command !== 'toggle-design-mode') return;
+  if (command !== 'toggle-design-mode' || IS_SAFARI) return;
   if (IS_FIREFOX) {
-    openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
+    handleActionOrCommand(tab);
     return;
   }
   if (!launchSurfaceReady) {
@@ -318,7 +339,7 @@ async function openRoute(tabId: number | null, url: unknown): Promise<OpenRouteR
 }
 
 // Message handling — relay between content script and side panel
-browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+function dispatchPanelMessage(msg: any, sender: chrome.runtime.MessageSender, sendResponse: (value?: any) => void): boolean {
   if (!msg || typeof msg.type !== 'string' || sender.id !== browser.runtime.id) {
     sendResponse({ ok: false }); return false;
   }
@@ -441,6 +462,19 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // The dock-back flow (sidePanel.open) must run in the popup to keep the user
   // gesture; it pings this first so the popup's imminent close doesn't
   // deactivate the tab before the side panel re-binds it.
+  if (msg.type === 'SP_FIREFOX_DOCK_BEGIN' && IS_FIREFOX) {
+    const tabId = currentTargetTab;
+    const source = [...popoutWindows].find(([, bound]) => bound === tabId);
+    if (tabId == null || !source) { sendResponse({ ok: false }); return true; }
+    firefoxDock!.begin(tabId, source[0]).then(() => sendResponse({ ok: true }),
+      error => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+  if (msg.type === 'SP_FIREFOX_DOCK_CANCEL' && IS_FIREFOX) {
+    if (currentTargetTab != null) void firefoxDock!.cancel(currentTargetTab);
+    sendResponse({ ok: true });
+    return true;
+  }
   if (msg.type === 'SP_TRANSITION_BEGIN') {
     const tabId = currentTargetTab;
     if (tabId != null) {
@@ -739,19 +773,44 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'CAPTURE_VIEWPORT') {
-    browser.tabs.captureVisibleTab({ format: 'png' })
-      .then((dataUrl) => sendResponse({ dataUrl }))
-      .catch(() => sendResponse({ dataUrl: null }));
+    const tab = sender.tab;
+    const generation = tab?.id == null ? -1 : captureGenerations.get(tab.id) ?? 0;
+    const valid = async () => {
+      if (tab?.id == null || tab.windowId == null) return false;
+      const [active] = await browser.tabs.query({ active: true, windowId: tab.windowId });
+      return active?.id === tab.id && active.url === tab.url && (captureGenerations.get(tab.id) ?? 0) === generation;
+    };
+    void (async () => {
+      if (!(await valid())) return sendResponse({ dataUrl: null });
+      const dataUrl = await browser.tabs.captureVisibleTab(tab!.windowId, { format: 'png' });
+      sendResponse({ dataUrl: await valid() ? dataUrl : null });
+    })().catch(() => sendResponse({ dataUrl: null }));
     return true;
   }
 
   return false;
+}
+browser.runtime.onMessage.addListener((msg, sender, respond) => {
+  if (IS_SAFARI && !sender.tab) return false;
+  return dispatchPanelMessage(msg, sender, respond);
+});
+if (IS_SAFARI) installInspectorBridge(browser, {
+  dispatch: dispatchPanelMessage,
+  inject: injectContentScript,
+  bind(port, tabId) {
+    const old = panelPorts.get(port);
+    panelPorts.delete(port);
+    panelSurfaces.delete(port);
+    if (tabId != null) { panelPorts.set(port, tabId); panelSurfaces.set(port, 'panel'); }
+    if (old != null && old !== tabId && panelsForTab(old) === 0) {
+      void browser.tabs.sendMessage(old, { type: 'DEACTIVATE_DESIGN_MODE' }).catch(() => {});
+    }
+  },
 });
 
 // Remember a floating window's size/position so the next pop-out restores it.
-// Pop-out is Chrome-only and onBoundsChanged is unsupported on Firefox, so
-// this whole listener tree-shakes out of the Firefox bundle.
-if (!IS_FIREFOX) {
+// Bounds events are optional; older Firefox retains the default geometry.
+if (!IS_SAFARI) {
   browser.windows.onBoundsChanged?.addListener((win) => {
     // Skip non-normal states so a minimize (e.g. while pinned to PiP) doesn't
     // clobber the remembered floating-window bounds.
@@ -763,10 +822,13 @@ if (!IS_FIREFOX) {
 }
 browser.windows.onRemoved.addListener((windowId) => {
   popoutWindows.delete(windowId);
+  void firefoxDock?.sourceClosed(windowId);
 });
+browser.tabs.onAttached?.addListener(tabId => { void firefoxDock?.moved(tabId); });
 // If a tab that a floating window is bound to closes, the window can no longer
 // control anything — close it.
 browser.tabs.onRemoved.addListener((tabId) => {
+  void firefoxDock?.clear(tabId);
   for (const [winId, boundTab] of popoutWindows) {
     if (boundTab === tabId) { try { void browser.windows.remove(winId).catch(() => {}); } catch {} }
   }
@@ -775,7 +837,7 @@ browser.tabs.onRemoved.addListener((tabId) => {
 let cachedLaunchSurface: LaunchSurface = DEFAULT_LAUNCH_SURFACE;
 
 async function readLaunchSurface(): Promise<LaunchSurface> {
-  if (IS_FIREFOX) return DEFAULT_LAUNCH_SURFACE;
+  if (IS_SAFARI) return DEFAULT_LAUNCH_SURFACE;
   try {
     const raw = (await browser.storage.local.get(LAUNCH_SURFACE_KEY))[LAUNCH_SURFACE_KEY];
     return parseLaunchSurface(raw);
@@ -786,15 +848,21 @@ async function readLaunchSurface(): Promise<LaunchSurface> {
 
 function applyLaunchSurface(surface: LaunchSurface): void {
   cachedLaunchSurface = surface;
-  setActionOpensPanel(surface === 'side-panel');
+  if (!IS_SAFARI) setActionOpensPanel(surface === 'side-panel');
 }
 
 function handleActionOrCommand(tab?: chrome.tabs.Tab): void {
-  if (IS_FIREFOX) {
+  if (firefoxDock?.wantsSidebar(tab)) {
+    openPanel({}).catch((err) => console.error('[DM] Failed to finish docking:', err));
+    return;
+  }
+  const surface = IS_FIREFOX
+    ? supportedLaunchSurface(launchSurfaceReady ? cachedLaunchSurface : DEFAULT_LAUNCH_SURFACE, detectLaunchCapabilities(IS_SAFARI, browser, globalThis))
+    : cachedLaunchSurface;
+  if (IS_FIREFOX && surface === 'side-panel') {
     openPanel({}).catch((err) => console.error('[DM] Failed to open sidebar:', err));
     return;
   }
-  const surface = cachedLaunchSurface;
   if (surface === 'side-panel') {
     if (tab?.windowId != null) openPanel({ windowId: tab.windowId }).catch((err) => console.error('[DM] Failed to open side panel:', err));
     else if (tab?.id != null) openPanel({ tabId: tab.id }).catch((err) => console.error('[DM] Failed to open side panel:', err));
@@ -812,14 +880,34 @@ function handleActionOrCommand(tab?: chrome.tabs.Tab): void {
   });
 }
 
-async function openFloatingForTab(
+type FloatingResult = { ok: boolean; windowId?: number; error?: string };
+const openingFloating = new Map<number, Promise<FloatingResult>>();
+
+function openFloatingForTab(tabId: number, opts?: { pipLaunch?: boolean }): Promise<FloatingResult> {
+  const pending = openingFloating.get(tabId);
+  if (pending) return pending;
+  const opening = createFloatingForTab(tabId, opts).finally(() => openingFloating.delete(tabId));
+  openingFloating.set(tabId, opening);
+  return opening;
+}
+
+async function createFloatingForTab(
   tabId: number,
   opts?: { pipLaunch?: boolean },
-): Promise<{ ok: boolean; windowId?: number; error?: string }> {
+): Promise<FloatingResult> {
+  if (IS_SAFARI || !detectLaunchCapabilities(false, browser, globalThis).floating) {
+    return { ok: false, error: 'Floating windows are unavailable' };
+  }
   for (const [winId, bound] of popoutWindows) {
     if (bound === tabId) {
       try {
+        await firefoxDock?.clear(tabId);
         await browser.windows.update(winId, { focused: true });
+        for (const [port, boundTab] of panelPorts) {
+          if (boundTab === tabId && panelSurfaces.get(port) === 'popout') {
+            try { port.postMessage({ type: 'FOCUS_FLOATING_SURFACE' }); } catch {}
+          }
+        }
         return { ok: true, windowId: winId };
       } catch {}
     }

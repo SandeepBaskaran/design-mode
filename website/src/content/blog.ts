@@ -267,7 +267,7 @@ export const posts: BlogPost[] = [
       {
         heading: "Static OG image",
         paragraphs: [
-          "The marketing site now uses a single static og-image.png across every page. The dynamic per-page OG generation that some of the templates ship with was costing edge function invocations for no measurable benefit; one well-designed static image is enough.",
+          "The marketing site now uses a single static social-preview image across every page. The dynamic per-page OG generation that some of the templates ship with was costing edge function invocations for no measurable benefit; one well-designed static image is enough.",
         ],
       },
       {

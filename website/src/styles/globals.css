@@ -39,9 +39,9 @@
   --shadow-xl: 0 16px 32px -8px oklch(0.22 0.01 70 / 0.1), 0 28px 56px -14px oklch(0.22 0.01 70 / 0.14);
   --shadow-2xl: 0 28px 60px -14px oklch(0.22 0.01 70 / 0.18);
 
-  --font-sans: var(--font-google-sans-flex), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-sans);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-mono: var(--font-sans);
 
   --display-family: var(--font-sans);
   --text-family: var(--font-sans);
@@ -105,6 +105,8 @@
   --font-weight-display: var(--display-weight);
   --font-weight-text: var(--text-weight);
 
+  --text-body: 1rem;
+
   --text-3xl: 2rem;
   --text-3xl--line-height: 1.2;
   --text-4xl: 2.5rem;
@@ -146,7 +148,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground text-base leading-6;
   }
   *,
   ::after,
@@ -200,18 +202,21 @@
   --tw-prose-th-borders: var(--border);
   --tw-prose-td-borders: var(--border);
   font-family: var(--font-text);
-  font-size: 16px;
+  font-size: var(--text-body);
   line-height: 1.7;
 }
 .prose :where(h1) {
-  font-size: 32px;
+  font-size: 2rem;
 }
 .prose :where(h2, h3) {
-  font-size: 24px;
+  font-size: 1.5rem;
 }
 .prose :where(h1, h2, h3) {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
+}
+.prose :where(p, li, blockquote, pre, code, table, th, td, figcaption) {
+  font-size: var(--text-body);
 }
 .prose :where(a):hover {
   text-decoration-color: var(--primary);

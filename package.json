@@ -18,6 +18,8 @@
     "dev:link": "node scripts/link-shared-dist.mjs",
     "build": "npm run build:extension && npm run build:website",
     "build:extension": "cd packages/extension && node build.mjs",
+    "build:extension:safari": "cd packages/extension && node build.mjs --safari",
+    "package:extension:safari": "npm run build:extension:safari && cd packages/extension/dist-safari && rm -f ../designmode-for-safari.zip && zip -rq ../designmode-for-safari.zip . -x '*.DS_Store' -x '*.map'",
     "build:analytics": "npm run build:analytics --workspace @design-mode/extension",
     "test:analytics-build": "node --test packages/extension/analytics-build*.test.mjs",
     "build:website": "cd website && npm run build",
@@ -39,7 +41,7 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "web-ext": "^10.6.0"
+    "web-ext": "^10.7.0"
   },
   "overrides": {
     "zod": "$zod",

@@ -1,0 +1,47 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const A = require('./certification/panel-actions.cjs');
+
+module.exports = async h => {
+  const checks = [];
+  const check = (ok, label, observed) => {
+    checks.push({ label, ok: !!ok, observed });
+    fs.writeFileSync(path.join(h.out, 'layers-multi-select.json'), JSON.stringify({ version: h.version, checks }, null, 2));
+    assert.ok(ok, label);
+  };
+  const click = async selector => { await h.panel(A.clickSelector, selector); await h.wait(300); };
+  const inspect = selector => h.panel(A.inspectSelector, selector);
+  const toggle = '[data-dm-action="toggle-layer-multi-select"]';
+  const count = async () => (await inspect('[data-dm-action="clear-multi-select"]'))[0]?.text || '';
+  await h.send('SP_ACTIVATE');
+  await h.select('heading');
+  await click('[data-dm-tab="layers"]');
+  const ids = await h.content(() => Object.fromEntries(['heading','copy','hide'].map(id => [id, document.getElementById(id).getAttribute('data-dm-id')])));
+  const row = id => '[data-dm-layer="' + ids[id] + '"]';
+  check((await inspect(toggle))[0].attributes['aria-pressed'] === 'false', 'toggle defaults off');
+  await click(row('heading'));
+  await click(toggle);
+  check((await inspect(toggle))[0].attributes['aria-pressed'] === 'true', 'toggle stays pressed independently of selection count');
+  await click(row('copy'));
+  check((await count()).includes('2 selected'), 'plain click adds second layer');
+  await h.screenshot('layers-multi-select-active');
+  await h.send('SP_APPLY_STYLE', { property: 'opacity', value: '0.6' });
+  const opacity = await h.content(() => ['heading','copy','hide'].map(id => getComputedStyle(document.getElementById(id)).opacity));
+  check(JSON.stringify(opacity) === JSON.stringify(['0.6','0.6','1']), 'installed content applies style only to selected pair', opacity);
+  await click(row('copy')); await click(row('heading'));
+  check(!(await count()) && (await inspect(toggle))[0].attributes['aria-pressed'] === 'true', 'remove final layer retains modifier-free mode');
+  await click(row('hide'));
+  check((await count()).includes('1 selected'), 'empty mode starts a fresh single-item set');
+  await click(toggle);
+  check(!(await count()) && (await inspect(toggle))[0].attributes['aria-pressed'] === 'false', 'toggle off clears selection');
+  await click(row('heading'));
+  await h.panel(A.modifiedClick, { selector: row('hide'), shiftKey: true }); await h.wait(300);
+  check((await count()).includes('3 selected'), 'Shift-click still selects visible range with toggle off');
+  await click('[data-dm-bulk-action="clear-selection"]');
+  check(!(await count()), 'bulk clear removes selection chip');
+  await h.send('SP_APPLY_STYLE', { property: 'borderRadius', value: '7px' });
+  const radius = await h.content(() => ['heading','copy','hide'].map(id => getComputedStyle(document.getElementById(id)).borderRadius));
+  check(JSON.stringify(radius) === JSON.stringify(['0px','0px','7px']), 'bulk clear synchronizes page: later edits no longer fan out', radius);
+  await h.screenshot('layers-multi-select');
+};

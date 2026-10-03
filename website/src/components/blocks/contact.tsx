@@ -29,7 +29,7 @@ export function ContactHero() {
       <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
         Get in touch
       </h1>
-      <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+      <p className="text-muted-foreground mt-4 max-w-3xl text-base">
         Bug? Feature idea? Sponsorship question? Pick the channel that fits —
         email for off-the-record, GitHub for everything else.
       </p>
@@ -42,7 +42,7 @@ export function ContactChannels() {
     <div className="container max-w-5xl">
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="bg-card border-border rounded-2xl border p-6 shadow-sm">
-          <h2 className="text-foreground flex items-center gap-2 font-semibold">
+          <h2 className="text-foreground flex items-center gap-2 text-base font-semibold">
             <Mail className="size-6" /> Email
           </h2>
           <div className="mt-4">
@@ -60,7 +60,7 @@ export function ContactChannels() {
         </div>
 
         <div className="bg-card border-border rounded-2xl border p-6 shadow-sm">
-          <h2 className="text-foreground flex items-center gap-2 font-semibold">
+          <h2 className="text-foreground flex items-center gap-2 text-base font-semibold">
             <GithubIcon className="size-6" /> GitHub
           </h2>
           <div className="mt-4 space-y-2">

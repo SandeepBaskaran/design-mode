@@ -30,7 +30,7 @@
   gap: 0.5rem;
   padding: 0.5rem 0.875rem;
   margin: 1rem auto 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-body);
   font-weight: 500;
   border: 1px solid color-mix(in oklch, var(--foreground) 10%, transparent);
   background: color-mix(in oklch, var(--foreground) 3%, transparent);
@@ -94,7 +94,7 @@
   gap: 0.625rem;
   padding: 0.5rem 0.75rem;
   border-radius: 0.375rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-body);
   font-weight: 500;
   color: color-mix(in oklch, var(--foreground) 65%, transparent);
   text-decoration: none;
@@ -121,7 +121,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  font-size: 0.6875rem;
+  font-size: var(--text-body);
   font-weight: 600;
   color: color-mix(in oklch, var(--foreground) 40%, transparent);
   background: color-mix(in oklch, var(--foreground) 5%, transparent);
@@ -150,7 +150,7 @@
   gap: 0.5rem;
   padding: 0.375rem 0.625rem;
   margin-left: 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-body);
   font-weight: 500;
   color: color-mix(in oklch, var(--foreground) 55%, transparent);
   text-decoration: none;
@@ -175,7 +175,7 @@
   justify-content: center;
   width: 16px;
   height: 16px;
-  font-size: 0.625rem;
+  font-size: var(--text-body);
   font-weight: 600;
   color: color-mix(in oklch, var(--foreground) 35%, transparent);
   background: color-mix(in oklch, var(--foreground) 4%, transparent);
@@ -233,7 +233,7 @@
   p {
     margin: 0;
     color: color-mix(in oklch, var(--foreground) 78%, transparent);
-    font-size: 0.9375rem;
+    font-size: var(--text-body);
     line-height: 1.6;
   }
 }
@@ -256,7 +256,7 @@
   display: inline-flex;
   align-items: center;
   padding: 0.125rem 0.5rem;
-  font-size: 0.6875rem;
+  font-size: var(--text-body);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;

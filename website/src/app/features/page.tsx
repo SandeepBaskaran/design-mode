@@ -54,10 +54,10 @@ export const metadata = {
     url: "https://designmode.app/features",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -68,10 +68,10 @@ export const metadata = {
       "Inspect and edit a rendered webpage with Layers, visual controls, structured change history, Copy as Prompt and MCP agent hand-off.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -172,7 +172,7 @@ export default function FeaturesPage() {
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Every control, where you need it
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
               The Design Mode side panel is split into three rows. A header row
               to pick what you're working on, three middle panels for the actual
               editing, and a bottom row that ships your edits to your AI coding

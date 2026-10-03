@@ -32,10 +32,10 @@ export const metadata = {
     url: "https://designmode.app/use-cases",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -46,10 +46,10 @@ export const metadata = {
       "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -76,7 +76,7 @@ export default function UseCasesIndex() {
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Workflows for visual editing and agent hand-off
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
               Start with the shared loop: make the intended change on the
               rendered interface, capture the exact specification, then ask a
               coding agent or developer to update and verify the source. The

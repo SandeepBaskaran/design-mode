@@ -12,7 +12,7 @@ export function FirefoxBanner() {
         href={withNavRef(FIREFOX_AMO_URL)}
         target="_blank"
         rel="noopener noreferrer"
-        className="focus-visible:ring-ring text-foreground mx-auto flex min-h-8 flex-wrap items-center justify-center gap-2 px-4 py-2 text-center text-[12px] leading-snug break-words focus-visible:ring-2 focus-visible:outline-none sm:text-base"
+        className="focus-visible:ring-ring text-foreground mx-auto flex min-h-8 flex-wrap items-center justify-center gap-2 px-4 py-2 text-center text-base leading-snug break-words focus-visible:ring-2 focus-visible:outline-none"
       >
         <Image
           src="/firefox.svg"

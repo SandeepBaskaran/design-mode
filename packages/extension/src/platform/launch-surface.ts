@@ -1,3 +1,5 @@
+export { detectLaunchCapabilities, supportedLaunchSurface } from './launch-capabilities';
+
 export const LAUNCH_SURFACE_KEY = 'dm-launch-surface';
 
 export const LAUNCH_SURFACES = ['side-panel', 'floating', 'picture-in-picture'] as const;

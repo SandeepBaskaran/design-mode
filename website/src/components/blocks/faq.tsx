@@ -12,7 +12,7 @@ export { homepageFaqQA } from "@/content/product-facts";
 
 export const FAQ = () => {
   return (
-    <section className="py-28 lg:py-32">
+    <section className="py-32">
       <div className="container max-w-5xl">
         <div className="mb-12 space-y-4 text-center lg:mb-16">
           <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">

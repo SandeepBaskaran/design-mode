@@ -12,4 +12,6 @@ const hasSidebarAction =
   typeof (globalThis as { browser?: { sidebarAction?: unknown } }).browser?.sidebarAction !== 'undefined';
 
 export const IS_FIREFOX = uaFirefox || hasSidebarAction;
-export const IS_CHROME = !IS_FIREFOX;
+declare const __DM_SAFARI__: boolean;
+export const IS_SAFARI = typeof __DM_SAFARI__ !== 'undefined' && __DM_SAFARI__;
+export const IS_CHROME = !IS_FIREFOX && !IS_SAFARI;

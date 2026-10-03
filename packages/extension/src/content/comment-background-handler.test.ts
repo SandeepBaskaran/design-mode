@@ -7,10 +7,9 @@ import { createCommentStore, COMMENT_PAGE_ERROR, COMMENT_STORE_ERROR } from '../
 
 const source = readFileSync(new URL('../background/index.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('background.ts', source, ts.ScriptTarget.Latest, true);
-const listener = ast.statements.find(n => ts.isExpressionStatement(n) && ts.isCallExpression(n.expression)
-  && n.expression.expression.getText(ast) === 'browser.runtime.onMessage.addListener');
+const listener = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'dispatchPanelMessage');
 assert.ok(listener);
-const code = ts.transpile(listener.getText(ast), { target: ts.ScriptTarget.ES2022 });
+const code = ts.transpile(listener.getText(ast) + '\nbrowser.runtime.onMessage.addListener(dispatchPanelMessage);', { target: ts.ScriptTarget.ES2022 });
 
 it('background handler exposes page-local recovery and preserves damaged data on clear', async () => {
   const pageUrl = 'https://example.test/a';
@@ -22,7 +21,7 @@ it('background handler exposes page-local recovery and preserves damaged data on
     set: async (values: any) => { data = structuredClone(values['dm-comments']); },
   } as any);
   let handler: any;
-  const context = vm.createContext({
+  const context = vm.createContext({ IS_SAFARI: false,
     Error, URL, COMMENT_PAGE_ERROR, COMMENT_STORE_ERROR, commentStore, currentTargetTab: null,
     browser: { runtime: { id: 'extension', onMessage: { addListener: (fn: any) => { handler = fn; } } } },
   });

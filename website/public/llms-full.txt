@@ -94,6 +94,22 @@ First-party Cursor documentation supports stdio, SSE and Streamable HTTP. Projec
 
 Other clients have different files, wrappers, transports and authentication rules. Their current first-party documentation is authoritative.
 
+## Agent skill and safe setup
+
+Canonical skill: https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md
+Discovery index: https://designmode.app/.well-known/agent-skills/index.json
+Prompt-first guide: https://designmode.app/mcp
+
+Setup and client examples were reviewed on 29 September 2026. Cloud and Self-hosted require Streamable HTTP with a custom Authorization bearer header. Pair using an anonymous credential from the extension's MCP page, not OAuth, an account login or subscription verification. Enter secrets locally through a protected input or securely supplied environment variable, never into AI chat or shell history. OAuth-only connectors and clients without header support cannot use the token directly; choose Local stdio if available, otherwise Copy as Prompt. The separate agent CLI package is private; do not assume a published installation command.
+
+Claude Code expands ${DESIGN_MODE_TOKEN} in project .mcp.json headers. Cursor uses ${env:DESIGN_MODE_TOKEN}. VS Code's local extension-host .vscode/mcp.json uses a servers wrapper and can use password-masked promptString inputs. Those interactive inputs are not forwarded to Agent Host sessions. Merge existing configuration; preserve other servers. Follow https://code.visualstudio.com/docs/agents/reference/mcp-configuration and the examples at https://designmode.app/docs/mcp-setup.
+
+Start with live schema discovery and get_session_summary({}). With permission to read the page, call get_changes({}); empty edits are valid. Do not apply, resolve or clear during setup. No account check is needed. Reading a skill is not a connection or a permission grant.
+
+Progressive reads mean summary first, one full change fetch, then selecting unresolved IDs locally and requesting only needed screenshots. get_changes has no pagination, status filter or max_chars parameter. get_screenshot accepts a returned unique selector, elementId or commentId, not a raw region. export_changes requires format css, tailwind, scss or jsx. Provide explicit IDs for status writes; omitting ids targets everything.
+
+Only Local offers opt-in wait_for_handoff: exact pageUrl, optional returned sessionId and after cursor, and timeoutMs up to 20000. Work on the immutable feedback report, stop on stopped/busy/error, and do not imply always-on polling. Cloud and Self-hosted remain one-shot reads.
+
 ## Storage and privacy
 
 The extension contains no product analytics SDK or telemetry path.

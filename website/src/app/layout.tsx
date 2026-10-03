@@ -1,4 +1,4 @@
-import { Google_Sans_Flex } from "next/font/google";
+import { Inter } from "next/font/google";
 
 import type { Metadata } from "next";
 
@@ -11,10 +11,12 @@ import { JsonLd, personSchema, websiteSchema } from "@/components/site/json-ld";
 import { LinkTracker } from "@/components/site/link-tracker";
 import "@/styles/globals.css";
 
-const googleSansFlex = Google_Sans_Flex({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-google-sans-flex",
+  variable: "--font-inter",
   display: "swap",
+  fallback: ["Arial", "Helvetica", "sans-serif"],
+  adjustFontFallback: false,
   preload: true,
 });
 
@@ -82,10 +84,10 @@ export const metadata: Metadata = {
     url: "https://designmode.app",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — Live design editing for developers and agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -95,10 +97,10 @@ export const metadata: Metadata = {
     site: "@sandeepbaskaran",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -112,7 +114,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={googleSansFlex.variable}
+      className={inter.variable}
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >

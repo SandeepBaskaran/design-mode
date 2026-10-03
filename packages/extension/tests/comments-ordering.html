@@ -1,0 +1,4 @@
+<!doctype html><title>Controlled comment anchors</title><style>body{padding:60px;font:16px sans-serif}#heading{width:200px;height:60px}#other{width:160px;height:50px;margin-top:80px}</style><main id="targets"></main><script>
+window.mountTargets=()=>{document.querySelector('#targets').innerHTML='<h1 id="heading">Saved target</h1><div id="other">Second saved target</div>'};
+if(sessionStorage.getItem('late')!=='yes')mountTargets();
+</script>

@@ -20,6 +20,11 @@ const defaultShortcuts: KeyboardShortcut[] = DEFAULT_SHORTCUTS.map(s => ({ ...s,
 let shortcuts = mergeSavedShortcuts(defaultShortcuts, undefined);
 let enabled = false;
 let storageHooked = false;
+let shortcutStorage: typeof browser.storage | undefined;
+
+export function configureShortcutStorage(storage: typeof browser.storage) {
+  shortcutStorage = storage;
+}
 
 // ── Register / Unregister ──
 
@@ -104,14 +109,14 @@ export function getShortcuts(): KeyboardShortcut[] {
 
 async function saveShortcuts() {
   try {
-    await browser.storage.local.set({ 'dm-shortcuts': shortcuts });
+    await (shortcutStorage ?? browser.storage).local.set({ 'dm-shortcuts': shortcuts });
   } catch {}
 }
 
 export async function loadShortcuts() {
   hookShortcutStorage();
   try {
-    const data = await browser.storage.local.get('dm-shortcuts');
+    const data = await (shortcutStorage ?? browser.storage).local.get('dm-shortcuts');
     shortcuts = mergeSavedShortcuts(defaultShortcuts, data['dm-shortcuts']);
   } catch {}
 }
@@ -120,7 +125,7 @@ function hookShortcutStorage() {
   if (storageHooked) return;
   storageHooked = true;
   try {
-    browser.storage.onChanged.addListener((changes, area) => {
+    (shortcutStorage ?? browser.storage).onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
       if (!changes['dm-shortcuts']) return;
       shortcuts = mergeSavedShortcuts(defaultShortcuts, changes['dm-shortcuts'].newValue);

@@ -27,10 +27,10 @@ export const metadata = {
     url: "https://designmode.app/docs",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -41,10 +41,10 @@ export const metadata = {
       "Install Design Mode, configure Claude Code or Cursor, understand browser support and the Changes tab, and troubleshoot common issues.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -71,7 +71,7 @@ export default function DocsIndex() {
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Docs
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
               How to install Design Mode, set up MCP for your AI coding agent,
               work with the Changes tab, and fix common issues.
             </p>

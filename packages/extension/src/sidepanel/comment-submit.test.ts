@@ -1,3 +1,5 @@
+import { createInspectorOperation, runInspectorAction } from './inspector-operation';
+const beginInspectorOperation = () => createInspectorOperation(() => 0, false);
 import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -13,7 +15,7 @@ const javascript = ts.transpile(submit.getText(ast), { target: ts.ScriptTarget.E
 function composer(response: Record<string, unknown>, extra = {}) {
   const sent: Record<string, unknown>[] = [];
   const errors: string[] = [];
-  const context = vm.createContext({
+  const context = vm.createContext({ beginInspectorOperation, runInspectorAction,
     commentText: 'keep my draft', commentMode: true, commentSubmitting: false,
     editingCommentId: null, regionCommentPending: false,
     send: async (message: Record<string, unknown>) => { sent.push(message); return response; },

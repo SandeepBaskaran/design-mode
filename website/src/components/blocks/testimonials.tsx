@@ -124,7 +124,7 @@ export const Testimonials = ({
                           />
                         </div>
                         <div className="flex flex-1 flex-col justify-between gap-10 p-6">
-                          <blockquote className="font-display text-2xl leading-none! font-medium lg:text-3xl">
+                          <blockquote className="font-display text-base leading-relaxed font-medium">
                             {testimonial.quote}
                           </blockquote>
                           <div className="space-y-0">

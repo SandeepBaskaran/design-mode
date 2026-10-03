@@ -27,10 +27,10 @@ export const metadata = {
     url: "https://designmode.app/blog",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -41,10 +41,10 @@ export const metadata = {
       "Stories from building Design Mode and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -81,7 +81,7 @@ export default function BlogIndex() {
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Blog
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
               Build notes from Design Mode and walkthroughs of real workflows —
               MCP architecture, vibe coding, Tailwind redesigns, changelog
               deep-dives.

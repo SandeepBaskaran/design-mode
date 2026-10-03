@@ -4,7 +4,6 @@ import {
   Camera,
   CheckCircle2,
   Cloud,
-  Copy,
   Eraser,
   FileDown,
   GitCompareArrows,
@@ -14,11 +13,13 @@ import {
   Server,
   Send,
   Wand2,
+  MessageSquare,
+  Clock,
 } from "lucide-react";
 
 import { Background } from "@/components/background";
 import { ModesComparison } from "@/components/blocks/modes-comparison";
-import { DashedLine } from "@/components/dashed-line";
+import { CopyPrompt } from "@/components/site/copy-prompt";
 import {
   Accordion,
   AccordionContent,
@@ -27,303 +28,351 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { withNavRef } from "@/lib/nav-ref";
+import {
+  DESIGN_MODE_SKILL,
+  MCP_SETUP_PROMPT,
+  mcpClients,
+} from "@/lib/mcp-guide";
 
+const title = "Connect your AI app with MCP | Design Mode";
+const description =
+  "Set up Design Mode with a compatible AI app. Connect through Cloud, Local or Self-hosted MCP, test safely and read your browser design changes.";
 export const metadata = {
-  title: {
-    absolute: "Send browser design changes to coding agents | Design Mode",
-  },
-  description:
-    "Copy visual changes as Markdown or connect Design Mode to a compatible coding agent through Cloud, Local or Self-hosted MCP.",
-  keywords: [
-    "MCP setup",
-    "Model Context Protocol",
-    "Claude Code MCP",
-    "Cursor MCP",
-    "Claude Desktop MCP",
-    "Windsurf MCP",
-    "Cline MCP",
-    "MCP server for design",
-    "MCP for AI coding agents",
-    "self-hosted MCP",
-    "MCP relay",
-  ],
+  title: { absolute: title },
+  description,
   alternates: { canonical: "https://designmode.app/mcp" },
   openGraph: {
     type: "website",
-    title: "Send browser design changes to coding agents | Design Mode",
-    description:
-      "Copy visual changes as Markdown or connect Design Mode to a compatible coding agent through Cloud, Local or Self-hosted MCP.",
+    title,
+    description,
     url: "https://designmode.app/mcp",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Send browser design changes to coding agents | Design Mode",
-    description:
-      "Copy visual changes as Markdown or connect Design Mode to a compatible coding agent through Cloud, Local or Self-hosted MCP.",
+    title,
+    description,
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
 };
 
-// Illustrative transport settings only. MCP clients use different wrappers,
-// scopes, files and authentication rules; the verified client-specific guide
-// lives at /docs/mcp-setup.
-const localConfig = `{
-  "mcpServers": {
-    "design-mode": {
-      "command": "npm",
-      "args": ["start"],
-      "cwd": "/absolute/path/to/design-mode"
-    }
-  }
-}`;
-
-const cloudConfig = `{
-  "mcpServers": {
-    "design-mode": {
-      "type": "http",
-      "url": "https://mcp.designmode.app/mcp",
-      "headers": { "Authorization": "Bearer dm_<your-token>" }
-    }
-  }
-}`;
-
-const selfConfig = `{
-  "mcpServers": {
-    "design-mode": {
-      "type": "http",
-      "url": "https://<your-deploy>/mcp",
-      "headers": { "Authorization": "Bearer dm_<your-token>" }
-    }
-  }
-}`;
-
-type Mode = {
-  id: string;
-  name: string;
-  icon: React.ElementType;
-  tagline: string;
-  description: string;
-  bestFor: string;
-  highlight?: boolean;
-  config: string;
-  note?: string;
-};
-
-const modes: Mode[] = [
-  {
-    id: "cloud",
-    name: "Cloud",
-    icon: Cloud,
-    tagline: "Selected by default; connects only after setup.",
-    description:
-      "Create an anonymous credential, then connect the extension and agent through mcp.designmode.app. Agent calls use Streamable HTTP; the extension receives requests over an authenticated event stream.",
-    bestFor:
-      "Best for: anyone who'd rather not run a local process — including agents that can't reach localhost (sandboxed CI, remote VSCode tunnels, web-based agents).",
-    highlight: true,
-    config: cloudConfig,
-  },
-  {
-    id: "local",
-    name: "Local",
-    icon: Monitor,
-    tagline: "Fastest, fully offline.",
-    description:
-      "Run the companion MCP server on your own machine. Design Mode MCP traffic stays on localhost.",
-    bestFor:
-      "Best for: power users with a terminal who want no Design Mode relay egress and the lowest possible latency.",
-    config: localConfig,
-    note: "No npm package to install — clone the repo, run npm install, and point cwd at the absolute path of the repo root. npm start launches the local companion server. Concurrent agent sessions attach to one shared owner on port 9960; if that owner closes, a surviving session takes ownership on its next tool call. Design Mode never kills a foreign process. If another app needs 9960, set DM_PORT to another port and select the same Local port in the extension.",
-  },
-  {
-    id: "self-hosted",
-    name: "Self-hosted",
-    icon: Server,
-    tagline: "Same protocol, your own infra.",
-    description:
-      "Fork packages/mcp-cloud and deploy on any Node.js host with Redis — Vercel, Railway, Fly, your own VM. Point the extension at your URL and issue your own bearer tokens.",
-    bestFor:
-      "Best for: teams that want the Cloud-mode ergonomics but on infrastructure they operate.",
-    config: selfConfig,
-  },
-];
-
 const tools = [
-  {
-    name: "get_changes",
-    icon: ListTree,
-    description:
-      "Read style, text, DOM and token changes, comments, addressable items, CSS and hand-off state.",
-  },
-  {
-    name: "apply_changes",
-    icon: Wand2,
-    description: "Apply a structured patch back to the page from the agent.",
-  },
-  {
-    name: "set_change_status",
-    icon: ListChecks,
-    description:
-      "Mark changes/comments to-do, in-progress, or resolved as you implement them — the user sees the status in their Changes tab.",
-  },
-  {
-    name: "clear_changes",
-    icon: Eraser,
-    description: "Wipe the current change buffer — useful between iterations.",
-  },
   {
     name: "get_session_summary",
     icon: GitCompareArrows,
+    access: "Read",
     description:
-      "Connection status, active browser sessions, tracked-item counts and the current hand-off marker.",
+      "Check the connection, active sessions, tracked-item counts and hand-off marker.",
   },
   {
-    name: "export_changes",
-    icon: FileDown,
-    description: "Export the current changes as CSS, Tailwind, SCSS or JSX.",
+    name: "get_changes",
+    icon: ListTree,
+    access: "Read",
+    description:
+      "Fetch recorded styles, text, DOM edits, design tokens and comments, including item IDs and status.",
   },
   {
     name: "get_screenshot",
     icon: Camera,
+    access: "Read",
     description:
-      "Capture the edited viewport or crop to an element or comment region.",
+      "Capture the visible page, or crop to one element or comment. Screenshots can include private page content.",
+  },
+  {
+    name: "export_changes",
+    icon: FileDown,
+    access: "Read",
+    description:
+      "Read style changes as CSS, Tailwind, SCSS or JSX. This is separate from the extension's JSON export and Copy as Prompt.",
+  },
+  {
+    name: "apply_changes",
+    icon: Wand2,
+    access: "Write",
+    description:
+      "Preview CSS changes in the browser. This does not edit your repository.",
+  },
+  {
+    name: "set_change_status",
+    icon: ListChecks,
+    access: "Write",
+    description:
+      "Set specific tracked items to todo, in_progress or resolved using their IDs.",
   },
   {
     name: "mark_comment_resolved",
     icon: CheckCircle2,
+    access: "Write",
+    description: "Resolve or reopen one pinned comment using its commentId.",
+  },
+  {
+    name: "clear_changes",
+    icon: Eraser,
+    access: "Destructive",
     description:
-      "Mark a pinned comment done (or reopen it) once the agent has acted on it.",
+      "Clear the tracked session and revert its live-page edits. Ask before using it.",
   },
 ];
+
+function Snippet({ children }: { children: string }) {
+  return (
+    <pre className="bg-ink text-ink-foreground mt-6 max-w-full overflow-x-auto rounded-xl p-4 font-mono text-base leading-relaxed">
+      <code>{children}</code>
+    </pre>
+  );
+}
 
 export default function McpPage() {
   return (
     <>
-      {/* Hero — yellow background slab */}
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className="py-32" aria-labelledby="mcp-title">
           <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Send visual changes to your coding agent
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
-              Design Mode records what you changed on the rendered page. Copy
-              that specification as Markdown, or let a compatible MCP client
-              read it and keep the Changes tab in sync while it updates your
-              repository.
+            <p className="text-muted-foreground text-base font-medium tracking-widest">
+              DESIGN MODE + YOUR AI APP
             </p>
-            <div className="text-muted-foreground mt-8 max-w-3xl space-y-4 text-base leading-relaxed">
-              <p>
-                <strong className="text-foreground">
-                  What is Model Context Protocol (MCP)?
-                </strong>{" "}
-                MCP is an open protocol for connecting AI applications to
-                external tools and data. A &quot;tool&quot; is anything the
-                agent can read from or write to — a database, a filesystem, a
-                web service, or in this case, the design state of your live
-                page. Design Mode exposes eight session tools in every mode so
-                your agent can read every edit you made in the side panel, push
-                patches back to the page, grab screenshots, and mark your
-                comments resolved — all without copy-paste. MCP connection,
-                mode, and token management now live on their own dedicated page
-                inside the extension, opened from the header MCP chip. Local
-                also registers <code>wait_for_handoff</code> for opt-in live
-                feedback rounds; each Send produces an immutable snapshot, and
-                Stop ends the loop without clearing edits. Cloud and Self-hosted
-                keep one-shot Send.
-              </p>
-              <p>
-                <strong className="text-foreground">
-                  Why three connection modes?
-                </strong>{" "}
-                Different teams have different constraints. Cloud is selected on
-                a fresh install but stays disconnected until you create a
-                credential. It suits anyone whose agent can&apos;t reach
-                localhost. Local is for power users who want zero network egress
-                and the lowest possible latency. Self-hosted is for teams who
-                want Cloud ergonomics on their own infrastructure.
-              </p>
+            <h1
+              id="mcp-title"
+              className="mt-6 text-4xl tracking-tight sm:text-5xl md:text-6xl"
+            >
+              Your browser changes.
+              <br />
+              In your agent’s hands.
+            </h1>
+            <p className="text-muted-foreground mt-6 max-w-2xl text-base leading-relaxed">
+              Start with this prompt. A capable agent can help you connect; apps
+              that cannot configure themselves can guide you through the steps.
+            </p>
+            <div className="bg-background/90 mt-10 rounded-xl border p-6 sm:p-8">
+              <h2 className="text-xl font-semibold">Set up with your agent</h2>
+              <CopyPrompt text={MCP_SETUP_PROMPT} />
             </div>
           </div>
         </section>
       </Background>
 
-      {/* Middle — plain */}
-      <section className="py-16 lg:py-20">
-        <div className="container grid max-w-5xl gap-6 md:grid-cols-2">
-          <Card>
-            <CardContent className="flex h-full flex-col gap-4 p-6">
-              <Copy className="size-6" />
-              <h2 className="text-2xl font-semibold">Copy as Prompt</h2>
-              <p className="text-muted-foreground text-base leading-relaxed">
-                Copy the recorded selectors, properties, old values, new values,
-                text edits, DOM changes and comments as Markdown. Paste it into
-                any coding agent. No MCP connection is required.
+      <section className="py-32" aria-labelledby="what-mcp">
+        <div className="container max-w-5xl">
+          <h2 id="what-mcp" className="text-3xl tracking-tight md:text-4xl">
+            What MCP makes possible
+          </h2>
+          <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
+            Model Context Protocol connects AI apps to external tools. Design
+            Mode gives a connected agent tools to read your recorded browser
+            edits, inspect screenshots and update their status. The agent still
+            needs separate access to your repository to change source code.
+          </p>
+          <div className="mt-12 grid gap-8 rounded-xl border p-6 md:grid-cols-2 md:p-8">
+            <div>
+              <MessageSquare
+                aria-hidden="true"
+                className="text-primary size-8"
+              />
+              <h3 className="mt-6 text-2xl font-semibold">
+                Ask your agent what’s left
+              </h3>
+              <p className="text-muted-foreground mt-4 leading-relaxed">
+                When connected, your agent can fetch the latest changes when you
+                ask. It reads updates when it makes a request or an explicitly
+                enabled polling call—not through always-on background
+                monitoring. Reading the list does not automatically edit your
+                source.
               </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex h-full flex-col gap-4 p-6">
-              <Send className="size-6" />
-              <h2 className="text-2xl font-semibold">Send to Agent over MCP</h2>
-              <p className="text-muted-foreground text-base leading-relaxed">
-                Connect a compatible client so it can fetch the change set,
-                preview updates in the browser, capture screenshots and mark
-                work resolved. The client still needs separate repository
-                access.
+            </div>
+            <div
+              className="bg-muted/40 min-w-0 rounded-xl border"
+              aria-label="Example conversation"
+            >
+              <p className="text-muted-foreground border-b px-6 py-4 text-base">
+                Example conversation
               </p>
-            </CardContent>
-          </Card>
+              <div className="space-y-6 p-6">
+                <div>
+                  <p className="text-base font-semibold">You</p>
+                  <p className="mt-2">
+                    What changes are left to complete in Design Mode?
+                  </p>
+                </div>
+                <div>
+                  <p className="text-base font-semibold">
+                    Agent · read-only tool call
+                  </p>
+                  <code className="mt-2 block text-base">
+                    get_changes({"{}"})
+                  </code>
+                </div>
+                <div>
+                  <p className="text-base font-semibold">Agent</p>
+                  <p className="text-muted-foreground mt-2">
+                    Two items are still pending in this example:
+                  </p>
+                  <ul className="mt-2 list-disc space-y-2 pl-5">
+                    <li>Increase the hero heading’s line height.</li>
+                    <li>
+                      Address the comment on the primary button’s contrast.
+                    </li>
+                  </ul>
+                  <p className="text-muted-foreground mt-3">
+                    Would you like me to find these in your source?
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="text-muted-foreground mt-8">
+            No MCP support? Use{" "}
+            <strong className="text-foreground">Copy as Prompt</strong> in the
+            Changes tab and paste the Markdown into your app. It is a snapshot,
+            not a live connection.
+          </p>
         </div>
+      </section>
 
-        <DashedLine className="container max-w-5xl" />
-
-        <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-3">
-          {modes.map((mode) => {
-            const Icon = mode.icon;
-            return (
-              <Card
-                key={mode.id}
-                className={mode.highlight ? "outline-primary outline-4" : ""}
-              >
-                <CardContent className="flex h-full flex-col gap-4 p-6">
-                  <div className="flex items-center gap-4">
-                    <Icon className="text-foreground size-6" />
-                    <h2 className="text-2xl font-semibold">{mode.name}</h2>
-                  </div>
-                  <p className="text-muted-foreground text-base font-medium">
-                    {mode.tagline}
-                  </p>
-                  <p className="text-muted-foreground text-base leading-relaxed">
-                    {mode.description}
-                  </p>
-                  <p className="text-muted-foreground mt-auto text-base">
-                    {mode.bestFor}
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
+      <section id="connect" className="py-32" aria-labelledby="connect-title">
+        <div className="container max-w-5xl">
+          <h2
+            id="connect-title"
+            className="text-3xl tracking-tight md:text-4xl"
+          >
+            Choose how to connect
+          </h2>
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            <Card>
+              <CardContent className="space-y-4 p-6">
+                <Cloud aria-hidden="true" className="size-6" />
+                <h3 className="text-2xl font-semibold">
+                  Cloud{" "}
+                  <span className="text-muted-foreground text-base font-normal">
+                    Default
+                  </span>
+                </h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  No companion process to run. Open the extension’s MCP page
+                  from its header chip, keep Cloud selected and create an
+                  anonymous credential.
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  Pair the agent using the same bearer token. No Design Mode
+                  account or subscription verification; this is not an OAuth
+                  sign-in flow.
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="space-y-4 p-6">
+                <Monitor aria-hidden="true" className="size-6" />
+                <h3 className="text-2xl font-semibold">Local</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Your MCP client starts the companion over stdio. It talks to
+                  the extension on localhost, with no Design Mode relay traffic.
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  Requires a local repository checkout and Node.js. Select Local
+                  in the extension; the default bridge port is 9960.
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="space-y-4 p-6">
+                <Server aria-hidden="true" className="size-6" />
+                <h3 className="text-2xl font-semibold">Self-hosted</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Run the Node.js + Redis relay on infrastructure you operate.
+                  Configure its base URL in the extension and use that
+                  deployment’s /mcp endpoint in your agent.
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  Use a credential registered with that relay—not a hosted Cloud
+                  token.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+          <p className="mt-8 font-medium">Cloud endpoint · Streamable HTTP</p>
+          <Snippet>{"https://mcp.designmode.app/mcp"}</Snippet>
+          <p className="text-muted-foreground mt-4">
+            Use the apex host and the /mcp path. The extension’s event-stream
+            URL is not the agent endpoint. Keep bearer tokens out of chat,
+            screenshots, shell history and committed configuration.
+          </p>
+          <Accordion type="single" collapsible className="mt-8">
+            <AccordionItem value="local">
+              <AccordionTrigger className="text-base">
+                Local setup from source
+              </AccordionTrigger>
+              <AccordionContent className="text-base leading-relaxed">
+                <p>
+                  Review and clone the{" "}
+                  <a
+                    href="https://github.com/SandeepBaskaran/design-mode"
+                    className="underline underline-offset-4"
+                  >
+                    source repository
+                  </a>
+                  , then run npm ci at its root to install locked dependencies.
+                  Configure your client to launch the following command, using
+                  your absolute checkout path:
+                </p>
+                <Snippet>
+                  {
+                    "npm start --prefix /absolute/path/to/design-mode/packages/mcp-local"
+                  }
+                </Snippet>
+                <p className="mt-4">
+                  For a stdio JSON entry, use command <code>npm</code> and args{" "}
+                  <code>
+                    [&quot;start&quot;, &quot;--prefix&quot;,
+                    &quot;/absolute/path/to/design-mode/packages/mcp-local&quot;]
+                  </code>
+                  . The client owns this process. There is no published CLI
+                  install assumed here: the agent CLI package is currently
+                  private. If another app owns port 9960, set DM_PORT in the
+                  companion’s environment and match the extension’s Local port;
+                  never kill a foreign process.
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="self">
+              <AccordionTrigger className="text-base">
+                Self-hosted setup
+              </AccordionTrigger>
+              <AccordionContent className="text-base leading-relaxed">
+                <p>
+                  Deploy packages/mcp-cloud with Redis using its{" "}
+                  <a
+                    href="https://github.com/SandeepBaskaran/design-mode/tree/main/packages/mcp-cloud"
+                    className="underline underline-offset-4"
+                  >
+                    deployment guide
+                  </a>
+                  . Keep TLS and bearer authentication enabled. Set the
+                  extension’s relay base URL, register an anonymous credential
+                  there, then replace only the URL in your client example with{" "}
+                  <code>https://your-relay.example/mcp</code> and provide that
+                  relay’s token locally.
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
+      </section>
 
-        <DashedLine className="container mt-20 max-w-5xl" />
-
-        <div className="container mt-16 max-w-5xl">
+      <section className="py-32" aria-labelledby="apps-title">
+        <div className="container max-w-5xl">
           <h2 className="text-2xl tracking-tight md:text-3xl">
             Mode comparison
           </h2>
@@ -333,208 +382,241 @@ export default function McpPage() {
           </p>
         </div>
         <ModesComparison />
-
-        <DashedLine className="container mt-4 max-w-5xl" />
-
-        <div className="container mt-16 max-w-5xl">
-          <h2 className="text-2xl tracking-tight md:text-3xl">
-            Config snippets
+        <div className="container max-w-5xl">
+          <h2 id="apps-title" className="text-3xl tracking-tight md:text-4xl">
+            Configure your AI app
           </h2>
-          <p className="text-muted-foreground mt-2 max-w-2xl">
-            Paste the right block into your agent's config file, replace any{" "}
-            <code className="bg-muted rounded px-2 py-2 text-base">
-              dm_&lt;your-token&gt;
-            </code>{" "}
-            placeholder with the bearer token from the extension's dedicated MCP
-            page (Copy token), and restart the agent.
+          <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
+            These Cloud examples use the client’s own configuration format.
+            Merge the entry—do not replace other servers. Enter your token
+            locally using a protected input or a securely supplied environment
+            variable.
           </p>
-
-          <Accordion type="single" collapsible className="mt-8 w-full">
-            {modes.map((mode) => (
-              <AccordionItem key={mode.id} value={mode.id}>
-                <AccordionTrigger className="text-2xl font-semibold">
-                  {mode.name}
+          <Accordion
+            type="single"
+            collapsible
+            defaultValue="Claude Code"
+            className="mt-8"
+          >
+            {mcpClients.map((client) => (
+              <AccordionItem key={client.name} value={client.name}>
+                <AccordionTrigger className="text-base">
+                  {client.name}
                 </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-6 pt-2">
-                    <Snippet label="Generic MCP config — adapt to your client">
-                      {mode.config}
-                    </Snippet>
-                    {mode.note && (
-                      <p className="text-muted-foreground text-base">
-                        {mode.note}
-                      </p>
-                    )}
-                    <p className="text-muted-foreground text-base">
-                      Configuration location, wrapper, transport names and
-                      authentication support differ by client and version. Use
-                      the client-specific, version-stamped instructions in the{" "}
-                      <Link
-                        href="/docs/mcp-setup"
-                        className="underline underline-offset-8"
-                      >
-                        MCP setup guide
-                      </Link>{" "}
-                      rather than pasting this generic shape without checking
-                      it.
-                    </p>
-                  </div>
+                <AccordionContent className="text-base leading-relaxed">
+                  <p className="font-medium">{client.location}</p>
+                  <p className="text-muted-foreground mt-4">
+                    {client.description}
+                  </p>
+                  <Snippet>{client.code}</Snippet>
+                  <a
+                    href={client.source}
+                    className="mt-6 inline-block underline underline-offset-4"
+                  >
+                    Official {client.name} MCP documentation →
+                  </a>
                 </AccordionContent>
               </AccordionItem>
             ))}
+            <AccordionItem value="other">
+              <AccordionTrigger className="text-base">
+                Claude Desktop, Windsurf, Cline and other apps
+              </AccordionTrigger>
+              <AccordionContent className="text-base leading-relaxed">
+                <p>
+                  MCP support alone is not enough: Cloud and Self-hosted require
+                  Streamable HTTP and a custom Authorization bearer header. A
+                  connector that only supports OAuth or has no custom-header
+                  input cannot connect directly with this token. Do not try an
+                  OAuth login as a substitute. Check your installed client’s
+                  current documentation; choose Local if it supports stdio, or
+                  use Copy as Prompt.
+                </p>
+                <p className="mt-4">
+                  For Claude Desktop, use its documented local-server
+                  configuration for Local mode rather than assuming the remote
+                  Connectors UI accepts bearer headers. Configuration files and
+                  reload steps differ by app.
+                </p>
+                <p className="mt-4">
+                  <Link
+                    href="/docs/mcp-setup"
+                    className="underline underline-offset-4"
+                  >
+                    Detailed setup guide →
+                  </Link>
+                </p>
+              </AccordionContent>
+            </AccordionItem>
           </Accordion>
-        </div>
-
-        <DashedLine className="container mt-20 max-w-5xl" />
-
-        <div className="container mt-16 max-w-5xl">
-          <h2 className="text-2xl tracking-tight md:text-3xl">
-            Give your agent the workflow
-          </h2>
-          <p className="text-muted-foreground mt-2 max-w-2xl">
-            MCP configuration only connects the tools. This optional workflow
-            prompt gives an agent a repeatable sequence for retrieving the live
-            changes and hand-off marker, mapping them to source, implementing
-            them and updating status. Install it in the client-specific command
-            location, invoke it after you press{" "}
-            <strong className="text-foreground">Send to Agent</strong>, and run{" "}
-            <code className="bg-muted rounded px-2 py-2 text-base">
-              /design-mode
-            </code>
-            .
+          <p className="text-muted-foreground mt-6 text-base">
+            Examples checked against first-party documentation on 29 September
+            2026. Client versions and organisation policies can change
+            availability.
           </p>
-
-          <div className="mt-6 flex flex-wrap items-center gap-4">
-            <Button asChild>
-              <a href="/design-mode.md" download="design-mode.md">
-                <FileDown className="size-4" />
-                Download design-mode.md
-              </a>
-            </Button>
-            <span className="text-muted-foreground text-base">
-              Portable prompt reference; no MCP connection is required to read
-              it.
-            </span>
-          </div>
-
-          <div className="bg-muted/50 border-border mt-8 rounded-xl border p-4">
-            <h3 className="text-base font-semibold">
-              Import it using current client documentation
-            </h3>
-            <p className="text-muted-foreground mt-2 text-base leading-relaxed">
-              Prompt and workflow paths change independently of the MCP
-              protocol. Paste the file into a chat or save it only at the
-              project command location documented by your client version. The
-              MCP connection and this optional workflow prompt are separate
-              pieces.
-            </p>
-          </div>
         </div>
       </section>
 
-      {/* Bottom — yellow background slab */}
+      <section className="py-32" aria-labelledby="tools-title">
+        <div className="container max-w-5xl">
+          <h2 id="tools-title" className="text-3xl tracking-tight md:text-4xl">
+            Tools your agent can use
+          </h2>
+          <p className="text-muted-foreground mt-6 max-w-3xl text-base">
+            Cloud, Local and Self-hosted expose these eight session tools. Read
+            the discovered schema before each new kind of call.
+          </p>
+          <div className="mt-10 grid gap-4 md:grid-cols-2">
+            {tools.map((tool) => {
+              const Icon = tool.icon;
+              return (
+                <Card key={tool.name}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3">
+                      <Icon aria-hidden="true" className="size-5 shrink-0" />
+                      <h3 className="min-w-0 font-mono text-base font-semibold break-words">
+                        {tool.name}
+                      </h3>
+                    </div>
+                    <p className="text-muted-foreground mt-3 text-base">
+                      {tool.access} · All modes
+                    </p>
+                    <p className="text-muted-foreground mt-3 leading-relaxed">
+                      {tool.description}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          <Card className="mt-4">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3">
+                <Clock aria-hidden="true" className="size-5" />
+                <h3 className="font-mono text-base font-semibold">
+                  wait_for_handoff
+                </h3>
+              </div>
+              <p className="text-muted-foreground mt-3 text-base">
+                Opt-in session control · Local only
+              </p>
+              <p className="text-muted-foreground mt-3 leading-relaxed">
+                Wait up to 20 seconds for an explicit Send to Agent. Each
+                feedback response contains an immutable snapshot. Only repeat
+                calls after the user chooses live rounds; stop on stopped, busy
+                or an error. Cloud and Self-hosted use one-shot reads.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section className="py-32" aria-labelledby="reads-title">
+        <div className="container max-w-5xl">
+          <h2 id="reads-title" className="text-3xl tracking-tight md:text-4xl">
+            Read progressively, act on a bounded scope
+          </h2>
+          <ol className="text-muted-foreground mt-8 max-w-3xl list-decimal space-y-6 pl-5 text-base leading-relaxed">
+            <li>
+              <strong className="text-foreground">Start small.</strong> Get the
+              session summary before fetching a full change report.
+            </li>
+            <li>
+              <strong className="text-foreground">
+                Fetch once, select locally.
+              </strong>{" "}
+              Call get_changes with no arguments and work from its unresolved
+              items. It has no server-side pagination, status filter or
+              max_chars parameter—do not invent them.
+            </li>
+            <li>
+              <strong className="text-foreground">
+                Zoom in only when needed.
+              </strong>{" "}
+              Request a screenshot with one returned selector or elementId, or a
+              commentId for a pinned region. Export one supported format if
+              useful.
+            </li>
+            <li>
+              <strong className="text-foreground">Keep writes explicit.</strong>{" "}
+              Update only selected item IDs after implementing and verifying
+              source changes. Omitting ids from set_change_status targets
+              everything.
+            </li>
+          </ol>
+          <Snippet>
+            {
+              'get_session_summary({})\nget_changes({})\nget_screenshot({ "commentId": "<id from get_changes>" })\nexport_changes({ "format": "css" })'
+            }
+          </Snippet>
+          <p className="text-muted-foreground mt-6">
+            For opt-in Local live rounds, start wait_for_handoff with the exact
+            pageUrl and timeoutMs ≤ 20000. Continue only with the returned
+            sessionId and after cursor. Never fabricate a session ID or treat
+            later edits as part of an earlier snapshot.
+          </p>
+        </div>
+      </section>
+
       <Background variant="bottom">
-        <section className="py-20 lg:py-28">
-          <DashedLine className="container max-w-5xl" />
-          <div className="container mt-16 max-w-5xl">
-            <h2 className="text-2xl tracking-tight md:text-3xl">
-              The eight session tools
+        <section className="py-32" aria-labelledby="skill-title">
+          <div className="container max-w-5xl">
+            <Send aria-hidden="true" className="size-8" />
+            <h2
+              id="skill-title"
+              className="mt-6 text-3xl tracking-tight md:text-4xl"
+            >
+              Give your agent the workflow
             </h2>
-            <p className="text-muted-foreground mt-2 max-w-2xl">
-              Every mode exposes the same eight session tools — your agent can
-              read the current page diff, push patches back, grab screenshots,
-              track change status, and resolve your comments as it works. The
-              Local companion also registers <code>wait_for_handoff</code> for
-              opt-in feedback rounds with bounded waits, immutable per-Send
-              snapshots, and an explicit Stop. Cloud and Self-hosted keep
-              one-shot Send.
+            <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
+              The Design Mode agent skill covers setup, safe connection checks
+              and a scoped design-to-code workflow. Download the Markdown and
+              follow your app’s skill-install instructions, or ask a capable
+              agent to read it. Reading a skill does not install an MCP
+              connection or grant tool permissions.
             </p>
-
-            <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {tools.map((tool) => {
-                const Icon = tool.icon;
-                return (
-                  <Card key={tool.name}>
-                    <CardContent className="flex flex-col gap-2 p-6">
-                      <div className="flex items-center gap-2">
-                        <Icon className="text-foreground size-4" />
-                        <code className="text-base font-semibold">
-                          {tool.name}
-                        </code>
-                      </div>
-                      <p className="text-muted-foreground text-base leading-relaxed">
-                        {tool.description}
-                      </p>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+            <div className="mt-8 flex flex-wrap gap-4">
+              <Button asChild>
+                <a href={DESIGN_MODE_SKILL} download="SKILL.md">
+                  <FileDown aria-hidden="true" className="size-4" />
+                  Download agent skill
+                </a>
+              </Button>
+              <Button asChild variant="outline">
+                <a href={DESIGN_MODE_SKILL}>Read SKILL.md</a>
+              </Button>
             </div>
-
-            <p className="text-muted-foreground mt-10 text-base">
-              Privacy: Local mode keeps Design Mode MCP traffic on your machine.
-              Cloud and Self-hosted modes request a 60-second queue expiry and
-              normally delete responses when consumed; expiry is best-effort.{" "}
-              <Link href="/privacy" className="underline underline-offset-8">
-                Full privacy disclosure →
+            <p className="text-muted-foreground mt-6">
+              Discoverable through the{" "}
+              <a
+                href="/.well-known/agent-skills/index.json"
+                className="underline underline-offset-4"
+              >
+                skill index
+              </a>{" "}
+              and{" "}
+              <a href="/llms.txt" className="underline underline-offset-4">
+                llms.txt
+              </a>
+              . The existing{" "}
+              <a
+                href="/design-mode.md"
+                className="underline underline-offset-4"
+              >
+                command prompt
+              </a>{" "}
+              remains available separately.
+            </p>
+            <p className="text-muted-foreground mt-8 text-base">
+              Local keeps Design Mode MCP traffic on your machine. Cloud and
+              Self-hosted relay page data; queue expiry is best-effort.{" "}
+              <Link href="/privacy" className="underline underline-offset-4">
+                Read the privacy disclosure →
               </Link>
             </p>
-
-            <DashedLine className="mt-20" />
-
-            <div className="mt-16">
-              <h2 className="text-2xl tracking-tight md:text-3xl">
-                Compatible AI coding agents
-              </h2>
-              <p className="text-muted-foreground mt-2 max-w-2xl">
-                These clients publish MCP support, but their configuration and
-                transport capabilities change by version. Check the setup guide
-                and the client&apos;s current documentation:
-              </p>
-              <ul className="text-foreground mt-6 grid grid-cols-2 gap-x-6 gap-y-2 text-base md:grid-cols-3">
-                <li>• Claude Desktop</li>
-                <li>• Claude Code</li>
-                <li>• Cursor</li>
-                <li>• Windsurf</li>
-                <li>• Cline</li>
-                <li>• Continue</li>
-                <li>• Zed</li>
-                <li>• VS Code (with MCP extension)</li>
-                <li>• Any custom MCP client</li>
-              </ul>
-              <p className="text-muted-foreground mt-6 max-w-2xl text-base">
-                Don&apos;t see your tool? If it speaks MCP, the Self-hosted or
-                Cloud snippet above will work. File an issue on{" "}
-                <a
-                  href={withNavRef(
-                    "https://github.com/SandeepBaskaran/design-mode/issues",
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline underline-offset-8"
-                >
-                  GitHub
-                </a>{" "}
-                if you hit a version-specific issue so it can be reproduced and
-                documented.
-              </p>
-            </div>
           </div>
         </section>
       </Background>
     </>
-  );
-}
-
-function Snippet({ label, children }: { label: string; children: string }) {
-  return (
-    <div>
-      <p className="text-muted-foreground mb-2 text-base font-medium">
-        {label}
-      </p>
-      <pre className="bg-ink text-ink-foreground overflow-x-auto rounded-xl p-4 font-mono text-base leading-relaxed">
-        <code>{children}</code>
-      </pre>
-    </div>
   );
 }

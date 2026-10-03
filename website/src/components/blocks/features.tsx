@@ -27,7 +27,7 @@ const items = [
 
 export const Features = () => {
   return (
-    <section id="features" className="pb-28 lg:pb-32">
+    <section id="features" className="py-32">
       <div className="container">
         {/* Top dashed line with text */}
         <div className="relative flex items-center justify-center">

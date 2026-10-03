@@ -2,6 +2,8 @@ import { ANALYTICS_CONSENT_KEY, consentMatches, nativeConsentAllowed, persistAna
 import { analyticsConfig } from '../platform/analytics-config';
 import { IS_FIREFOX } from '../platform/target';
 
+let panelBrowser: typeof chrome | undefined;
+const api = () => panelBrowser ?? globalThis.browser;
 let enabled = false;
 let ready = false;
 let nativeConsent = false;
@@ -13,8 +15,8 @@ let changed = () => {};
 export async function refreshAnalyticsSetting() {
   try {
     const [stored, permissions] = await Promise.all([
-      browser.storage.local.get(ANALYTICS_CONSENT_KEY),
-      IS_FIREFOX ? browser.permissions.getAll() as Promise<DataPermissions> : Promise.resolve({} as DataPermissions),
+      api().storage.local.get(ANALYTICS_CONSENT_KEY),
+      IS_FIREFOX ? api().permissions.getAll() as Promise<DataPermissions> : Promise.resolve({} as DataPermissions),
     ]);
     nativeConsent = IS_FIREFOX && permissions.data_collection !== undefined;
     enabled = consentMatches(stored[ANALYTICS_CONSENT_KEY], analyticsConfig) && nativeConsentAllowed(IS_FIREFOX, permissions);
@@ -23,23 +25,26 @@ export async function refreshAnalyticsSetting() {
   changed();
 }
 
-export function initAnalyticsSetting(onChange: () => void) {
+export function initAnalyticsSetting(onChange: () => void, browserApi = globalThis.browser) {
+  panelBrowser = browserApi;
   changed = onChange;
   void refreshAnalyticsSetting();
-  browser.storage.onChanged.addListener((changes, area) => {
+  api().storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[ANALYTICS_CONSENT_KEY]) void refreshAnalyticsSetting();
   });
-  browser.permissions.onRemoved.addListener(() => { void refreshAnalyticsSetting(); });
-  browser.permissions.onAdded.addListener(() => { void refreshAnalyticsSetting(); });
+  if (IS_FIREFOX) {
+    api().permissions.onRemoved.addListener(() => { void refreshAnalyticsSetting(); });
+    api().permissions.onAdded.addListener(() => { void refreshAnalyticsSetting(); });
+  }
 }
 
 export async function disableAnalytics() {
   enabled = false;
   // Stop the sole sender before persisting; storage removal also stops other contexts.
-  const stop = browser.runtime.sendMessage({ type: 'DM_ANALYTICS_STOP' }).then(response => {
+  const stop = api().runtime.sendMessage({ type: 'DM_ANALYTICS_STOP' }).then(response => {
     if (!response?.ok) throw new Error('Stop not acknowledged');
   });
-  const [stopped, persisted] = await Promise.allSettled([stop, persistAnalyticsDisabled(browser.storage.local)]);
+  const [stopped, persisted] = await Promise.allSettled([stop, persistAnalyticsDisabled(api().storage.local)]);
   persistenceUnresolved = persisted.status === 'rejected';
   if (persistenceUnresolved) {
     status = 'Could not save opt-out. Analytics may resume after a background restart. Retry turning off; a permanent stop is not confirmed.';
@@ -57,9 +62,9 @@ export async function toggleAnalytics() {
     if (enabled || persistenceUnresolved) await disableAnalytics();
     else {
       // Call request before any await so Firefox retains the click gesture.
-      const granted = !nativeConsent || await browser.permissions.request({ data_collection: ['technicalAndInteraction', 'locationInfo'] } as chrome.permissions.Permissions);
+      const granted = !nativeConsent || await api().permissions.request({ data_collection: ['technicalAndInteraction', 'locationInfo'] } as chrome.permissions.Permissions);
       if (!granted) { status = 'Permission declined. Analytics remains off.'; return; }
-      await browser.storage.local.set({ [ANALYTICS_CONSENT_KEY]: { enabled: true, version: 2, host: analyticsConfig.host, key: analyticsConfig.key } });
+      await api().storage.local.set({ [ANALYTICS_CONSENT_KEY]: { enabled: true, version: 2, host: analyticsConfig.host, key: analyticsConfig.key } });
     }
     await refreshAnalyticsSetting();
   } catch {

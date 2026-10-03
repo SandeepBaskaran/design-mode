@@ -1,8 +1,11 @@
+import { createInspectorOperation, runInspectorAction } from './inspector-operation';
+const beginInspectorOperation = () => createInspectorOperation(() => 0, false);
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import ts from 'typescript';
+import { writeInspectorTextClipboard } from '../inspector/clipboard';
 
 const source = readFileSync(new URL('./sidepanel.ts', import.meta.url), 'utf8');
 it('labels the style grouping Appearance without changing its filter key', () => {
@@ -14,17 +17,17 @@ const ast = ts.createSourceFile('sidepanel.ts', source, ts.ScriptTarget.Latest, 
 const names = ['panelRouteKey', 'resetChangesRoute', 'currentRouteGroups', 'routeChangeCount', 'siteChangeCount', 'siteChangesExport', 'renderRouteGroups', 'refreshChanges', 'clearAllChanges', 'copyPrompt'];
 const functions = ast.statements.filter(node => ts.isFunctionDeclaration(node) && names.includes(node.name!.text)).map(node => node.getText(ast)).join('\n');
 const actions = source.slice(source.indexOf("        case 'open-route':"), source.indexOf("        case 'clear-all-changes':"));
-const compiled = ts.transpileModule(functions + '\nasync function action(act, key) { const actionBtn = {dataset: {dmRouteKey:key}}; switch(act) {' + actions + '} }', { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
+const compiled = ts.transpileModule(functions + '\nasync function action(act, key) { const operation = beginInspectorOperation(); const actionBtn = {dataset: {dmRouteKey:key}}; switch(act) {' + actions + '} }', { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 
 const a = 'https://example.test/a';
 const b = 'https://example.test/b?q=1';
 function group(url: string, styleChanges: any[] = [], textChanges: any[] = [], comments: any[] = []) {
   return { routeKey: url, url, styleChanges, textChanges, comments, domChanges: [] };
 }
-function harness() {
+function harness(safari = false) {
   const messages: any[] = [];
   const toasts: any[] = [];
-  const context = createContext({
+  const context = createContext({ beginInspectorOperation, runInspectorAction, IS_SAFARI: safari, writeInspectorTextClipboard,
     URL, Map, Set, Date, console, activeRouteKey: a, changesPageUrl: a,
     routeGroups: [group(b, [{ selector: 'h1', property: 'color', oldValue: 'red', newValue: 'blue' }])],
     styleChanges: [{ selector: 'h1', property: 'margin', oldValue: '0', newValue: '8px' }], textChanges: [], domChanges: [], comments: [], tokenChanges: [], componentContexts: {},
@@ -150,11 +153,41 @@ describe('site-wide changes panel', () => {
     assert.equal(c.styleChanges[0].property, 'latest');
   });
 
-  it('requests site-wide prompt output rather than a filtered visible subset', async () => {
-    const { context: c, messages } = harness();
-    c.send = async (message: any) => { messages.push(message); return { output: `# ${a}\nchange\n# ${b}\nchange` }; };
-    await c.copyPrompt();
-    assert.equal(messages[0].scope, 'site');
-    assert.ok(c.copied.includes(b));
-  });
+  for (const safari of [false, true]) {
+    it(`requests site-wide prompt output rather than a filtered visible subset (${safari ? 'Safari' : 'Chrome/Firefox'})`, async t => {
+      const { context: c, messages } = harness(safari);
+      const expected = `# ${a}\nchange\n# ${b}\nchange`;
+      let clipboardStarted = false;
+      let release!: (value: any) => void;
+      if (safari) {
+        for (const [key, value] of Object.entries({
+          navigator: { clipboard: { async write(items: any[]) {
+            clipboardStarted = true;
+            c.copied = await (await items[0].data['text/plain']).text();
+          } } },
+          ClipboardItem: class { constructor(public data: Record<string, Promise<Blob>>) {} },
+        })) {
+          const previous = Object.getOwnPropertyDescriptor(globalThis, key);
+          Object.defineProperty(globalThis, key, { configurable: true, value });
+          t.after(() => {
+            if (previous) Object.defineProperty(globalThis, key, previous);
+            else Reflect.deleteProperty(globalThis, key);
+          });
+        }
+        c.navigator.clipboard.writeText = () => { throw new Error('Safari must reserve a promised clipboard item'); };
+      } else {
+        c.writeInspectorTextClipboard = () => { throw new Error('Chrome/Firefox must retain writeText'); };
+      }
+      c.changesFilter = 'comment'; c.changesSearch = 'no match';
+      c.send = (message: any) => { messages.push(message); return new Promise(resolve => { release = resolve; }); };
+      const pending = c.copyPrompt();
+      assert.equal(clipboardStarted, safari);
+      assert.equal(c.copied, undefined);
+      release({ output: expected });
+      await pending;
+      assert.deepEqual(JSON.parse(JSON.stringify(messages)), [{ type: 'SP_EXPORT', format: 'markdown', scope: 'site' }]);
+      assert.equal(c.copied, expected);
+      assert.ok(c.copied.includes(b));
+    });
+  }
 });

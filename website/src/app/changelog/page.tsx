@@ -26,13 +26,30 @@ export const metadata = {
     description:
       "Release highlights for Design Mode, in plain language, with the date each version shipped.",
     url: "https://designmode.app/changelog",
-    images: ["/og-image.png"],
+    images: [
+      {
+        url: "/og-design-mode-inter-v3.png",
+        width: 1200,
+        height: 630,
+        alt: "Design Mode — The visual editor for all your agent’s work",
+      },
+    ],
   },
 };
 
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 // Format an ISO YYYY-MM-DD without going through Date() — avoids any
@@ -51,11 +68,11 @@ export default function ChangelogPage() {
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Changelog
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-2xl text-lg md:text-xl">
+            <p className="text-muted-foreground mt-4 max-w-2xl text-base">
               Release highlights in plain language, with the date each version
               shipped — not a complete inventory of every change.
             </p>
-            <p className="text-muted-foreground mt-3 text-sm">
+            <p className="text-muted-foreground mt-3 text-base">
               Want the technical detail?{" "}
               <a
                 href={REPO_CHANGELOG}
@@ -79,13 +96,13 @@ export default function ChangelogPage() {
               <li key={r.version} id={`v${r.version}`} className="scroll-mt-24">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h2 className="font-display text-xl font-semibold tracking-tight">
-                    <span className="bg-secondary text-secondary-foreground rounded-lg px-2 py-1 text-sm font-medium">
+                    <span className="bg-secondary text-secondary-foreground rounded-lg px-2 py-1 text-base font-medium">
                       v{r.version}
                     </span>
                   </h2>
                   <time
                     dateTime={r.date}
-                    className="text-muted-foreground text-sm"
+                    className="text-muted-foreground text-base"
                   >
                     {formatDate(r.date)}
                   </time>
@@ -95,7 +112,7 @@ export default function ChangelogPage() {
                   {r.highlights.map((h) => (
                     <li
                       key={h}
-                      className="text-muted-foreground flex gap-2 text-[15px] leading-relaxed"
+                      className="text-muted-foreground flex gap-2 text-base leading-relaxed"
                     >
                       <span
                         aria-hidden
@@ -109,7 +126,7 @@ export default function ChangelogPage() {
             ))}
           </ol>
 
-          <p className="text-muted-foreground mt-16 border-t pt-8 text-sm">
+          <p className="text-muted-foreground mt-16 border-t pt-8 text-base">
             Design Mode is free and open source.{" "}
             <Link
               href="/demo"

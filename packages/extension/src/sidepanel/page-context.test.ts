@@ -1,3 +1,4 @@
+import { runInspectorAction } from './inspector-operation';
 import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,7 +12,7 @@ it('Changes ignores old URLs, child frames, other tabs and navigating documents'
     && n.expression.expression.getText(ast) === 'browser.runtime.onMessage.addListener');
   assert.ok(statement);
   let handler: any;
-  const state = vm.createContext({ myTabId: 7, boundPageUrl: 'https://page.test/a?q=1#one',
+  const state = vm.createContext({ runInspectorAction, myTabId: 7, boundPageUrl: 'https://page.test/a?q=1#one',
     pageNavigating: false, pageUnavailable: false, changesRequest: 0, routeEditingBlocked: false,
     resetChangesRoute: (url: string) => { assert.equal(url, 'https://page.test/a?q=1#one'); },
     styleChanges: [], textChanges: [], domChanges: [], comments: [], tokenChanges: [], componentContexts: {},

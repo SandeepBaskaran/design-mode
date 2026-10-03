@@ -1,3 +1,5 @@
+import { createInspectorOperation, runInspectorAction } from './inspector-operation';
+const beginInspectorOperation = () => createInspectorOperation(() => 0, false);
 import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -17,7 +19,7 @@ const code = ts.transpile(`async function importFile() { ${branch.getText(ast)} 
 function fixture(parsed: unknown, ok = true, size = 100) {
   const sent: any[] = [], toasts: any[] = [];
   let read = false;
-  const context = vm.createContext({
+  const context = vm.createContext({ beginInspectorOperation, runInspectorAction,
     importChangesInput: { files: [{ size }], value: 'file' },
     FileReader: class { onload: any; readAsText() { read = true; this.onload({ target: { result: JSON.stringify(parsed) } }); } },
     styleChanges: ['old'], textChanges: ['old'], domChanges: ['old'], comments: ['old'], tokenChanges: ['old-token'],

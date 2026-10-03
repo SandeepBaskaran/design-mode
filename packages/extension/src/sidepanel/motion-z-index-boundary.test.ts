@@ -1,3 +1,5 @@
+import { createInspectorOperation, runInspectorAction } from './inspector-operation';
+const beginInspectorOperation = () => createInspectorOperation(() => 0, false);
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -26,7 +28,7 @@ test('z-index commit rejects invalid drafts before applyStyle, including token-l
   for (const [raw, valid] of [['10', true], ['-2', true], ['auto', true], ['', true], ['10.5', false], ['letters', false], ['var(--broken', false], ['var(--z)', true]] as const) {
     const writes: unknown[] = [];
     const attrs: Record<string, string> = {};
-    runInNewContext(js, {
+    runInNewContext(js, { operation: beginInspectorOperation(), beginInspectorOperation, runInspectorAction,
       propInput: { dataset: { dmProp: 'zIndex', dmNumeric: '1', dmUnit: '' }, value: raw, setAttribute: (k: string, v: string) => { attrs[k] = v; } },
       CSS: { supports: (p: string, v: string) => { assert.equal(p, 'z-index'); assert.equal(v, raw); return valid; } },
       applyStyle: (...args: unknown[]) => writes.push(args),
@@ -42,7 +44,7 @@ test('z-index arrow stepping does not truncate invalid drafts or expressions', (
   const js = ts.transpile('(function(){' + source.slice(start, end) + '})()', { target: ts.ScriptTarget.ES2022 });
   for (const [raw, expected] of [['10', '11'], ['-2', '-1'], ['auto', '1'], ['10.5', null], ['letters', null], ['var(--z)', null]] as const) {
     const writes: unknown[][] = [];
-    runInNewContext(js, { isNumeric: true, propName: 'zIndex', propInput: {value: raw}, unit: '', nudgeAmount: 10, fillOpacityMatch: null,
+    runInNewContext(js, { operation: beginInspectorOperation(), beginInspectorOperation, runInspectorAction, isNumeric: true, propName: 'zIndex', propInput: {value: raw}, unit: '', nudgeAmount: 10, fillOpacityMatch: null,
       e: {key: 'ArrowUp', shiftKey: false, preventDefault() {}}, isNonNegativeNumericProp: () => false,
       applyStyle: (...args: unknown[]) => writes.push(args) });
     assert.deepEqual(writes, expected === null ? [] : [['zIndex', expected]]);

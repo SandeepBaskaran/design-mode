@@ -27,10 +27,10 @@ export const metadata = {
     url: "https://designmode.app/contact",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -41,10 +41,10 @@ export const metadata = {
       "Get in touch about Design Mode — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-design-mode-inter-v3.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode browser visual editor for AI coding agents",
+        alt: "Design Mode — The visual editor for all your agent’s work",
       },
     ],
   },

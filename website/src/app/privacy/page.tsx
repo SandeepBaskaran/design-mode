@@ -16,7 +16,7 @@ export default function PrivacyPage() {
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Privacy
             </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base md:text-2xl">
+            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
               Design Mode runs locally by default. Here's exactly what data
               leaves your machine, when, and why.
             </p>

@@ -6,7 +6,7 @@ import { ArrowUpRight } from "lucide-react";
 import { withNavRef } from "@/lib/nav-ref";
 
 const REPO_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");
-const X_URL = withNavRef("https://x.com/sandeepbaskaran");
+
 const SPONSORS_URL = withNavRef("https://github.com/sponsors/SandeepBaskaran");
 const PRODUCT_HUNT_URL = withNavRef(
   "https://www.producthunt.com/products/design-mode",
@@ -22,7 +22,7 @@ export function Footer() {
         { name: "Try the demo", href: "/demo" },
         { name: "Connect your agent", href: "/mcp" },
         { name: "Use cases", href: "/use-cases" },
-        { name: "Compare", href: "/compare" },
+
       ],
     },
     {
@@ -30,9 +30,9 @@ export function Footer() {
       links: [
         { name: "Documentation", href: "/docs" },
         { name: "Changelog", href: "/changelog" },
-        { name: "Install Design Mode", href: "/docs/install" },
+        { name: "Compare", href: "/compare" },
         { name: "Blog", href: "/blog" },
-        { name: "FAQ", href: "/faq" },
+
       ],
     },
     {
@@ -41,14 +41,15 @@ export function Footer() {
         { name: "About", href: "/about" },
         { name: "Contact", href: "/contact" },
         { name: "Privacy", href: "/privacy" },
-        { name: "Source code", href: REPO_URL },
+        { name: "FAQ", href: "/faq" },
+
       ],
     },
     {
       title: "Community",
       links: [
         { name: "GitHub", href: REPO_URL },
-        { name: "X (Twitter)", href: X_URL },
+
         { name: "Product Hunt", href: PRODUCT_HUNT_URL },
         { name: "Sponsor", href: SPONSORS_URL },
       ],
@@ -85,7 +86,7 @@ export function Footer() {
         </div>
         <nav
           aria-label="Footer"
-          className="grid grid-cols-2 gap-x-8 gap-y-8 md:grid-cols-4"
+          className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-4 md:gap-x-8"
         >
           {groups.map((group) => (
             <div key={group.title}>
@@ -116,7 +117,7 @@ export function Footer() {
             </div>
           ))}
         </nav>
-        <div className="text-muted-foreground col-span-full flex w-full flex-col items-center gap-2 text-center text-base">
+        <div className="text-muted-foreground col-span-full flex w-full flex-col items-center gap-2 text-center text-base md:flex-row md:justify-between md:text-left">
           <p>© {new Date().getFullYear()} Design Mode</p>
           <p>
             Made by{" "}

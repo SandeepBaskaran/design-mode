@@ -114,7 +114,7 @@ export const Navbar = () => {
               Chrome icon on Firefox. Signals cross-browser availability. */}
           <OtherStoreLink />
           <div className="max-xl:hidden">
-            <AddToChromeCta />
+            <AddToChromeCta className="text-sm" />
           </div>
 
           {/* Hamburger (mobile only) */}

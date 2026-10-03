@@ -59,7 +59,7 @@ When a user sends content to an external coding agent, that provider handles the
 - [How Copy as Prompt and MCP hand-off work](https://designmode.app/mcp)
 - [MCP setup for Claude Code and Cursor](https://designmode.app/docs/mcp-setup)
 - [Chrome and Firefox support](https://designmode.app/docs/browser-support)
-- [Install](https://designmode.app/docs/install)
+
 - [Changes tab](https://designmode.app/docs/changes-tab)
 - [Keyboard shortcuts](https://designmode.app/docs/keyboard-shortcuts)
 - [Troubleshooting](https://designmode.app/docs/troubleshooting)
@@ -80,6 +80,16 @@ The comparison hub distinguishes source-backed comparisons from unverified draft
 
 - [Comparison hub](https://designmode.app/compare)
 - [Source-backed comparisons in plain text](https://designmode.app/compare/llms.txt): generated from the same content as the comparison pages, including pricing, use cases, sources and methodology.
+
+## Agent skill and setup
+
+- [Design Mode agent skill](https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md): canonical setup, protected token entry, read-only verification and scoped design-to-code workflow.
+- [Skill discovery index](https://designmode.app/.well-known/agent-skills/index.json)
+- [Prompt-first MCP connection guide](https://designmode.app/mcp)
+
+Cloud uses anonymous bearer-token pairing at https://mcp.designmode.app/mcp, not OAuth or a Design Mode account/subscription check. Use a protected local client input or securely supplied environment variable; never paste tokens into AI chat. HTTP clients need custom Authorization-header support. Otherwise use Local stdio or Copy as Prompt. The agent CLI package is private; no published CLI install is assumed.
+
+Start with get_session_summary({}), then get_changes({}) with permission to read the page. get_changes has no pagination or status filter: select unresolved IDs locally. Fetch only needed screenshots by selector, elementId or commentId. Updates happen on agent requests; Local wait_for_handoff is an explicit opt-in bounded loop, not always-on monitoring.
 
 ## More detail
 
