@@ -16,13 +16,13 @@
   },
   "dependencies": {
     "@design-mode/shared": "*",
-    "@modelcontextprotocol/sdk": "^1.30.1",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "ws": "^8.22.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
-    "@types/ws": "^8.5.13",
+    "@types/ws": "^8.18.2",
     "tsx": "^4.23.15",
     "typescript": "^5.7.0"
   }
