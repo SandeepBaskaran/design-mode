@@ -1,6 +1,6 @@
 {
   "name": "@designmode-app/cli",
-  "version": "0.1.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Cloud-first agent CLI for Design Mode MCP: Cloud, Local and Self-hosted",
   "license": "MIT",

@@ -10,11 +10,11 @@ A free, open-source browser extension (Chrome + Firefox) that turns any website 
 
 ## 🎨 Install in 60 seconds
 
-**1. Add it to your browser:** **[Chrome Web Store →](https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih)** (Chrome, Edge, Brave, Arc) · **[Firefox Add-ons →](https://addons.mozilla.org/firefox/addon/design-mode-add-on/)** (Firefox)
+**1. Add it to your browser:** **[Chrome Web Store →](https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih)** (Chrome, Edge, Brave, Arc) · **[Firefox Add-ons →](https://addons.mozilla.org/firefox/addon/design-mode-add-on/)** (Firefox) · **[Safari →](https://designmode.app/docs/browser-support)** (macOS Web Inspector, via GitHub Releases)
 
 **2. Try it without installing:** [walk the interactive demo at designmode.app/demo](https://designmode.app/demo)
 
-**3. Connect your AI agent (optional):** [pick one of the three modes at designmode.app/mcp](https://designmode.app/mcp)
+**3. Connect your AI agent (optional):** [pick one of the three modes at designmode.app/mcp](https://designmode.app/mcp) (Local, Cloud, or Self-hosted)
 
 That's it. Pin the extension to your toolbar, open any website, and click the toolbar icon. Chrome opens your chosen surface (side panel by default, floating, or Pin on top); Firefox opens its sidebar. Hover any element to highlight it; click to edit. Everything you change is tracked in the Changes tab and can be sent to your AI coding agent with one click.
 
@@ -32,13 +32,14 @@ Design Mode is a visual editor that lives in your browser. Instead of describing
 - Show your AI agent *exactly* what you want — visually — instead of describing it.
 - Drop sticky-note comments on elements and ship them with the prompt.
 - Export your changes as ready-to-paste CSS, Tailwind, SCSS, or JSX.
+- Opt-in anonymous analytics helps prioritize what actually gets built next.
 - Tighten a layout in seconds, then commit the patch. The vibe-coding loop, minus the back-and-forth.
 
 ## Three ways to connect your AI agent
 
 Design Mode brings a coding agent inside the page through a small bridge called MCP. There are three connection modes — pick whichever fits how you work:
 
-- **Cloud (default)** — Use the hosted relay at `mcp.designmode.app`. Paste a bearer token into your agent's config and you're done — no install, no terminal. Free with a per-tenant daily quota.
+- **Cloud (default)** — Use the hosted relay at `mcp.designmode.app`. Paste a bearer token into your agent's config and you're done — no install, no terminal. Free and anonymous.
 - **Local** — Run a tiny companion server on your laptop with one `npm` command. Fastest path, nothing leaves your machine — power-user mode with a terminal. Concurrent agent sessions automatically attach to one shared local owner, so they reuse port 9960 and the same browser connection.
 - **Self-hosted** — Same code as Cloud (open source in `packages/mcp-cloud`). Deploy on any Node.js host with Redis — Vercel, Railway, Fly, your own VM. You own the relay and the privacy posture.
 
