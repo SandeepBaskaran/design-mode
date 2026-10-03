@@ -2,9 +2,7 @@
 
 Package: **`@designmode-app/cli`**. Executable: **`designmode-app`**.
 Cloud is the default; Local and Self-hosted use the same existing MCP contracts.
-The package remains `private: true` to prevent accidental publication. It is
-not yet a published-install promise. See [PUBLISHING.md](./PUBLISHING.md) for the
-approved naming and manual release procedure.
+Version 3.0.0 is published to npm under the `designmode-app` organisation.
 
 ## Build and try locally
 
@@ -17,15 +15,14 @@ node packages/cli/dist/cli.cjs --mode local tools
 npm pack --workspace @designmode-app/cli
 ```
 
-Install the resulting tarball with `npm install /path/to/designmode-app-cli-0.1.0.tgz`
+Install the resulting tarball with `npm install /path/to/designmode-app-cli-3.0.0.tgz`
 and use `designmode-app`. The executable bundles its dependencies and existing
 Local MCP engine; it does not import a workspace at runtime. Build from the
 monorepo, not from an unpacked tarball. Node 18 or newer is required.
 
-After an explicitly approved publication, one-off usage will be
-`npx @designmode-app/cli@latest status`, or install with
+One-off usage is `npx @designmode-app/cli@3.0.0 --help`, or install with
 `npm install -g @designmode-app/cli`. Pin a tested version for durable setups.
-`npx` may download/install the package into npm's cache.
+`npx` may download the package into npm's cache.
 
 ## Select a mode and configure credentials
 
@@ -143,9 +140,9 @@ cover invalid auth, malformed responses, redirect rejection, disconnects,
 timeouts, bad config/permissions, schema discovery and secret redaction.
 These tests are not production-relay, real-Redis or real-browser certification.
 
-## Publishing later
+## Published package
 
-Keep `private: true` until the maintainer explicitly approves release. Validate
-the exact tarball and version, authenticate in the maintainer's terminal with
-`npm login`, then **only with approval** run `npm publish --access public` from
-this package. No publication or login is part of building/testing this CLI.
+`@designmode-app/cli@3.0.0` is public. Later versions still require an explicit
+publish from this directory after the version, README and tarball are checked.
+Authenticate in the maintainer's terminal, then run `npm publish --access public`.
+Do not put tokens or one-time codes in the repository or chat.

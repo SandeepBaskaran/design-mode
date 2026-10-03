@@ -13,7 +13,7 @@ Required release metadata:
 - `bin`: `designmode-app` pointing to the built CLI entry
 - `publishConfig.access`: `public`
 
-Keep the accidental-publication guard (`private: true`) until a release is explicitly approved. It must be removed or set false before publication.
+`private` is false. The package is already published; do not set it back to true.
 
 ## Publication
 
