@@ -8,7 +8,7 @@ import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDis
 const config = parseAnalyticsConfig({ host: 'https://analytics.invalid', key: 'phc_local_test_only' })!;
 const consent = { ...config, version: 2, enabled: true };
 const event = { feature: 'import', outcome: 'attempt' };
-const base = { readConsent: async () => consent, permissions: async () => ({}), firefox: false, manifest: { version: '2.3.1' } };
+const base = { readConsent: async () => consent, permissions: async () => ({}), firefox: false, manifest: { version: '3.0.0' } };
 
 test('exact panel identity permits docked, Firefox sidebar and tab-backed popout; rejects web/content senders', () => {
   for (const protocol of ['chrome-extension:', 'moz-extension:']) {

@@ -10,6 +10,27 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [3.0.0] — 2026-10-03
 
+### Added
+
+- **Safari on Mac.** Design Mode can open as a Web Inspector tab. Install the Safari-specific ZIP from GitHub Releases as a temporary extension. It is not a sidebar, not an App Store install, and Safari removes temporary extensions after 24 hours or when Safari quits.
+- **Cloud and self-hosted agent connections.** A coding agent can reach the browser through the hosted relay or your own Redis relay, without a local companion.
+- **Optional usage analytics.** A configured build can send bounded feature events to PostHog only after explicit consent. Off by default. No page content, selectors, comments or screenshots. Each event has a fresh random ID, so this cannot measure unique users or retention.
+- **`@designmode-app/cli`.** Cloud-first command-line connection for Cloud, Local and Self-hosted MCP. The package stays private until publication is separately approved.
+
+### Changed
+
+- **Firefox persistence.** Session reads go through the background, so saved edits survive reload when content scripts cannot use `storage.session`.
+- **Site-wide hand-off.** Copy as Prompt, JSON export and Send to Agent can include saved routes for the current origin. Review every route before sharing.
+- **Element comments.** Comments use a full selector, so a comment on an unidentified element does not reattach to the first matching tag (fixes #69).
+- **Website guidance.** Setup, privacy, browser support and machine-readable summaries now describe the free product, optional analytics and the three connection modes.
+
+### Security
+
+- Import and clear operations reject a session that changed while the import was in flight.
+- Cloud credential revocation and feedback lifecycle checks were hardened.
+
+## [2.3.1] — 2026-09-20
+
 ### Changed
 
 - Refreshed patch-and-minor dependencies for Chrome types, Node.js types, and

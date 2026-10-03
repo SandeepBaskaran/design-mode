@@ -64,7 +64,7 @@ test('remove failure writes a durable disabled record, also safe after worker re
   let sends = 0;
   const restarted = createAnalytics(parseAnalyticsConfig({ host: 'https://analytics.invalid', key: 'phc_local_test_only' }), {
     readConsent: async () => f.stored['dm-analytics-consent-v1'], permissions: async () => ({}), firefox: false,
-    manifest: { version: '2.3.1' }, fetch: async () => { sends++; return new Response(); },
+    manifest: { version: '3.0.0' }, fetch: async () => { sends++; return new Response(); },
   });
   await restarted.capture({ feature: 'inspect', outcome: 'attempt' });
   assert.equal(sends, 0);

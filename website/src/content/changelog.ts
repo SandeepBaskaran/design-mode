@@ -19,6 +19,17 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "3.0.0",
+    date: "2026-10-03",
+    headline: "Free visual editing for Chrome, Firefox and Safari on Mac.",
+    highlights: [
+      "Connect a coding agent through Cloud, Local or your own relay, then copy the changes as a prompt or send them through MCP.",
+      "Use Design Mode in Safari’s Web Inspector from the temporary extension on GitHub Releases. Re-add it after 24 hours or when Safari quits.",
+      "Keep edits across Firefox reloads, and review every saved route on the current site before you share a hand-off.",
+      "Optional usage analytics stays off until you agree. It records feature activity only, never page content.",
+    ],
+  },
+  {
     version: "2.3.1",
     date: "2026-09-20",
     headline: "A smoother homepage and clearer demo guidance.",

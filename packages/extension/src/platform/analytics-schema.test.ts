@@ -16,7 +16,7 @@ for (const firefox of [false, true]) {
     const received: any[] = [];
     let reads = 0;
     const deps = {
-      firefox, manifest: { version: '2.3.1' }, readConsent: async () => consent,
+      firefox, manifest: { version: '3.0.0' }, readConsent: async () => consent,
       permissions: async () => ({ data_collection: permissions }),
       environment: () => { reads++; return { language: 'en-IN', timeZone: 'Asia/Kolkata', brands: [{ brand: 'Google Chrome', version: 'private' }] }; },
       fetch: async (_: unknown, init?: RequestInit) => { received.push(JSON.parse(init!.body as string)); return new Response(); },
