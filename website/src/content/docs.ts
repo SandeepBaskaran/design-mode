@@ -7,7 +7,12 @@ export type DocPage = {
   metaDescription: string;
   keywords: string[];
   intro: string;
-  sections: { heading: string; body: string; code?: string }[];
+  sections: {
+    heading: string;
+    body: string;
+    code?: string;
+    links?: { href: string; label: string }[];
+  }[];
   related: string[];
 };
 

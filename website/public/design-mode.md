@@ -5,9 +5,7 @@ description: Apply the user's Design Mode edits and resolve their comments
 # Design Mode
 
 Turn the visual edits and comments the user made in the Design Mode browser
-extension into real code changes. Design Mode is free on Chrome, Firefox and
-Safari on Mac. Safari uses the Web Inspector zip on the latest GitHub release,
-not a store listing. Design Mode exposes these tools over its MCP
+extension into real code changes. Design Mode exposes these over its MCP
 server — drive them live; do not look for task files on disk.
 
 ## Tools (Design Mode MCP server)
