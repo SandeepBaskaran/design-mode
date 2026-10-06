@@ -8,7 +8,7 @@
 
 - Product: desktop browser extension for Chrome/Chromium and Firefox.
 - Licence: MIT.
-- Current repository version: 3.0.0. That is the version in this source tree as of 3 October 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
+- Current repository version: 3.0.1. That is the version in this source tree as of 6 October 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
 - Author: Sandeep Baskaran.
 - Source: https://github.com/SandeepBaskaran/design-mode
 - Website: https://designmode.app
@@ -25,7 +25,7 @@ Browser-internal pages, extension stores and other protected surfaces cannot be 
 
 - Current Chrome-family desktop browsers with Manifest V3 side panels. The extension manifest does not declare an exact Chrome minimum.
 - Firefox 121+ through its native sidebar.
-- Safari is not supported.
+- Safari on Mac: manual install of designmode-for-safari.zip from the latest GitHub release (https://github.com/SandeepBaskaran/design-mode/releases/latest).
 - Core editing, the Changes tab and agent hand-off work in both builds.
 - Pop-out, Document Picture-in-Picture and the screen EyeDropper remain Chromium-only.
 - Chrome toolbar clicks and Alt+D open the launch surface selected in Settings (Side panel by default, Floating, or a Pin-on-top opener). Firefox always opens its sidebar.

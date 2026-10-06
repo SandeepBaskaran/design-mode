@@ -1,6 +1,6 @@
 # Design Mode — verified product summary
 
-Last reviewed against the Design Mode 3.0.0 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 3 October 2026.
+Last reviewed against the Design Mode 3.0.1 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 3 October 2026.
 
 This file is a versioned agent-oriented summary of product mechanics, privacy and setup. It is not a dump of every marketing page and does not guarantee search or chat ranking.
 
@@ -41,7 +41,7 @@ Design Mode targets desktop browsers:
 
 - current Chrome-family browsers with the Manifest V3 side-panel API; the extension manifest does not declare an exact Chrome minimum;
 - Firefox 121+ through the native sidebar;
-- no Safari build.
+- Safari on Mac through a manual install of designmode-for-safari.zip from the latest GitHub release (https://github.com/SandeepBaskaran/design-mode/releases/latest).
 
 The core editor, Layers, Design, Changes, comments, screenshots and agent hand-off exist in both builds. Three capabilities remain Chromium-only because Firefox lacks the corresponding browser API: pop-out, Document Picture-in-Picture and the screen EyeDropper. Firefox uses the same editor in its native sidebar and falls back to local extension storage where `storage.session` is unavailable.
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
+import { FaqAnswer } from "@/components/site/faq-answer";
 import { JsonLd, faqSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
 import {
@@ -99,7 +100,7 @@ export default function FaqPage() {
                       {qa.question}
                     </AccordionTrigger>
                     <AccordionContent className="text-muted-foreground leading-relaxed">
-                      {qa.answer}
+                      <FaqAnswer qa={qa} />
                     </AccordionContent>
                   </AccordionItem>
                 ))}

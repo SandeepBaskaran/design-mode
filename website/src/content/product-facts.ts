@@ -1,4 +1,9 @@
-export type QA = { question: string; answer: string };
+export type QA = {
+  question: string;
+  answer: string;
+  /** Optional follow-up links rendered after the answer (not in JSON-LD). */
+  links?: { label: string; href: string }[];
+};
 export type FaqGroup = { title: string; items: QA[] };
 
 export const PRODUCT_DEFINITION =
@@ -45,7 +50,11 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Which browsers are supported?",
         answer:
-          "Design Mode supports current desktop Chromium browsers that provide Manifest V3 side panels, including Chrome, Edge, Brave and Arc, plus Firefox 121 or later through its native sidebar. Safari is not supported. Firefox provides the core editor; pop-out, Document Picture-in-Picture and the EyeDropper API remain Chromium-only. In Chrome, toolbar clicks and Alt+D open the launch surface selected in Settings (Side panel by default, Floating, or a Pin-on-top opener). Firefox always opens its sidebar.",
+          "Design Mode works in Chrome, Firefox and Safari. Features differ a little between them; the browser support and install guides have the details. Chrome and Firefox work right away: install it from the Chrome Web Store or Firefox Add-ons. Safari needs a quick manual setup that takes under 30 seconds.",
+        links: [
+          { label: "Browser support", href: "/docs/browser-support" },
+          { label: "Install guides", href: "/docs" },
+        ],
       },
       {
         question: "Should I use Chrome or Firefox?",
@@ -82,7 +91,7 @@ export const faqGroups: FaqGroup[] = [
         question:
           "What is the difference between Cloud, Local and Self-hosted?",
         answer:
-          "Cloud is selected on a fresh install, but it makes no connection until you create a Cloud credential. Local connects the extension to the companion server on your machine. Concurrent Local clients share one owner on port 9960 by default; a surviving client takes over if the owner closes, foreign occupants are never killed, and DM_PORT selects a fallback port that must match the extension. Self-hosted points the extension and agent at relay infrastructure you operate. Cloud and Self-hosted relay messages over HTTPS; Local keeps the Design Mode transport on your machine.",
+          "They are three ways to pass your changes to your AI assistant. Cloud is the easiest. Your changes travel through our secure online service, and nothing connects until you turn it on. Local keeps everything on your own computer. Self-hosted is for teams that want to run that service themselves.",
       },
       {
         question: "Do I have to use MCP?",

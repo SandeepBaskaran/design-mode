@@ -19,6 +19,16 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "3.0.1",
+    date: "2026-10-06",
+    headline: "Clearer install options for Chrome, Firefox and Safari.",
+    highlights: [
+      "The install button now matches your browser: Add to Chrome, Add to Firefox, or Download latest on Safari.",
+      "The site banner links straight to Firefox Add-ons and the Safari download.",
+      "Simpler answers in the FAQ about supported browsers and connection modes.",
+    ],
+  },
+  {
     version: "2.3.1",
     date: "2026-09-20",
     headline: "A smoother homepage and clearer demo guidance.",

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { FaqAnswer } from "@/components/site/faq-answer";
 import {
   Accordion,
   AccordionContent,
@@ -39,7 +40,7 @@ export const FAQ = () => {
                 {item.question}
               </AccordionTrigger>
               <AccordionContent className="text-muted-foreground leading-relaxed">
-                {item.answer}
+                <FaqAnswer qa={item} />
               </AccordionContent>
             </AccordionItem>
           ))}

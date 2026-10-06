@@ -22,7 +22,7 @@ export function BrowserHandoff() {
           <article>
             <div
               className="flex h-10 items-center gap-4"
-              aria-label="Chrome and Firefox"
+              aria-label="Chrome, Firefox and Safari"
             >
               <Image
                 src="/chrome.svg"
@@ -38,12 +38,19 @@ export function BrowserHandoff() {
                 height={32}
                 unoptimized
               />
+              <Image
+                src="/safari.svg"
+                alt="Safari"
+                width={32}
+                height={32}
+                unoptimized
+              />
             </div>
             <h3 className="mt-6 text-2xl font-semibold">Add to your browser</h3>
             <p className="text-muted-foreground mt-4 text-base leading-relaxed">
-              Edit pages in Chrome or Firefox.
+              Edit pages in Chrome, Firefox or Safari.
               <br />
-              Safari isn’t supported.
+              Safari takes a quick manual setup.
             </p>
           </article>
           <article>
