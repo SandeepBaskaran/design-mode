@@ -4,23 +4,40 @@ import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 import { useInstallTarget } from "@/hooks/use-install-target";
+import {
+  CHROME_WEB_STORE_URL,
+  FIREFOX_AMO_URL,
+  SAFARI_RELEASE_URL,
+} from "@/lib/install-links";
+import { withNavRef } from "@/lib/nav-ref";
 import { cn } from "@/lib/utils";
 
-// Both browser targets download the latest GitHub Release. The icon still follows the visitor's browser.
+// Browser-aware install CTA. Chrome Web Store on Chromium and unknown
+// browsers, addons.mozilla.org (AMO) on Firefox, and the latest GitHub
+// release on Safari (manual install); label + icon follow suit. Named
+// AddToChromeCta for its (many) existing call sites.
+
 const STORES = {
   chrome: {
     name: "Chrome",
-    label: "Download latest",
-    href: "https://github.com/SandeepBaskaran/design-mode/releases/latest",
+    label: "Add to Chrome",
+    href: withNavRef(CHROME_WEB_STORE_URL),
     icon: "/chrome.svg",
     event: "add_to_chrome",
   },
   firefox: {
     name: "Firefox",
-    label: "Download latest",
-    href: "https://github.com/SandeepBaskaran/design-mode/releases/latest",
+    label: "Add to Firefox",
+    href: withNavRef(FIREFOX_AMO_URL),
     icon: "/firefox.svg",
     event: "add_to_firefox",
+  },
+  safari: {
+    name: "Safari",
+    label: "Download latest",
+    href: SAFARI_RELEASE_URL,
+    icon: "/safari.svg",
+    event: "download_safari",
   },
 } as const;
 
@@ -70,8 +87,9 @@ export function AddToChromeCta({
 }
 
 // Small icon-only link to the OTHER browser's store, so users know Design
-// Mode is available on both. Navbar-only: sits between the GitHub icon and
-// the primary CTA. On Chrome it points at Firefox/AMO; on Firefox, Chrome/CWS.
+// Mode is available elsewhere. Navbar-only: sits between the GitHub icon and
+// the primary CTA. On Firefox it points at Chrome/CWS; otherwise (Chrome,
+// Safari, unknown) at Firefox/AMO.
 export function OtherStoreLink({ className }: { className?: string }) {
   const target = useInstallTarget();
   const other = target === "firefox" ? STORES.chrome : STORES.firefox;

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+
 
 import { ArrowDownUp, Copy, Plug } from "lucide-react";
 
@@ -22,7 +22,7 @@ export function BrowserHandoff() {
           <article>
             <div
               className="flex h-10 items-center gap-4"
-              aria-label="Chrome and Firefox"
+              aria-label="Chrome, Firefox and Safari"
             >
               <Image
                 src="/chrome.svg"
@@ -38,19 +38,19 @@ export function BrowserHandoff() {
                 height={32}
                 unoptimized
               />
+              <Image
+                src="/safari.svg"
+                alt="Safari"
+                width={32}
+                height={32}
+                unoptimized
+              />
             </div>
             <h3 className="mt-6 text-2xl font-semibold">Add to your browser</h3>
             <p className="text-muted-foreground mt-4 text-base leading-relaxed">
-              Edit pages in Chrome, Firefox, or Safari on Mac.
+              Edit pages in Chrome, Firefox or Safari.
               <br />
-              Safari opens in Web Inspector from the{" "}
-              <Link
-                href="https://github.com/SandeepBaskaran/design-mode/releases/latest"
-                className="underline underline-offset-4"
-              >
-                latest GitHub release
-              </Link>
-              , not the extensions toolbar.
+              Safari takes a quick manual setup.
             </p>
           </article>
           <article>

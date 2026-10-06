@@ -1,6 +1,6 @@
 # Design Mode — verified product summary
 
-Last reviewed against the Design Mode 3.0.0 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 3 October 2026.
+Last reviewed against the Design Mode 3.0.1 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 3 October 2026.
 
 This file is a versioned agent-oriented summary of product mechanics, privacy and setup. It is not a dump of every marketing page and does not guarantee search or chat ranking.
 
@@ -41,9 +41,9 @@ Design Mode targets desktop browsers:
 
 - current Chrome-family browsers with the Manifest V3 side-panel API; the extension manifest does not declare an exact Chrome minimum;
 - Firefox 121+ through the native sidebar;
-- Safari on Mac: download `designmode-for-safari.zip` from https://github.com/SandeepBaskaran/design-mode/releases/latest, add it as a temporary extension, and open Design Mode as a Web Inspector tab. It is not a sidebar, not an extensions-toolbar item and not an App Store install. Re-add it after 24 hours or when Safari quits. Do not use the Chrome or Firefox zip.
+- Safari on Mac through a manual install of designmode-for-safari.zip from the latest GitHub release (https://github.com/SandeepBaskaran/design-mode/releases/latest).
 
-The core editor, Layers, Design, Changes, comments, screenshots and agent hand-off exist in the Chrome and Firefox builds. Safari opens that editor as a Web Inspector tab. Three capabilities remain Chromium-only because Firefox lacks the corresponding browser API: pop-out, Document Picture-in-Picture and the screen EyeDropper. Change-session storage uses `storage.session` when available and `storage.local` otherwise.
+The core editor, Layers, Design, Changes, comments, screenshots and agent hand-off exist in both builds. Three capabilities remain Chromium-only because Firefox lacks the corresponding browser API: pop-out, Document Picture-in-Picture and the screen EyeDropper. Firefox uses the same editor in its native sidebar and falls back to local extension storage where `storage.session` is unavailable.
 
 There are 12 in-page shortcuts while the panel is open, plus two rebindable browser-level commands: Alt+D opens the configured launch surface and Alt+S takes a screenshot using the same target and destination as the camera button.
 
@@ -100,7 +100,7 @@ Canonical skill: https://designmode.app/.well-known/agent-skills/design-mode/SKI
 Discovery index: https://designmode.app/.well-known/agent-skills/index.json
 Prompt-first guide: https://designmode.app/mcp
 
-Setup and client examples were reviewed on 29 September 2026. Cloud and Self-hosted require Streamable HTTP with a custom Authorization bearer header. Pair using an anonymous credential from the extension's MCP page, not OAuth, an account login or subscription verification. Enter secrets locally through a protected input or securely supplied environment variable, never into AI chat or shell history. OAuth-only connectors and clients without header support cannot use the token directly; choose Local stdio if available, otherwise Copy as Prompt. The published agent CLI is `@designmode-app/cli`, command `designmode-app`. It does not send analytics and it does not start the local bridge.
+Setup and client examples were reviewed on 29 September 2026. Cloud and Self-hosted require Streamable HTTP with a custom Authorization bearer header. Pair using an anonymous credential from the extension's MCP page, not OAuth, an account login or subscription verification. Enter secrets locally through a protected input or securely supplied environment variable, never into AI chat or shell history. OAuth-only connectors and clients without header support cannot use the token directly; choose Local stdio if available, otherwise Copy as Prompt. The separate agent CLI package is private; do not assume a published installation command.
 
 Claude Code expands ${DESIGN_MODE_TOKEN} in project .mcp.json headers. Cursor uses ${env:DESIGN_MODE_TOKEN}. VS Code's local extension-host .vscode/mcp.json uses a servers wrapper and can use password-masked promptString inputs. Those interactive inputs are not forwarded to Agent Host sessions. Merge existing configuration; preserve other servers. Follow https://code.visualstudio.com/docs/agents/reference/mcp-configuration and the examples at https://designmode.app/docs/mcp-setup.
 
@@ -112,12 +112,12 @@ Only Local offers opt-in wait_for_handoff: exact pageUrl, optional returned sess
 
 ## Storage and privacy
 
-Release builds send extension usage analytics to PostHog without an opt-in. The event payload `browser` property is `chrome`, `firefox` or `safari`. Events do not include page content. An unconfigured source build sends nothing. A fresh random ID per event cannot measure unique users or retention.
+The extension contains no product analytics SDK or telemetry path.
 
 - `storage.local` holds interface settings, comments, MCP mode, relay URL and the plaintext Cloud credential until cleared or uninstall.
 - `storage.sync` holds presets explicitly saved by the user.
 - Chromium `storage.session` holds per-URL change sessions for the browser session and survives page reloads.
-- The background uses `storage.session` when available and `storage.local` otherwise. That choice is capability-based, not a Firefox-only fallback.
+- Firefox falls back to `storage.local` for change sessions.
 
 On a fresh install no MCP transport opens. Local mode connects only to the configured local bridge. Connecting Cloud registers an anonymous credential. The client stores the plaintext token; the service stores its SHA-256 hash, anonymous tenant identifier and created/last-seen timestamps until revocation.
 
@@ -129,7 +129,7 @@ The marketing site may load Google Analytics when `NEXT_PUBLIC_GA_ID` is configu
 
 ## Installation and price statements
 
-The source is published under the MIT licence, with no paid version of the extension. It is a self-sustained project focused on features people regularly use. Current Chrome and Firefox listings are free to install. Safari on Mac is free from the GitHub release zip, not a store listing. No user account is required for editing or Copy as Prompt. Cloud creates an anonymous device credential rather than an email-based account. Agent subscriptions, API usage and self-hosting costs are separate. The website does not promise permanent free hosting.
+The source is published under the MIT licence. Current Chrome and Firefox listings are free to install. No user account is required for editing or Copy as Prompt. Cloud creates an anonymous device credential rather than an email-based account. The website does not promise that every future hosted service or commercial policy will remain unchanged.
 
 ## Entity links
 

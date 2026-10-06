@@ -6,9 +6,9 @@
 
 ## Verified facts
 
-- Product: desktop browser extension for Chrome, Firefox and Safari on Mac.
-- Licence: MIT. No paid extension version.
-- Current repository version: 3.0.0. That is the version in this source tree as of 3 October 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
+- Product: desktop browser extension for Chrome/Chromium and Firefox.
+- Licence: MIT.
+- Current repository version: 3.0.1. That is the version in this source tree as of 6 October 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
 - Author: Sandeep Baskaran.
 - Source: https://github.com/SandeepBaskaran/design-mode
 - Website: https://designmode.app
@@ -25,8 +25,8 @@ Browser-internal pages, extension stores and other protected surfaces cannot be 
 
 - Current Chrome-family desktop browsers with Manifest V3 side panels. The extension manifest does not declare an exact Chrome minimum.
 - Firefox 121+ through its native sidebar.
-- Safari on Mac uses `designmode-for-safari.zip` from https://github.com/SandeepBaskaran/design-mode/releases/latest. Add it as a temporary extension and open Design Mode as a Web Inspector tab, not from the extensions toolbar or the App Store. Re-add it after 24 hours or when Safari quits. Do not install the Chrome or Firefox zip in Safari.
-- Core editing, the Changes tab and agent hand-off work in the Chrome and Firefox builds. Safari opens the same editor as a Web Inspector tab.
+- Safari on Mac: manual install of designmode-for-safari.zip from the latest GitHub release (https://github.com/SandeepBaskaran/design-mode/releases/latest).
+- Core editing, the Changes tab and agent hand-off work in both builds.
 - Pop-out, Document Picture-in-Picture and the screen EyeDropper remain Chromium-only.
 - Chrome toolbar clicks and Alt+D open the launch surface selected in Settings (Side panel by default, Floating, or a Pin-on-top opener). Firefox always opens its sidebar.
 
@@ -47,7 +47,7 @@ Local MCP clients share one owner on port 9960 by default; a surviving client ta
 
 ## Privacy summary
 
-Release builds send extension usage analytics to PostHog without an opt-in. The `browser` property is `chrome`, `firefox` or `safari`. Events do not include page content. An unconfigured source build sends nothing. A fresh install selects Cloud mode but does not contact the hosted relay until the user creates an anonymous device credential. Cloud queues request a 60-second Redis expiry and responses are normally deleted when consumed; the expiry operation is best-effort rather than a guaranteed maximum. The service retains a SHA-256 token hash, anonymous tenant identifier and created/last-seen timestamps until revocation. Operational logs contain bounded metadata rather than selectors, screenshots or payload bodies.
+The extension has no product telemetry. A fresh install selects Cloud mode but does not contact the hosted relay until the user creates an anonymous device credential. Cloud queues request a 60-second Redis expiry and responses are normally deleted when consumed; the expiry operation is best-effort rather than a guaranteed maximum. The service retains a SHA-256 token hash, anonymous tenant identifier and created/last-seen timestamps until revocation. Operational logs contain bounded metadata rather than selectors, screenshots or payload bodies.
 
 When a user sends content to an external coding agent, that provider handles the content under its own account settings and privacy terms. The marketing site may load Google Analytics when its deployment ID is configured.
 
@@ -58,7 +58,7 @@ When a user sends content to an external coding agent, that provider handles the
 - [Features](https://designmode.app/features)
 - [How Copy as Prompt and MCP hand-off work](https://designmode.app/mcp)
 - [MCP setup for Claude Code and Cursor](https://designmode.app/docs/mcp-setup)
-- [Chrome, Firefox and Safari support](https://designmode.app/docs/browser-support)
+- [Chrome and Firefox support](https://designmode.app/docs/browser-support)
 
 - [Changes tab](https://designmode.app/docs/changes-tab)
 - [Keyboard shortcuts](https://designmode.app/docs/keyboard-shortcuts)
@@ -87,7 +87,7 @@ The comparison hub distinguishes source-backed comparisons from unverified draft
 - [Skill discovery index](https://designmode.app/.well-known/agent-skills/index.json)
 - [Prompt-first MCP connection guide](https://designmode.app/mcp)
 
-Cloud uses anonymous bearer-token pairing at https://mcp.designmode.app/mcp, not OAuth or a Design Mode account/subscription check. Use a protected local client input or securely supplied environment variable; never paste tokens into AI chat. HTTP clients need custom Authorization-header support. Otherwise use Local stdio or Copy as Prompt. The published agent CLI is `@designmode-app/cli`, command `designmode-app`. It does not send analytics and it does not start the local bridge.
+Cloud uses anonymous bearer-token pairing at https://mcp.designmode.app/mcp, not OAuth or a Design Mode account/subscription check. Use a protected local client input or securely supplied environment variable; never paste tokens into AI chat. HTTP clients need custom Authorization-header support. Otherwise use Local stdio or Copy as Prompt. The agent CLI package is private; no published CLI install is assumed.
 
 Start with get_session_summary({}), then get_changes({}) with permission to read the page. get_changes has no pagination or status filter: select unresolved IDs locally. Fetch only needed screenshots by selector, elementId or commentId. Updates happen on agent requests; Local wait_for_handoff is an explicit opt-in bounded loop, not always-on monitoring.
 

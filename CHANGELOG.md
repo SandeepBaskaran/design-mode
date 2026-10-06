@@ -8,6 +8,25 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.0.1] — 2026-10-06
+
+### Changed
+
+- The website's browser banner now names Firefox and Safari, each with its
+  logo. Only the browser names are links: Firefox goes to Firefox Add-ons and
+  Safari to the latest GitHub release.
+- The main install button follows the visitor's browser: **Add to Chrome**
+  (Chrome Web Store) on Chrome, Chromium browsers and unknown browsers,
+  **Add to Firefox** (Firefox Add-ons) on Firefox, and **Download latest**
+  (latest GitHub release) on Safari. Server rendering defaults to Chrome, so
+  hydration stays consistent.
+- The homepage browser card shows the Safari logo alongside Chrome and Firefox.
+- Rewrote the browser-availability FAQ (Chrome, Firefox and Safari; Safari
+  needs a quick manual setup) and rewrote the Cloud, Local and Self-hosted FAQ
+  in plain language.
+- Updated `next` to 16.3.8 for its security fixes, matching `@next/mdx` and
+  `eslint-config-next` 16.3.8.
+
 ## [3.0.0] — 2026-10-03
 
 ### Added

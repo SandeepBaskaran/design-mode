@@ -19,14 +19,13 @@ export type Release = {
 
 export const releases: Release[] = [
   {
-    version: "3.0.0",
-    date: "2026-10-03",
-    headline: "Free visual editing for Chrome, Firefox and Safari on Mac.",
+    version: "3.0.1",
+    date: "2026-10-06",
+    headline: "Clearer install options for Chrome, Firefox and Safari.",
     highlights: [
-      "Connect a coding agent through Cloud, Local or your own relay, then copy the changes as a prompt or send them through MCP.",
-      "Use Design Mode in Safari’s Web Inspector from the temporary extension on GitHub Releases. Re-add it after 24 hours or when Safari quits.",
-      "Keep edits across Firefox reloads, and review every saved route on the current site before you share a hand-off.",
-      "Usage analytics is on in release builds. It records feature activity by browser package and never page content.",
+      "The install button now matches your browser: Add to Chrome, Add to Firefox, or Download latest on Safari.",
+      "The site banner links straight to Firefox Add-ons and the Safari download.",
+      "Simpler answers in the FAQ about supported browsers and connection modes.",
     ],
   },
   {

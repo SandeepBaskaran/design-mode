@@ -1,8 +1,13 @@
-export type QA = { question: string; answer: string };
+export type QA = {
+  question: string;
+  answer: string;
+  /** Optional follow-up links rendered after the answer (not in JSON-LD). */
+  links?: { label: string; href: string }[];
+};
 export type FaqGroup = { title: string; items: QA[] };
 
 export const PRODUCT_DEFINITION =
-  "Design Mode is a free, open-source browser extension for Chrome, Firefox and Safari on Mac. It lets you edit a rendered webpage visually, records the exact changes, and hands them to a coding agent. The browser edit is a preview and specification; the agent updates source code in a repository it can access.";
+  "Design Mode is a free, open-source Chrome and Firefox extension that lets you edit a rendered webpage visually, records the exact changes, and hands them to a coding agent. The browser edit is a preview and specification; the agent updates source code in a repository it can access.";
 
 export const faqGroups: FaqGroup[] = [
   {
@@ -45,7 +50,11 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Which browsers are supported?",
         answer:
-          "Design Mode is free on desktop Chrome, Firefox and Safari on Mac. Chromium browsers with Manifest V3 side panels, including Chrome, Edge, Brave and Arc, install from the Chrome Web Store and open in the side panel. Firefox 121 or later installs from Firefox Add-ons and opens in the native sidebar. Safari uses a separate temporary extension, designmode-for-safari.zip, from the latest GitHub release. Add it in Safari and open Design Mode as a Web Inspector tab, not from the extensions toolbar or the App Store. Safari removes temporary extensions after 24 hours or when Safari quits, so re-add it then. Do not install the Chrome or Firefox zip in Safari. Pop-out, Document Picture-in-Picture and the EyeDropper API remain Chromium-only. Store listings can lag the GitHub release.",
+          "Design Mode works in Chrome, Firefox and Safari. Features differ a little between them; the browser support and install guides have the details. Chrome and Firefox work right away: install it from the Chrome Web Store or Firefox Add-ons. Safari needs a quick manual setup that takes under 30 seconds.",
+        links: [
+          { label: "Browser support", href: "/docs/browser-support" },
+          { label: "Install guides", href: "/docs" },
+        ],
       },
       {
         question: "Should I use Chrome or Firefox?",
@@ -82,7 +91,7 @@ export const faqGroups: FaqGroup[] = [
         question:
           "What is the difference between Cloud, Local and Self-hosted?",
         answer:
-          "Cloud is selected on a fresh install, but it makes no connection until you create a Cloud credential. Local connects the extension to the companion server on your machine. Concurrent Local clients share one owner on port 9960 by default; a surviving client takes over if the owner closes, foreign occupants are never killed, and DM_PORT selects a fallback port that must match the extension. Self-hosted points the extension and agent at relay infrastructure you operate. Cloud and Self-hosted relay messages over HTTPS; Local keeps the Design Mode transport on your machine.",
+          "They are three ways to pass your changes to your AI assistant. Cloud is the easiest. Your changes travel through our secure online service, and nothing connects until you turn it on. Local keeps everything on your own computer. Self-hosted is for teams that want to run that service themselves.",
       },
       {
         question: "Do I have to use MCP?",
@@ -97,7 +106,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "What data leaves my machine by default?",
         answer:
-          "Release builds send usage analytics to PostHog without an opt-in. Events name the browser package as chrome, firefox or safari and do not include page content, selectors, comments or screenshots. An unconfigured source build sends nothing. See the privacy page.",
+          "The editor itself has no product telemetry. A fresh install selects Cloud mode but does not contact the relay until you create a Cloud credential. The marketing website may load Google Analytics when its deployment ID is configured. See the privacy page for storage, relay and website analytics details.",
       },
       {
         question: "How does the Cloud relay store data?",
@@ -112,7 +121,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Is Design Mode free and open source?",
         answer:
-          "Design Mode is free and MIT-licensed, with no paid version of the extension. It is a self-sustained project focused on features people regularly use. MIT permits commercial use, modification and redistribution subject to its licence notice. Coding-agent subscriptions, API usage and self-hosting costs are separate. This is not a promise of permanent free hosting.",
+          "The extension and repository are published under the MIT licence and the current store listings are free to install. MIT permits commercial use, modification and redistribution subject to its licence notice. Future hosting or service policy should be judged from the terms published at that time rather than a promise that can never change.",
       },
     ],
   },
