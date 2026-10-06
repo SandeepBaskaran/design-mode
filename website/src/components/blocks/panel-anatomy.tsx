@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-
 import { Caveat } from "next/font/google";
+
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
   ArrowDown,

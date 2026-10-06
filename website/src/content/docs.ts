@@ -15,9 +15,9 @@ export const docs: DocPage[] = [
   {
     slug: "browser-support",
     title: "Browser support & parity",
-    metaTitle: "Browser support — Chrome, Firefox, and feature parity",
+    metaTitle: "Browser support — Chrome, Firefox, Safari and feature parity",
     metaDescription:
-      "Design Mode runs on Chrome, Edge, Brave, Arc, and Firefox. What's identical across browsers, and the few Chrome-only features (pop-out window, Picture-in-Picture, screen eyedropper).",
+      "Design Mode runs on Chrome, Edge, Brave, Arc, Firefox and Safari on Mac. What's identical across browsers, and the few browser-specific features (including Safari's manual setup).",
     keywords: [
       "Design Mode browser support",
       "Design Mode Firefox",
@@ -26,7 +26,7 @@ export const docs: DocPage[] = [
       "browser feature parity",
     ],
     intro:
-      "Design Mode runs on Chromium browsers (Chrome, Edge, Brave, Arc) and on Firefox 121+. Everything core is identical across browsers; a few extras depend on APIs that only Chromium ships, so they're hidden on Firefox.",
+      "Design Mode runs on Chromium browsers (Chrome, Edge, Brave, Arc), Firefox 121+ and Safari on Mac. Everything core is available across browsers; a few extras depend on browser APIs, and Safari needs a short manual setup.",
     sections: [
       {
         heading: "Supported browsers",
@@ -37,8 +37,12 @@ export const docs: DocPage[] = [
         body: "The whole editing surface is the same: inspect any element; edit Position, Layout, Typography, Fill, Stroke, Effects, Motion, and Layout Guides; the Layers tree; the Changes tab with export/import; comments; element and viewport screenshots; DOM edits (duplicate, delete, reorder); the design-token engine; and the full MCP / send-to-agent handoff. Firefox always opens its sidebar; Chrome can launch into its side panel or Chrome-only floating surfaces.",
       },
       {
-        heading: "Chrome-only features",
-        body: "Three extras rely on Chromium-only browser APIs and are hidden on Firefox: the pop-out floating window (needs the side-panel + windows APIs), Picture-in-Picture “pin on top” (needs the Document Picture-in-Picture API), and the screen eyedropper “Pick” button (needs the EyeDropper API). On Firefox, colour entry still works via the HSV picker, the site-token list, and hex/RGB input — only the whole-screen sampler is unavailable.",
+        heading: "Browser-specific features",
+        body: "Three extras rely on Chromium-only browser APIs and are hidden on Firefox: the pop-out floating window (needs the side-panel + windows APIs), Picture-in-Picture “pin on top” (needs the Document Picture-in-Picture API), and the screen eyedropper “Pick” button (needs the EyeDropper API). On Firefox, colour entry still works via the HSV picker, the site-token list, and hex/RGB input — only the whole-screen sampler is unavailable. Safari has its own Web Inspector installation and integration details below.",
+      },
+      {
+        heading: "Safari specifics",
+        body: "Safari on Mac uses a temporary Web Inspector extension from the latest GitHub release. Open Safari Settings → Developer → Add Temporary Extension, choose designmode-for-safari.zip, and re-add it after Safari quits or the temporary extension expires. The main editing workflow is available in the Inspector; this build does not use the Chrome Web Store or Firefox Add-ons.",
       },
       {
         heading: "Firefox specifics",

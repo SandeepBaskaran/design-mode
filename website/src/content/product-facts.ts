@@ -7,7 +7,7 @@ export type QA = {
 export type FaqGroup = { title: string; items: QA[] };
 
 export const PRODUCT_DEFINITION =
-  "Design Mode is a free, open-source Chrome and Firefox extension that lets you edit a rendered webpage visually, records the exact changes, and hands them to a coding agent. The browser edit is a preview and specification; the agent updates source code in a repository it can access.";
+  "Design Mode is a free, open-source browser extension for Chrome, Firefox and Safari. It lets you edit a webpage visually, records the exact changes, and hands them to a coding agent. The browser edit is a preview; the agent updates source code in a repository it can access.";
 
 export const faqGroups: FaqGroup[] = [
   {
@@ -30,7 +30,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Does Design Mode change my production source code?",
         answer:
-          "Not by itself. It changes the rendered page in your browser and records a structured specification. Copy as Prompt puts that specification on your clipboard. Send to Agent exposes it through MCP to a connected agent, which still needs access to your repository and must implement and verify the source-code change.",
+          "No. It only changes what you see in your browser and records those changes. You can copy the notes or send them to a coding agent. The agent still needs access to your project and must make the real code change.",
       },
       {
         question: "Can I edit a third-party website?",

@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Design Mode",
     short_name: "Design Mode",
     description:
-      "An open-source Chrome and Firefox visual editor that records rendered-page changes for coding-agent hand-off.",
+      "An open-source Chrome, Firefox and Safari visual editor that records rendered-page changes for coding-agent hand-off.",
     start_url: "/",
     display: "standalone",
     background_color: "#ffffff",

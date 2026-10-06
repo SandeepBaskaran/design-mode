@@ -15,6 +15,8 @@ const CHROME_URL =
   "https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih";
 const FIREFOX_URL =
   "https://addons.mozilla.org/firefox/addon/design-mode-add-on/";
+const SAFARI_URL =
+  "https://github.com/SandeepBaskaran/design-mode/releases/latest";
 const X_URL = "https://x.com/sandeepbaskaran";
 const AUTHOR_URL = "https://sandeepbaskaran.com";
 
@@ -30,10 +32,10 @@ export const personSchema = {
   "@id": IDS.person,
   name: "Sandeep Baskaran",
   url: AUTHOR_URL,
-  jobTitle: "Senior UX Designer",
-  sameAs: [X_URL, AUTHOR_URL],
+  jobTitle: "Design Engineer",
+  sameAs: [X_URL, REPO_URL, AUTHOR_URL],
   description:
-    "Senior UX Designer based in Bengaluru and creator of Design Mode, a free open-source browser visual editor for AI coding agents.",
+    "Design engineer based in Bengaluru and creator of Design Mode, an open-source browser visual editor for AI coding agents.",
 };
 
 export const websiteSchema = {
@@ -41,8 +43,6 @@ export const websiteSchema = {
   "@type": "WebSite",
   "@id": IDS.website,
   name: "Design Mode",
-  alternateName: "DesignMode",
-  about: { "@id": IDS.software },
   url: SITE_URL,
   description:
     "A browser visual editor that captures changes to a rendered webpage and hands them to AI coding agents.",
@@ -55,20 +55,16 @@ export const softwareApplicationSchema = {
   "@id": IDS.software,
   name: "Design Mode",
   description:
-    "A free browser extension for Chrome, Firefox and Safari on Mac. It edits a rendered webpage, records the changes, and hands them to a coding agent.",
+    "A browser extension for Chrome, Firefox and Safari for visually editing a rendered webpage, recording the changes, and handing them to a coding agent.",
   applicationCategory: "DesignApplication",
   applicationSubCategory: "BrowserExtension",
   softwareRequirements:
-    "Desktop Chromium with Manifest V3 side panels, Firefox 121+, or Safari on Mac via the temporary Web Inspector extension from GitHub Releases",
+    "Desktop Chromium browser with Manifest V3 side-panel support, Firefox 121+, or Safari on macOS with Web Inspector",
   url: SITE_URL,
-  downloadUrl: [
-    CHROME_URL,
-    FIREFOX_URL,
-    "https://github.com/SandeepBaskaran/design-mode/releases/latest",
-  ],
-  installUrl: [CHROME_URL, FIREFOX_URL],
-  sameAs: [REPO_URL, CHROME_URL, FIREFOX_URL],
-  softwareVersion: "3.0.0",
+  downloadUrl: [CHROME_URL, FIREFOX_URL, SAFARI_URL],
+  installUrl: [CHROME_URL, FIREFOX_URL, SAFARI_URL],
+  sameAs: [REPO_URL, CHROME_URL, FIREFOX_URL, SAFARI_URL],
+  softwareVersion: "3.0.1",
   license: "https://opensource.org/licenses/MIT",
   isPartOf: { "@id": IDS.website },
   offers: {
