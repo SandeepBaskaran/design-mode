@@ -51,8 +51,8 @@ export const Hero = () => {
         <p className="text-muted-foreground mx-auto mt-8 max-w-[848px] text-base">
           <span className="sm:hidden">Edit</span>
           <span className="max-sm:hidden">
-            Design Mode is a free, open-source Chrome and Firefox extension that
-            lets you edit
+            Design Mode is a free, open-source extension for Chrome, Firefox and Safari
+            that lets you edit
           </span>{" "}
           a rendered webpage visually, record the exact changes, and hand them
           to a coding agent.

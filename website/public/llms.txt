@@ -6,7 +6,7 @@
 
 ## Verified facts
 
-- Product: desktop browser extension for Chrome/Chromium and Firefox.
+- Product: desktop browser extension for Chrome/Chromium, Firefox and Safari on Mac.
 - Licence: MIT.
 - Current repository version: 3.0.1. That is the version in this source tree as of 6 October 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
 - Author: Sandeep Baskaran.
@@ -58,7 +58,7 @@ When a user sends content to an external coding agent, that provider handles the
 - [Features](https://designmode.app/features)
 - [How Copy as Prompt and MCP hand-off work](https://designmode.app/mcp)
 - [MCP setup for Claude Code and Cursor](https://designmode.app/docs/mcp-setup)
-- [Chrome and Firefox support](https://designmode.app/docs/browser-support)
+- [Browser support](https://designmode.app/docs/browser-support)
 
 - [Changes tab](https://designmode.app/docs/changes-tab)
 - [Keyboard shortcuts](https://designmode.app/docs/keyboard-shortcuts)

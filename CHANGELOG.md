@@ -104,18 +104,6 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   ordered multi-delete behaviour.
 - Added website route/discovery integrity checks and refreshed dependency pins.
 
-## [3.0.0] — 2026-10-03
-
-### Added
-- **Safari Support (Web Inspector):** Design Mode now supports Apple Safari on macOS via Web Inspector. It requires a manual temporary extension installation from the GitHub release `.zip` per Apple's developer guidelines. 
-- **Cloud & Self-Hosted MCP:** Added support for external routing over a Redis-backed remote MCP relay, allowing Claude Code and Cursor to reach your browser over the internet securely without a localhost daemon.
-- **Opt-in Analytics (PostHog):** Added anonymous, configuration-gated, and consent-gated PostHog telemetry to help prioritize development. This tracks extension feature usage without capturing text, code, selectors, or page URLs. Fully disabled by default.
-
-### Changed
-- **Cross-Browser Persistence:** Hardened the session storage mechanisms for Mozilla Firefox so your changes survive page reloads when standard `storage.session` isn't accessible.
-- **MCP Client Guide & Documentation:** Redesigned the site's setup and integration paths (including LLM crawler context) to explicitly support Cloud MCP usage.
-- **Element Comments:** Overhauled the comment selector mechanism to resolve robust paths instead of bare tags, preventing comments from reattaching to the wrong sibling element (fixes #69).
-
 ## [2.2.1] — 2026-09-05
 
 ### Fixed

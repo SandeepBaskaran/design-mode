@@ -95,7 +95,7 @@ export const comparisons: Comparison[] = [
       "Choose by starting point: a rendered product you want to refine, or a canvas where you want to create and collaborate. MagicPath 2.0 positions itself as a shared workspace for interactive prototypes and apps, with external-agent access and code export. Design Mode keeps the visual review on your existing page and leaves source implementation to your agent. Neither workflow removes the need to review and test the resulting code.",
     whenToPickDesignMode: [
       "You want to refine localhost, staging or production without moving the project into another design workspace.",
-      "You want a free MIT-licensed Chrome or Firefox editor with portable prompt exports and optional MCP hand-off.",
+      "You want a free MIT-licensed editor for Chrome, Firefox or Safari with portable prompt exports and optional MCP hand-off.",
       "Your existing repository, coding agent and release process should remain the source of truth.",
     ],
     whenToPickCompetitor: [
@@ -107,7 +107,7 @@ export const comparisons: Comparison[] = [
       {
         feature: "Starting point",
         designMode:
-          "A scriptable webpage rendered in Chrome or Firefox. Browser-protected pages are excluded.",
+          "A scriptable webpage rendered in Chrome, Firefox or Safari. Browser-protected pages are excluded.",
         competitor:
           "A shared visual canvas, accessible through its web app or macOS app, for interactive prototypes and app creation.",
       },
@@ -190,7 +190,7 @@ export const comparisons: Comparison[] = [
       {
         feature: "Starting point",
         designMode:
-          "A rendered webpage in Chrome or Firefox; no project import or site-code changes needed.",
+          "A rendered webpage in Chrome, Firefox or Safari; no project import or site-code changes needed.",
         competitor:
           "An imported HTML/CSS, React/Tailwind or supported TypeScript project in a desktop or web canvas.",
       },
@@ -468,7 +468,7 @@ export const comparisons: Comparison[] = [
       {
         feature: "Installation and page access",
         designMode:
-          "Chrome or Firefox extension; no code added to the inspected app. Works on scriptable pages, not browser-protected surfaces.",
+          "Chrome, Firefox or Safari extension; no code added to the inspected app. Works on scriptable pages, not browser-protected surfaces.",
         competitor:
           "Embed a Web Component using npm or a CDN script. The local setup also runs a Python MCP server and HTTP API; SSR apps need client-side loading.",
       },
@@ -563,7 +563,7 @@ export const comparisons: Comparison[] = [
       {
         feature: "Where you work and what you install",
         designMode:
-          "Chrome or Firefox extension on scriptable localhost, staging or production pages. No package or script added to the inspected site; browser-protected pages are excluded.",
+          "Chrome, Firefox or Safari extension on scriptable localhost, staging or production pages. No package or script added to the inspected site; browser-protected pages are excluded.",
         competitor:
           "Editor added to your site through the cssstudio package or a script tag. The installation guide runs it in development mode.",
       },

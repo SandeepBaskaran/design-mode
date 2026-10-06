@@ -15,6 +15,8 @@ const CHROME_URL =
   "https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih";
 const FIREFOX_URL =
   "https://addons.mozilla.org/firefox/addon/design-mode-add-on/";
+const SAFARI_URL =
+  "https://github.com/SandeepBaskaran/design-mode/releases/latest";
 const X_URL = "https://x.com/sandeepbaskaran";
 const AUTHOR_URL = "https://sandeepbaskaran.com";
 
@@ -53,16 +55,16 @@ export const softwareApplicationSchema = {
   "@id": IDS.software,
   name: "Design Mode",
   description:
-    "A Chrome and Firefox extension for visually editing a rendered webpage, recording the changes, and handing them to a coding agent.",
+    "A browser extension for Chrome, Firefox and Safari for visually editing a rendered webpage, recording the changes, and handing them to a coding agent.",
   applicationCategory: "DesignApplication",
   applicationSubCategory: "BrowserExtension",
   softwareRequirements:
-    "Desktop Chromium browser with Manifest V3 side-panel support, or Firefox 121+",
+    "Desktop Chromium browser with Manifest V3 side-panel support, Firefox 121+, or Safari on macOS with Web Inspector",
   url: SITE_URL,
-  downloadUrl: [CHROME_URL, FIREFOX_URL],
-  installUrl: [CHROME_URL, FIREFOX_URL],
-  sameAs: [REPO_URL, CHROME_URL, FIREFOX_URL],
-  softwareVersion: "2.3.1",
+  downloadUrl: [CHROME_URL, FIREFOX_URL, SAFARI_URL],
+  installUrl: [CHROME_URL, FIREFOX_URL, SAFARI_URL],
+  sameAs: [REPO_URL, CHROME_URL, FIREFOX_URL, SAFARI_URL],
+  softwareVersion: "3.0.1",
   license: "https://opensource.org/licenses/MIT",
   isPartOf: { "@id": IDS.website },
   offers: {

@@ -19,7 +19,7 @@ export const useCases: UseCase[] = [
     title: "Vibe coding with Claude Code",
     metaTitle: "Vibe coding with Claude Code — visual editing + AI agent loop",
     metaDescription:
-      "Use Design Mode, a Chrome and Firefox extension, with Claude Code: edit a scriptable page visually, hand the structured diff over MCP, then review Claude Code's repository implementation.",
+      "Use Design Mode, a browser extension for Chrome, Firefox and Safari, with Claude Code: edit a scriptable page visually, hand the structured diff over MCP, then review Claude Code's repository implementation.",
     keywords: [
       "vibe coding",
       "Claude Code visual editor",
@@ -28,7 +28,7 @@ export const useCases: UseCase[] = [
       "design with AI agent",
     ],
     intro:
-      "Design Mode is a Chrome and Firefox extension that edits the rendered page. Claude Code is a coding agent that implements changes in a repository it can access. The loop is: decide the look in the browser, ask Claude Code to implement a scoped change, then review the source diff. Design Mode is not Claude's editor, and it does not write your files.",
+      "Design Mode is a browser extension for Chrome, Firefox and Safari that edits the rendered page. Claude Code is a coding agent that implements changes in a repository it can access. The loop is: decide the look in the browser, ask Claude Code to implement a scoped change, then review the source diff. Design Mode is not Claude's editor, and it does not write your files.",
     problem:
       'Claude Code is strong at writing CSS once it knows exactly what you want. The bottleneck is conveying design intent. Screenshots are ambiguous. Mock files drift from the production page. "Make the hero pop more" is too vague.',
     workflow: [
@@ -72,7 +72,7 @@ export const useCases: UseCase[] = [
       "Cursor + Design Mode",
     ],
     intro:
-      "Cursor's built-in design mode lives inside the editor. Design Mode is a Chrome and Firefox extension that edits the actual rendered page. Use them together when you want live layout, fonts, and states in the browser, then ask Cursor to implement only the scoped change in the repo you already opened. Cursor does not commit automatically.",
+      "Cursor's built-in design mode lives inside the editor. Design Mode is a browser extension that edits the actual rendered page. Use them together when you want live layout, fonts, and states in the browser, then ask Cursor to implement only the scoped change in the repo you already opened. Cursor does not commit automatically.",
     problem:
       "Cursor's chat is text-first. Describing a hover state, a gradient, or a kerning tweak in prose is slow and imprecise. Pasting screenshots works for big changes but falls apart at the pixel level. Cursor's editor-native design surface is also not the live rendered page.",
     workflow: [

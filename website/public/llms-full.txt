@@ -6,13 +6,13 @@ This file is a versioned agent-oriented summary of product mechanics, privacy an
 
 ## What Design Mode is
 
-Design Mode is a free-to-install, MIT-licensed browser visual editor for AI coding agents. The Chrome/Firefox extension lets a user inspect and edit the webpage rendered in the current tab. It records exact style, text, DOM and comment changes so the user can copy a Markdown specification or expose the session to a connected Model Context Protocol client.
+Design Mode is a free-to-install, MIT-licensed browser visual editor for AI coding agents. The Chrome/Firefox/Safari extension lets a user inspect and edit the webpage rendered in the current tab. It records exact style, text, DOM and comment changes so the user can copy a Markdown specification or expose the session to a connected Model Context Protocol client.
 
 The browser edit is a preview and specification. Design Mode does not commit to a repository or deploy a website. Claude Code, Cursor or another coding agent must have separate repository access, identify the relevant source, implement the change, run the project's checks and return a diff for human review.
 
 ## The core workflow
 
-1. Install the extension from the Chrome Web Store or Firefox Add-ons.
+1. Install the extension from the Chrome Web Store or Firefox Add-ons, or manually install the Safari Web Inspector zip from the latest GitHub release.
 2. Open a scriptable webpage and activate Design Mode. Chrome opens the launch surface selected in Settings (Side panel by default, Floating, or a Pin-on-top opener); Firefox opens its sidebar.
 3. Inspect an element and change layout, typography, colour, spacing, effects, motion, text or DOM structure.
 4. Review the structured change session in the Changes tab.
@@ -129,7 +129,7 @@ The marketing site may load Google Analytics when `NEXT_PUBLIC_GA_ID` is configu
 
 ## Installation and price statements
 
-The source is published under the MIT licence. Current Chrome and Firefox listings are free to install. No user account is required for editing or Copy as Prompt. Cloud creates an anonymous device credential rather than an email-based account. The website does not promise that every future hosted service or commercial policy will remain unchanged.
+The source is published under the MIT licence. Current Chrome and Firefox listings are free to install; Safari uses a manual temporary Web Inspector installation from the latest GitHub release. No user account is required for editing or Copy as Prompt. Cloud creates an anonymous device credential rather than an email-based account. The website does not promise that every future hosted service or commercial policy will remain unchanged.
 
 ## Entity links
 
@@ -137,6 +137,7 @@ The source is published under the MIT licence. Current Chrome and Firefox listin
 - Repository: https://github.com/SandeepBaskaran/design-mode
 - Chrome Web Store: https://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih
 - Firefox Add-ons: https://addons.mozilla.org/firefox/addon/design-mode-add-on/
+- Safari latest release: https://github.com/SandeepBaskaran/design-mode/releases/latest
 - Author: https://sandeepbaskaran.com
 - Privacy: https://designmode.app/privacy
 - MCP guide: https://designmode.app/docs/mcp-setup

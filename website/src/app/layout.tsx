@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     template: "%s | Design Mode",
   },
   description:
-    "Edit a live webpage visually in Chrome or Firefox, capture the exact changes, and send them to Claude Code, Cursor or another MCP-compatible coding agent.",
+    "Edit a live webpage visually in Chrome, Firefox or Safari, capture the exact changes, and send them to Claude Code, Cursor or another MCP-compatible coding agent.",
   applicationName: "Design Mode",
   category: "Developer Tools",
   keywords: [
