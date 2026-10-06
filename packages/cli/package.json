@@ -24,8 +24,10 @@
     "test": "npm run build && tsx --test --test-concurrency=1 test/*.test.ts"
   },
   "devDependencies": {
+    "@types/ws": "^8.18.2",
     "esbuild": "0.28.2",
     "tsx": "^4.23.13",
+    "ws": "^8.22.0",
     "@modelcontextprotocol/sdk": "^1.31.0"
   },
   "publishConfig": {
