@@ -27,7 +27,7 @@ export const metadata = {
     url: "https://designmode.app/docs",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",
@@ -41,7 +41,7 @@ export const metadata = {
       "Install Design Mode, configure Claude Code or Cursor, understand browser support and the Changes tab, and troubleshoot common issues.",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",

@@ -225,3 +225,30 @@ test('inbox rejects unauthenticated, invalid JSON and malformed messages without
   }
   assert.equal(f.writes.some(({ key }) => key.startsWith('resp:')), false);
 });
+
+test('register caps anonymous token mints per client address before writing a row', async () => {
+  const f = fixture();
+  const quota = f.load('lib/quota.ts');
+  const register = f.load('api/auth/register.ts');
+  const call = (ip) => register.POST(new Request('https://relay.test/api/auth/register', {
+    method: 'POST', headers: { 'x-forwarded-for': `${ip}, 10.0.0.1` },
+  }));
+  for (let i = 0; i < quota.REGISTER_LIMIT; i++) {
+    const res = await call('203.0.113.7');
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.match(body.token, /^dm_/);
+  }
+  const tokenRows = () => f.writes.filter(({ key }) => key.startsWith('tok:')).length;
+  const minted = tokenRows();
+  assert.equal(minted, quota.REGISTER_LIMIT);
+  const limited = await call('203.0.113.7');
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get('retry-after'), String(quota.REGISTER_WINDOW_S));
+  assert.equal(tokenRows(), minted, 'a limited call must not store a token');
+  assert.ok(f.logs.some(log => log.event === 'auth.register.limited'));
+  // A different address has its own bucket.
+  assert.equal((await call('198.51.100.9')).status, 200);
+  // Missing proxy headers share one bucket rather than bypassing the cap.
+  assert.equal(quota.clientAddress(new Request('https://relay.test')), 'unknown');
+});

@@ -26,7 +26,7 @@ export const metadata = {
     url: "https://designmode.app/faq",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",
@@ -40,7 +40,7 @@ export const metadata = {
       "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari, and handles storage and Cloud relay data.",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",

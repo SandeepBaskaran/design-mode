@@ -27,7 +27,7 @@ export const metadata = {
     url: "https://designmode.app/demo",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",
@@ -41,7 +41,7 @@ export const metadata = {
       "Install Design Mode, then use this guided canvas to inspect demo targets, change styles and copy the exact change specification.",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",

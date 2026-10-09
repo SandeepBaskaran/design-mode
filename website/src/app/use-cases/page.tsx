@@ -32,7 +32,7 @@ export const metadata = {
     url: "https://designmode.app/use-cases",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",
@@ -46,7 +46,7 @@ export const metadata = {
       "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",

@@ -45,7 +45,7 @@ function harness() {
     },
   };
   vm.runInNewContext(compiled, {
-    browser, chrome: browser, URL, console: { log() {} }, exports: {},
+    browser, chrome: browser, URL, console: { log() {}, debug() {} }, exports: {},
     require: (path: string) => {
       if (path === './user-styles') return { replaceUserStyles: async () => {} };
       if (path.endsWith('/analytics-config')) return { analyticsConfig: {} };

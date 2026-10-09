@@ -2838,4 +2838,4 @@ window.addEventListener('dm-comment-pin-dragged', (e: any) => {
   },
 };
 
-console.log(`[Design Mode] Content script loaded (v${browser.runtime.getManifest().version}). All phases active.`);
+console.debug(`[Design Mode] Content script loaded (v${browser.runtime.getManifest().version}). All phases active.`);

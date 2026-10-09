@@ -27,7 +27,7 @@ export const metadata = {
     url: "https://designmode.app/blog",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",
@@ -41,7 +41,7 @@ export const metadata = {
       "Stories from building Design Mode and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",

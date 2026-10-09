@@ -22,7 +22,7 @@ before ticking.
 
 ## Required native checks before merge
 
-These checks remain **pending** until exercised against the installed final build in disposable Chrome and Firefox profiles. Unit tests, mocked messaging and synthetic keyboard events do not establish a native pass. Record browser/OS versions, artifact hash and evidence for each result.
+These checks remain **pending** until exercised against the installed final build in disposable Chrome and Firefox profiles and a native Safari session. Unit tests, mocked messaging, synthetic keyboard events and Playwright WebKit do not establish a native pass. Record browser/OS versions, artifact hash and evidence for each result.
 
 - [ ] Physical keyboard delivery with page and panel focus: Option/Alt shortcuts, Undo/Redo, Enter/Shift+Enter, Escape, editable targets, IME/AltGr and the accepted Firefox comment-focus limitation below.
 - [ ] Actual clipboard write and read-back for Copy as Prompt, computed CSS, diagnostics and screenshot PNG; record denied-permission behaviour without granting personal-profile permissions.
@@ -31,6 +31,7 @@ These checks remain **pending** until exercised against the installed final buil
 - [ ] Chrome Picture-in-Picture: click-driven opening, focus, edit, close and dock-back lifecycle; confirm floating/PiP controls are absent on Firefox.
 - [ ] Tooltip visibility and accessible names using pointer hover and keyboard focus, including narrow sidebars, floating windows and PiP; no clipping or stale tooltips after rerender.
 - [ ] Changes Appearance filter retains style-only grouping and counts; the Design Appearance section remains named Appearance. Do not relabel CSS style values or API fields.
+- [ ] Safari (Phase S): temporary-extension install from `designmode-for-safari.zip`, Web Inspector tab, active-tab targeting and repick, Inspector-click clipboard, screenshot capture and the no-`file://` boundary.
 
 ## Phase 0 — Activation & lifecycle
 
@@ -670,6 +671,41 @@ everything not listed here must behave exactly as on Chrome.
 
 ---
 
+## Phase S — Safari parity (Web Inspector build, runtime `IS_SAFARI` divergences)
+
+Safari ships from a **separate build** (`npm run package:extension:safari` →
+`packages/extension/designmode-for-safari.zip`, also produced by
+`package:extension:all` and `package:extension:release`). It is a Web Inspector
+extension, not a side panel: the manifest gains `devtools_page` + the `devtools`
+permission and drops `side_panel` / `sidebar_action`. Install: Safari Settings →
+Developer → **Add Temporary Extension…** → pick the unzipped `dist-safari/`
+folder (or the zip). Allow the extension on the test site in Safari Settings →
+Extensions. Re-add after Safari quits — temporary extensions do not persist.
+Re-walk the core phases; this phase lists only the **Safari-specific** deltas.
+Background and boundaries are in `docs/safari-inspector-parity-evidence.md`.
+
+| #    | Test | Steps | Expected |
+|------|------|-------|----------|
+| S.1  | Temporary extension loads | Add Temporary Extension from the release zip | Design Mode appears under Settings → Extensions with no manifest error; toolbar button shows the icon |
+| S.2  | Toolbar popup is the help card | Click the toolbar button | A small **Design Mode for Safari** popup explains: allow access, open Web Inspector (⌥⌘I), dock it, pick the Design Mode tab. No side panel opens |
+| S.3  | Inspector tab present | Open Web Inspector on an HTTPS page and dock it | A **Design Mode** tab exists in Web Inspector; the editor renders with the header badge `v3.0.1 · Safari` |
+| S.4  | Active-tab targeting | With the Inspector docked, pick an element, then switch Safari tabs and pick again | The editor follows the active tab in the last-focused window; the previous tab's selection is dropped and a fresh pick works on the new tab |
+| S.5  | Reconnect state | Navigate the inspected tab to a Safari-internal page (e.g. `favorites://`) or a site without permission | The **Reconnect to the active page** view appears with the error text, a *Pick element on active tab* button and a *Reload editor connection* button; no console spam |
+| S.6  | Reconnect actions work | From S.5, return to an HTTPS page → *Pick element on active tab*; then *Reload editor connection* | Repick restores the editor; reload re-initialises the Inspector panel without losing applied edits on the page |
+| S.7  | Visibility handoff | Switch the Inspector to another tab (Elements) and back | Leaving signals panel-closing (overlays clear); returning re-activates inspect without duplicate listeners (hover highlight is single) |
+| S.8  | Launch controls absent | Open Settings and the header | No Launch / Side panel / Floating / Pin-on-top controls; no pop-out or PiP icons (Inspector-only surface) |
+| S.9  | Copy as Prompt (Inspector click) | Make an edit → click **Copy as Prompt** in the panel | Clipboard contains the prompt; paste into TextEdit to read back. Direct Inspector click is the gesture — do not test via a page-focused shortcut |
+| S.10 | Export CSS (Inspector click) | Select an element → Export computed CSS | Clipboard read-back matches; an empty/stale export shows an error instead of replacing the clipboard with empty text |
+| S.11 | Screenshot — clipboard | Settings → Screenshot → Clipboard → click the camera in the panel | PNG lands on the clipboard (paste into Preview). If Safari denies, the toast reads *Clipboard unavailable. Choose Download in Screenshot Capture settings and retry.* |
+| S.12 | Screenshot — download | Settings → Screenshot → Download → camera | Safari offers/saves a PNG via the anchor download; record whether the file actually saved (Safari has no `downloads` API) |
+| S.13 | Oversized capture fails explicitly | Capture a very tall page element beyond the bridge payload limit | A bounded Inspector error is shown immediately; the capture does not hang until timeout |
+| S.14 | `file://` is unsupported | Open a local HTML file and the Inspector | Editor shows the unavailable state; nothing binds or dispatches to the file page (fails closed). Serve the fixture over HTTP to test instead |
+| S.15 | Hover guidance | Help → hover/touch guidance | Safari copy: *leave touch emulation, return to a normal macOS Safari webpage, dock Web Inspector and use Design Mode's own picker* |
+| S.16 | MCP local mode | Run `npm start` in `packages/mcp-local`; MCP page → Local | Status reaches **connected**; `get_changes` returns the Inspector-made edits (Phase 11.A parity) |
+| S.17 | Store links absent | Contribute panel | No Chrome Web Store / AMO review link is shown for the Safari build; share copy does not reference a store |
+
+---
+
 ## Phase 18 — Authored sizing and agent review workflow
 
 | Test | Action | Expected |
@@ -717,6 +753,7 @@ After every full pass, tag the run in the project notes:
 vX.Y.Z — YYYY-MM-DD
 ✓ All phases pass (Chrome)
 ✓ Phase F parity pass (Firefox)
+✓ Phase S parity pass (Safari — native session, not WebKit automation)
 ✓ npm run build:extension clean
 ✓ npm run verify passed all automated checks
 ```

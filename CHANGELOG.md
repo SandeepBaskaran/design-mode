@@ -8,6 +8,43 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The release workflow now runs the full `npm run verify` suite on the tagged
+  commit and refuses to publish when the tag does not match the version in
+  `package.json` and the extension manifest.
+- `npm run package:extension:all` also builds `designmode-for-safari.zip`,
+  matching the three artifacts the release workflow attaches.
+- `npm run verify` checks that every released version in `CHANGELOG.md` is
+  present in the website changelog with the same date, and that the newest
+  entry matches the package version. The website changelog gained the
+  missing 3.0.0 entry.
+- The extension's "loaded" and "connected" console lines now use `debug`
+  level, so a release build no longer writes to the console of every page.
+- `SECURITY.md` documents the threat model for the `<all_urls>` host
+  permission and for the cloud relay's wildcard CORS, anonymous tokens and
+  rate limits; `RELEASING.md` describes the Safari zip and the release gate.
+- `docs/e2e-testcases.md` gained a Safari parity phase (Phase S) for the
+  native Web Inspector build.
+- `packages/cli/README.md` states that 3.0.0 is the latest published npm
+  version and that 3.0.1 is unpublished until the maintainer runs
+  `npm publish`.
+
+### Fixed
+
+- Social-card previews (Open Graph and Twitter) on every page pointed at a
+  missing image; they now use `/og-image.png`.
+- Removed six unreferenced PNGs (~810 KB) from the website's public folder.
+
+### Security
+
+- `/api/auth/register` on the cloud relay is rate-limited per client address
+  (`DM_REGISTER_LIMIT` mints per `DM_REGISTER_WINDOW_S` seconds, default 5
+  per hour) and answers `429` with `Retry-After` when exceeded.
+- Patched production dependencies `proxy-addr`, `sharp` (0.35.5) and
+  `source-map-js`, and the dev dependency `shell-quote` via npm overrides.
+  `npm audit --omit=dev` reports no vulnerabilities.
+
 ## [3.0.1] — 2026-10-06
 
 ### Changed

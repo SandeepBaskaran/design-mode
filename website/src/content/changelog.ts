@@ -29,6 +29,19 @@ export const releases: Release[] = [
     ],
   },
   {
+    version: "3.0.0",
+    date: "2026-10-03",
+    headline: "Safari, cloud connections and a CLI.",
+    highlights: [
+      "Use Design Mode in Safari on Mac as a Web Inspector tab. Install the Safari ZIP from GitHub Releases as a temporary extension; Safari removes it after 24 hours or when it quits.",
+      "Connect a coding agent through the hosted relay or your own Redis relay, with no local companion running.",
+      "Set up Cloud, Local or Self-hosted MCP from the terminal with the new designmode-app CLI.",
+      "Send to Agent, Copy as Prompt and JSON export can include saved routes for the whole origin, not just the current page.",
+      "Saved edits now survive a reload in Firefox, and element comments stay attached to the element you left them on.",
+      "Release builds send a small set of anonymous feature events so we can see which features are used. No page content, selectors, comments or screenshots are sent.",
+    ],
+  },
+  {
     version: "2.3.1",
     date: "2026-09-20",
     headline: "A smoother homepage and clearer demo guidance.",

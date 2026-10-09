@@ -11,7 +11,7 @@ export const metadata = {
     url: "https://designmode.app/privacy",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",
@@ -25,7 +25,7 @@ export const metadata = {
       "How Design Mode stores browser edits, when Cloud or Local MCP traffic starts, what the relay retains, and which analytics events the website sends.",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",

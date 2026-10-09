@@ -84,7 +84,7 @@ export const metadata: Metadata = {
     url: "https://designmode.app",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",
@@ -97,7 +97,7 @@ export const metadata: Metadata = {
     site: "@sandeepbaskaran",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",

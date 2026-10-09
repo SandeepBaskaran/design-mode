@@ -1814,7 +1814,7 @@ async function connectLocal(port: number) {
         if (ws !== socket || transportMode !== 'local') return;
         localReconnectAttempt = 0;
         setAgentConnected(false);
-        console.log('[Design Mode] Connected to companion server');
+        console.debug('[Design Mode] Connected to companion server');
         // Back-fill everything recorded before the server came up (it is
         // spawned by the agent, usually after the user already edited).
         syncAllChanges();
@@ -1864,7 +1864,7 @@ async function runCloudStream() {
         if (resp.status === 401) { console.warn('[Design Mode] cloud stream auth failed'); return; }
         throw new Error(`stream status ${resp.status}`);
       }
-      console.log('[Design Mode] cloud stream open');
+      console.debug('[Design Mode] cloud stream open');
       backoff = 1000;
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();

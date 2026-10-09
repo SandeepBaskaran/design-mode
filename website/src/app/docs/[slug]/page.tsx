@@ -53,7 +53,7 @@ export async function generateMetadata({
       type: "article",
       images: [
         {
-          url: "/og-design-mode-inter-v3.png",
+          url: "/og-image.png",
           width: 1200,
           height: 630,
           alt: "Design Mode — The visual editor for all your agent’s work",
@@ -66,7 +66,7 @@ export async function generateMetadata({
       description,
       images: [
         {
-          url: "/og-design-mode-inter-v3.png",
+          url: "/og-image.png",
           width: 1200,
           height: 630,
           alt: "Design Mode — The visual editor for all your agent’s work",

@@ -9,12 +9,24 @@
 import { mintToken, storeToken } from '../../lib/auth.js';
 import { logEvent } from '../../lib/log.js';
 import { corsHeaders, preflight, withCors } from '../../lib/cors.js';
+import { clientAddress, consumeRegister } from '../../lib/quota.js';
 
 export const config = { runtime: 'nodejs' };
 
 export async function POST(req: Request): Promise<Response> {
   const started = Date.now();
   try {
+    // Unauthenticated endpoint: cap mints per client address before any
+    // KV row is written, so a scripted caller cannot fill the store.
+    const address = clientAddress(req);
+    const limit = await consumeRegister(address);
+    if (!limit.allowed) {
+      logEvent('auth.register.limited', { latencyMs: Date.now() - started, status: 429 });
+      return new Response(JSON.stringify({ error: 'too many registrations', retryAfterS: limit.retryAfterS }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': String(limit.retryAfterS), ...corsHeaders() },
+      });
+    }
     const { token, tenantId } = mintToken();
     await storeToken(token, tenantId);
     const proto = (req.headers.get('x-forwarded-proto') || 'https').split(',')[0];

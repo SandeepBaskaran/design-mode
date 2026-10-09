@@ -105,7 +105,7 @@ export function articleSchema(opts: {
     headline: opts.title,
     description: opts.description,
     url: opts.url,
-    image: `${SITE_URL}/og-design-mode-inter-v3.png`,
+    image: `${SITE_URL}/og-image.png`,
     ...(opts.datePublished ? { datePublished: opts.datePublished } : {}),
     ...(opts.dateModified ? { dateModified: opts.dateModified } : {}),
     author: { "@id": IDS.person },

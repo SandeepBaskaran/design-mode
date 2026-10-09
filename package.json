@@ -25,7 +25,7 @@
     "build:website": "cd website && npm run build",
     "package:extension": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-extension.zip && zip -rq ../design-mode-extension.zip . -x '*.DS_Store' -x '*.map'",
     "package:extension:firefox": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-addon.zip && zip -rq ../design-mode-addon.zip . -x '*.DS_Store' -x '*.map'",
-    "package:extension:all": "npm run package:extension && cp \"$(dirname \"$(realpath packages/extension/dist)\")/design-mode-extension.zip\" \"$(dirname \"$(realpath packages/extension/dist)\")/design-mode-addon.zip\"",
+    "package:extension:all": "npm run package:extension && cp \"$(dirname \"$(realpath packages/extension/dist)\")/design-mode-extension.zip\" \"$(dirname \"$(realpath packages/extension/dist)\")/design-mode-addon.zip\" && npm run package:extension:safari",
     "package:extension:release": "DM_DISTRIBUTION=published_hint npm run build:analytics --workspace @design-mode/extension && cd packages/extension/dist && rm -f ../design-mode-extension.zip ../design-mode-addon.zip && zip -rq ../design-mode-extension.zip . -x '*.DS_Store' -x '*.map' && cp ../design-mode-extension.zip ../design-mode-addon.zip && cd .. && DM_DISTRIBUTION=published_hint node build.mjs --safari --analytics && cd dist-safari && rm -f ../designmode-for-safari.zip && zip -rq ../designmode-for-safari.zip . -x '*.DS_Store' -x '*.map'",
     "lint:extension": "npm run build:extension && web-ext lint -s packages/extension/dist",
     "typecheck:extension": "npm --workspace @design-mode/extension run typecheck",
@@ -48,6 +48,9 @@
     "zod": "$zod",
     "@types/react": "^19.2.0",
     "@types/react-dom": "19.3.0",
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.10",
+    "shell-quote": "^1.12.0",
+    "sharp": "^0.35.5",
+    "postcss-selector-parser": "^7.1.6"
   }
 }

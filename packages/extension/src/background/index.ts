@@ -1006,4 +1006,6 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-console.log('[Design Mode] Background service worker loaded.');
+// debug level: hidden at the default DevTools verbosity so a release build
+// does not write to every service-worker console on load.
+console.debug('[Design Mode] Background service worker loaded.');

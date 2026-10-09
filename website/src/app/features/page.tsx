@@ -54,7 +54,7 @@ export const metadata = {
     url: "https://designmode.app/features",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",
@@ -68,7 +68,7 @@ export const metadata = {
       "Inspect and edit a rendered webpage with Layers, visual controls, structured change history, Copy as Prompt and MCP agent hand-off.",
     images: [
       {
-        url: "/og-design-mode-inter-v3.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Design Mode — The visual editor for all your agent’s work",

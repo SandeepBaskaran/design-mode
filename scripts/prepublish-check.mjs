@@ -178,6 +178,47 @@ step('design-mode.md matches AGENT_COMMAND_MARKDOWN', () => {
   }
 });
 
+// ── 4c. Website changelog in sync with CHANGELOG.md ───────────────────────
+// CHANGELOG.md is the source of truth. website/src/content/changelog.ts is a
+// designer-facing summary, so its wording is free — but every released
+// version and date must match, and the newest entry must be the package
+// version. This catches a release landing in one file but not the other.
+step('Website changelog matches CHANGELOG.md versions', () => {
+  const md = readFileSync(resolve(root, 'CHANGELOG.md'), 'utf8');
+  const released = [...md.matchAll(/^## \[(\d+\.\d+\.\d+)\] — (\d{4}-\d{2}-\d{2})$/gm)]
+    .map((m) => ({ version: m[1], date: m[2] }));
+  if (released.length === 0) throw new Error('No released versions found in CHANGELOG.md');
+
+  const ts = readFileSync(resolve(root, 'website/src/content/changelog.ts'), 'utf8');
+  const site = [...ts.matchAll(/version:\s*"(\d+\.\d+\.\d+)",\s*\n\s*date:\s*"(\d{4}-\d{2}-\d{2})"/g)]
+    .map((m) => ({ version: m[1], date: m[2] }));
+  const siteByVersion = new Map(site.map((r) => [r.version, r.date]));
+
+  const missing = released.filter((r) => !siteByVersion.has(r.version)).map((r) => r.version);
+  if (missing.length) {
+    throw new Error(`website/src/content/changelog.ts is missing release(s): ${missing.join(', ')}`);
+  }
+  const dateMismatch = released.filter((r) => siteByVersion.get(r.version) !== r.date);
+  if (dateMismatch.length) {
+    throw new Error(
+      `Release date mismatch between CHANGELOG.md and changelog.ts: ${dateMismatch
+        .map((r) => `${r.version} (md ${r.date}, site ${siteByVersion.get(r.version)})`)
+        .join('; ')}`,
+    );
+  }
+  const extra = site.filter((r) => !released.some((m) => m.version === r.version)).map((r) => r.version);
+  if (extra.length) {
+    throw new Error(`changelog.ts lists version(s) absent from CHANGELOG.md: ${extra.join(', ')}`);
+  }
+  if (site[0].version !== released[0].version) {
+    throw new Error(`changelog.ts newest entry is ${site[0].version}, CHANGELOG.md newest is ${released[0].version}`);
+  }
+  const pkgVersion = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version;
+  if (released[0].version !== pkgVersion) {
+    throw new Error(`CHANGELOG.md newest release is ${released[0].version} but package.json is ${pkgVersion}`);
+  }
+});
+
 // ── 5. Local MCP build (uses extra heap; package.json sets NODE_OPTIONS) ──
 step('Build local MCP server', () => {
   run('npm --workspace @design-mode/mcp-local run build', { stdio: 'pipe' });

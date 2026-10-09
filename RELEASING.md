@@ -69,19 +69,27 @@ recommending the bump:
 - Tag name: **always** `vMAJOR.MINOR.PATCH` (lowercase `v`, no
   pre-release suffix unless explicitly requested).
 - Release zip filenames: **always** `design-mode-extension.zip`
-  (Chrome Web Store) and `design-mode-addon.zip` (Firefox / AMO).
-  **They are byte-for-byte identical** — the single `dist/` + merged
-  `manifest.json` are valid Chrome and Firefox at once; the two names
-  exist only so each store gets a recognisable file.
-  `.github/workflows/release.yml` builds and attaches **both**
-  automatically when the tag is pushed. Never produce per-version
-  filenames; replace the existing assets.
+  (Chrome Web Store), `design-mode-addon.zip` (Firefox / AMO) and
+  `designmode-for-safari.zip` (Safari, GitHub Releases only).
+  The Chrome and Firefox zips are **byte-for-byte identical** — the
+  single `dist/` + merged `manifest.json` are valid Chrome and Firefox
+  at once; the two names exist only so each store gets a recognisable
+  file. The Safari zip is a separate `dist-safari/` build (Web Inspector
+  tab, no side panel). `.github/workflows/release.yml` builds and
+  attaches **all three** automatically when the tag is pushed. Never
+  produce per-version filenames; replace the existing assets.
+- The release workflow first runs `npm run verify` on the tagged commit
+  and checks that the tag matches the `version` in root `package.json`
+  and `packages/extension/public/manifest.json`. A tag on a commit that
+  fails either check publishes nothing — fix on `main`, delete the tag,
+  and re-tag the fixed commit.
 - **Before any push that includes extension changes (or any push
   preceding a release tag), regenerate the local zips:**
   `npm run package:extension:all` from repo root. This rebuilds the
-  extension once and overwrites both
-  `packages/extension/design-mode-extension.zip` and
-  `packages/extension/design-mode-addon.zip`. The zips are gitignored
+  extension and overwrites all three of
+  `packages/extension/design-mode-extension.zip`,
+  `packages/extension/design-mode-addon.zip` and
+  `packages/extension/designmode-for-safari.zip`. The zips are gitignored
   (they never land in the repo history), but fresh local copies are
   required so the maintainer can upload them to the stores immediately
   after the GitHub Release fires. Verify each file's mtime is newer

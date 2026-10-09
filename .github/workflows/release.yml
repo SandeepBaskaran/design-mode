@@ -17,6 +17,21 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      # Gate: the tagged commit must pass the same checks CI runs on main,
+      # and the tag must name the version the tree actually carries. A tag
+      # pushed on a red or mis-versioned commit fails here and publishes
+      # nothing, instead of shipping artifacts CI never approved.
+      - name: Verify tagged commit
+        run: npm run verify
+      - name: Check tag matches package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          MANIFEST="$(node -p "require('./packages/extension/public/manifest.json').version")"
+          if [ "$TAG" != "$PKG" ] || [ "$TAG" != "$MANIFEST" ]; then
+            echo "Tag v$TAG does not match package.json ($PKG) / manifest.json ($MANIFEST)" >&2
+            exit 1
+          fi
       - name: Package Chrome, Firefox and Safari releases
         env:
           DM_POSTHOG_HOST: ${{ secrets.DM_POSTHOG_HOST }}

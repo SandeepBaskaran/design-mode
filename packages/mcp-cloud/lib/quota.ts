@@ -48,6 +48,49 @@ export async function consumeBurst(tenantId: string): Promise<boolean> {
   return used <= BURST_LIMIT;
 }
 
+// Registration limiter. /api/auth/register is unauthenticated by design
+// (it is how a fresh install gets its first token), so it is the one
+// endpoint a stranger can hit without a credential. Every call writes a
+// KV row, so cap mints per client address per window. Override per
+// deployment via env without changing code.
+export const REGISTER_LIMIT = (() => {
+  const n = parseInt(process.env.DM_REGISTER_LIMIT || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 5;
+})();
+export const REGISTER_WINDOW_S = (() => {
+  const n = parseInt(process.env.DM_REGISTER_WINDOW_S || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 3600;
+})();
+
+// Vercel sets x-forwarded-for to the real client address (first hop);
+// x-real-ip is present too. Without either, fall back to a shared bucket
+// so a misconfigured proxy degrades to a global cap rather than no cap.
+export function clientAddress(req: Request): string {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0].trim();
+    if (first) return first;
+  }
+  const real = req.headers.get('x-real-ip');
+  if (real) return real.trim();
+  return 'unknown';
+}
+
+export interface RegisterLimitResult {
+  allowed: boolean;
+  used: number;
+  limit: number;
+  retryAfterS: number;
+}
+
+export async function consumeRegister(address: string): Promise<RegisterLimitResult> {
+  const c = await kv();
+  const key = `register:${address}`;
+  const used = await c.incr(key);
+  if (used === 1) { try { await c.expire(key, REGISTER_WINDOW_S); } catch { /* non-fatal */ } }
+  return { allowed: used <= REGISTER_LIMIT, used, limit: REGISTER_LIMIT, retryAfterS: REGISTER_WINDOW_S };
+}
+
 // Atomic increment + read. EXPIRE only fires on the first call of the
 // day (when the counter just became 1) so we don't keep extending the
 // TTL — the day's bucket dies a few minutes after midnight either way.
