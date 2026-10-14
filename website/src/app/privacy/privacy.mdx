@@ -171,14 +171,17 @@ off-switch. An unconfigured source build sends nothing. Analytics does not
 change what the editor can do. Coding-agent subscriptions, API usage and
 self-hosting costs are separate.
 
-Each event uses a fresh random ID, so the stream cannot measure unique people,
-sessions or retention. The event payload names the browser package as `chrome`,
-`firefox` or `safari` and omits page URLs, selectors, edits, comments, text,
-tokens and screenshots. It also omits raw user agent, browser version and OS.
-Ordinary HTTPS metadata may still disclose browser or device information, and
-the receiver sees the IP address. This source does not verify the receiver's
-retention, deletion or billing settings. The marketing site is a separate
-project and is not included in these extension events.
+To measure active installations (DAU/WAU/MAU), retention and feature adoption,
+the extension generates a persistent random UUID stored in `storage.local`
+(`dm-analytics-distinct-id`) and enables PostHog person profiles
+(`$process_person_profile: true`) and IP-based GeoIP enrichment
+(`$geoip_disable: false`). The event payload includes the browser package
+(`chrome`, `firefox` or `safari`), extension version, distribution hint,
+validated language, timezone and `navigator.userAgent` (`$raw_user_agent`), while
+omitting page URLs, selectors, edits, comments, text, tokens and screenshots.
+This source does not verify the receiver's retention, deletion or billing
+settings. The marketing site is a separate project and is not included in these
+extension events.
 
 ## What designmode.app collects
 

@@ -13,9 +13,25 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - Four source-backed comparison pages: Design Mode vs EditUI, Airship,
   LayerDock and Vex (`/compare/design-mode-vs-editui`, `-airship`,
   `-layerdock`, `-vex`). Each records what was checked, when, and where.
+- Extension analytics schema v3: bounded events for Copy as Prompt
+  (`dm_copy_prompt`), element/region annotation entry (`dm_annotate`), design
+  token edits (`dm_token_edit` with `scope`), Computed CSS open and copy
+  (`dm_computed_css` with `action`), theme switches (`dm_theme`), Help view
+  clicks (`dm_help` with `target`), matching-layers toggles
+  (`dm_matching_layers`), and media download/copy (`dm_media` with `action`
+  and `media`).
 
 ### Changed
 
+- Extension analytics now persists a random installation UUID
+  (`dm-analytics-distinct-id` in `storage.local`) and enables PostHog person
+  profiles (`$process_person_profile: true`), GeoIP enrichment
+  (`$geoip_disable: false`), and bounded `$raw_user_agent` capture to support
+  DAU/WAU/MAU, retention cohorts, and feature funnels while keeping page URLs,
+  DOM content, selectors, tokens, and MCP payloads excluded.
+- Removed the disclosure-only Usage analytics section from the extension's
+  Settings view; analytics disclosure remains in `PRIVACY.md` (linked from
+  Help) and store listings.
 - The website's "also available for" banner follows the visitor's browser,
   like the install button: it names the two browsers you are not using
   (Chrome and Firefox on Safari, Chrome and Safari on Firefox, Firefox and

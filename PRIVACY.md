@@ -22,7 +22,7 @@ Editor data and preferences live on **your machine**, in the browser's extension
 
 | Storage area              | What's there                                                                        | Lifetime                       |
 | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ |
-| `chrome.storage.local`    | UI preferences: `dm-theme`, `dm-color-format`, `dm-capture-mode`, active Tokens-panel tab (`dm-tokens-tab`), inspector overlay colours (`dm-inspector-hover-color`, `dm-inspector-select-color`, `dm-overlay-margin-color`, `dm-overlay-padding-color`), contrast-checker settings (`dm-a11y-category`, `dm-a11y-level`), nudge-amount (`dm-nudge-amount`), page-cursor toggle (`dm-custom-cursor`), Chrome launch surface (`dm-launch-surface`: `side-panel` / `floating` / `picture-in-picture`), pop-out window bounds (`dm-popout-bounds`), pinned PiP window size + support flag (`dm-pip-size`, `dm-pip-unsupported`) | Until you uninstall the ext.   |
+| `chrome.storage.local`    | UI preferences and installation analytics ID: `dm-analytics-distinct-id` (persistent random UUID for usage analytics), `dm-theme`, `dm-color-format`, `dm-capture-mode`, active Tokens-panel tab (`dm-tokens-tab`), inspector overlay colours (`dm-inspector-hover-color`, `dm-inspector-select-color`, `dm-overlay-margin-color`, `dm-overlay-padding-color`), contrast-checker settings (`dm-a11y-category`, `dm-a11y-level`), nudge-amount (`dm-nudge-amount`), page-cursor toggle (`dm-custom-cursor`), Chrome launch surface (`dm-launch-surface`: `side-panel` / `floating` / `picture-in-picture`), pop-out window bounds (`dm-popout-bounds`), pinned PiP window size + support flag (`dm-pip-size`, `dm-pip-unsupported`) | Until you uninstall the ext.   |
 | `chrome.storage.sync`     | User-saved presets you opt to sync across devices                                   | Synced via your browser's sync account (Chrome Sync / Firefox Sync) |
 | `chrome.storage.session`  | Per-page edit sessions (style/text/DOM changes), keyed by `origin + path + search`  | Until tab/browser closes       |
 
@@ -116,14 +116,13 @@ A release build sends usage events to PostHog without a separate opt-in. It is n
 
 Release builds include the PostHog project and send these events without a settings opt-in. An ordinary source build with no project configuration still sends nothing. Project 629592 is the extension-only destination. The public project token is embedded in the release packages, not printed in documentation. See [ANALYTICS.md](packages/extension/ANALYTICS.md). This source does not verify the receiver's billing or retention settings.
 
-The extension sends only a fixed event schema: bounded feature names,
-attempt/command_acknowledged/failure or MCP-state outcomes, bounded friction
-reasons, MCP mode and state when applicable, and the browser package (`chrome`, `firefox` or `safari`; Edge, Brave and Arc use the Chrome package), validated
-browser language and Intl timezone when available (which may suggest a region),
-extension version, schema version 2, `extension` surface, and a best-effort distribution label.
+The extension sends a bounded event schema: feature names,
+attempt/command_acknowledged/failure or state outcomes, bounded friction
+reasons, MCP mode and state when applicable, the browser package (`chrome`, `firefox` or `safari`; Edge, Brave and Arc use the Chrome package), validated
+browser language, Intl timezone, and `navigator.userAgent` (`$raw_user_agent`, bounded to 512 printable ASCII characters) when available,
+extension version, schema version 3, `extension` surface, and a best-effort distribution label.
 Event names describe the action (for example `dm_style_edit`, `dm_send_to_agent`)
-rather than the generic `dm_feature`; outcomes remain separate. No raw user agent,
-browser version, OS or certain Brave identification is collected. Language is
+rather than the generic `dm_feature`; outcomes remain separate. Language is
 bounded to 35 characters with no private-use subtags; timezone to 64 and validated
 by Intl. Invalid/unavailable metadata is omitted.
 `command_acknowledged` means only a command returned without a reported error,
@@ -137,24 +136,22 @@ installation**. No extra browser permission is requested to classify installs.
 There is **no autocapture, session replay, pageview tracking, remote SDK code,
 feature-flag fetching, or exception reporting**. Events cannot include page URLs,
 selectors, comments, text, edits, design/authentication tokens, screenshots, raw
-errors, MCP payloads, account IDs or extension IDs. PostHog requires a distinct ID;
-we generate a new random ID for every event, never persist it or correlate devices,
-and disable person profiles and GeoIP enrichment. This deliberately cannot measure
-unique users, retention cohorts, sessions or user-level funnels: aggregate-only
-measurement, with no persistent or session tracking identity. As with any HTTPS request, the receiver still
-sees your IP address and ordinary transport metadata. This is not a promise of
-network-level anonymity. Cookies and referrers are omitted; redirects are rejected.
+errors, MCP payloads, account IDs or extension IDs. To measure active users (DAU/WAU/MAU),
+retention cohorts and feature funnels, the extension generates a random UUID on first use
+and persists it in `chrome.storage.local` under `dm-analytics-distinct-id` as the PostHog
+`distinct_id`. PostHog person profile processing (`$process_person_profile: true`) and
+IP-based GeoIP enrichment (`$geoip_disable: false`) are enabled, associating the installation ID
+with environment metadata (`browser`, `browser_vendor`, `version`, `distribution`, `language`,
+`timezone`, `$raw_user_agent`) and IP-derived location. Cookies and referrers are omitted; redirects are rejected.
 
 The sole sender is the background context. Events are best-effort, capped at 60
-per minute per live background context and four in flight; there is no disk queue,
-retry, beacon, or saved analytics identifier. Closing or restarting that context
-can lose events and resets its in-memory rate limit. The release build has no
+per minute per live background context and four in flight; there is no disk event queue,
+retry, or beacon. Closing or restarting that context
+can lose in-flight events and resets its in-memory rate limit. The release build has no
 Settings off-switch. On Firefox, sending continues only when the browser does
 not report a data-collection permission list, or that list includes
 `locationInfo`. A reported list without `locationInfo` sends nothing. Already
-received requests cannot be recalled. The event payload does not include raw
-user agent, browser version or OS; ordinary HTTPS metadata may still disclose
-browser or device information.
+received requests cannot be recalled.
 
 Firefox declares `locationInfo` as required data collection and
 `technicalAndInteraction` as optional. That declaration covers analytics

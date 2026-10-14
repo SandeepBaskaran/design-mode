@@ -81,7 +81,7 @@ No remote scripts, autocapture, replay, surveys, feature flags or error SDK exis
 CSP is not relaxed; existing host permissions already cover the configured HTTPS
 receiver and the existing CSP does not restrict `connect-src`.
 
-Events use schema version `2`, surface `extension`. Stable semantic names at the existing real panel hooks replace `dm_feature`:
+Events use schema version `3`, surface `extension`. Stable semantic names at the panel hooks map `feature` to `event`:
 
 | Feature | Event |
 | --- | --- |
@@ -97,40 +97,53 @@ Events use schema version `2`, surface `extension`. Stable semantic names at the
 | send_to_agent | `dm_send_to_agent` |
 | feedback_stop | `dm_feedback_stop` |
 | mcp_state | `dm_mcp_state` |
+| copy_prompt | `dm_copy_prompt` |
+| annotate | `dm_annotate` |
+| token_edit | `dm_token_edit` |
+| computed_css | `dm_computed_css` |
+| theme | `dm_theme` |
+| help | `dm_help` |
+| matching_layers | `dm_matching_layers` |
+| media | `dm_media` |
 
-Outcome remains a separate property; names do not imply success. Existing hooks are unchanged, not new instrumentation of unobserved actions.
+Outcome remains a separate property; names do not imply success.
 
 - `feature`: inspect, style, text, dom, comment, import, export, screenshot, undo,
-  redo, send_to_agent, feedback_stop, mcp_state.
+  redo, send_to_agent, feedback_stop, mcp_state, copy_prompt, annotate, token_edit,
+  computed_css, theme, help, matching_layers, media.
 - `outcome`: attempt, command_acknowledged, failure, state, clipboard_completed,
   clipboard_failed, download_initiated, download_failed.
 - Optional `reason`: unavailable, rejected, offline, waiting_for_agent, busy.
-- Optional `mode`: local, cloud, self-hosted. Optional `state`: offline, running,
-  connected. These are extension-observed state, not server diagnostics.
-- `browser`: `firefox` (the central `IS_FIREFOX` flag), `chrome` when UA-CH
-  explicitly advertises Google Chrome, `chromium` when only that family is known,
-  otherwise `unknown`. `browser_vendor`: `Mozilla`, `Google`, or `unknown`.
-  These are best-effort reported signals, not brand attestation: Brave is never
-  identified with certainty; privacy modes may suppress or imitate brands.
+- Optional `mode`: local, cloud, self-hosted.
+- Optional `state`: offline, running, connected (for `mcp_state`); dark, light,
+  system (for `theme`); on, off (for `matching_layers`).
+- Optional `action`: open, copy, download (distinguishes `dm_computed_css` open vs
+  copy, and `dm_media` download vs copy).
+- Optional `kind`: element, region (for `dm_annotate`).
+- Optional `scope`: root, theme, component (for `dm_token_edit`).
+- Optional `target`: shortcuts, copy_diagnostics, file_access_settings, readme,
+  privacy, issues, email, back (for `dm_help`).
+- Optional `media`: svg, image, video, audio, background (for `dm_media`).
+- Optional `resolved`: dark, light (for `dm_theme`).
+- `browser`: `safari`, `firefox`, or `chrome` (from build-time target flags).
+  `browser_vendor`: `Apple`, `Mozilla`, or `Google`.
 - Optional `language`: validated `navigator.language` (maximum 35 characters,
   canonical Intl locale base name; no private-use or extension subtags). Optional
   `timezone`: Intl-resolved zone, maximum 64 characters, syntactically bounded and
-  validated by Intl; invalid/unavailable values are omitted. Zone can suggest a
-  region. No geolocation API, raw user agent, UA-CH version, browser version or OS
-  is sent. Metadata is collected by the background only after consent, never
-  trusted from incoming events.
+  validated by Intl; invalid/unavailable values are omitted. Optional
+  `$raw_user_agent`: bounded printable ASCII `navigator.userAgent` (maximum 512
+  characters). Metadata is collected by the background, never trusted from incoming events.
 - `version`: extension manifest version; `distribution`: hints described above.
-  No extension ID or user ID.
-- `$process_person_profile: false`, `$geoip_disable: true`; fresh random
-  `distinct_id` **for each event**, not stored or linked to MCP credentials.
+  No extension ID or account user ID.
+- `$process_person_profile: true`, `$geoip_disable: false`, and `$set` with
+  environment/version properties; persistent random installation `distinct_id`
+  stored in `storage.local` under `dm-analytics-distinct-id` (not linked to MCP credentials).
 
 Extra keys and unrecognized optional values are dropped; unknown features or
 outcomes are rejected. No page URL, referrer, selector, DOM/HTML/text, comment,
 content/token/auth value, screenshot, raw error or MCP message is copied. IP and
-normal request metadata remain visible to the receiver; no network anonymity is
-claimed. This is **aggregate-only** measurement. Per-event IDs prevent unique-user
-analytics, retention cohorts, session analysis and cross-event funnels. No
-persistent or session tracking identity is authorized or implemented.
+normal request metadata remain visible to the receiver; GeoIP enrichment and
+person profiles are enabled to support DAU/WAU/MAU, retention cohorts, and funnels.
 
 Panel hooks cover allowlisted command attempts and responses. A no-error response
 is only `command_acknowledged`, including empty/no-op responses: it is **not**
@@ -167,21 +180,15 @@ regranting alone never enables it. If both storage writes fail, the same unresol
 persistence limitation applies after native permission is regranted and the worker
 restarts.
 
-## Chrome and Firefox consent
+## Disclosure and native Firefox permission
 
-The in-product switch starts off, has a full inline disclosure and a named receiver,
-and is optional for all functionality. It is unavailable until config and consent
-state are loaded. In Firefox, `permissions.getAll().data_collection` presence
+Usage analytics disclosure lives in `PRIVACY.md` (linked from the extension Help view)
+and in browser store listings. There is no separate Usage analytics section in the
+extension Settings view. In Firefox, `permissions.getAll().data_collection` presence
 feature-detects native support, per Mozilla's guidance (no UA version guess).
-Native `technicalAndInteraction` and `locationInfo` permissions are requested synchronously from the
-click before any await. Native permission **and** the app switch are necessary.
-Firefox 121–139 falls back to the same explicit in-product consent disclosure.
-The manifest uses required `none` with optional `technicalAndInteraction` (an empty
-required array fails web-ext schema validation). Optional `locationInfo` is also
-declared and required by our native gate because timezone can reveal a region;
-Mozilla lists region under location. Language/browser settings and action events
-fall under technical/interaction data. Both permissions and fresh scope-2 local
-consent are required before any event. `strict_min_version` remains 121.
+The manifest declares `data_collection_permissions.required: ["locationInfo"]` and
+`optional: ["technicalAndInteraction"]`; `nativeConsentAllowed()` requires `locationInfo`
+when `data_collection` is present. `strict_min_version` remains 121.
 
 ## Verification
 
@@ -199,22 +206,18 @@ Run from the repository root:
 npm run test:extension
 npm run build:extension
 npm exec --no -- web-ext lint -s packages/extension/dist
-node packages/extension/tests/analytics-browser.mjs
 node packages/extension/tests/analytics-firefox.mjs
 HEADFUL=1 CHROME_BIN='/path/to/Chrome for Testing' node packages/extension/tests/analytics-popout.mjs
 ```
 
 Analytics tests run as part of the standard extension test globs. Tests cover
 invalid/default config, payload scrubbing, zero fetch calls without gates, changed
-project, Chrome/native Firefox/121 fallback, denied native consent, UI switch
-state, pending-check invalidation, in-flight abort, no retry, rate cap, restart,
+project, Chrome/native Firefox/121 fallback, denied native consent,
+pending-check invalidation, in-flight abort, no retry, rate cap, restart,
 and merged-manifest retention. A configured transport test uses a real loopback
 HTTP receiver via an injected fetch adapter: its only destination is 127.0.0.1;
 the production parser still accepts HTTPS origins only. No real PostHog call is
-made. UI unit tests compile the real setting module with mocked browser APIs;
-they are not proof of installed native permission dialogs. The Chromium DOM probe
-checks the rendered switch/disclosure and all five consent configurations with
-mock browser APIs. The installed Firefox MV3 probe checks actual native permission
+made. The installed Firefox MV3 probe checks actual native permission
 revocation and storage with a mocked analytics fetch (only its test report goes
 to loopback). The installed Chromium MV3 popout probe uses a disposable fixture extension with
 the production sender guard and transport, real runtime sender metadata, and a
