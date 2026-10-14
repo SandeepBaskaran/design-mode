@@ -26,6 +26,7 @@ import {
 const analytics = createAnalytics(analyticsConfig, {
   readConsent: async () => undefined,
   permissions: () => IS_FIREFOX ? browser.permissions.getAll() as Promise<DataPermissions> : Promise.resolve({}),
+  storage: browser.storage.local,
   firefox: IS_FIREFOX, safari: IS_SAFARI, manifest: browser.runtime.getManifest(), fetch: (...args) => fetch(...args),
 });
 browser.permissions.onRemoved.addListener(() => {

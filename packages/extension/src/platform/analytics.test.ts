@@ -61,7 +61,15 @@ test('config is absent by default and rejects unsafe/incomplete endpoints', () =
 });
 
 test('allowlist strips page content, URLs, selectors, tokens and raw errors', () => {
-  assert.deepEqual(boundedEvent({ ...event, url: 'https://private.invalid', selector: '#secret', text: 'secret', comment: 'secret', token: 'secret', screenshot: 'secret', error: 'secret', reason: 'secret', mode: 'secret', state: 'secret' }), event);
+  assert.deepEqual(boundedEvent({ ...event, url: 'https://private.invalid', selector: '#secret', text: 'secret', comment: 'secret', token: 'secret', screenshot: 'secret', error: 'secret', reason: 'secret', mode: 'secret', state: 'secret', action: 'secret', kind: 'secret', scope: 'secret', target: 'secret', media: 'secret', resolved: 'secret' }), event);
+  assert.deepEqual(boundedEvent({ feature: 'computed_css', outcome: 'attempt', action: 'open' }), { feature: 'computed_css', outcome: 'attempt', action: 'open' });
+  assert.deepEqual(boundedEvent({ feature: 'computed_css', outcome: 'clipboard_completed', action: 'copy' }), { feature: 'computed_css', outcome: 'clipboard_completed', action: 'copy' });
+  assert.deepEqual(boundedEvent({ feature: 'annotate', outcome: 'attempt', kind: 'region' }), { feature: 'annotate', outcome: 'attempt', kind: 'region' });
+  assert.deepEqual(boundedEvent({ feature: 'token_edit', outcome: 'command_acknowledged', scope: 'theme' }), { feature: 'token_edit', outcome: 'command_acknowledged', scope: 'theme' });
+  assert.deepEqual(boundedEvent({ feature: 'theme', outcome: 'state', state: 'system', resolved: 'dark' }), { feature: 'theme', outcome: 'state', state: 'system', resolved: 'dark' });
+  assert.deepEqual(boundedEvent({ feature: 'help', outcome: 'attempt', target: 'shortcuts' }), { feature: 'help', outcome: 'attempt', target: 'shortcuts' });
+  assert.deepEqual(boundedEvent({ feature: 'matching_layers', outcome: 'state', state: 'on' }), { feature: 'matching_layers', outcome: 'state', state: 'on' });
+  assert.deepEqual(boundedEvent({ feature: 'media', outcome: 'download_initiated', action: 'download', media: 'svg' }), { feature: 'media', outcome: 'download_initiated', action: 'download', media: 'svg' });
   assert.equal(boundedEvent({ feature: 'secret', outcome: 'attempt' }), null);
   assert.equal(boundedEvent({ feature: 'import', outcome: 'secret' }), null);
 });
@@ -110,20 +118,30 @@ test('configured transport reaches ONLY a loopback mock; opt-out clears pending 
     return fetch('http://127.0.0.1:' + address.port + '/i/v0/e/', init);
   };
   try {
-    const analytics = createAnalytics(config, { ...base, fetch: localFetch });
+    const store: Record<string, unknown> = {};
+    const storage = {
+      get: async (key: string) => ({ [key]: store[key] }),
+      set: async (value: Record<string, unknown>) => { Object.assign(store, value); },
+    };
+    const analytics = createAnalytics(config, { ...base, storage, fetch: localFetch });
     await analytics.capture(event); await analytics.capture({ feature: 'send_to_agent', outcome: 'failure', reason: 'offline' });
     analytics.stop(); await analytics.capture(event);
     assert.equal(received.length, 2);
-    assert.notEqual(received[0].body.distinct_id, received[1].body.distinct_id);
-    assert.equal(received[0].body.properties.$process_person_profile, false);
-    assert.equal(received[0].body.properties.$geoip_disable, true);
+    assert.equal(received[0].body.distinct_id, received[1].body.distinct_id);
+    assert.equal(received[0].body.distinct_id, store['dm-analytics-distinct-id']);
+    assert.equal(received[0].body.properties.$process_person_profile, true);
+    assert.equal(received[0].body.properties.$geoip_disable, false);
     assert.equal(received[0].body.properties.surface, 'extension');
     assert.equal(requests[0].credentials, 'omit');
     assert.equal(requests[0].redirect, 'error');
     assert.equal(requests[0].referrerPolicy, 'no-referrer');
+    const restartedWithStore = createAnalytics(config, { ...base, storage, fetch: localFetch });
+    await restartedWithStore.capture(event);
+    assert.equal(received.length, 3);
+    assert.equal(received[2].body.distinct_id, received[0].body.distinct_id);
     const pending = createAnalytics(config, { ...base, fetch: localFetch });
     const task = pending.capture(event); pending.stop(); await task;
-    assert.equal(received.length, 2);
+    assert.equal(received.length, 3);
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
 });
 

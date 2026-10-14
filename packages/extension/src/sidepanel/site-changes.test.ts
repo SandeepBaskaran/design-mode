@@ -27,6 +27,7 @@ function group(url: string, styleChanges: any[] = [], textChanges: any[] = [], c
 function harness(safari = false) {
   const messages: any[] = [];
   const toasts: any[] = [];
+  const tracked: any[] = [];
   const context = createContext({ beginInspectorOperation, runInspectorAction, IS_SAFARI: safari, writeInspectorTextClipboard,
     URL, Map, Set, Date, console, activeRouteKey: a, changesPageUrl: a,
     routeGroups: [group(b, [{ selector: 'h1', property: 'color', oldValue: 'red', newValue: 'blue' }])],
@@ -38,12 +39,13 @@ function harness(safari = false) {
     escapeAttr: (s: unknown) => String(s).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;'),
     icon: (name: string) => `<svg data-icon="${name}"></svg>`,
     render() {}, refreshDomTree() {}, refreshState() {},
+    trackFeature: (ev: any) => tracked.push(ev),
     root: { querySelector() { return null; } }, navigator: { clipboard: { async writeText(value: string) { context.copied = value; } } },
     send: async (message: any) => { messages.push(message); return { success: true, styleChanges: [], comments: [], routeGroups: [] }; },
     showCaptureToast: (...args: any[]) => toasts.push(args),
   });
   runInContext(compiled, context);
-  return { context, messages, toasts };
+  return { context, messages, toasts, tracked };
 }
 
 describe('site-wide changes panel', () => {
@@ -155,7 +157,7 @@ describe('site-wide changes panel', () => {
 
   for (const safari of [false, true]) {
     it(`requests site-wide prompt output rather than a filtered visible subset (${safari ? 'Safari' : 'Chrome/Firefox'})`, async t => {
-      const { context: c, messages } = harness(safari);
+      const { context: c, messages, tracked } = harness(safari);
       const expected = `# ${a}\nchange\n# ${b}\nchange`;
       let clipboardStarted = false;
       let release!: (value: any) => void;
@@ -186,6 +188,10 @@ describe('site-wide changes panel', () => {
       release({ output: expected });
       await pending;
       assert.deepEqual(JSON.parse(JSON.stringify(messages)), [{ type: 'SP_EXPORT', format: 'markdown', scope: 'site' }]);
+      assert.deepEqual(JSON.parse(JSON.stringify(tracked)), [
+        { feature: 'copy_prompt', outcome: 'attempt' },
+        { feature: 'copy_prompt', outcome: 'clipboard_completed' },
+      ]);
       assert.equal(c.copied, expected);
       assert.ok(c.copied.includes(b));
     });

@@ -1,20 +1,42 @@
 export const ANALYTICS_CONSENT_KEY = 'dm-analytics-consent-v1';
+export const ANALYTICS_DISTINCT_ID_KEY = 'dm-analytics-distinct-id';
 export type AnalyticsConfig = { host: string; key: string; distribution?: string };
 export type Consent = { enabled: true; host: string; key: string; version: 2 };
 export type DataPermissions = { data_collection?: string[] };
-export type AnalyticsEvent = { feature: string; outcome: string; reason?: string; mode?: string; state?: string };
+export type AnalyticsEvent = {
+  feature: string;
+  outcome: string;
+  reason?: string;
+  mode?: string;
+  state?: string;
+  action?: string;
+  kind?: string;
+  scope?: string;
+  target?: string;
+  media?: string;
+  resolved?: string;
+};
 
 const eventNames: Readonly<Record<string, string>> = Object.freeze({
   inspect: 'dm_inspect', style: 'dm_style_edit', text: 'dm_text_edit', dom: 'dm_dom_edit',
   comment: 'dm_comment_update', import: 'dm_changes_import', export: 'dm_changes_export',
   screenshot: 'dm_screenshot', undo: 'dm_undo', redo: 'dm_redo',
   send_to_agent: 'dm_send_to_agent', feedback_stop: 'dm_feedback_stop', mcp_state: 'dm_mcp_state',
+  copy_prompt: 'dm_copy_prompt', annotate: 'dm_annotate', token_edit: 'dm_token_edit',
+  computed_css: 'dm_computed_css', theme: 'dm_theme', help: 'dm_help',
+  matching_layers: 'dm_matching_layers', media: 'dm_media',
 });
 const features = Object.keys(eventNames);
 const outcomes = ['attempt', 'command_acknowledged', 'clipboard_completed', 'clipboard_failed', 'download_initiated', 'download_failed', 'failure', 'state'];
 const reasons = ['unavailable', 'rejected', 'offline', 'waiting_for_agent', 'busy'];
 const modes = ['local', 'cloud', 'self-hosted'];
-const states = ['offline', 'running', 'connected'];
+const states = ['offline', 'running', 'connected', 'dark', 'light', 'system', 'on', 'off'];
+const actions = ['open', 'copy', 'download'];
+const kinds = ['element', 'region'];
+const scopes = ['root', 'theme', 'component'];
+const targets = ['shortcuts', 'copy_diagnostics', 'file_access_settings', 'readme', 'privacy', 'issues', 'email', 'back'];
+const medias = ['svg', 'image', 'video', 'audio', 'background'];
+const resolvedThemes = ['dark', 'light'];
 
 export function parseAnalyticsConfig(value: unknown): AnalyticsConfig | null {
   if (!value || typeof value !== 'object') return null;
@@ -74,6 +96,12 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
   if (reasons.includes(e.reason || '')) result.reason = e.reason;
   if (modes.includes(e.mode || '')) result.mode = e.mode;
   if (states.includes(e.state || '')) result.state = e.state;
+  if (actions.includes(e.action || '')) result.action = e.action;
+  if (kinds.includes(e.kind || '')) result.kind = e.kind;
+  if (scopes.includes(e.scope || '')) result.scope = e.scope;
+  if (targets.includes(e.target || '')) result.target = e.target;
+  if (medias.includes(e.media || '')) result.media = e.media;
+  if (resolvedThemes.includes(e.resolved || '')) result.resolved = e.resolved;
   return result;
 }
 
@@ -82,9 +110,10 @@ export const messageFeatures: Readonly<Record<string, string>> = Object.freeze({
   SP_DOM_ACTION: 'dom', SP_UPDATE_COMMENT: 'comment', SP_SET_COMMENT_RESOLVED: 'comment', SP_IMPORT_CHANGES: 'import',
   SP_EXPORT: 'export', SP_SCREENSHOT: 'screenshot', SP_UNDO: 'undo',
   SP_REDO: 'redo', SP_SEND_TO_AGENT: 'send_to_agent', SP_STOP_FEEDBACK_SESSION: 'feedback_stop',
+  SP_SET_ROOT_VAR: 'token_edit', SP_GET_COMPUTED_CSS: 'computed_css',
 });
 
-type Environment = { language?: unknown; brands?: readonly { brand: string }[]; timeZone?: unknown };
+type Environment = { language?: unknown; brands?: readonly { brand: string }[]; timeZone?: unknown; userAgent?: unknown };
 
 export function environmentProperties(firefox: boolean, environment: Environment, safari = false) {
   const browser = safari ? 'safari' : firefox ? 'firefox' : 'chrome';
@@ -101,6 +130,10 @@ export function environmentProperties(firefox: boolean, environment: Environment
     try { result.timezone = new Intl.DateTimeFormat('en', { timeZone }).resolvedOptions().timeZone; }
     catch { /* Omit unsupported zones. */ }
   }
+  const userAgent = environment.userAgent;
+  if (typeof userAgent === 'string' && userAgent.length > 0 && userAgent.length <= 512 && /^[\x20-\x7E]+$/.test(userAgent)) {
+    result.$raw_user_agent = userAgent;
+  }
   return result;
 }
 
@@ -108,13 +141,21 @@ function runtimeEnvironment(): Environment {
   const nav = typeof navigator === 'undefined' ? undefined : navigator as Navigator & { userAgentData?: { brands?: { brand: string }[] } };
   let timeZone: string | undefined;
   try { timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* Optional metadata. */ }
-  return { language: nav?.language, brands: nav?.userAgentData?.brands, timeZone };
+  return { language: nav?.language, brands: nav?.userAgentData?.brands, timeZone, userAgent: nav?.userAgent };
 }
+
+export type DistinctIdStorage = {
+  get: (key: string) => Promise<Record<string, unknown>>;
+  set: (value: Record<string, unknown>) => Promise<unknown>;
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Dependencies = {
   environment?: () => Environment;
   readConsent: () => Promise<unknown>;
   permissions: () => Promise<DataPermissions>;
+  storage?: DistinctIdStorage;
   firefox: boolean;
   safari?: boolean;
   manifest: { version: string; update_url?: string };
@@ -127,6 +168,32 @@ export function createAnalytics(config: AnalyticsConfig | null, deps: Dependenci
   const active = new Set<AbortController>();
   let windowStart = 0;
   let count = 0;
+  let cachedDistinctId: string | null = null;
+  let distinctIdPending: Promise<string> | null = null;
+  function resolveDistinctId(): Promise<string> {
+    if (cachedDistinctId) return Promise.resolve(cachedDistinctId);
+    if (distinctIdPending) return distinctIdPending;
+    distinctIdPending = (async () => {
+      if (deps.storage) {
+        try {
+          const record = await deps.storage.get(ANALYTICS_DISTINCT_ID_KEY);
+          const existing = record?.[ANALYTICS_DISTINCT_ID_KEY];
+          if (typeof existing === 'string' && UUID_RE.test(existing)) {
+            cachedDistinctId = existing;
+            return existing;
+          }
+        } catch { /* Fall back to generated UUID if storage read fails. */ }
+      }
+      const next = crypto.randomUUID();
+      cachedDistinctId = next;
+      if (deps.storage) {
+        try { await deps.storage.set({ [ANALYTICS_DISTINCT_ID_KEY]: next }); }
+        catch { /* Keep in-memory ID for this session if storage write fails. */ }
+      }
+      return next;
+    })();
+    return distinctIdPending;
+  }
   function stop() {
     generation++;
     blocked = true;
@@ -141,6 +208,8 @@ export function createAnalytics(config: AnalyticsConfig | null, deps: Dependenci
     try {
       if (!nativeConsentAllowed(deps.firefox, await deps.permissions())) return;
       if (epoch !== generation || blocked || active.size >= 4) return;
+      const distinctId = await resolveDistinctId();
+      if (epoch !== generation || blocked || active.size >= 4) return;
       const now = Date.now();
       if (now - windowStart >= 60_000) { count = 0; windowStart = now; }
       if (count >= 60) return;
@@ -149,14 +218,24 @@ export function createAnalytics(config: AnalyticsConfig | null, deps: Dependenci
       active.add(controller);
       const timeout = setTimeout(() => controller.abort(), 5000);
       try {
-        // Per-event randomness deliberately prevents cross-event/device identity.
+        const envProps = environmentProperties(deps.firefox, (deps.environment || runtimeEnvironment)(), deps.safari);
+        const distribution = distributionHint(config, deps.manifest);
+        const personProps: Record<string, string> = {
+          browser: envProps.browser,
+          browser_vendor: envProps.browser_vendor,
+          version: deps.manifest.version,
+          distribution,
+        };
+        if (envProps.language) personProps.language = envProps.language;
+        if (envProps.timezone) personProps.timezone = envProps.timezone;
+        if (envProps.$raw_user_agent) personProps.$raw_user_agent = envProps.$raw_user_agent;
         await deps.fetch(config.host + '/i/v0/e/', {
           method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error',
           headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
-          body: JSON.stringify({ api_key: config.key, distinct_id: crypto.randomUUID(), event: eventNames[event.feature],
-            properties: { ...event, schema_version: 2, surface: 'extension',
-              ...environmentProperties(deps.firefox, (deps.environment || runtimeEnvironment)(), deps.safari), version: deps.manifest.version,
-              distribution: distributionHint(config, deps.manifest), $process_person_profile: false, $geoip_disable: true } }),
+          body: JSON.stringify({ api_key: config.key, distinct_id: distinctId, event: eventNames[event.feature],
+            properties: { ...event, schema_version: 3, surface: 'extension',
+              ...envProps, version: deps.manifest.version,
+              distribution, $set: personProps, $process_person_profile: true, $geoip_disable: false } }),
         });
       } finally { clearTimeout(timeout); active.delete(controller); }
     } catch { /* Analytics must never affect an editor action; no retry or error payload. */ }

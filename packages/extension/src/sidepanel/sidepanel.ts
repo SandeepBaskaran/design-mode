@@ -11,7 +11,6 @@ import '../platform/polyfill';
 import { browser } from '../platform/panel-api';
 import { IS_CHROME, IS_FIREFOX, IS_SAFARI } from '../platform/target';
 import { commandOutcome, messageFeatures, type AnalyticsEvent } from '../platform/analytics';
-import { renderAnalyticsSetting } from './analytics-setting';
 import { openPanel, preparePanelTarget } from '../platform/panel';
 import { detectLaunchCapabilities, supportedLaunchSurface, pipFailureMessage } from '../platform/launch-capabilities';
 import {
@@ -824,21 +823,31 @@ function trackMcpState() {
   lastAnalyticsMcpState = current;
   trackFeature({ feature: 'mcp_state', outcome: 'state', mode: mcpMode, state: mcpState });
 }
+function resolveTokenScopeKind(scopeSelector?: string): 'root' | 'theme' | 'component' {
+  if (!scopeSelector || scopeSelector === ':root') return 'root';
+  const found = designSystem?.scopes?.find(s => s.selector === scopeSelector);
+  if (found && (found.kind === 'root' || found.kind === 'theme' || found.kind === 'component')) return found.kind;
+  return 'component';
+}
 async function send(msg: any, operation = beginInspectorOperation()): Promise<any> {
   operation.assertCurrent();
   const feature = Object.hasOwn(messageFeatures, msg?.type) ? messageFeatures[msg.type] : undefined;
-  if (feature) trackFeature({ feature, outcome: 'attempt' });
+  const extra: Partial<AnalyticsEvent> =
+    msg?.type === 'SP_GET_COMPUTED_CSS' ? { action: 'open' } :
+    msg?.type === 'SP_SET_ROOT_VAR' ? { scope: resolveTokenScopeKind(msg.scopeSelector) } :
+    {};
+  if (feature) trackFeature({ feature, outcome: 'attempt', ...extra });
   const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
     ? { ...msg, targetTabId: myTabId }
     : msg;
   try {
     const r = await operation.wait(browser.runtime.sendMessage(stamped));
     if (IS_SAFARI && r?.error) throw new Error(String(r.error));
-    if (feature) trackFeature({ feature, ...commandOutcome(r) });
+    if (feature) trackFeature({ feature, ...commandOutcome(r), ...extra });
     return r || {};
   } catch (error) {
     operation.assertCurrent();
-    if (feature) trackFeature({ feature, outcome: 'failure', reason: 'unavailable' });
+    if (feature) trackFeature({ feature, outcome: 'failure', reason: 'unavailable', ...extra });
     if (IS_SAFARI) {
       // Backpressure rejects this operation, not the live target binding.
       if (error instanceof Error && error.message === 'Too many Inspector requests') {
@@ -1976,6 +1985,7 @@ async function downloadMedia(operation = beginInspectorOperation()) {
   operation.assertCurrent();
   if (!mediaInfo) return;
   const m = mediaInfo;
+  trackFeature({ feature: 'media', action: 'download', media: m.kind, outcome: 'attempt' });
   let ok = false;
   try {
     if (m.kind === 'svg' && m.markup) {
@@ -1997,6 +2007,7 @@ async function downloadMedia(operation = beginInspectorOperation()) {
     console.error('[DM] Media download failed:', err);
     const a = document.createElement('a'); a.href = m.src; a.download = m.filename || ''; a.target = '_blank'; a.click();
   }
+  trackFeature({ feature: 'media', action: 'download', media: m.kind, outcome: ok ? 'download_initiated' : 'download_failed' });
   if (ok) flashActionButton('download-media', icon('check', 11) + ' Downloaded');
 }
 async function copySvgMarkup(operation = beginInspectorOperation()) {
@@ -2004,6 +2015,7 @@ async function copySvgMarkup(operation = beginInspectorOperation()) {
   if (!mediaInfo?.markup) return;
   let ok = false;
   try { await operation.wait(navigator.clipboard.writeText(mediaInfo.markup)); ok = true; } catch { operation.assertCurrent(); }
+  trackFeature({ feature: 'media', action: 'copy', media: 'svg', outcome: ok ? 'clipboard_completed' : 'clipboard_failed' });
   if (ok) flashActionButton('copy-svg-markup', icon('check', 9) + ' Copied');
 }
 function showCaptureToast(kind: 'success' | 'error', text: string) {
@@ -2083,11 +2095,12 @@ function cancelComment() {
   commentMode = false; commentText = ''; editingCommentId = null; viewingCommentId = null;
   commentDirty = false; regionCommentPending = false; awaitingRegionDraw = false; render();
 }
-function startComment() { if (!info) return; commentMode = true; commentText = ''; editingCommentId = null; viewingCommentId = null; commentDirty = false; render(); }
+function startComment() { if (!info) return; trackFeature({ feature: 'annotate', kind: 'element', outcome: 'attempt' }); commentMode = true; commentText = ''; editingCommentId = null; viewingCommentId = null; commentDirty = false; render(); }
 // Region comment: ask the content script to enter draw mode. The composer
 // opens later, when the REGION_DRAWN message arrives.
 function startRegionComment() {
   if (awaitingRegionDraw) { awaitingRegionDraw = false; void runInspectorAction(send({ type: 'SP_CANCEL_REGION_COMMENT' })); render(); return; }
+  trackFeature({ feature: 'annotate', kind: 'region', outcome: 'attempt' });
   commentMode = false; regionCommentPending = false; awaitingRegionDraw = true;
   void runInspectorAction(send({ type: 'SP_START_REGION_COMMENT' }));
   render();
@@ -2171,14 +2184,31 @@ async function revertGroup(groupKey: string, operation = beginInspectorOperation
 
 async function copyPrompt(operation = beginInspectorOperation()) {
   operation.assertCurrent();
+  trackFeature({ feature: 'copy_prompt', outcome: 'attempt' });
   const output = operation.wait(send({ type: 'SP_EXPORT', format: 'markdown', scope: 'site' }, operation))
     .then(res => res.output || res.markdown || '');
   const safariCopy = IS_SAFARI ? writeInspectorTextClipboard(output) : null;
   const text = await operation.wait(output);
-  if (!text) return;
+  if (!text) {
+    trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed' });
+    return;
+  }
   if (safariCopy) {
-    if (!await operation.wait(safariCopy)) { showCaptureToast('error', 'Could not copy prompt'); return; }
-  } else await operation.wait(navigator.clipboard.writeText(text));
+    if (!await operation.wait(safariCopy)) {
+      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed' });
+      showCaptureToast('error', 'Could not copy prompt');
+      return;
+    }
+  } else {
+    try { await operation.wait(navigator.clipboard.writeText(text)); }
+    catch {
+      operation.assertCurrent();
+      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed' });
+      showCaptureToast('error', 'Could not copy prompt');
+      return;
+    }
+  }
+  trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_completed' });
   const btn = root.querySelector('#dm-copy-prompt-btn');
   if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); }
 }
@@ -2210,21 +2240,23 @@ async function stopLiveFeedback(operation = beginInspectorOperation()) {
   } else showCaptureToast('error', 'Could not stop the loop. Stop your agent directly if it is still running.');
   render();
 }
-function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); browser.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
+function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); trackFeature({ feature: 'theme', outcome: 'state', state: theme, resolved: resolvedTheme }); browser.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
 
 /* ── Select matching layers ── */
 async function toggleMatchingLayers(next: boolean, operation = beginInspectorOperation()) {
   operation.assertCurrent();
   matchingLayersChecked = next;
-  if (!next) { await operation.wait(pushMultiSelectIds([], operation)); render(); return; }
-  if (!info) { matchingLayersChecked = false; return; }
+  if (!next) { trackFeature({ feature: 'matching_layers', outcome: 'state', state: 'off' }); await operation.wait(pushMultiSelectIds([], operation)); render(); return; }
+  if (!info) { matchingLayersChecked = false; trackFeature({ feature: 'matching_layers', outcome: 'failure', reason: 'rejected' }); return; }
   const res = await operation.wait(send({ type: 'SP_FIND_MATCHING', elementId: info.id }, operation));
   const ids: string[] = Array.isArray(res?.ids) ? res.ids : [];
   if (ids.length >= 2) {
+    trackFeature({ feature: 'matching_layers', outcome: 'state', state: 'on' });
     await operation.wait(pushMultiSelectIds(ids, operation));
     showCaptureToast('success', 'Editing ' + ids.length + ' matching layers — changes apply to all.');
   } else {
     matchingLayersChecked = false;
+    trackFeature({ feature: 'matching_layers', outcome: 'failure', reason: 'rejected' });
     showCaptureToast('error', 'No other matching layers on this page.');
   }
   render();
@@ -9620,7 +9652,6 @@ function renderSettingsView(): string {
     '<button data-dm-theme="system" style="' + themeActive('system') + '">System</button>' +
     '<button data-dm-theme="dark" style="' + themeActive('dark') + '">Dark</button>' +
     '<button data-dm-theme="light" style="' + themeActive('light') + '">Light</button></div></div>' +
-    renderAnalyticsSetting() +
     // Footer actions — Reset + Shortcuts. Reset wipes the locally-stored
     // settings (theme, color format, capture mode, MCP port + auto-connect,
     // inspector colours) so the next session starts at defaults.
@@ -9753,14 +9784,14 @@ function renderHelpView(): string {
     '<button data-dm-action="show-shortcuts" style="' + secondaryBtn + '">' + icon('keyboard', 12) + ' Keyboard shortcuts</button>' +
     '<div style="' + card + '">' +
     '<p style="margin:0 0 12px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">Found a bug or want to request a feature? File it on GitHub — please include your Chrome version and repro steps.</p>' +
-    '<a href="https://github.com/SandeepBaskaran/design-mode/issues/new/choose" target="_blank" rel="noopener noreferrer" style="' + primaryBtn + '">Report an issue ' + icon('externalLink', 12) + '</a>' +
+    '<a href="https://github.com/SandeepBaskaran/design-mode/issues/new/choose" data-dm-help-target="issues" target="_blank" rel="noopener noreferrer" style="' + primaryBtn + '">Report an issue ' + icon('externalLink', 12) + '</a>' +
     '<div style="height:8px;"></div>' +
     '<button data-dm-action="copy-diagnostics" style="' + secondaryBtn + '">' + icon('copy', 12) + ' <span data-dm-copy-label>Copy diagnostics</span></button>' +
     '</div>' +
     '<div style="' + card + '"><div style="display:flex;flex-direction:column;gap:8px;">' +
-    '<a href="https://github.com/SandeepBaskaran/design-mode#readme" target="_blank" rel="noopener noreferrer" style="' + linkStyle + '">Read the docs ↗</a>' +
-    '<a href="https://github.com/SandeepBaskaran/design-mode/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer" style="' + linkStyle + '">Privacy ↗</a>' +
-    '<a href="mailto:hello@sandeepbaskaran.com" style="' + linkStyle + '">Security disclosure ↗</a>' +
+    '<a href="https://github.com/SandeepBaskaran/design-mode#readme" data-dm-help-target="readme" target="_blank" rel="noopener noreferrer" style="' + linkStyle + '">Read the docs ↗</a>' +
+    '<a href="https://github.com/SandeepBaskaran/design-mode/blob/main/PRIVACY.md" data-dm-help-target="privacy" target="_blank" rel="noopener noreferrer" style="' + linkStyle + '">Privacy ↗</a>' +
+    '<a href="mailto:hello@sandeepbaskaran.com" data-dm-help-target="email" style="' + linkStyle + '">Security disclosure ↗</a>' +
     '</div></div>' +
     '</div>' +
     '<div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v' + extensionVersion() + '</div></div>' +
@@ -10271,6 +10302,11 @@ function setupDelegation() {
       return;
     }
 
+    const helpLink = target.closest<HTMLElement>('[data-dm-help-target]');
+    if (helpLink) {
+      trackFeature({ feature: 'help', outcome: 'attempt', target: helpLink.dataset.dmHelpTarget });
+    }
+
     // Action buttons
     const actionBtn = target.closest<HTMLElement>('[data-dm-action]');
     if (actionBtn) {
@@ -10476,10 +10512,11 @@ function setupDelegation() {
         case 'settings': helpOpen = false; contributeOpen = false; mcpOpen = false; settingsOpen = !settingsOpen; render(); break;
         case 'back-from-mcp': mcpOpen = false; render(); break;
         case 'mcp': settingsOpen = false; helpOpen = false; contributeOpen = false; mcpOpen = !mcpOpen; if (mcpOpen) runInspectorAction(refreshMcpStatus(true, operation)); render(); break;
-        case 'back-from-help': helpOpen = false; render(); break;
+        case 'back-from-help': trackFeature({ feature: 'help', outcome: 'attempt', target: 'back' }); helpOpen = false; render(); break;
         case 'help': settingsOpen = false; contributeOpen = false; mcpOpen = false; helpOpen = !helpOpen; render(); break;
         case 'back-from-contribute': contributeOpen = false; render(); break;
         case 'open-file-access-settings': {
+          trackFeature({ feature: 'help', outcome: 'attempt', target: 'file_access_settings' });
           if (IS_SAFARI) {
             showCaptureToast('error', 'Use an HTTP/HTTPS page and allow access in Safari Settings → Extensions.');
             break;
@@ -10494,6 +10531,7 @@ function setupDelegation() {
         }
         case 'contribute': settingsOpen = false; helpOpen = false; mcpOpen = false; contributeOpen = !contributeOpen; render(); break;
         case 'copy-diagnostics': {
+          trackFeature({ feature: 'help', outcome: 'attempt', target: 'copy_diagnostics' });
           const payload = buildDiagnostics();
           const flash = (msg: string) => {
             const lbl = document.querySelector('[data-dm-copy-label]') as HTMLElement | null;
@@ -10591,7 +10629,7 @@ function setupDelegation() {
           }).catch((error: Error) => showCaptureToast('error', 'Could not dock the panel: ' + error.message + '. The pinned window is still open.')));
           break;
         }
-        case 'show-shortcuts': shortcutsOpen = true; render(); break;
+        case 'show-shortcuts': if (helpOpen) trackFeature({ feature: 'help', outcome: 'attempt', target: 'shortcuts' }); shortcutsOpen = true; render(); break;
         case 'close-shortcuts': shortcutsOpen = false; render(); break;
         case 'noop': break;
         // Cloud-mode auth flow. Register mints a fresh device token via
@@ -10852,7 +10890,12 @@ function setupDelegation() {
           break;
         }
         case 'close-computed-css': computedCssOpen = false; render(); break;
-        case 'copy-computed-css': navigator.clipboard.writeText(computedCssText).catch(() => {}); break;
+        case 'copy-computed-css':
+          navigator.clipboard.writeText(computedCssText).then(
+            () => trackFeature({ feature: 'computed_css', action: 'copy', outcome: 'clipboard_completed' }),
+            () => trackFeature({ feature: 'computed_css', action: 'copy', outcome: 'clipboard_failed' }),
+          );
+          break;
         // v1.2: Before/After
         case 'preview-original': {
           runInspectorAction(send({ type: 'SP_PREVIEW_ORIGINAL' }, operation).then(() => { previewingOriginal = true; render(); }));
@@ -11233,6 +11276,7 @@ function setupDelegation() {
     if (themeBtn) {
       theme = themeBtn.dataset.dmTheme as Theme;
       resolveTheme();
+      trackFeature({ feature: 'theme', outcome: 'state', state: theme, resolved: resolvedTheme });
       browser.storage?.local?.set?.({ 'dm-theme': theme });
       render();
       return;
