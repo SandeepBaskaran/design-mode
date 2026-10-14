@@ -8,6 +8,8 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.0.2] — 2026-10-15
+
 ### Added
 
 - Four source-backed comparison pages: Design Mode vs EditUI, Airship,
@@ -54,7 +56,7 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - `docs/e2e-testcases.md` gained a Safari parity phase (Phase S) for the
   native Web Inspector build.
 - `packages/cli/README.md` states that 3.0.0 is the latest published npm
-  version and that 3.0.1 is unpublished until the maintainer runs
+  version and that 3.0.2 is unpublished until the maintainer runs
   `npm publish`.
 
 ### Fixed

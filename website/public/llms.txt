@@ -8,7 +8,7 @@
 
 - Product: desktop browser extension for Chrome/Chromium, Firefox and Safari on Mac.
 - Licence: MIT.
-- Current repository version: 3.0.1. That is the version in this source tree as of 6 October 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
+- Current repository version: 3.0.2. That is the version in this source tree as of 15 October 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
 - Author: Sandeep Baskaran.
 - Source: https://github.com/SandeepBaskaran/design-mode
 - Website: https://designmode.app
@@ -47,7 +47,7 @@ Local MCP clients share one owner on port 9960 by default; a surviving client ta
 
 ## Privacy summary
 
-The extension has no product telemetry. A fresh install selects Cloud mode but does not contact the hosted relay until the user creates an anonymous device credential. Cloud queues request a 60-second Redis expiry and responses are normally deleted when consumed; the expiry operation is best-effort rather than a guaranteed maximum. The service retains a SHA-256 token hash, anonymous tenant identifier and created/last-seen timestamps until revocation. Operational logs contain bounded metadata rather than selectors, screenshots or payload bodies.
+Release builds of the extension send bounded feature usage events to PostHog (`us.i.posthog.com`) using a persistent random installation UUID (`dm-analytics-distinct-id` in `storage.local`), person profiles, and GeoIP enrichment — never page URLs, DOM content, selectors, tokens, comments, screenshots or MCP payloads. Local `npm run dev` / `npm run build` builds have analytics disabled. A fresh install selects Cloud mode but does not contact the hosted relay until the user creates an anonymous device credential. Cloud queues request a 60-second Redis expiry and responses are normally deleted when consumed; the expiry operation is best-effort rather than a guaranteed maximum. The service retains a SHA-256 token hash, anonymous tenant identifier and created/last-seen timestamps until revocation. Operational logs contain bounded metadata rather than selectors, screenshots or payload bodies.
 
 When a user sends content to an external coding agent, that provider handles the content under its own account settings and privacy terms. The marketing site may load Google Analytics when its deployment ID is configured.
 

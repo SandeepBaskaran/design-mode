@@ -19,6 +19,18 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "3.0.2",
+    date: "2026-10-15",
+    headline: "Browser-aware banner, four new comparisons, and expanded usage analytics.",
+    highlights: [
+      "The top banner now adapts to your browser and links to the other two supported browsers (Chrome, Firefox, or Safari).",
+      "Added four source-backed comparison pages: Design Mode vs EditUI, Airship, LayerDock, and Vex.",
+      "Fixed Open Graph and Twitter social preview cards across the website.",
+      "Expanded bounded extension usage analytics (schema v3) and updated the privacy policy; removed the redundant Settings notice.",
+      "Rate-limited Cloud credential registration and refreshed production dependencies.",
+    ],
+  },
+  {
     version: "3.0.1",
     date: "2026-10-06",
     headline: "Clearer install options for Chrome, Firefox and Safari.",

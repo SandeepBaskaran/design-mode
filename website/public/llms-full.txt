@@ -1,6 +1,6 @@
 # Design Mode — verified product summary
 
-Last reviewed against the Design Mode 3.0.1 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 9 October 2026.
+Last reviewed against the Design Mode 3.0.2 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 15 October 2026.
 
 This file is a versioned agent-oriented summary of product mechanics, privacy and setup. It is not a dump of every marketing page and does not guarantee search or chat ranking.
 
@@ -112,9 +112,9 @@ Only Local offers opt-in wait_for_handoff: exact pageUrl, optional returned sess
 
 ## Storage and privacy
 
-The extension contains no product analytics SDK or telemetry path.
+Release builds of the extension (`npm run build:analytics`) send bounded feature usage events to PostHog (`https://us.i.posthog.com/capture/`) without third-party SDKs, using a persistent random installation UUID (`dm-analytics-distinct-id` in `storage.local`), PostHog person profiles, and GeoIP enrichment. Page URLs, DOM text, selectors, CSS/token values, comments, screenshots and MCP payloads are never sent. Local `npm run dev` / `npm run build` builds have analytics disabled.
 
-- `storage.local` holds interface settings, comments, MCP mode, relay URL and the plaintext Cloud credential until cleared or uninstall.
+- `storage.local` holds interface settings, comments, MCP mode, relay URL, the random installation ID (`dm-analytics-distinct-id`), and the plaintext Cloud credential until cleared or uninstall.
 - `storage.sync` holds presets explicitly saved by the user.
 - Chromium `storage.session` holds per-URL change sessions for the browser session and survives page reloads.
 - Firefox falls back to `storage.local` for change sessions.

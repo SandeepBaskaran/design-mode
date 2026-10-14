@@ -64,7 +64,7 @@ export const softwareApplicationSchema = {
   downloadUrl: [CHROME_URL, FIREFOX_URL, SAFARI_URL],
   installUrl: [CHROME_URL, FIREFOX_URL, SAFARI_URL],
   sameAs: [REPO_URL, CHROME_URL, FIREFOX_URL, SAFARI_URL],
-  softwareVersion: "3.0.1",
+  softwareVersion: "3.0.2",
   license: "https://opensource.org/licenses/MIT",
   isPartOf: { "@id": IDS.website },
   offers: {
