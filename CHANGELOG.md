@@ -8,8 +8,19 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Four source-backed comparison pages: Design Mode vs EditUI, Airship,
+  LayerDock and Vex (`/compare/design-mode-vs-editui`, `-airship`,
+  `-layerdock`, `-vex`). Each records what was checked, when, and where.
+
 ### Changed
 
+- The website's "also available for" banner follows the visitor's browser,
+  like the install button: it names the two browsers you are not using
+  (Chrome and Firefox on Safari, Chrome and Safari on Firefox, Firefox and
+  Safari on Chrome, Chromium and unknown browsers). Server rendering keeps
+  the Chrome variant, so hydration stays consistent.
 - The release workflow now runs the full `npm run verify` suite on the tagged
   commit and refuses to publish when the tag does not match the version in
   `package.json` and the extension manifest.

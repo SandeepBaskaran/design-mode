@@ -1282,6 +1282,260 @@ export const comparisons: Comparison[] = [
       "design-mode-vs-locofy",
     ],
   },
+  {
+    slug: "design-mode-vs-editui",
+    competitor: "EditUI",
+    title: "Design Mode vs EditUI",
+    metaTitle: "Design Mode vs EditUI — recorded edits vs written instructions",
+    metaDescription:
+      "Honest comparison: EditUI lets you click elements in Chrome, type an instruction per element and paste the batch into Claude Code, Cursor or Codex. Design Mode records the actual values you change, streams them over MCP, and runs on Chrome, Firefox and Safari.",
+    keywords: [
+      "Design Mode vs EditUI",
+      "EditUI alternative",
+      "EditUI Chrome extension",
+      "Cursor Design Mode for any agent",
+      "visual UI feedback for coding agents",
+    ],
+    oneLiner:
+      "EditUI is the closest 'point at it' competitor: a free Chrome extension that collects per-element instructions and copies them into your agent.",
+    positioning:
+      "Both tools exist to stop you describing which element you mean. EditUI's answer is annotation: click, type what should change, collect, copy a prompt that carries DOM, class and computed-style context. Design Mode's answer is editing: change the value on the page, see it, and hand the agent the before/after diff over MCP. EditUI edits are still words; Design Mode edits are numbers and tokens.",
+    whenToPickDesignMode: [
+      "You want to try the change on the page first and hand over the exact value, not a sentence the agent has to interpret.",
+      "You work in Firefox or Safari — EditUI is Chrome-only.",
+      "You want the agent connected live over MCP (Cloud, Local or Self-hosted) instead of a copy-paste round trip.",
+      "You want a searchable Changes tab and Markdown/JSON export of everything you touched.",
+    ],
+    whenToPickCompetitor: [
+      "You prefer writing the instruction ('make this secondary') and letting the agent decide the implementation.",
+      "You want zero setup: no MCP config, no companion process, just copy and paste.",
+      "Your review is mostly non-visual (behaviour, content, structure) where a typed note is the natural unit.",
+    ],
+    table: baseFeatures({
+      editing:
+        "No — you select an element and type an instruction; the page itself is not changed",
+      mcp: "No — copies a prompt to the clipboard; you paste it into Claude Code, Cursor, Codex or Windsurf",
+      history:
+        "Per-review list of collected edits in chrome.storage.local; cleared on uninstall",
+      os: "Not stated on the site; Chrome Web Store listing only",
+      price: "Free, no account (made by Usercall)",
+      export: "Prompt text only (copy all)",
+      fit: "Developers reviewing a running app in Chrome who paste into an agent",
+    }),
+    honesty:
+      "EditUI's copy-everything prompt is well designed: element, text, DOM, classes, parent, neighbours, URL, viewport and computed styles. If your agent is good at turning 'tighten this spacing' into code, the copy-paste loop is fine. Design Mode's case is precision and reach: you record 16px → 12px rather than 'tighter', the agent gets it over MCP without a paste, and the same workflow runs in Firefox and Safari.",
+    research: {
+      checkedOn: "11 October 2026",
+      methodology:
+        "Documentation review of the EditUI homepage, Chrome extension page and FAQ, plus the 4 October 2026 Show HN post. The extension was not installed and no agent round-trip was tested. Capability claims are vendor-documented, not independently runtime-verified.",
+      sources: [
+        { label: "EditUI homepage", url: "https://www.editui.app/" },
+        {
+          label: "EditUI Chrome extension and FAQ",
+          url: "https://www.editui.app/chrome-extension",
+        },
+        {
+          label: "Show HN: EditUI (4 October 2026)",
+          url: "https://news.ycombinator.com/item?id=49959046",
+        },
+      ],
+    },
+    related: [
+      "design-mode-vs-cursor-design-mode",
+      "design-mode-vs-stagewise",
+      "design-mode-vs-airship",
+    ],
+  },
+  {
+    slug: "design-mode-vs-airship",
+    competitor: "Airship",
+    title: "Design Mode vs Airship",
+    metaTitle:
+      "Design Mode vs Airship — browser extension vs local design canvas",
+    metaDescription:
+      "Honest comparison: Airship wraps your local dev server in a Figma-like canvas and drives Claude Code, Codex or OpenCode to edit source. Design Mode is a browser extension that edits any scriptable page — localhost, staging or production — and hands the diff to any MCP client.",
+    keywords: [
+      "Design Mode vs Airship",
+      "Airship alternative",
+      "airship.design",
+      "visual editor for your codebase",
+      "design canvas for Claude Code",
+    ],
+    oneLiner:
+      "Airship is a local reverse proxy that puts an infinite design canvas with real viewports in front of your dev server and lets an agent edit the source.",
+    positioning:
+      "Airship and Design Mode disagree about where the editor should live. Airship says: run `npx @airshiplabs/cli --target 3000`, open the canvas on localhost:3001, select an element, and the agent resolves it back to file and line and edits the source. Design Mode says: the page you already have open is the canvas, whichever origin it is on, and the extension streams what you changed to the agent over MCP.",
+    whenToPickDesignMode: [
+      "You need to edit a staging or production page, or any site you don't run locally — Airship is localhost-only.",
+      "You want to share a session or stream edits to an agent on another machine (Cloud mode).",
+      "You want the native browser, DevTools and extensions you already use rather than a proxied canvas.",
+      "Your agent is not Claude Code, Codex or OpenCode — Design Mode speaks MCP to any client.",
+    ],
+    whenToPickCompetitor: [
+      "You want side-by-side real viewports (desktop, tablet, mobile) of the same local app.",
+      "You want the tool to map a selection straight to a source file and line.",
+      "You want built-in per-file revert without Git and a safe mode that blocks destructive agent commands.",
+      "You value a fully local, no-account, no-telemetry setup.",
+    ],
+    table: baseFeatures({
+      editing:
+        "Yes, on your own local dev server only — the canvas proxies localhost and resolves selections to source",
+      mcp: "No MCP — drives Claude Code, Codex or OpenCode directly from the canvas",
+      history:
+        "Keeps the previous version of each edited file for instant revert; no searchable edit log documented",
+      os: "CLI is published under MIT on npm (@airshiplabs/cli 0.3.0, August 2026); repository at github.com/0xnyn/airship",
+      price: "Free; no account or hosted service",
+      export: "Not documented — edits land directly in source",
+      fit: "Developers iterating on a local React/Next/Vite app with a terminal agent",
+    }),
+    honesty:
+      "Airship's multi-viewport canvas and file:line resolution are things Design Mode does not do, and 'edit the source, revert the file' is a tighter loop than a diff handoff when everything is on one laptop. Design Mode's case is reach: it works on pages you don't host, in three browsers, and with any MCP client, and it keeps a persistent record of what changed.",
+    research: {
+      checkedOn: "11 October 2026",
+      methodology:
+        "Documentation review of the Airship homepage, how-it-works and FAQ sections, plus the @airshiplabs/cli npm registry entry for version and licence. The CLI was not run and no agent edit was tested. Capability claims are vendor-documented, not independently runtime-verified.",
+      sources: [
+        {
+          label: "Airship homepage and FAQ",
+          url: "https://www.airship.design/",
+        },
+        {
+          label: "@airshiplabs/cli on npm",
+          url: "https://www.npmjs.com/package/@airshiplabs/cli",
+        },
+      ],
+    },
+    related: [
+      "design-mode-vs-editui",
+      "design-mode-vs-stagewise",
+      "design-mode-vs-figma-dev-mode",
+    ],
+  },
+  {
+    slug: "design-mode-vs-layerdock",
+    competitor: "LayerDock",
+    title: "Design Mode vs LayerDock",
+    metaTitle:
+      "Design Mode vs LayerDock — visual editor vs client feedback pins",
+    metaDescription:
+      "Honest comparison: LayerDock pins client feedback on a live site with screenshot, device and console errors, and exposes pins to Claude Code or Cursor over MCP. Design Mode records the design change itself and hands the diff to the agent.",
+    keywords: [
+      "Design Mode vs LayerDock",
+      "LayerDock alternative",
+      "website feedback tool MCP",
+      "client feedback pins Claude Code",
+      "visual editor vs annotation tool",
+    ],
+    oneLiner:
+      "LayerDock is a client-feedback tool: comments pinned to elements on a live site, with context an agent can read over MCP.",
+    positioning:
+      "LayerDock solves 'which button?' for clients who will never install anything: share a review link, they click and comment, each pin carries a screenshot, device, browser and page errors, and your agent can read and resolve pins through LayerDock's MCP server. Design Mode solves a different step — the person who knows what the fix is makes it on the page and the agent receives the exact change. Comments versus edits.",
+    whenToPickDesignMode: [
+      "The reviewer is a designer or developer who can make the change, not just describe it.",
+      "You want typography, colour, spacing and layout values recorded as a diff, not a sentence.",
+      "You want an open-source, free tool with no per-seat or per-dock limits.",
+      "You need Firefox and Safari as first-class review browsers.",
+    ],
+    whenToPickCompetitor: [
+      "Your reviewers are clients or stakeholders who should get a link, not an extension.",
+      "You need threads, assignments, status and pushes to Slack, Jira, Linear, GitHub, Trello or ClickUp.",
+      "Screenshots, recordings and captured console errors matter more than exact style values.",
+    ],
+    table: baseFeatures({
+      editing:
+        "No — comments pinned to elements; Inspect mode shows box model and computed styles but does not change them",
+      mcp: "Yes — LayerDock ships an MCP server so Claude Code, Cursor or any MCP agent can list docks, read pins and resolve them",
+      history: "Pins with threads, status and assignment per dock",
+      os: "No — hosted SaaS",
+      price:
+        "Free plan (2 docks, 35 submissions/month); paid plans unlock integrations",
+      export:
+        "Via integrations and MCP; no documented Markdown/JSON diff export",
+      fit: "Agencies, freelancers and in-house teams collecting client feedback on live sites",
+    }),
+    honesty:
+      "If your bottleneck is getting usable feedback out of clients, LayerDock is built for that and Design Mode is not. The two can coexist: a client pins 'this feels off' in LayerDock, and the designer answers with a recorded change in Design Mode. LayerDock was in beta with around 50 users when its founder posted on DEV, so expect the product to move.",
+    research: {
+      checkedOn: "11 October 2026",
+      methodology:
+        "Documentation review of the LayerDock homepage, FAQ and pricing section, and the founder's DEV Community launch post. No account was created and the MCP server was not connected. Capability and pricing claims are vendor-documented, not independently runtime-verified.",
+      sources: [
+        {
+          label: "LayerDock homepage, FAQ and pricing",
+          url: "https://layerdock.io",
+        },
+        {
+          label:
+            "We built LayerDock to make website feedback less painful (DEV Community)",
+          url: "https://dev.to/zain_khan_/we-built-layerdock-to-make-website-feedback-less-painful-4llm",
+        },
+      ],
+    },
+    related: [
+      "design-mode-vs-pls-fix",
+      "design-mode-vs-ui-ticket-mcp",
+      "design-mode-vs-agentation",
+    ],
+  },
+  {
+    slug: "design-mode-vs-vex",
+    competitor: "Vex",
+    title: "Design Mode vs Vex",
+    metaTitle:
+      "Design Mode vs Vex — lightweight MCP handoff vs full agent orchestrator",
+    metaDescription:
+      "Honest comparison: Vex pairs a Chrome extension with its own Python orchestrator, Electron app and NATS bus to run Claude against structured visual edits. Design Mode is a single extension that hands the diff to whichever MCP agent you already run.",
+    keywords: [
+      "Design Mode vs Vex",
+      "Vex alternative",
+      "lukaskellerstein vex",
+      "visual editing browser AI code changes",
+      "agent orchestrator Chrome extension",
+    ],
+    oneLiner:
+      "Vex captures visual edits as 12 structured action types and ships them to its own agent orchestrator, which runs Claude and streams results back.",
+    positioning:
+      "Vex and Design Mode agree that edits should be structured data, not prose. They part ways on how much to own. Vex is a platform: Chrome extension, FastAPI orchestrator with SQLite, Electron desktop app, NATS for streaming, Claude Agent SDK adapters, execution traces with token cost per batch, and framework detection that generates idiomatic React, Vue, Svelte, Django or Rails code. Design Mode is an extension plus an optional relay: it records the change and speaks MCP to the agent you already have.",
+    whenToPickDesignMode: [
+      "You already run Claude Code, Cursor, Codex, Windsurf or any MCP client and don't want a second agent runtime.",
+      "You want to install from a store and be editing in a minute — Vex needs Node 20+, Python 3.11+, uv, an orchestrator and a desktop app.",
+      "You need Firefox or Safari.",
+      "You want an MIT licence; Vex's repository is 'All rights reserved'.",
+    ],
+    whenToPickCompetitor: [
+      "You want the tool to run the agent for you and show full execution traces, tool calls and cost per batch.",
+      "You want AI section generation and framework-aware code output built into the editor.",
+      "You're comfortable self-hosting a Python service and prefer an all-in-one pipeline.",
+    ],
+    table: baseFeatures({
+      editing:
+        "Yes — resize, restyle, swap images and AI-generate sections on live pages in Chrome 116+",
+      mcp: "No — REST batch submit to its own Agent Orchestrator, which runs Claude via the Agent SDK",
+      history: "Batches and per-batch execution traces stored in SQLite",
+      os: "Source is public on GitHub but licensed 'All rights reserved' — not open source",
+      price: "Free to run; you supply the Claude credentials",
+      export: "Not documented",
+      fit: "Developers who want a self-hosted end-to-end visual-edit-to-code pipeline",
+    }),
+    honesty:
+      "Vex is ambitious and its execution-trace view (steps, tool calls, tokens, cost) is something Design Mode does not offer. It is also early — version 0.1.5 at the time of checking, a handful of stars, and a non-open licence despite the public repository. Design Mode's case is that most people already have an agent; they need a clean, portable way to hand it a change, not another orchestrator.",
+    research: {
+      checkedOn: "11 October 2026",
+      methodology:
+        "Review of the Vex GitHub README (features, architecture, quick start, API reference, licence section) and repository metadata via the GitHub API. The extension, orchestrator and desktop app were not installed or run. Capability claims are as documented by the author, not independently runtime-verified.",
+      sources: [
+        {
+          label: "Vex repository and README",
+          url: "https://github.com/lukaskellerstein/vex",
+        },
+      ],
+    },
+    related: [
+      "design-mode-vs-stagewise",
+      "design-mode-vs-editui",
+      "design-mode-vs-drawbridge",
+    ],
+  },
 ];
 
 export function getComparison(slug: string): Comparison | undefined {

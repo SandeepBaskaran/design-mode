@@ -6,7 +6,7 @@ import { Footer } from "@/components/blocks/footer";
 import { Navbar } from "@/components/blocks/navbar";
 import { Analytics } from "@/components/site/analytics";
 import { BackToTop } from "@/components/site/back-to-top";
-import { FirefoxBanner } from "@/components/site/firefox-banner";
+import { BrowserBanner } from "@/components/site/browser-banner";
 import { JsonLd, personSchema, websiteSchema } from "@/components/site/json-ld";
 import { LinkTracker } from "@/components/site/link-tracker";
 import "@/styles/globals.css";
@@ -128,7 +128,7 @@ export default function RootLayout({
           Skip to content
         </a>
         <Navbar />
-        <FirefoxBanner />
+        <BrowserBanner />
         <main id="main-content" className="mx-auto w-full max-w-[1200px]">
           {children}
         </main>
