@@ -8,7 +8,7 @@
 
 - Product: desktop browser extension for Chrome/Chromium, Firefox and Safari on Mac.
 - Licence: MIT.
-- Current repository version: 3.0.2. That is the version in this source tree as of 15 October 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
+- Current repository version: 3.1.0. That is the version in this source tree as of 16 October 2026; it is not a guaranteed Chrome Web Store or Firefox Add-ons listing version.
 - Author: Sandeep Baskaran.
 - Source: https://github.com/SandeepBaskaran/design-mode
 - Website: https://designmode.app

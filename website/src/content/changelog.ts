@@ -19,6 +19,16 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "3.1.0",
+    date: "2026-10-16",
+    headline: "Clearer usage analytics and a homepage demo.",
+    highlights: [
+      "Usage analytics now records which CSS property and design section you edit, which text or DOM action you use, and a bounded reason when a command fails. Page content, CSS values and URLs stay out.",
+      "The homepage plays a product demo, and the secondary button now says Try it yourself.",
+      "Homepage sections use less vertical space on phones.",
+    ],
+  },
+  {
     version: "3.0.2",
     date: "2026-10-15",
     headline: "Browser-aware banner, four new comparisons, and expanded usage analytics.",

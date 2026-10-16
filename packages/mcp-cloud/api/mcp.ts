@@ -24,7 +24,7 @@ export const config = { runtime: 'nodejs' };
 const TOOL_TIMEOUT_MS = 12_000;
 const PROTOCOL_VERSION = '2024-11-05';
 // Keep in sync with APP_VERSION in packages/shared/src/constants.ts.
-const SERVER_VERSION = '3.0.2';
+const SERVER_VERSION = '3.1.0';
 
 interface ToolDef {
   name: string;

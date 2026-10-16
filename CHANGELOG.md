@@ -8,6 +8,23 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-10-16
+
+### Added
+
+- Extension analytics schema v4. Style edits include an allow-listed CSS
+  property and a category. Text edits distinguish plain text from HTML. DOM
+  edits name the action. Export events include the format and a bucketed
+  change count. Failures include an allow-listed error code and a page
+  scheme. Values, selectors, page URLs and raw errors stay out.
+- Homepage product demo, with a still from the walkthrough as the poster.
+
+### Changed
+
+- The homepage secondary button says “Try it yourself”.
+- Homepage sections use less padding below the large breakpoint.
+- `PRIVACY.md` describes the schema v4 fields.
+
 ## [3.0.2] — 2026-10-15
 
 ### Added

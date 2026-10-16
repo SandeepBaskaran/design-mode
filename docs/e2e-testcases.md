@@ -688,7 +688,7 @@ Background and boundaries are in `docs/safari-inspector-parity-evidence.md`.
 |------|------|-------|----------|
 | S.1  | Temporary extension loads | Add Temporary Extension from the release zip | Design Mode appears under Settings → Extensions with no manifest error; toolbar button shows the icon |
 | S.2  | Toolbar popup is the help card | Click the toolbar button | A small **Design Mode for Safari** popup explains: allow access, open Web Inspector (⌥⌘I), dock it, pick the Design Mode tab. No side panel opens |
-| S.3  | Inspector tab present | Open Web Inspector on an HTTPS page and dock it | A **Design Mode** tab exists in Web Inspector; the editor renders with the header badge `v3.0.2 · Safari` |
+| S.3  | Inspector tab present | Open Web Inspector on an HTTPS page and dock it | A **Design Mode** tab exists in Web Inspector; the editor renders with the header badge `v3.1.0 · Safari` |
 | S.4  | Active-tab targeting | With the Inspector docked, pick an element, then switch Safari tabs and pick again | The editor follows the active tab in the last-focused window; the previous tab's selection is dropped and a fresh pick works on the new tab |
 | S.5  | Reconnect state | Navigate the inspected tab to a Safari-internal page (e.g. `favorites://`) or a site without permission | The **Reconnect to the active page** view appears with the error text, a *Pick element on active tab* button and a *Reload editor connection* button; no console spam |
 | S.6  | Reconnect actions work | From S.5, return to an HTTPS page → *Pick element on active tab*; then *Reload editor connection* | Repick restores the editor; reload re-initialises the Inspector panel without losing applied edits on the page |

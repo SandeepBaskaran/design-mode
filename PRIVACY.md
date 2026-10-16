@@ -120,9 +120,16 @@ The extension sends a bounded event schema: feature names,
 attempt/command_acknowledged/failure or state outcomes, bounded friction
 reasons, MCP mode and state when applicable, the browser package (`chrome`, `firefox` or `safari`; Edge, Brave and Arc use the Chrome package), validated
 browser language, Intl timezone, and `navigator.userAgent` (`$raw_user_agent`, bounded to 512 printable ASCII characters) when available,
-extension version, schema version 3, `extension` surface, and a best-effort distribution label.
+extension version, schema version 4, `extension` surface, and a best-effort distribution label.
 Event names describe the action (for example `dm_style_edit`, `dm_send_to_agent`)
-rather than the generic `dm_feature`; outcomes remain separate. Language is
+rather than the generic `dm_feature`; outcomes remain separate. Style edits may
+include an allow-listed CSS property name and a category such as typography,
+spacing, layout, colour, border, effects, position or sizing. They never include
+the CSS value. Text edits may say whether the edit was plain text or HTML. DOM
+edits may name the action, such as delete, duplicate or reorder. Export events
+may name the format and a bucketed change count (`0`, `1`, `2-5`, `6-20`,
+`20+`). Failures may include an allow-listed error code and a page scheme such
+as `https`, `localhost`, `file` or `chrome_internal`, never the page URL. Language is
 bounded to 35 characters with no private-use subtags; timezone to 64 and validated
 by Intl. Invalid/unavailable metadata is omitted.
 `command_acknowledged` means only a command returned without a reported error,
