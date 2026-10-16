@@ -43,7 +43,7 @@ const features = [
 
 export const Hero = () => {
   return (
-    <section className="py-32">
+    <section className="py-16 md:py-24 lg:py-32">
       {/* Hero — vertical stack, centred */}
       <div className="container max-w-[1200px] text-center max-sm:px-4">
         <HeroHeadline />
@@ -58,7 +58,7 @@ export const Hero = () => {
           to a coding agent.
         </p>
 
-        {/* Secondary on the LEFT (Try by yourself → /demo), primary on the RIGHT (Add to Chrome) */}
+        {/* Secondary on the LEFT (Try it yourself → /demo), primary on the RIGHT (Add to Chrome) */}
         <div className="mt-16 grid grid-cols-2 items-stretch gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center sm:gap-4">
           <AddToChromeCta
             size="lg"
@@ -70,9 +70,29 @@ export const Hero = () => {
             className="h-14 max-sm:w-full max-sm:px-2 max-sm:py-1 max-sm:whitespace-normal text-base"
             asChild
           >
-            <Link href="/demo">Try by yourself</Link>
+            <Link href="/demo">Try it yourself</Link>
           </Button>
         </div>
+
+        <figure className="mx-auto mt-10 w-full max-w-[980px] sm:mt-16">
+          <video
+            className="border-border aspect-[8/5] w-full rounded-2xl border bg-black object-cover shadow-lg"
+            controls
+            playsInline
+            muted
+            loop
+            preload="metadata"
+            poster="/designmode-demo-poster.jpg"
+            width={1280}
+            height={800}
+            aria-label="Design Mode demo: edit a page, then hand the changes to an agent"
+          >
+            <source src="/designmode-demo.mp4" type="video/mp4" />
+          </video>
+          <figcaption className="text-muted-foreground mt-3 text-base">
+            A short walkthrough of editing a page and handing the changes to an agent.
+          </figcaption>
+        </figure>
       </div>
     </section>
   );

@@ -22,7 +22,7 @@ function WorkflowWindow({ title, children }: { title: string; children: ReactNod
 
 export function AgentWorkflow() {
   return (
-    <section aria-labelledby="agent-workflow-heading" className="py-32">
+    <section aria-labelledby="agent-workflow-heading" className="py-16 md:py-24 lg:py-32">
       <div className="container flex flex-col items-center justify-start">
         <div className="mx-0 w-full max-w-[980px] text-center">
           <p className="text-muted-foreground text-base font-medium tracking-widest uppercase">

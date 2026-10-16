@@ -600,7 +600,7 @@ export function PanelAnatomy() {
     <section
       id="panel-anatomy"
       aria-labelledby="panel-anatomy-title"
-      className="py-32"
+      className="py-16 md:py-24 lg:py-32"
     >
       <div ref={track} className={styles.track}>
         <div ref={sticky} className={`container ${styles.sticky}`}>

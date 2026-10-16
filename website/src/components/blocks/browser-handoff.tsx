@@ -6,7 +6,7 @@ import { ArrowDownUp, Copy, Plug } from "lucide-react";
 
 export function BrowserHandoff() {
   return (
-    <section className="py-32" aria-labelledby="browser-handoff-heading">
+    <section className="py-16 md:py-24 lg:py-32" aria-labelledby="browser-handoff-heading">
       <div className="container max-w-5xl">
         <h2
           id="browser-handoff-heading"

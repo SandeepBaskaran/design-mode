@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 export function ClosingCta() {
   return (
-    <section aria-labelledby="closing-cta-heading" className="py-32">
+    <section aria-labelledby="closing-cta-heading" className="py-16 md:py-24 lg:py-32">
       <div className="container text-center">
         <p className="text-muted-foreground text-base font-medium tracking-widest">
           FROM INTENT TO IMPLEMENTATION
