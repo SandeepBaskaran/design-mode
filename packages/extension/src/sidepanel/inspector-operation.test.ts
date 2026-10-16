@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { createInspectorOperation, InspectorOperationCancelled, runInspectorAction } from './inspector-operation.ts';
 import { changeGroupKey, styleChangeGroupKey, collectGroupRevertIds } from './change-group.ts';
+import { changeCountBucket, commandOutcome, pageSchemeFromUrl, styleAnalytics, styleAnalyticsList } from '../platform/analytics.ts';
 
 // Execute the actual production function declarations, not replicas of their
 // loops. The panel's module startup needs a browser DOM; these workflows only
@@ -34,7 +35,7 @@ function panel(safari = true) {
     styleChanges: [{ id: 'style-a', elementId: 'hero' }, { id: 'style-b', elementId: 'hero' }],
     textChanges: [], domChanges: [], comments: [], tokenChanges: [], componentContexts: {},
     batchAppliedChanges: new Set(), editedTokens: new Map(),
-    messageFeatures: {}, trackFeature() {}, commandOutcome: () => ({}),
+    messageFeatures: {}, trackFeature() {}, commandOutcome, styleAnalytics, styleAnalyticsList, pageSchemeFromUrl, changeCountBucket, boundPageUrl: '', siteChangeCount: () => 0,
     commentSubmitting: false, changesGrouping: 'element', changesRequest: 0,
     pageGeneration: 0, pageUnavailable: false, pageNavigating: false, activeRouteKey: '', changesPageUrl: '',
     routeGroups: [], routeEditingBlocked: false, showCaptureToast() {},
