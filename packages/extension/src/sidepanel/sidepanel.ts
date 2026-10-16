@@ -10,7 +10,7 @@
 import '../platform/polyfill';
 import { browser } from '../platform/panel-api';
 import { IS_CHROME, IS_FIREFOX, IS_SAFARI } from '../platform/target';
-import { commandOutcome, messageFeatures, type AnalyticsEvent } from '../platform/analytics';
+import { changeCountBucket, commandOutcome, messageFeatures, pageSchemeFromUrl, styleAnalytics, styleAnalyticsList, type AnalyticsEvent } from '../platform/analytics';
 import { openPanel, preparePanelTarget } from '../platform/panel';
 import { detectLaunchCapabilities, supportedLaunchSurface, pipFailureMessage } from '../platform/launch-capabilities';
 import {
@@ -831,23 +831,37 @@ function resolveTokenScopeKind(scopeSelector?: string): 'root' | 'theme' | 'comp
 }
 async function send(msg: any, operation = beginInspectorOperation()): Promise<any> {
   operation.assertCurrent();
-  const feature = Object.hasOwn(messageFeatures, msg?.type) ? messageFeatures[msg.type] : undefined;
+  const feature = msg?.silentAnalytics ? undefined : (Object.hasOwn(messageFeatures, msg?.type) ? messageFeatures[msg.type] : undefined);
+  const styleBatch = msg?.type === 'SP_APPLY_STYLES' ? styleAnalyticsList(msg.changes) : [];
   const extra: Partial<AnalyticsEvent> =
     msg?.type === 'SP_GET_COMPUTED_CSS' ? { action: 'open' } :
     msg?.type === 'SP_SET_ROOT_VAR' ? { scope: resolveTokenScopeKind(msg.scopeSelector) } :
+    msg?.type === 'SP_APPLY_STYLE' ? styleAnalytics(msg.property) :
+    msg?.type === 'SP_APPLY_STYLES' ? (styleBatch[0] || {}) :
+    msg?.type === 'SP_SET_TEXT' ? { action: 'text', category: 'text' } :
+    msg?.type === 'SP_SET_HTML' ? { action: 'html', category: 'text' } :
+    msg?.type === 'SP_DOM_ACTION' ? { action: msg.action, category: 'dom' } :
+    msg?.type === 'SP_REORDER_LAYER' ? { action: 'reorder', category: 'dom' } :
+    msg?.type === 'SP_EXPORT' ? { format: msg.format, change_count_bucket: changeCountBucket(siteChangeCount()) } :
     {};
-  if (feature) trackFeature({ feature, outcome: 'attempt', ...extra });
+  const page_scheme = pageSchemeFromUrl(boundPageUrl);
+  const track = (fields: Partial<AnalyticsEvent> & Pick<AnalyticsEvent, 'outcome'>) => {
+    if (!feature) return;
+    if (styleBatch.length <= 1) trackFeature({ feature, page_scheme, ...extra, ...fields });
+    else for (const item of styleBatch) trackFeature({ feature, page_scheme, ...extra, ...item, ...fields });
+  };
+  track({ outcome: 'attempt' });
   const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
     ? { ...msg, targetTabId: myTabId }
     : msg;
   try {
     const r = await operation.wait(browser.runtime.sendMessage(stamped));
     if (IS_SAFARI && r?.error) throw new Error(String(r.error));
-    if (feature) trackFeature({ feature, ...commandOutcome(r), ...extra });
+    if (feature) track({ ...commandOutcome(r) });
     return r || {};
   } catch (error) {
     operation.assertCurrent();
-    if (feature) trackFeature({ feature, outcome: 'failure', reason: 'unavailable', ...extra });
+    if (feature) track({ outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' });
     if (IS_SAFARI) {
       // Backpressure rejects this operation, not the live target binding.
       if (error instanceof Error && error.message === 'Too many Inspector requests') {
@@ -2184,8 +2198,8 @@ async function revertGroup(groupKey: string, operation = beginInspectorOperation
 
 async function copyPrompt(operation = beginInspectorOperation()) {
   operation.assertCurrent();
-  trackFeature({ feature: 'copy_prompt', outcome: 'attempt' });
-  const output = operation.wait(send({ type: 'SP_EXPORT', format: 'markdown', scope: 'site' }, operation))
+  trackFeature({ feature: 'copy_prompt', outcome: 'attempt', change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) });
+  const output = operation.wait(send({ type: 'SP_EXPORT', format: 'markdown', scope: 'site', silentAnalytics: true }, operation))
     .then(res => res.output || res.markdown || '');
   const safariCopy = IS_SAFARI ? writeInspectorTextClipboard(output) : null;
   const text = await operation.wait(output);
@@ -2218,7 +2232,7 @@ async function sendToAgent(operation = beginInspectorOperation()) {
   sendingFeedback = true;
   try {
   await operation.wait(refreshMcpStatus(undefined, operation));
-  if (mcpState !== 'connected') { trackFeature({ feature: 'send_to_agent', outcome: 'failure', reason: mcpState === 'offline' ? 'offline' : 'waiting_for_agent', mode: mcpMode }); sendAgentHelpOpen = true; render(); return; }
+  if (mcpState !== 'connected') { trackFeature({ feature: 'send_to_agent', outcome: 'failure', reason: mcpState === 'offline' ? 'offline' : 'waiting_for_agent', error_code: mcpState === 'offline' ? 'bridge_unreachable' : 'agent_timeout', mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) }); sendAgentHelpOpen = true; render(); return; }
   if (feedbackSession?.state === 'implementing') return;
   const res = await operation.wait(send({ type: 'SP_SEND_TO_AGENT', scope: 'site' }, operation));
   if (res?.ok) {

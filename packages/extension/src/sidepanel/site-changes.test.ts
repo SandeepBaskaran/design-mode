@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import ts from 'typescript';
 import { writeInspectorTextClipboard } from '../inspector/clipboard';
+import { changeCountBucket, pageSchemeFromUrl } from '../platform/analytics';
 
 const source = readFileSync(new URL('./sidepanel.ts', import.meta.url), 'utf8');
 it('labels the style grouping Appearance without changing its filter key', () => {
@@ -28,7 +29,7 @@ function harness(safari = false) {
   const messages: any[] = [];
   const toasts: any[] = [];
   const tracked: any[] = [];
-  const context = createContext({ beginInspectorOperation, runInspectorAction, IS_SAFARI: safari, writeInspectorTextClipboard,
+  const context = createContext({ beginInspectorOperation, runInspectorAction, IS_SAFARI: safari, writeInspectorTextClipboard, changeCountBucket, pageSchemeFromUrl, boundPageUrl: '',
     URL, Map, Set, Date, console, activeRouteKey: a, changesPageUrl: a,
     routeGroups: [group(b, [{ selector: 'h1', property: 'color', oldValue: 'red', newValue: 'blue' }])],
     styleChanges: [{ selector: 'h1', property: 'margin', oldValue: '0', newValue: '8px' }], textChanges: [], domChanges: [], comments: [], tokenChanges: [], componentContexts: {},
@@ -187,9 +188,9 @@ describe('site-wide changes panel', () => {
       assert.equal(c.copied, undefined);
       release({ output: expected });
       await pending;
-      assert.deepEqual(JSON.parse(JSON.stringify(messages)), [{ type: 'SP_EXPORT', format: 'markdown', scope: 'site' }]);
+      assert.deepEqual(JSON.parse(JSON.stringify(messages)), [{ type: 'SP_EXPORT', format: 'markdown', scope: 'site', silentAnalytics: true }]);
       assert.deepEqual(JSON.parse(JSON.stringify(tracked)), [
-        { feature: 'copy_prompt', outcome: 'attempt' },
+        { feature: 'copy_prompt', outcome: 'attempt', change_count_bucket: '2-5', page_scheme: 'unknown' },
         { feature: 'copy_prompt', outcome: 'clipboard_completed' },
       ]);
       assert.equal(c.copied, expected);

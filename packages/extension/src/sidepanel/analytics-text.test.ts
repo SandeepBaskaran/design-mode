@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { commandOutcome, messageFeatures } from '../platform/analytics.ts';
+import { commandOutcome, messageFeatures, pageSchemeFromUrl, styleAnalytics, changeCountBucket } from '../platform/analytics.ts';
 
 const source = readFileSync(new URL('./sidepanel.ts', import.meta.url), 'utf8');
 const ast = ts.createSourceFile('sidepanel.ts', source, ts.ScriptTarget.Latest, true);
@@ -16,7 +16,7 @@ for (const response of [{ info: {} }, { ok: false }, null, 'throw']) {
     const events: unknown[] = [];
     const commands: unknown[] = [];
     const context = vm.createContext({
-      IS_SAFARI: false, beginInspectorOperation: () => createInspectorOperation(() => 0, false), messageFeatures, commandOutcome, myTabId: 42,
+      IS_SAFARI: false, beginInspectorOperation: () => createInspectorOperation(() => 0, false), messageFeatures, commandOutcome, styleAnalytics, pageSchemeFromUrl, changeCountBucket, boundPageUrl: '', siteChangeCount: () => 0, myTabId: 42,
       info: null, styleChanges: [], textChanges: [], domChanges: [], undoCount: 0, redoCount: 0,
       render() {}, trackFeature(event: unknown) { events.push(event); },
       browser: { runtime: { async sendMessage(message: unknown) {
@@ -27,8 +27,8 @@ for (const response of [{ info: {} }, { ok: false }, null, 'throw']) {
     });
     await vm.runInContext(compiled + '\napplyHtml("synthetic-element", "<b>Private page text</b>")', context);
     assert.deepEqual(JSON.parse(JSON.stringify(commands)), [{type: 'SP_SET_HTML', elementId: 'synthetic-element', html: '<b>Private page text</b>', targetTabId: 42}]);
-    const outcome = response === 'throw' ? { outcome: 'failure', reason: 'unavailable' } : commandOutcome(response);
-    assert.deepEqual(JSON.parse(JSON.stringify(events)), [{feature:'text', outcome:'attempt'}, {feature:'text', ...outcome}]);
+    const outcome = response === 'throw' ? { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' } : commandOutcome(response);
+    assert.deepEqual(JSON.parse(JSON.stringify(events)), [{feature:'text', outcome:'attempt', action:'html', category:'text', page_scheme:'unknown'}, {feature:'text', page_scheme:'unknown', action:'html', category:'text', ...outcome}]);
     assert.equal(JSON.stringify(events).includes('Private'), false);
     assert.equal(JSON.stringify(events).includes('synthetic-element'), false);
   });

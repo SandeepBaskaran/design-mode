@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
-import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDisabled, boundedEvent, consentMatches, distributionHint, nativeConsentAllowed, parseAnalyticsConfig } from './analytics.ts';
+import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDisabled, boundedEvent, consentMatches, distributionHint, nativeConsentAllowed, parseAnalyticsConfig, styleAnalytics, styleAnalyticsList, pageSchemeFromUrl, changeCountBucket, classifyErrorCode } from './analytics.ts';
 
 const config = parseAnalyticsConfig({ host: 'https://analytics.invalid', key: 'phc_local_test_only' })!;
 const consent = { ...config, version: 2, enabled: true };
@@ -70,8 +70,39 @@ test('allowlist strips page content, URLs, selectors, tokens and raw errors', ()
   assert.deepEqual(boundedEvent({ feature: 'help', outcome: 'attempt', target: 'shortcuts' }), { feature: 'help', outcome: 'attempt', target: 'shortcuts' });
   assert.deepEqual(boundedEvent({ feature: 'matching_layers', outcome: 'state', state: 'on' }), { feature: 'matching_layers', outcome: 'state', state: 'on' });
   assert.deepEqual(boundedEvent({ feature: 'media', outcome: 'download_initiated', action: 'download', media: 'svg' }), { feature: 'media', outcome: 'download_initiated', action: 'download', media: 'svg' });
+  assert.deepEqual(boundedEvent({ feature: 'style', outcome: 'attempt', prop: 'font-size', category: 'typography', value: '#secret', selector: '#private' }), { feature: 'style', outcome: 'attempt', prop: 'font-size', category: 'typography' });
+  assert.deepEqual(boundedEvent({ feature: 'dom', outcome: 'attempt', action: 'duplicate', category: 'dom' }), { feature: 'dom', outcome: 'attempt', action: 'duplicate', category: 'dom' });
+  assert.deepEqual(boundedEvent({ feature: 'text', outcome: 'attempt', action: 'html', category: 'text', html: '<b>secret</b>' }), { feature: 'text', outcome: 'attempt', action: 'html', category: 'text' });
+  assert.deepEqual(boundedEvent({ feature: 'export', outcome: 'attempt', format: 'markdown', change_count_bucket: '2-5', page_scheme: 'https' }), { feature: 'export', outcome: 'attempt', format: 'markdown', change_count_bucket: '2-5', page_scheme: 'https' });
+  assert.deepEqual(boundedEvent({ feature: 'inspect', outcome: 'failure', error_code: 'restricted_url', page_scheme: 'chrome_internal', url: 'chrome://settings' }), { feature: 'inspect', outcome: 'failure', error_code: 'restricted_url', page_scheme: 'chrome_internal' });
+  assert.equal(boundedEvent({ feature: 'style', outcome: 'attempt', prop: 'not-a-prop', category: 'secret' })?.prop, undefined);
   assert.equal(boundedEvent({ feature: 'secret', outcome: 'attempt' }), null);
   assert.equal(boundedEvent({ feature: 'import', outcome: 'secret' }), null);
+  assert.deepEqual(styleAnalytics('fontSize'), { prop: 'font-size', category: 'typography' });
+  assert.deepEqual(styleAnalytics('backgroundColor'), { prop: 'background-color', category: 'color' });
+  assert.deepEqual(styleAnalytics('aspectRatio'), { prop: 'aspect-ratio', category: 'sizing' });
+  assert.deepEqual(styleAnalytics('flexGrow'), { prop: 'flex-grow', category: 'layout' });
+  assert.deepEqual(styleAnalytics('clipPath'), { prop: 'clip-path', category: 'effects' });
+  assert.deepEqual(styleAnalytics('gridTemplateAreas'), { prop: 'grid-template-areas', category: 'layout' });
+  assert.deepEqual(styleAnalyticsList([
+    { property: 'paddingTop', value: '8px' },
+    { property: 'paddingRight', value: '8px' },
+    { property: 'paddingTop', value: '9px' },
+    { property: '--private', value: 'secret' },
+  ]), [
+    { prop: 'padding-top', category: 'spacing' },
+    { prop: 'padding-right', category: 'spacing' },
+  ]);
+  assert.equal(pageSchemeFromUrl('https://example.com/path?q=1'), 'https');
+  assert.equal(pageSchemeFromUrl('http://localhost:3000/app'), 'localhost');
+  assert.equal(pageSchemeFromUrl('file:///Users/private/page.html'), 'file');
+  assert.equal(pageSchemeFromUrl('chrome://extensions'), 'chrome_internal');
+  assert.equal(changeCountBucket(0), '0');
+  assert.equal(changeCountBucket(4), '2-5');
+  assert.equal(changeCountBucket(21), '20+');
+  assert.equal(classifyErrorCode({ error: 'Could not establish connection. Receiving end does not exist.' }), 'no_content_script');
+  assert.equal(classifyErrorCode({ error: 'https://private.example/secret-path timed out' }), 'agent_timeout');
+  assert.equal(classifyErrorCode(undefined), 'unavailable');
 });
 
 test('Chrome, native Firefox denial/grant, Firefox 121 fallback', () => {

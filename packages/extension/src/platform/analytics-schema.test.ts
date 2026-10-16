@@ -46,7 +46,7 @@ for (const firefox of [false, true]) {
     assert.equal(p.$raw_user_agent, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
     assert.equal(p.$process_person_profile, true);
     assert.equal(p.$geoip_disable, false);
-    assert.equal(p.schema_version, 3);
+    assert.equal(p.schema_version, 4);
     assert.deepEqual(Object.keys(p).sort(), ['$geoip_disable', '$process_person_profile', '$raw_user_agent', '$set', 'browser', 'browser_vendor', 'distribution', 'feature', 'language', 'outcome', 'schema_version', 'surface', 'timezone', 'version'].sort());
     assert.equal(JSON.stringify(received).includes('private'), false);
     const count = received.length;
