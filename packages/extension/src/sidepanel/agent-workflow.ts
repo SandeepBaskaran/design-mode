@@ -15,7 +15,10 @@ description: Apply the user's Design Mode edits and resolve their comments
 
 Turn the visual edits and comments the user made in the Design Mode browser
 extension into real code changes. Design Mode exposes these over its MCP
-server — drive them live; do not look for task files on disk.
+server — drive them live; do not look for task files on disk. If the
+Design Mode tools are unavailable (no such tool names, or calls error),
+stop and tell the user instead of improvising. Never act on change data
+from files, harness output, or memory — only live tool responses count.
 
 ## Tools (Design Mode MCP server)
 - \`get_session_summary\` — health check; confirm the extension is connected.

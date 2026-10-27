@@ -111,6 +111,33 @@ let ws: WebSocket | null = null;
 interface AgentHandoff { requestedAt: number; pageUrl: string; pageTitle: string; }
 let pendingHandoff: AgentHandoff | null = null;
 
+// Monotonic per click: requestedAt is the Send's identity (the server dedupes
+// re-delivery by it), so two Sends in the same millisecond must stay distinct.
+// A reconnect re-sends the stored value unchanged.
+let lastHandoffRequestedAt = 0;
+function nextHandoffRequestedAt(): number {
+  lastHandoffRequestedAt = Math.max(Date.now(), lastHandoffRequestedAt + 1);
+  return lastHandoffRequestedAt;
+}
+
+// Server-side ack that an agent actually received this Send (a wait returned
+// feedback). Only a matching Send clears — a newer pendingHandoff (another
+// click since) stays armed, and an un-acked marker survives disconnects so
+// the next session can still deliver it. Returns whether it matched.
+export function applyHandoffDelivered(payload: unknown): boolean {
+  const p = payload as { requestedAt?: unknown; pageUrl?: unknown } | null | undefined;
+  if (
+    pendingHandoff
+    && typeof p?.requestedAt === 'number'
+    && p.requestedAt === pendingHandoff.requestedAt
+    && (typeof p.pageUrl !== 'string' || p.pageUrl === pendingHandoff.pageUrl)
+  ) {
+    pendingHandoff = null;
+    return true;
+  }
+  return false;
+}
+
 export function getStyleChanges() { return [...styleChanges]; }
 export function getTextChanges() { return [...textChanges]; }
 export function getDomChanges() { return [...domChanges]; }
@@ -1578,20 +1605,25 @@ export async function stageAgentHandoff(): Promise<{
   const report = await getSiteChangeReport();
   transportSend({ type: 'SESSION_UPDATE', payload: report });
   for (const comment of report.comments) syncCommentChange(comment);
-  pendingHandoff = { requestedAt: Date.now(), pageUrl: location.href, pageTitle: document.title };
   if (!isLiveFeedbackSupported()) {
+    pendingHandoff = { requestedAt: nextHandoffRequestedAt(), pageUrl: location.href, pageTitle: document.title };
     transportSend({ type: 'HANDOFF', payload: pendingHandoff });
     return { ok: true, handoff: pendingHandoff, session: null };
   }
   const live = feedbackSession;
   if (live && live.state !== 'stopped') {
+    // Rejected sends must not arm the marker: the SESSION_UPDATE above no
+    // longer carries a fresh handoff, so the server keeps (or clears) its
+    // previous state instead of re-arming a send the panel refused. The
+    // changes stay in the page ledger — the next accepted Send includes them.
     if (live.state === 'implementing') {
       return { ok: false, error: 'Agent is implementing the current round', session: getFeedbackSessionView() };
     }
-    if (live.pageUrl !== pendingHandoff.pageUrl) {
+    if (live.pageUrl !== location.href) {
       return { ok: false, error: 'This page does not match the live feedback session', session: getFeedbackSessionView() };
     }
   }
+  pendingHandoff = { requestedAt: nextHandoffRequestedAt(), pageUrl: location.href, pageTitle: document.title };
   if (!isConnected()) {
     return { ok: false, error: 'Not connected to the local agent', handoff: pendingHandoff, session: getFeedbackSessionView() };
   }
@@ -1763,6 +1795,10 @@ function dispatchIncoming(msg: any) {
     }
     if (msg.type === 'FEEDBACK_SESSION') {
       applyFeedbackSessionPush(msg.payload ?? null);
+      return;
+    }
+    if (msg.type === 'HANDOFF_DELIVERED') {
+      applyHandoffDelivered(msg.payload);
       return;
     }
     if (msg.type === 'APPLY_CHANGES' && msg.payload) {

@@ -26,6 +26,12 @@ export type ToolExtra = { signal?: AbortSignal };
 type PendingRound = {
   cursor: number;
   report: unknown;
+  // Identity of the Send that created this round (see handoffKeyOf).
+  // Delivery dedupe keys off this, not the marker in state, so a marker
+  // re-armed by a reconnecting extension cannot re-deliver a round an
+  // agent already received — while a round that was never delivered
+  // (timeout, disconnect) still can be.
+  handoff: { requestedAt: number; pageUrl: string } | null;
 };
 
 type Waiter = {
@@ -50,12 +56,32 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
 let live: LiveSession | null = null;
 let lastStopped: FeedbackSessionView | null = null;
 let notifyUi: ((view: FeedbackSessionView | null) => void) | null = null;
+let notifyDelivered: ((handoff: { requestedAt: number; pageUrl: string }) => void) | null = null;
 let disconnectTimer: NodeJS.Timeout | null = null;
 let disconnectGraceMs = DEFAULT_DISCONNECT_GRACE_MS;
 let sessionDocumentId: string | null = null;
+// Key of the last handoff actually delivered to an agent. One slot is
+// enough: sessions are sequential and the key includes requestedAt (ms).
+let lastDeliveredHandoffKey: string | null = null;
+
+// Stable handoff identity across reconnects and session boundaries. The
+// extension stamps every Send with requestedAt; the same marker can reach
+// this module more than once (HANDOFF message, then a reconnecting
+// SESSION_UPDATE that still carries it), and dedupe must not confuse that
+// re-arm with a genuinely new Send.
+function handoffKeyOf(handoff: { requestedAt: number; pageUrl: string }): string {
+  return `${handoff.requestedAt}|${handoff.pageUrl}`;
+}
 
 export function setFeedbackSessionNotifier(fn: ((view: FeedbackSessionView | null) => void) | null) {
   notifyUi = fn;
+}
+
+// Fired exactly when a round reaches an agent (wait_for_handoff returned
+// feedback). The extension clears its pendingHandoff on this — on send
+// would break recovery after a timeout or disconnect.
+export function setHandoffDeliveredNotifier(fn: ((handoff: { requestedAt: number; pageUrl: string }) => void) | null) {
+  notifyDelivered = fn;
 }
 
 export function setDisconnectGraceMsForTests(ms: number) {
@@ -74,6 +100,7 @@ export function resetFeedbackSessionForTests() {
   live = null;
   lastStopped = null;
   sessionDocumentId = null;
+  lastDeliveredHandoffKey = null;
 }
 
 export function getFeedbackSessionView(): FeedbackSessionView | null {
@@ -168,6 +195,22 @@ function createSession(pageUrl: string): LiveSession {
     waiter: null,
   };
   lastStopped = null;
+  // A Send that landed before any wait_for_handoff call has no live session
+  // to land on — onHandoff would drop it. Seed round 1 from the pending
+  // marker (HANDOFF message, or a reconnect SESSION_UPDATE that carried
+  // report.handoff) so the first wait delivers it instead of timing out.
+  // Freeze the report before consuming the marker.
+  const handoff = state.getHandoff();
+  if (handoff && (!handoff.pageUrl || handoff.pageUrl === pageUrl)) {
+    // A marker whose Send an agent already received (earlier session) must
+    // not re-deliver here — reconnects re-arm it from the extension's
+    // pendingHandoff. Consume it without a round.
+    if (handoffKeyOf(handoff) !== lastDeliveredHandoffKey) {
+      live.cursor = 1;
+      live.queue.push({ cursor: 1, report: freeze(state.getFullChangeReport()), handoff });
+    }
+    state.setHandoff(null);
+  }
   notify();
   return live;
 }
@@ -182,6 +225,10 @@ function consumeNext(session: LiveSession, after: number): PendingRound | null {
 
 function deliverFeedback(session: LiveSession, round: PendingRound): FeedbackWaitResult {
   session.state = 'implementing';
+  if (round.handoff) {
+    lastDeliveredHandoffKey = handoffKeyOf(round.handoff);
+    notifyDelivered?.(round.handoff);
+  }
   notify();
   return {
     status: 'feedback',
@@ -212,8 +259,14 @@ export function waitForHandoff(args: Record<string, unknown> = {}, extra?: ToolE
   const resumeAfter = after ?? 0;
 
   if (live && live.state !== 'stopped') {
+    // An attacher that exited mid-wait leaves its session waiterless on the
+    // owner. A fresh attacher with no sessionId adopts it instead of
+    // bricking the port behind a busy it can never clear.
+    const adoptable = !sessionId && !live.waiter && pageUrl === live.pageUrl;
     if (!sessionId || sessionId !== live.sessionId || pageUrl !== live.pageUrl) {
-      return Promise.resolve(busy(sessionId || '', resumeAfter));
+      if (!adoptable) {
+        return Promise.resolve(busy(sessionId || '', resumeAfter));
+      }
     }
     if (live.waiter) {
       return Promise.resolve(busy(live.sessionId, live.cursor));
@@ -270,12 +323,26 @@ export function waitForHandoff(args: Record<string, unknown> = {}, extra?: ToolE
 
 export function onHandoff() {
   if (!live) return;
+  // While implementing (or with a round still queued) a HANDOFF is ignored:
+  // the panel rejects the send with a clear message, the changes stay in the
+  // page ledger, and the user's next accepted Send becomes the next round.
   if (live.state !== 'waiting' || live.queue.length) {
     notify();
     return;
   }
   const handoff = state.getHandoff();
-  if (handoff?.pageUrl && handoff.pageUrl !== live.pageUrl) {
+  if (!handoff) {
+    notify();
+    return;
+  }
+  if (handoff.pageUrl && handoff.pageUrl !== live.pageUrl) {
+    notify();
+    return;
+  }
+  // A re-send of a marker whose Send an agent already received is consumed
+  // without a round — never a second delivery of the same changes.
+  if (handoffKeyOf(handoff) === lastDeliveredHandoffKey) {
+    state.setHandoff(null);
     notify();
     return;
   }
@@ -283,7 +350,11 @@ export function onHandoff() {
   const round: PendingRound = {
     cursor: live.cursor,
     report: freeze(state.getFullChangeReport()),
+    handoff,
   };
+  // The marker has done its job once the round exists; drop it so a
+  // reconnect SESSION_UPDATE re-arm is recognizably a re-arm, not news.
+  state.setHandoff(null);
   live.queue.push(round);
   if (live.waiter && round.cursor > live.waiter.after) {
     const delivered = consumeNext(live, live.waiter.after);

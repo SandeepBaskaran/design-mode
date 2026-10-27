@@ -8,6 +8,7 @@ import {
   onPageNavigated,
   onSessionPage,
   setFeedbackSessionNotifier,
+  setHandoffDeliveredNotifier,
   stopFeedbackSession,
 } from './feedback-session.js';
 
@@ -37,6 +38,12 @@ export function sendToExtension(msg: object): boolean {
 
 setFeedbackSessionNotifier((session) => {
   sendToExtension({ type: 'FEEDBACK_SESSION', payload: session });
+});
+
+// The extension clears its pendingHandoff only on this ack — a Send that was
+// never delivered (timeout, disconnect) stays recoverable across reconnects.
+setHandoffDeliveredNotifier((handoff) => {
+  sendToExtension({ type: 'HANDOFF_DELIVERED', payload: handoff });
 });
 
 export function attachWebSocketServer(server: HttpServer, token: string): WebSocketServer {

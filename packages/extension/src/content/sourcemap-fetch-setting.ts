@@ -44,12 +44,17 @@ export function whenSourcemapFetchSettingKnown(): Promise<boolean> {
 async function readStored(): Promise<void> {
   if (known) return;
   try {
-    const get = browser.storage?.local?.get;
-    if (typeof get !== 'function') {
+    const area = browser.storage?.local;
+    // StorageArea methods are native functions that throw "Illegal
+    // invocation" when called without the area as their receiver — which
+    // the catch below would read as "no storage here" and fail-close the
+    // gate for the tab's lifetime. Invoke as a method on the area so the
+    // receiver binds; never pull `get` off the area and call it unbound.
+    if (!area || typeof area.get !== 'function') {
       failClosed();
       return;
     }
-    const r = await get([STORAGE_KEY]);
+    const r = await area.get([STORAGE_KEY]);
     // A change that landed via onChanged while the read was in flight is
     // at least as fresh as the read's snapshot — keep it.
     if (!known) applySourcemapFetchValue(r?.[STORAGE_KEY]);

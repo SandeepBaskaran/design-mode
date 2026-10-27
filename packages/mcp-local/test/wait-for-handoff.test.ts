@@ -64,8 +64,13 @@ async function waitForView(timeoutMs = 500) {
   throw new Error('timed out waiting for live session');
 }
 
+// requestedAt is the Send's identity (the server dedupes re-delivery by it),
+// so two Sends in the same millisecond must stamp distinct values — the same
+// monotonic guarantee the real extension makes in change-tracker.ts.
+let lastHandoffStamp = 0;
 function sendHandoff(pageUrl = PAGE) {
-  state.setHandoff({ requestedAt: Date.now(), pageUrl, pageTitle: 'App' });
+  lastHandoffStamp = Math.max(Date.now(), lastHandoffStamp + 1);
+  state.setHandoff({ requestedAt: lastHandoffStamp, pageUrl, pageTitle: 'App' });
   onHandoff();
 }
 
@@ -261,6 +266,13 @@ describe('wait_for_handoff websocket disconnect', () => {
     state.clear();
     setDisconnectGraceMsForTests(40);
     owner = await claimOrAttach(await getFreePort());
+  });
+
+  // A send from an earlier test must not seed the next test's session with
+  // an instant feedback round — createSession now consumes pending markers.
+  beforeEach(() => {
+    resetFeedbackSessionForTests();
+    state.clear();
   });
 
   after(async () => {

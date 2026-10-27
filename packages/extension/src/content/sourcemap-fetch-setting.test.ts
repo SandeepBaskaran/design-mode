@@ -80,3 +80,7 @@ describe('sourcemap fetch gate', () => {
     }
   });
 });
+
+// The initial storage read must call StorageArea.get with the area as its
+// receiver — see sourcemap-fetch-setting.receiver.test.ts, which runs in its
+// own process so the one-shot module state is still unknown.
