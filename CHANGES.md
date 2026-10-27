@@ -4,7 +4,7 @@ User-facing reference for everything in the Changes tab. Each control + each ent
 
 For implementation status see PARITY.md (where applicable). This document is for **understanding what each thing in the Changes tab does**.
 
-Last updated: 2026-07-30.
+Last updated: 2026-10-27.
 
 ---
 
@@ -67,7 +67,30 @@ Split into two clusters: primary actions on the left, file-IO on the right.
 | Left | **Changes toggle** (`eye` / `eye-off` icon) | Single toggle replacing the old View Original / View Changes pair. Active (accent-tinted, `eye`) when your edits are visible — the default state. Click flips to previewing the original (muted, `eye-off`). Click again restores. | Comparing your design to the original; sanity-checking what actually shipped vs what you've added. |
 | Left | **Clear all** (`trash` icon, danger-coloured) | Opens a confirmation dialog (overlay) before wiping every tracked change on every saved route of the current origin — styles, text edits, DOM operations, and comments. **Esc** dismisses the dialog. | One-shot reset to ship-state. |
 | Right | **Export** (`download` icon) | Downloads every tracked change as a JSON file. | Stashing a session before clearing it, or shipping a snapshot to a teammate. |
+| Right | **Code** (`code` icon) | Opens the Code view: preview the recorded session as CSS or JSON, then copy it to the clipboard or download it. See below. | Handing the exact recorded values to a developer or a pasted prompt, without sending anything to an agent. |
 | Right | **Import** (`upload` icon) | Replaces every change with an imported JSON file. | Picking up where you left off, or applying a teammate's saved session. |
+
+### Code view (Copy CSS / Export changes)
+
+Opened by the **Code** button; **Esc** or the back arrow closes it. Two tabs
+pick the format — the preview is selectable text, and the format being
+previewed is always labelled:
+
+- **CSS** — one rule per selector, grouped per route (`/* Route: … */`
+  comments), including pseudo-state variants (`:hover`, `@starting-style`)
+  exactly as recorded. It contains **only the declarations recorded this
+  session** — it is not a patch or the page's full source code, and it cannot
+  express text/DOM edits or comments.
+- **JSON** — the same structured record the Export button downloads
+  (selectors, old/new values, statuses, source locations, breakpoints,
+  comments), covering every saved route on the origin.
+
+**Copy** puts the previewed format on the clipboard; **Download** saves
+`design-mode-changes-<timestamp>.css|json` (`text/css` / `application/json`).
+With no recorded changes both actions are disabled. If the session has no
+style edits, the CSS tab says so and CSS copy/download stay disabled — the
+JSON tab remains available. The existing **Export** button (JSON file) and
+the Alt+X copy-CSS shortcut keep working unchanged.
 
 When the Changes toggle is in **previewing-original** state:
 - A banner appears: "Previewing original — click Changes to see your edits."

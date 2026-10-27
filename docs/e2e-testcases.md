@@ -384,6 +384,13 @@ The user's reported **Raycast global Option+C conflict is separate**: native tes
 | 7.26  | Batch unflag | Click zap again | Icon returns to outline (does NOT un-apply the changes — that's the trash button's job) |
 | 7.27  | Tab badge count | Make 5 changes | "Changes" tab shows badge `5` (style + text + DOM + comments combined) |
 | 7.28  | Breakpoint pill on rows | Narrow the browser so the page viewport is < 1024px → edit a style / text / duplicate an element | Each such row shows a small `MOBILE` / `TABLET` pill (next to the status badge); hovering it shows `Edited at {bp} · {width}px`. Desktop-width edits show no pill; the pill survives reload (persisted on the change) |
+| 7.29  | Code view opens | Make style + text edits → click the **Code** button in the action row | Full-panel "Export code" view opens on the CSS tab; the preview shows a CSS rule per selector with `/* Route: … */` grouping; header shows the total change count; **Esc** or the back arrow returns to the Changes tab |
+| 7.30  | Code view CSS copy | In the Code view, click **Copy CSS** | Toast "CSS copied to clipboard"; pasting yields exactly the previewed CSS (recorded declarations only, not full source) |
+| 7.31  | Code view JSON tab + copy | Switch to the **JSON** tab → click **Copy JSON** | Preview shows the structured record (version 2, route groups, statuses, source locations, comments); toast "Change record copied as JSON"; pasted text round-trips as valid JSON |
+| 7.32  | Code view downloads | Click **Download** on each tab | CSS tab saves `design-mode-changes-<timestamp>.css` (`text/css`); JSON tab saves `design-mode-changes-<timestamp>.json` (`application/json`); the Changes-tab Export button and Alt+X still work as before |
+| 7.33  | Code view empty state | Open the Code view → Clear all changes from another tab or via Undo until nothing is recorded | With no recorded changes the Changes action row (and its **Code** button) is hidden, so the view cannot be opened empty; if it is already open it shows "(no changes recorded yet)" with Copy/Download disabled and no errors |
+| 7.34  | Code view CSS without style edits | Record only a text/comment change (no style edits) → open the Code view, CSS tab | "No CSS declarations — the recorded changes include no style edits." with Copy/Download disabled; the JSON tab remains usable |
+| 7.35  | Code view escaping | Record a change on an element whose selector/value contains markup characters (or import one) → open both tabs | The preview shows them escaped (`&lt;…&gt;`); no raw `<script>`/`<img onerror=…>` appears in the panel DOM |
 
 ---
 

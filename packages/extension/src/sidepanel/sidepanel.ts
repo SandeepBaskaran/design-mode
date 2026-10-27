@@ -34,6 +34,7 @@ import { componentGroup, groupByComponent, type ComponentContext } from '../comp
 import { parseFeedbackSession, type FeedbackSessionView } from './feedback-view';
 import { configureShortcutStorage, enableShortcuts, loadShortcuts, registerShortcut } from '../content/keyboard-shortcuts';
 import { diffWords } from './word-diff';
+import { exportCodeFilename, exportMimeType, formatExportCount, serializeChangesJson, summarizeExportPayload, type ExportFormat } from './export-actions';
 import { writeScreenshotClipboard } from './screenshot-clipboard';
 import { writeInspectorTextClipboard } from '../inspector/clipboard';
 import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, sanitizeRichTextHref, normalizeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
@@ -178,6 +179,13 @@ type ColorFormat = 'hex' | 'rgba' | 'hsl';
 let tab: Tab = 'design';
 let settingsOpen = false;
 let helpOpen = false;
+// Changes-tab "Code" view: preview the recorded changes as CSS or JSON
+// before copying / downloading. `exportCodeCss` is fetched once per open —
+// null while the content-script round-trip is in flight, '' when the
+// export failed.
+let exportCodeOpen = false;
+let exportCodeTab: ExportFormat = 'css';
+let exportCodeCss: string | null = null;
 let mcpOpen = false;
 let sendAgentHelpOpen = false;
 
@@ -8991,6 +8999,7 @@ function renderChangesTab(): string {
   // Import is a styled <label> wrapping a hidden file input, mirroring the
   // presets export/import pattern in Settings.
   const exportBtn = '<button data-dm-action="export-changes" title="Download every tracked change as a JSON file" style="' + inactiveStyle + '">' + icon('download', 10) + ' Export</button>';
+  const codeBtn = '<button data-dm-action="export-code" title="Preview and copy or download the recorded changes as CSS or JSON" style="' + inactiveStyle + '">' + icon('code', 10) + ' Code</button>';
   const importBtn = '<label title="Replace every change with an imported JSON file" style="' + inactiveStyle + '">' + icon('upload', 10) + ' Import<input type="file" accept=".json,application/json" data-dm-import-changes style="display:none;"/></label>';
   const clearBtn = '<button data-dm-action="clear-all-changes" style="padding:4px 10px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:4px;color:var(--dm-danger);cursor:pointer;font-size:9px;font-family:inherit;display:flex;align-items:center;gap:4px;">' + icon('trash', 10) + ' Clear all</button>';
   // Two clusters: primary (Changes toggle + Clear all) on the left, file
@@ -8998,7 +9007,7 @@ function renderChangesTab(): string {
   // pushes them apart while `flex-wrap` keeps the row tidy on narrow panels.
   const topRow = '<div style="padding:6px 10px;border-bottom:1px solid var(--dm-separator);display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;background:var(--dm-bg);">' +
     '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' + previewToggleBtn + clearBtn + '</div>' +
-    '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' + exportBtn + importBtn + '</div>' +
+    '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">' + exportBtn + codeBtn + importBtn + '</div>' +
     '</div>';
 
   // Action row 2 — Search + Expand-all toggle + Sort menu. Sort is an icon
@@ -9829,6 +9838,99 @@ function renderHelpView(): string {
     '</div>';
 }
 
+function renderExportCodeView(): string {
+  const card = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:14px;';
+  const actionBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;flex:1;padding:9px 12px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:12px;font-weight:500;font-family:inherit;';
+  const payload = siteChangesExport();
+  const summary = summarizeExportPayload(payload);
+
+  const tabBtn = (f: ExportFormat, label: string) => {
+    const active = exportCodeTab === f;
+    return '<button data-dm-action="export-code-tab" data-dm-format="' + f + '" aria-pressed="' + (active ? 'true' : 'false') + '" style="flex:1;padding:7px 10px;background:' + (active ? 'var(--dm-accent-bg)' : 'var(--dm-btn-bg)') + ';border:1px solid ' + (active ? 'var(--dm-accent-border)' : 'var(--dm-btn-border)') + ';border-radius:6px;color:' + (active ? 'var(--dm-accent)' : 'var(--dm-text-secondary)') + ';cursor:pointer;font-size:11px;font-family:inherit;font-weight:' + (active ? '600' : '400') + ';">' + label + '</button>';
+  };
+
+  const cssPending = exportCodeTab === 'css' && exportCodeCss === null;
+  const cssEmpty = exportCodeTab === 'css' && summary.style === 0;
+  const empty = summary.total === 0;
+  const noCopy = empty || (exportCodeTab === 'css' && (exportCodeCss === null || summary.style === 0));
+  const actionsDisabled = ' disabled aria-disabled="true" style="' + actionBtn + 'opacity:0.45;"';
+  const actionsEnabled = ' style="' + actionBtn + '"';
+  const previewText = empty
+    ? ''
+    : exportCodeTab === 'css'
+      ? (exportCodeCss ?? '')
+      : serializeChangesJson(payload);
+
+  const previewBlock = empty
+    ? '<div role="status" style="padding:24px 8px;text-align:center;font-size:12px;color:var(--dm-text-dim);">(no changes recorded yet)</div>'
+    : cssPending
+      ? '<div role="status" style="padding:24px 8px;text-align:center;font-size:12px;color:var(--dm-text-dim);">Preparing CSS…</div>'
+      : cssEmpty
+        ? '<div role="status" style="padding:24px 8px;text-align:center;font-size:12px;color:var(--dm-text-dim);">No CSS declarations — the recorded changes include no style edits.</div>'
+        : '<pre data-dm-export-code tabindex="0" aria-label="' + (exportCodeTab === 'css' ? 'CSS export preview' : 'JSON export preview') + '" style="margin:0;padding:10px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:6px;font-size:10px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dm-text);white-space:pre-wrap;overflow-wrap:anywhere;max-height:42vh;overflow-y:auto;user-select:text;">' + escapeAttr(previewText) + '</pre>';
+
+  const hint = empty
+    ? 'Record something on the page first, then copy or download it here.'
+    : exportCodeTab === 'css'
+      ? 'Contains only the declarations recorded this session, grouped per route — not the page’s full source code.'
+      : 'Full structured record: selectors, values, statuses, source locations and comments.';
+
+  return '<div style="padding:16px;">' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
+    '<button data-dm-action="back-from-export-code" aria-label="Back to changes" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
+    '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Export code</span>' +
+    '<span style="margin-left:auto;font-size:10px;color:var(--dm-text-dim);">' + formatExportCount(summary) + '</span></div>' +
+    '<div style="display:flex;gap:6px;margin-bottom:12px;" role="group" aria-label="Export format">' + tabBtn('css', 'CSS') + tabBtn('json', 'JSON') + '</div>' +
+    '<div style="' + card + '">' +
+    previewBlock +
+    '<p style="margin:10px 0 0 0;font-size:10px;line-height:1.5;color:var(--dm-text-dim);">' + hint + '</p>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px;">' +
+    '<button data-dm-action="copy-export-code"' + (noCopy ? actionsDisabled : actionsEnabled) + '>' + icon('copy', 12) + ' Copy ' + (exportCodeTab === 'css' ? 'CSS' : 'JSON') + '</button>' +
+    '<button data-dm-action="download-export-code"' + (noCopy ? actionsDisabled : actionsEnabled) + '>' + icon('download', 12) + ' Download</button>' +
+    '</div>' +
+    '</div>';
+}
+
+async function copyExportCode(operation = beginInspectorOperation()) {
+  if (exportCodeTab === 'css') {
+    if (exportCodeCss === null) { showCaptureToast('error', 'CSS is still preparing — try again in a moment'); return null; }
+    if (summarizeExportPayload(siteChangesExport()).style === 0) { showCaptureToast('error', 'No CSS declarations to copy'); return null; }
+  }
+  const text = exportCodeTab === 'css' ? exportCodeCss ?? '' : serializeChangesJson(siteChangesExport());
+  try {
+    if (IS_SAFARI) {
+      const ok = await operation.wait(writeInspectorTextClipboard(Promise.resolve(text)));
+      if (!ok) throw new Error('clipboard denied');
+    } else {
+      await operation.wait(navigator.clipboard.writeText(text));
+    }
+  } catch {
+    if (operation.isCurrent()) showCaptureToast('error', 'Could not copy ' + (exportCodeTab === 'css' ? 'CSS' : 'JSON'));
+    return null;
+  }
+  showCaptureToast('success', exportCodeTab === 'css' ? 'CSS copied to clipboard' : 'Change record copied as JSON');
+  return text;
+}
+
+function downloadExportCode() {
+  if (exportCodeTab === 'css') {
+    if (exportCodeCss === null) { showCaptureToast('error', 'CSS is still preparing — try again in a moment'); return null; }
+    if (summarizeExportPayload(siteChangesExport()).style === 0) { showCaptureToast('error', 'No CSS declarations to download'); return null; }
+  }
+  const text = exportCodeTab === 'css' ? exportCodeCss ?? '' : serializeChangesJson(siteChangesExport());
+  const filename = exportCodeFilename(exportCodeTab);
+  const blob = new Blob([text], { type: exportMimeType(exportCodeTab) });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showCaptureToast('success', 'Downloaded ' + filename);
+  return filename;
+}
+
 function renderFileAccessView(): string {
   const card = 'background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:8px;padding:14px;';
   const primaryBtn = 'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px 12px;background:var(--dm-text);border:1px solid var(--dm-text);border-radius:6px;color:var(--dm-bg);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;';
@@ -10076,6 +10178,8 @@ function render() {
     html = renderHeader() + renderHelpView() + renderCaptureToast();
   } else if (contributeOpen) {
     html = renderHeader() + renderContributeView() + renderCaptureToast();
+  } else if (exportCodeOpen) {
+    html = renderHeader() + renderExportCodeView() + renderCaptureToast();
   } else if (IS_SAFARI && inspectorError) {
     html = renderHeader() + '<section style="padding:20px;line-height:1.5;"><h2 style="font-size:15px;">Reconnect to the active page</h2>' +
       '<p role="alert" style="margin:12px 0;">' + escapeAttr(inspectorError) + '</p>' +
@@ -10513,6 +10617,35 @@ function setupDelegation() {
           showCaptureToast('success', `Exported ${siteChangeCount()} change${siteChangeCount() === 1 ? '' : 's'} across all routes.`);
           break;
         }
+        case 'export-code': {
+          const target = myTabId, route = activeRouteKey;
+          await operation.wait(refreshChanges(operation));
+          if (target !== myTabId || route !== activeRouteKey) break;
+          settingsOpen = false; helpOpen = false; contributeOpen = false; mcpOpen = false;
+          exportCodeOpen = true;
+          exportCodeTab = 'css';
+          exportCodeCss = null;
+          void (async () => {
+            const fetchOp = beginInspectorOperation();
+            try {
+              const res = await fetchOp.wait(send({ type: 'SP_EXPORT', format: 'css' }, fetchOp));
+              exportCodeCss = typeof res?.output === 'string' ? res.output : '';
+            } catch {
+              exportCodeCss = '';
+            }
+            if (exportCodeOpen) render();
+          })();
+          render();
+          break;
+        }
+        case 'export-code-tab': {
+          const format = actionBtn.dataset.dmFormat;
+          if (format === 'css' || format === 'json') { exportCodeTab = format; render(); }
+          break;
+        }
+        case 'copy-export-code': runInspectorAction(copyExportCode(operation)); break;
+        case 'download-export-code': downloadExportCode(); break;
+        case 'back-from-export-code': exportCodeOpen = false; render(); break;
         case 'revert-selected-changes': {
           // Drive each selected change-id through the existing per-change
           // revert path so undo state and overlay updates flow correctly.
@@ -10540,11 +10673,11 @@ function setupDelegation() {
         case 'clear-changes-search': changesSearch = ''; render(); break;
         case 'reset-changes-filter': changesFilter = 'all'; changesSearch = ''; render(); break;
         case 'back-from-settings': settingsOpen = false; render(); break;
-        case 'settings': helpOpen = false; contributeOpen = false; mcpOpen = false; settingsOpen = !settingsOpen; render(); break;
+        case 'settings': helpOpen = false; contributeOpen = false; mcpOpen = false; exportCodeOpen = false; settingsOpen = !settingsOpen; render(); break;
         case 'back-from-mcp': mcpOpen = false; render(); break;
-        case 'mcp': settingsOpen = false; helpOpen = false; contributeOpen = false; mcpOpen = !mcpOpen; if (mcpOpen) runInspectorAction(refreshMcpStatus(true, operation)); render(); break;
+        case 'mcp': settingsOpen = false; helpOpen = false; contributeOpen = false; exportCodeOpen = false; mcpOpen = !mcpOpen; if (mcpOpen) runInspectorAction(refreshMcpStatus(true, operation)); render(); break;
         case 'back-from-help': trackFeature({ feature: 'help', outcome: 'attempt', target: 'back' }); helpOpen = false; render(); break;
-        case 'help': settingsOpen = false; contributeOpen = false; mcpOpen = false; helpOpen = !helpOpen; render(); break;
+        case 'help': settingsOpen = false; contributeOpen = false; mcpOpen = false; exportCodeOpen = false; helpOpen = !helpOpen; render(); break;
         case 'back-from-contribute': contributeOpen = false; render(); break;
         case 'open-file-access-settings': {
           trackFeature({ feature: 'help', outcome: 'attempt', target: 'file_access_settings' });
@@ -10560,7 +10693,7 @@ function setupDelegation() {
           browser.tabs.create({ url }).catch(() => {});
           break;
         }
-        case 'contribute': settingsOpen = false; helpOpen = false; mcpOpen = false; contributeOpen = !contributeOpen; render(); break;
+        case 'contribute': settingsOpen = false; helpOpen = false; mcpOpen = false; exportCodeOpen = false; contributeOpen = !contributeOpen; render(); break;
         case 'copy-diagnostics': {
           trackFeature({ feature: 'help', outcome: 'attempt', target: 'copy_diagnostics' });
           const payload = buildDiagnostics();
@@ -14032,12 +14165,13 @@ function setupDelegation() {
       return;
     }
 
-    // Escape dismisses confirmation overlays.
-    if ((clearAllConfirming || deletingCommentId || revertingGroupKey) && e.key === 'Escape') {
+    // Escape dismisses confirmation overlays and the Export-code view.
+    if ((clearAllConfirming || deletingCommentId || revertingGroupKey || exportCodeOpen) && e.key === 'Escape') {
       e.preventDefault();
       clearAllConfirming = false;
       deletingCommentId = null;
       revertingGroupKey = null;
+      exportCodeOpen = false;
       render();
       return;
     }

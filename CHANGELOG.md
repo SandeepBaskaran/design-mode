@@ -10,6 +10,13 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Changes tab gains a **Code** view: preview the recorded session as CSS or
+  JSON before copying it to the clipboard or downloading it
+  (`design-mode-changes-<timestamp>.css|json`). The CSS output contains only
+  the declarations recorded this session, grouped per route — it is not a
+  patch of the page's source files. With no style edits recorded, the CSS
+  tab says so and stays disabled while JSON remains available. The existing
+  JSON-file Export button and the Alt+X copy-CSS shortcut are unchanged.
 - Send-to-Agent handoffs are durable in Local mode: an un-acked Send survives
   tab reloads, extension restarts and full browser restarts and reaches the
   next eligible agent. Delivery is at-least-once with duplicate suppression:
