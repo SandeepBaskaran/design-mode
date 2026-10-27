@@ -2361,7 +2361,7 @@ function handleContentMessage(msg: any, _: any, sendResponse: (payload: any) => 
     // server so the agent's next get_changes sees it.
     case 'SEND_TO_AGENT': {
       if (!isConnected() || !isAgentConnected()) { sendResponse({ ok: false, error: 'No agent connected' }); break; }
-      if (getFeedbackSessionView()?.state === 'implementing') { sendResponse({ ok: false, error: 'Agent is implementing the current round' }); break; }
+      if (getFeedbackSessionView()?.state === 'implementing') { sendResponse({ ok: false, error: 'Agent is still working on the previous handoff — your changes are saved and will be sent when you click Send again after it finishes' }); break; }
       stageAgentHandoff().then(
         result => sendResponse({ ...result, supported: isLiveFeedbackSupported() }),
         () => sendResponse({ ok: false, error: 'Could not send feedback' }),

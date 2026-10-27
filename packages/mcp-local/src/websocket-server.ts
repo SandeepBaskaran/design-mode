@@ -123,11 +123,17 @@ function handleMessage(msg: any) {
         state.replaceChanges(msg.payload);
         if (msg.payload.handoff?.requestedAt) {
           state.setHandoff({
+            id: typeof msg.payload.handoff.id === 'string' && msg.payload.handoff.id ? msg.payload.handoff.id : undefined,
             requestedAt: new Date(msg.payload.handoff.requestedAt).getTime(),
             pageUrl: msg.payload.handoff.pageUrl,
             pageTitle: msg.payload.handoff.pageTitle,
           });
         } else state.setHandoff(null);
+        // A reconnecting extension re-arms its persisted marker through
+        // SESSION_UPDATE (every change sync carries it). Route it through
+        // onHandoff so an already-delivered Send is re-acked — not just
+        // HANDOFF messages, which only fire on a fresh click.
+        onHandoff();
         onSessionPage(msg.payload.pageUrl, msg.payload.documentId);
       }
       break;

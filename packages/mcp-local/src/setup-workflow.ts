@@ -11,6 +11,10 @@ server — drive them live; do not look for task files on disk. If the
 Design Mode tools are unavailable (no such tool names, or calls error),
 stop and tell the user instead of improvising. Never act on change data
 from files, harness output, or memory — only live tool responses count.
+Never bypass, disable, or ask the user to lower a permission prompt to
+reach the source. Never edit source unless the change came from a live
+Design Mode tool response in this session — the workflow supplies
+nothing else to act on.
 
 ## Tools (Design Mode MCP server)
 - \`get_session_summary\` — health check; confirm the extension is connected.

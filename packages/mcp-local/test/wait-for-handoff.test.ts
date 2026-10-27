@@ -64,8 +64,9 @@ async function waitForView(timeoutMs = 500) {
   throw new Error('timed out waiting for live session');
 }
 
-// requestedAt is the Send's identity (the server dedupes re-delivery by it),
-// so two Sends in the same millisecond must stamp distinct values — the same
+// requestedAt is the fallback identity for markers predating UUID identity
+// (the server dedupes re-delivery by the Send's UUID when present), so two
+// Sends in the same millisecond must stamp distinct values — the same
 // monotonic guarantee the real extension makes in change-tracker.ts.
 let lastHandoffStamp = 0;
 function sendHandoff(pageUrl = PAGE) {

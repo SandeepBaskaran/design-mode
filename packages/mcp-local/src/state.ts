@@ -66,6 +66,9 @@ export interface Comment extends RouteMetadata {
 
 // Set when the user clicks "Send to Agent" in the side panel.
 export interface AgentHandoff {
+  // Random UUID from the extension — the Send's identity for delivery
+  // dedupe. Absent on markers from extensions predating UUID identity.
+  id?: string;
   requestedAt: number;
   pageUrl: string;
   pageTitle: string;

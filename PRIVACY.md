@@ -22,7 +22,7 @@ Editor data and preferences live on **your machine**, in the browser's extension
 
 | Storage area              | What's there                                                                        | Lifetime                       |
 | ------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ |
-| `chrome.storage.local`    | UI preferences and installation analytics ID: `dm-analytics-distinct-id` (persistent random UUID for usage analytics), `dm-theme`, `dm-color-format`, `dm-capture-mode`, active Tokens-panel tab (`dm-tokens-tab`), inspector overlay colours (`dm-inspector-hover-color`, `dm-inspector-select-color`, `dm-overlay-margin-color`, `dm-overlay-padding-color`), contrast-checker settings (`dm-a11y-category`, `dm-a11y-level`), nudge-amount (`dm-nudge-amount`), page-cursor toggle (`dm-custom-cursor`), source-map fetch gate (`dm-sourcemap-fetch`), Chrome launch surface (`dm-launch-surface`: `side-panel` / `floating` / `picture-in-picture`), pop-out window bounds (`dm-popout-bounds`), pinned PiP window size + support flag (`dm-pip-size`, `dm-pip-unsupported`) | Until you uninstall the ext.   |
+| `chrome.storage.local`    | UI preferences and installation analytics ID: `dm-analytics-distinct-id` (persistent random UUID for usage analytics), `dm-theme`, `dm-color-format`, `dm-capture-mode`, active Tokens-panel tab (`dm-tokens-tab`), inspector overlay colours (`dm-inspector-hover-color`, `dm-inspector-select-color`, `dm-overlay-margin-color`, `dm-overlay-padding-color`), contrast-checker settings (`dm-a11y-category`, `dm-a11y-level`), nudge-amount (`dm-nudge-amount`), page-cursor toggle (`dm-custom-cursor`), source-map fetch gate (`dm-sourcemap-fetch`), Chrome launch surface (`dm-launch-surface`: `side-panel` / `floating` / `picture-in-picture`), pop-out window bounds (`dm-popout-bounds`), pinned PiP window size + support flag (`dm-pip-size`, `dm-pip-unsupported`), un-acked Send-to-Agent markers (`dm-pending-handoff:<origin+path+search>`: send UUID, timestamp, page URL/title — never page content, selectors, or values; persisted in Local mode only, since only the local companion can acknowledge delivery; removed when the agent actually receives the send, when you discard or clear the changes, or after 24 h) | Until you uninstall the ext.   |
 | `chrome.storage.sync`     | User-saved presets you opt to sync across devices                                   | Synced via your browser's sync account (Chrome Sync / Firefox Sync) |
 | `chrome.storage.session`  | Per-page edit sessions (style/text/DOM changes), keyed by `origin + path + search`  | Until tab/browser closes       |
 
@@ -69,7 +69,14 @@ in its preview after explicit apply confirmation. Backups stay beside the
 changed files; they may contain other tools' credentials, so do not commit
 them. Doctor probes only the configured localhost bridge. Live feedback
 rounds reuse that Local connection and retain snapshots/session state only
-in process memory. No new external service or stored browser preference is
+in process memory. Delivery acknowledgements keep a bounded set of send
+UUIDs (never page content) in `~/.design-mode/handoff-delivered.json` —
+owner-only file permissions, entries expire after 7 days with a 128-entry
+cap — so a companion restart does not re-deliver a Send the agent already
+received. The dedupe is best-effort by design (fail-safe direction): a
+corrupt or unreadable file, or two companions delivering different Sends
+within the same sub-millisecond window, can cost a rare duplicate delivery —
+never a lost Send. No new external service or stored browser preference is
 introduced by these features.
 
 Apart from the release-build usage analytics described below, the extension sends data through the MCP mode you configure. Fresh

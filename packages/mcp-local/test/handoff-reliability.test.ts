@@ -8,11 +8,17 @@ import { describe, test, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict';
 import { WebSocket } from 'ws';
 import net from 'node:net';
+import { spawn, type ChildProcess } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { executeLocalTool } from '../src/tools.ts';
 import { state } from '../src/state.ts';
 import {
   getFeedbackSessionView,
   resetFeedbackSessionForTests,
+  setDeliveredAckFileForTests,
   setDisconnectGraceMsForTests,
   stopFeedbackSession,
   waitForHandoff,
@@ -460,6 +466,355 @@ describe('handoff delivery identity across sessions (real processes)', () => {
       }
     } finally {
       ws.close();
+    }
+  });
+});
+
+// ── C.4: delivery survives owner restarts ──
+//
+// The owner's delivered-key set persists to a bounded 0600 file
+// (DESIGN_MODE_HANDOFF_ACKS here; ~/.design-mode/ in production), so a
+// Send delivered just before a crash — whose HANDOFF_DELIVERED never
+// reached the extension — cannot re-deliver after the restart.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const CLI = path.join(here, '..', 'dist', 'bin', 'cli.js');
+
+async function waitForOwnerUp(port: number): Promise<void> {
+  for (let i = 0; i < 100; i++) {
+    const health = await probeOwnerHealth(port).catch(() => null);
+    if (health?.webSocketToken) return;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  throw new Error(`owner on port ${port} never came up`);
+}
+
+function killOwner(child: ChildProcess) {
+  try { child.kill('SIGKILL'); } catch {}
+}
+
+describe('handoff delivery across owner restarts (real owner subprocesses)', () => {
+  let port: number;
+  let ackFile: string;
+  const children: ChildProcess[] = [];
+
+  function spawnOwner(): ChildProcess {
+    const child = spawn(process.execPath, [CLI], {
+      env: { ...process.env, DM_PORT: String(port), DESIGN_MODE_HANDOFF_ACKS: ackFile },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    children.push(child);
+    return child;
+  }
+
+  before(async () => {
+    port = await getFreePort();
+    ackFile = path.join(tmpdir(), `dm-c4-acks-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`);
+    setDisconnectGraceMsForTests(60);
+  });
+
+  after(async () => {
+    rmSync(ackFile, { force: true });
+    setDisconnectGraceMsForTests(DEFAULT_DISCONNECT_GRACE_MS);
+  });
+
+  beforeEach(() => {
+    resetFeedbackSessionForTests();
+    state.clear();
+  });
+
+  afterEach(async () => {
+    // Kill every owner this test spawned, and wait for the port to actually
+    // free: a surviving owner would silently turn the next test's spawned
+    // CLI into an attacher of the stale session instead of a real owner.
+    for (const child of children.splice(0)) killOwner(child);
+    for (let i = 0; i < 50; i++) {
+      const health = await probeOwnerHealth(port).catch(() => null);
+      if (!health) break;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    resetFeedbackSessionForTests();
+    state.clear();
+  });
+
+  test('(k) restart before delivery: the re-armed Send still delivers, exactly once', async () => {
+    const owner1 = spawnOwner();
+    await waitForOwnerUp(port);
+    const requestedAt = Date.now();
+    const handoff = { id: crypto.randomUUID(), requestedAt, pageUrl: PAGE, pageTitle: 'App' };
+
+    const ws1 = await openExtensionClient(port);
+    send(ws1, 'SESSION_UPDATE', { pageUrl: PAGE, pageTitle: 'App', styleChanges: [styleChange('k1')], textChanges: [], domChanges: [] });
+    send(ws1, 'HANDOFF', handoff);
+    await new Promise(r => setTimeout(r, 50));
+    ws1.close();
+    killOwner(owner1);
+    await new Promise(r => setTimeout(r, 200));
+
+    // Restart: the extension (still holding the un-acked marker) reconnects
+    // and re-syncs SESSION_UPDATE carrying the same Send.
+    const owner2 = spawnOwner();
+    await waitForOwnerUp(port);
+    const reacked: Array<{ type: string; payload: any }> = [];
+    const ws2 = await openExtensionClient(port);
+    ws2.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'HANDOFF_DELIVERED') reacked.push(msg);
+      } catch { /* ignore */ }
+    });
+    try {
+      send(ws2, 'SESSION_UPDATE', {
+        pageUrl: PAGE, pageTitle: 'App',
+        styleChanges: [styleChange('k1')], textChanges: [], domChanges: [],
+        handoff,
+      });
+      const delivered = parseTool(await proxyToolCall(port, 'wait_for_handoff', { pageUrl: PAGE, timeoutMs: 2_000 }));
+      assert.equal(delivered.status, 'feedback', 'the undelivered Send survives the owner restart');
+      assert.equal(delivered.cursor, 1);
+      for (let i = 0; i < 100 && reacked.length === 0; i++) await new Promise(r => setTimeout(r, 10));
+      assert.equal(reacked.length, 1, 'the delivery ack reaches the reconnecting extension');
+      assert.equal(reacked[0].payload.id, handoff.id);
+
+      // A later re-arm of the now-delivered Send must not deliver again.
+      ws2.close();
+      await new Promise(r => setTimeout(r, 150));
+      const ws3 = await openExtensionClient(port);
+      try {
+        send(ws3, 'SESSION_UPDATE', {
+          pageUrl: PAGE, pageTitle: 'App',
+          styleChanges: [styleChange('k1')], textChanges: [], domChanges: [],
+          handoff,
+        });
+        const replay = parseTool(await proxyToolCall(port, 'wait_for_handoff', { pageUrl: PAGE, timeoutMs: 300 }));
+        assert.equal(replay.status, 'waiting', 'no second delivery across the restart');
+      } finally {
+        ws3.close();
+      }
+    } finally {
+      ws2.close();
+    }
+  });
+
+  test('(l) restart after delivery but before the ack reaches the extension: no re-delivery, and the reconnect re-acks', async () => {
+    const owner1 = spawnOwner();
+    await waitForOwnerUp(port);
+    const requestedAt = Date.now();
+    const handoff = { id: crypto.randomUUID(), requestedAt, pageUrl: PAGE, pageTitle: 'App' };
+
+    // Extension sends the Send, then drops before any agent picks it up —
+    // so when the wait delivers the round, the ack goes nowhere.
+    const ws1 = await openExtensionClient(port);
+    send(ws1, 'SESSION_UPDATE', { pageUrl: PAGE, pageTitle: 'App', styleChanges: [styleChange('l1')], textChanges: [], domChanges: [] });
+    send(ws1, 'HANDOFF', handoff);
+    await new Promise(r => setTimeout(r, 50));
+    ws1.close();
+    const delivered = parseTool(await proxyToolCall(port, 'wait_for_handoff', { pageUrl: PAGE, timeoutMs: 2_000 }));
+    assert.equal(delivered.status, 'feedback');
+    assert.ok(existsSync(ackFile), 'the delivered key was persisted synchronously');
+
+    // Crash the owner right after delivery; the ack never reached anyone.
+    killOwner(owner1);
+    await new Promise(r => setTimeout(r, 200));
+
+    const owner2 = spawnOwner();
+    await waitForOwnerUp(port);
+    const reacked: Array<{ type: string; payload: any }> = [];
+    const ws2 = await openExtensionClient(port);
+    ws2.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'HANDOFF_DELIVERED') reacked.push(msg);
+      } catch { /* ignore */ }
+    });
+    try {
+      // Extension reconnect: the persisted marker re-arms via SESSION_UPDATE.
+      send(ws2, 'SESSION_UPDATE', {
+        pageUrl: PAGE, pageTitle: 'App',
+        styleChanges: [styleChange('l1')], textChanges: [], domChanges: [],
+        handoff,
+      });
+      await new Promise(r => setTimeout(r, 50));
+      const replay = parseTool(await proxyToolCall(port, 'wait_for_handoff', { pageUrl: PAGE, timeoutMs: 400 }));
+      assert.equal(replay.status, 'waiting', 'the restarted owner must not re-deliver a Send it already delivered');
+      for (let i = 0; i < 100 && reacked.length === 0; i++) await new Promise(r => setTimeout(r, 10));
+      assert.equal(reacked.length, 1, 'exactly one re-ack so the extension can drop its persisted marker');
+      assert.equal(reacked[0].payload.id, handoff.id);
+    } finally {
+      ws2.close();
+    }
+  });
+});
+
+describe('handoff ack recovery with a live owner (real process)', () => {
+  let owner: Awaited<ReturnType<typeof claimOrAttach>> | null = null;
+  let ackFile = '';
+
+  before(async () => {
+    resetFeedbackSessionForTests();
+    state.clear();
+    setDisconnectGraceMsForTests(60);
+    ackFile = path.join(tmpdir(), `dm-c4-acks-m-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`);
+    setDeliveredAckFileForTests(ackFile);
+    owner = await claimOrAttach(await getFreePort());
+  });
+
+  after(async () => {
+    resetFeedbackSessionForTests();
+    setDeliveredAckFileForTests(null);
+    setDisconnectGraceMsForTests(DEFAULT_DISCONNECT_GRACE_MS);
+    await owner?.close();
+    state.clear();
+    rmSync(ackFile, { force: true });
+  });
+
+  beforeEach(() => {
+    resetFeedbackSessionForTests();
+    state.clear();
+  });
+
+  afterEach(() => {
+    resetFeedbackSessionForTests();
+    state.clear();
+  });
+
+  test('(m) ack lost while the extension is disconnected: re-ack on re-arm, no re-delivery, and the next Send delivers', async () => {
+    const requestedAt = Date.now();
+    const first = { id: crypto.randomUUID(), requestedAt, pageUrl: PAGE, pageTitle: 'App' };
+    // Extension sends the Send and drops before any waiter exists — the
+    // ack for this delivery has nowhere to go.
+    const ws1 = await openExtensionClient(owner!.port);
+    send(ws1, 'SESSION_UPDATE', { pageUrl: PAGE, pageTitle: 'App', styleChanges: [styleChange('m1')], textChanges: [], domChanges: [] });
+    send(ws1, 'HANDOFF', first);
+    await new Promise(r => setTimeout(r, 50));
+    ws1.close();
+
+    const delivered = parseTool(await proxyToolCall(owner!.port, 'wait_for_handoff', { pageUrl: PAGE, timeoutMs: 2_000 }));
+    assert.equal(delivered.status, 'feedback');
+    assert.ok(existsSync(ackFile), 'delivery persisted the key');
+
+    // Reconnect + re-arm the same Send (the extension still holds it).
+    const reacked: Array<{ type: string; payload: any }> = [];
+    const ws2 = await openExtensionClient(owner!.port);
+    ws2.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'HANDOFF_DELIVERED') reacked.push(msg);
+      } catch { /* ignore */ }
+    });
+    try {
+      send(ws2, 'SESSION_UPDATE', {
+        pageUrl: PAGE, pageTitle: 'App',
+        styleChanges: [styleChange('m1')], textChanges: [], domChanges: [],
+        handoff: first,
+      });
+      await new Promise(r => setTimeout(r, 50));
+      const replay = parseTool(await proxyToolCall(owner!.port, 'wait_for_handoff', { pageUrl: PAGE, timeoutMs: 400 }));
+      assert.equal(replay.status, 'waiting', 'no second delivery of the acked Send');
+      for (let i = 0; i < 100 && reacked.length === 0; i++) await new Promise(r => setTimeout(r, 10));
+      assert.equal(reacked.length, 1, 'the re-arm earns a fresh HANDOFF_DELIVERED');
+      assert.equal(reacked[0].payload.id, first.id);
+
+      // A genuinely new Send after the acked one still delivers.
+      const second = { id: crypto.randomUUID(), requestedAt: Date.now() + 1, pageUrl: PAGE, pageTitle: 'App' };
+      send(ws2, 'SESSION_UPDATE', { pageUrl: PAGE, pageTitle: 'App', styleChanges: [styleChange('m2')], textChanges: [], domChanges: [] });
+      send(ws2, 'HANDOFF', second);
+      const next = parseTool(await proxyToolCall(owner!.port, 'wait_for_handoff', { pageUrl: PAGE, sessionId: replay.sessionId, after: replay.cursor, timeoutMs: 2_000 }));
+      assert.equal(next.status, 'feedback', 'the new Send is not swallowed by the dedupe');
+      assert.equal(next.cursor, replay.cursor + 1);
+    } finally {
+      ws2.close();
+    }
+  });
+});
+
+// Two live owners (different ports, e.g. two projects on one machine) share
+// the production ack file. Neither owner's write may erase the entries the
+// other recorded — last-writer-wins here would silently shrink the dedupe
+// window below what the restart tests promise.
+describe('two owners share one delivered-ack file (real owner subprocesses)', () => {
+  const children: ChildProcess[] = [];
+  let sharedAckFile = '';
+  let portA = 0;
+  let portB = 0;
+
+  function spawnOwnerOn(port: number): ChildProcess {
+    const child = spawn(process.execPath, [CLI], {
+      env: { ...process.env, DM_PORT: String(port), DESIGN_MODE_HANDOFF_ACKS: sharedAckFile },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    children.push(child);
+    return child;
+  }
+
+  async function deliverOn(port: number, tag: string, handoff: { id: string; requestedAt: number; pageUrl: string; pageTitle: string }) {
+    const ws = await openExtensionClient(port);
+    try {
+      send(ws, 'SESSION_UPDATE', { pageUrl: PAGE, pageTitle: 'App', styleChanges: [styleChange(tag)], textChanges: [], domChanges: [] });
+      send(ws, 'HANDOFF', handoff);
+      const result = parseTool(await proxyToolCall(port, 'wait_for_handoff', { pageUrl: PAGE, timeoutMs: 5_000 }));
+      assert.equal(result.status, 'feedback');
+      return result;
+    } finally {
+      ws.close();
+    }
+  }
+
+  function readAckKeys(): string[] {
+    const parsed = JSON.parse(readFileSync(sharedAckFile, 'utf8')) as { version: number; entries: Array<{ k: string }> };
+    assert.equal(parsed.version, 1);
+    return parsed.entries.map(e => e.k);
+  }
+
+  afterEach(async () => {
+    for (const child of children.splice(0)) killOwner(child);
+    for (const port of [portA, portB]) {
+      for (let i = 0; i < 50; i++) {
+        const health = await probeOwnerHealth(port).catch(() => null);
+        if (!health) break;
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+  });
+
+  after(() => {
+    if (sharedAckFile) rmSync(sharedAckFile, { force: true });
+  });
+
+  test('each owner’s delivery lands in the shared file and survives every interleaved write', async () => {
+    sharedAckFile = path.join(tmpdir(), `dm-c4-acks-multi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`);
+    // Owner B's port is allocated after owner A is up and bound, so the OS
+    // cannot hand the same port to both (a collision would make B an
+    // attacher of A's session and the test would assert the wrong world).
+    portA = await getFreePort();
+    spawnOwnerOn(portA);
+    await waitForOwnerUp(portA);
+    portB = await getFreePort();
+    assert.notEqual(portB, portA);
+    spawnOwnerOn(portB);
+    await waitForOwnerUp(portB);
+
+    const sendA = { id: crypto.randomUUID(), requestedAt: Date.now(), pageUrl: PAGE, pageTitle: 'App' };
+    const gotA = await deliverOn(portA, 'ma', sendA);
+
+    const sendB = { id: crypto.randomUUID(), requestedAt: Date.now() + 1, pageUrl: PAGE, pageTitle: 'App' };
+    await deliverOn(portB, 'mb', sendB);
+
+    const keysAfterB = readAckKeys();
+    assert.ok(keysAfterB.includes(sendA.id), 'owner A’s ack survives owner B’s write');
+    assert.ok(keysAfterB.includes(sendB.id), 'owner B’s ack is recorded');
+
+    // Owner A's agent returns to its wait (session implementing → waiting)
+    // before the next Send — a HANDOFF while implementing is ignored by
+    // design, so the interleaved write needs the session back at waiting.
+    const idle = parseTool(await proxyToolCall(portA, 'wait_for_handoff', { pageUrl: PAGE, sessionId: gotA.sessionId, after: gotA.cursor, timeoutMs: 200 }));
+    assert.equal(idle.status, 'waiting');
+
+    // Owner A delivers again — its rewrite must re-merge owner B's entry.
+    const sendA2 = { id: crypto.randomUUID(), requestedAt: Date.now() + 2, pageUrl: PAGE, pageTitle: 'App' };
+    await deliverOn(portA, 'ma2', sendA2);
+    const keysAfterA2 = readAckKeys();
+    for (const key of [sendA.id, sendB.id, sendA2.id]) {
+      assert.ok(keysAfterA2.includes(key), 'every acknowledgement survives the interleaved writes');
     }
   });
 });

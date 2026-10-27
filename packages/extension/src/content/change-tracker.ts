@@ -108,12 +108,13 @@ let ws: WebSocket | null = null;
 
 // Set when the user clicks "Send to Agent"; travels to the MCP server so
 // the agent's next get_changes sees the explicit "these are ready" marker.
-interface AgentHandoff { requestedAt: number; pageUrl: string; pageTitle: string; }
+interface AgentHandoff { id: string; requestedAt: number; pageUrl: string; pageTitle: string; }
 let pendingHandoff: AgentHandoff | null = null;
 
-// Monotonic per click: requestedAt is the Send's identity (the server dedupes
-// re-delivery by it), so two Sends in the same millisecond must stay distinct.
-// A reconnect re-sends the stored value unchanged.
+// The Send's identity is a random UUID, so two Sends in the same
+// millisecond (or on clocks that step back) can never collide;
+// requestedAt is a monotonic stamp kept for ordering only. A reconnect
+// re-sends the stored values unchanged.
 let lastHandoffRequestedAt = 0;
 function nextHandoffRequestedAt(): number {
   lastHandoffRequestedAt = Math.max(Date.now(), lastHandoffRequestedAt + 1);
@@ -125,14 +126,142 @@ function nextHandoffRequestedAt(): number {
 // click since) stays armed, and an un-acked marker survives disconnects so
 // the next session can still deliver it. Returns whether it matched.
 export function applyHandoffDelivered(payload: unknown): boolean {
-  const p = payload as { requestedAt?: unknown; pageUrl?: unknown } | null | undefined;
+  const p = payload as { id?: unknown; pageUrl?: unknown } | null | undefined;
   if (
     pendingHandoff
-    && typeof p?.requestedAt === 'number'
-    && p.requestedAt === pendingHandoff.requestedAt
+    && typeof p?.id === 'string'
+    && p.id === pendingHandoff.id
     && (typeof p.pageUrl !== 'string' || p.pageUrl === pendingHandoff.pageUrl)
   ) {
     pendingHandoff = null;
+    removePersistedHandoff(p.id);
+    return true;
+  }
+  return false;
+}
+
+// ── Durable pending-handoff marker ──────────────────────────────────
+// pendingHandoff lives in content-script memory and dies with the tab,
+// the extension reload, or the browser — after the panel already told
+// the user the Send was accepted. So the marker is also written to
+// storage.local, keyed per route (origin+path+search): storage.local
+// survives browser restarts, while storage.session does not, and the
+// marker must be recoverable even after the browser is closed entirely.
+// The record is deliberately minimal — identity and page coordinates
+// only, never page content, selectors, or values. Only local-mode Sends
+// persist: the local transport is the only one that acks delivery, so a
+// record any other mode wrote could never be cleared.
+const PENDING_HANDOFF_KEY_PREFIX = 'dm-pending-handoff:';
+const PENDING_HANDOFF_VERSION = 1;
+const PENDING_HANDOFF_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+interface PersistedHandoffV1 {
+  version: 1;
+  id: string;
+  requestedAt: number;
+  pageUrl: string;
+  pageTitle: string;
+  routeKey: string;
+  createdAt: number;
+}
+
+function pendingHandoffStorageKey(routeKey: string): string {
+  return PENDING_HANDOFF_KEY_PREFIX + routeKey;
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function validatePersistedHandoff(raw: unknown): PersistedHandoffV1 | null {
+  const r = raw as PersistedHandoffV1 | null;
+  if (!r || typeof r !== 'object') return null;
+  if (r.version !== PENDING_HANDOFF_VERSION) return null;
+  if (!isUuid(r.id)) return null;
+  if (!isFiniteNumber(r.requestedAt)) return null;
+  if (typeof r.pageUrl !== 'string' || !r.pageUrl) return null;
+  if (typeof r.pageTitle !== 'string') return null;
+  if (typeof r.routeKey !== 'string' || !r.routeKey) return null;
+  if (!isFiniteNumber(r.createdAt)) return null;
+  return r;
+}
+
+// StorageArea methods are native functions that throw "Illegal invocation"
+// when invoked without the area as their receiver (see
+// sourcemap-fetch-setting.ts) — always call them as methods on the area.
+function localStorageArea(): { get(keys: string | null): Promise<Record<string, unknown>>; set(items: Record<string, unknown>): Promise<unknown>; remove(keys: string[]): Promise<unknown> } | null {
+  const area = (browser.storage as { local?: unknown } | undefined)?.local as
+    | { get?: unknown; set?: unknown; remove?: unknown }
+    | undefined;
+  if (!area || typeof area.get !== 'function' || typeof area.set !== 'function' || typeof area.remove !== 'function') return null;
+  return area as { get(keys: string | null): Promise<Record<string, unknown>>; set(items: Record<string, unknown>): Promise<unknown>; remove(keys: string[]): Promise<unknown> };
+}
+
+function persistPendingHandoff(handoff: AgentHandoff): void {
+  const area = localStorageArea();
+  if (!area) return;
+  const record: PersistedHandoffV1 = {
+    version: PENDING_HANDOFF_VERSION,
+    ...handoff,
+    routeKey: routeIdentity(location.href).url,
+    createdAt: Date.now(),
+  };
+  // Fire-and-forget: the in-memory marker is already armed and the ws
+  // send must not wait on storage. A lost write costs only the extra
+  // durability for this Send; nothing else reads the key meanwhile.
+  try { void Promise.resolve(area.set({ [pendingHandoffStorageKey(record.routeKey)]: record })).catch(() => {}); } catch {}
+}
+
+// Only an ack for the SAME Send (or an explicit user discard/clear)
+// removes the record — never a route switch or a reconnect.
+function removePersistedHandoff(id: string): void {
+  const area = localStorageArea();
+  if (!area) return;
+  void (async () => {
+    const all = await area.get(null);
+    for (const [key, value] of Object.entries(all || {})) {
+      if (!key.startsWith(PENDING_HANDOFF_KEY_PREFIX)) continue;
+      const record = validatePersistedHandoff(value);
+      if (record?.id === id) await area.remove([key]);
+    }
+  })().catch(() => {});
+}
+
+export async function restorePendingHandoff(): Promise<boolean> {
+  // A live marker (a Send armed earlier in this document) always wins.
+  if (pendingHandoff) return false;
+  const area = localStorageArea();
+  if (!area) return false;
+  let all: Record<string, unknown>;
+  try { all = await area.get(null); } catch { return false; }
+  // Only the local transport can ack a delivery, so only a local-mode
+  // record may re-arm; anything else would re-send its marker on every
+  // start for up to 24 h. Absent key follows the mode default (cloud).
+  if (all['dm-mcp-mode'] !== 'local') return false;
+  const currentRouteKey = routeIdentity(location.href).url;
+  for (const [key, value] of Object.entries(all || {})) {
+    if (!key.startsWith(PENDING_HANDOFF_KEY_PREFIX)) continue;
+    const record = validatePersistedHandoff(value);
+    if (!record || Date.now() - record.createdAt > PENDING_HANDOFF_MAX_AGE_MS) {
+      // Corrupt or expired: drop it so it can't re-arm later. Best-effort.
+      try { void Promise.resolve(area.remove([key])).catch(() => {}); } catch {}
+      continue;
+    }
+    if (record.routeKey !== currentRouteKey) continue;
+    pendingHandoff = {
+      id: record.id,
+      requestedAt: record.requestedAt,
+      pageUrl: record.pageUrl,
+      pageTitle: record.pageTitle,
+    };
+    // Re-arm the server the same way a reconnect does: the marker rides
+    // syncAllChanges' SESSION_UPDATE once the socket opens; if it is
+    // already open, push the marker directly.
+    if (isConnected()) transportSend({ type: 'HANDOFF', payload: pendingHandoff });
     return true;
   }
   return false;
@@ -172,7 +301,12 @@ export function discardActiveChanges() {
   styleChanges.length = 0;
   textChanges.length = 0;
   domChanges.length = 0;
+  const discardedHandoff = pendingHandoff;
+  if (discardedHandoff) removePersistedHandoff(discardedHandoff.id);
   pendingHandoff = null;
+  // Retract the server copy of the marker before any wait can seed a
+  // round from it - a discarded Send must never deliver.
+  if (discardedHandoff) syncAllChanges();
   clearAllRules();
 }
 
@@ -183,7 +317,10 @@ export function clearAllChanges(stopFeedback = true) {
   styleChanges.length = 0;
   textChanges.length = 0;
   domChanges.length = 0;
+  const clearedHandoff = pendingHandoff;
+  if (clearedHandoff) removePersistedHandoff(clearedHandoff.id);
   pendingHandoff = null;
+  if (clearedHandoff) syncAllChanges();
   clearAllRules();
   persistSession();
 }
@@ -1606,7 +1743,11 @@ export async function stageAgentHandoff(): Promise<{
   transportSend({ type: 'SESSION_UPDATE', payload: report });
   for (const comment of report.comments) syncCommentChange(comment);
   if (!isLiveFeedbackSupported()) {
-    pendingHandoff = { requestedAt: nextHandoffRequestedAt(), pageUrl: location.href, pageTitle: document.title };
+    // No persistence here: only the local transport acks delivery
+    // (HANDOFF_DELIVERED), so a persisted marker in this mode could never
+    // be cleared and would re-arm on every content-script start for up to
+    // 24 h. The in-memory marker still covers this document's lifetime.
+    pendingHandoff = { id: crypto.randomUUID(), requestedAt: nextHandoffRequestedAt(), pageUrl: location.href, pageTitle: document.title };
     transportSend({ type: 'HANDOFF', payload: pendingHandoff });
     return { ok: true, handoff: pendingHandoff, session: null };
   }
@@ -1617,13 +1758,14 @@ export async function stageAgentHandoff(): Promise<{
     // previous state instead of re-arming a send the panel refused. The
     // changes stay in the page ledger — the next accepted Send includes them.
     if (live.state === 'implementing') {
-      return { ok: false, error: 'Agent is implementing the current round', session: getFeedbackSessionView() };
+      return { ok: false, error: 'Agent is still working on the previous handoff — your changes are saved and will be sent when you click Send again after it finishes', session: getFeedbackSessionView() };
     }
     if (live.pageUrl !== location.href) {
       return { ok: false, error: 'This page does not match the live feedback session', session: getFeedbackSessionView() };
     }
   }
-  pendingHandoff = { requestedAt: nextHandoffRequestedAt(), pageUrl: location.href, pageTitle: document.title };
+  pendingHandoff = { id: crypto.randomUUID(), requestedAt: nextHandoffRequestedAt(), pageUrl: location.href, pageTitle: document.title };
+  persistPendingHandoff(pendingHandoff);
   if (!isConnected()) {
     return { ok: false, error: 'Not connected to the local agent', handoff: pendingHandoff, session: getFeedbackSessionView() };
   }
@@ -2030,6 +2172,11 @@ window.addEventListener('pagehide', () => {
     transportSend({ type: 'PAGE_NAVIGATED', payload: { pageUrl: location.href } });
   }
 });
+
+// Re-arm a persisted, un-acked Send when the content script starts (tab
+// reopened, extension reloaded, browser restarted). If the socket is not
+// open yet, syncAllChanges carries the marker in its SESSION_UPDATE.
+void restorePendingHandoff();
 
 // Reply to a request received via the relay. Used by handleScreenshotRequest
 // and by cloud tool dispatchers in content/index.ts (re-exported).

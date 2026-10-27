@@ -8,6 +8,39 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Send-to-Agent handoffs are durable in Local mode: an un-acked Send survives
+  tab reloads, extension restarts and full browser restarts and reaches the
+  next eligible agent. Delivery is at-least-once with duplicate suppression:
+  a delivered Send is acknowledged (`HANDOFF_DELIVERED`) and filtered from
+  later deliveries. The documented residual risk is a rare extra delivery —
+  a corrupt or unreadable acknowledgement file, or two companions delivering
+  different Sends within the same sub-millisecond window — never a lost Send.
+- Delivery acknowledgements persist across companion restarts in a bounded,
+  owner-only file (`~/.design-mode/handoff-delivered.json`), so a Send
+  delivered just before a crash is normally not delivered a second time.
+
+### Fixed
+
+- Discarding changes or using Clear all now also removes the persisted
+  pending Send, so a discarded Send no longer re-appears after a reload or
+  reaches a waiting agent. A newer Send's record survives an older tab's
+  discard.
+- Discarding changes or clearing all also retracts the copy of the pending
+  Send held in the local companion, so the discarded Send cannot reach an
+  agent that attaches afterwards — no page reload needed.
+- Persisted Sends are Local-mode only: Cloud and Self-hosted transports
+  cannot acknowledge delivery, so their Sends stay in-memory for the tab's
+  lifetime instead of silently re-arming for up to 24 hours.
+- Concurrent companion instances no longer overwrite each other's delivery
+  acknowledgements: every write re-reads and merges the shared file, and the
+  file is replaced atomically with owner-only permissions enforced on each
+  write.
+- Source-map refinement no longer fails closed for the whole tab when the
+  startup settings read throws, and resolved source locations land on the
+  authored file and line.
+
 ## [3.1.0] — 2026-10-16
 
 ### Added

@@ -1,4 +1,7 @@
 import { randomBytes } from 'node:crypto';
+import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir, homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { state } from './state.js';
 
 export const MAX_WAIT_MS = 20_000;
@@ -23,15 +26,18 @@ export type FeedbackWaitResult = {
 
 export type ToolExtra = { signal?: AbortSignal };
 
+// Identity of the Send that created a round. New Sends carry a random
+// UUID `id`; `requestedAt` is an ordering stamp. Delivery dedupe keys
+// off this identity, not the marker in state, so a marker re-armed by a
+// reconnecting extension cannot re-deliver a round an agent already
+// received — while a round that was never delivered (timeout,
+// disconnect) still can be.
+type HandoffIdentity = { id?: string; requestedAt: number; pageUrl: string; pageTitle?: string };
+
 type PendingRound = {
   cursor: number;
   report: unknown;
-  // Identity of the Send that created this round (see handoffKeyOf).
-  // Delivery dedupe keys off this, not the marker in state, so a marker
-  // re-armed by a reconnecting extension cannot re-deliver a round an
-  // agent already received — while a round that was never delivered
-  // (timeout, disconnect) still can be.
-  handoff: { requestedAt: number; pageUrl: string } | null;
+  handoff: HandoffIdentity | null;
 };
 
 type Waiter = {
@@ -56,21 +62,136 @@ const SESSION_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
 let live: LiveSession | null = null;
 let lastStopped: FeedbackSessionView | null = null;
 let notifyUi: ((view: FeedbackSessionView | null) => void) | null = null;
-let notifyDelivered: ((handoff: { requestedAt: number; pageUrl: string }) => void) | null = null;
+let notifyDelivered: ((handoff: HandoffIdentity) => void) | null = null;
 let disconnectTimer: NodeJS.Timeout | null = null;
 let disconnectGraceMs = DEFAULT_DISCONNECT_GRACE_MS;
 let sessionDocumentId: string | null = null;
-// Key of the last handoff actually delivered to an agent. One slot is
-// enough: sessions are sequential and the key includes requestedAt (ms).
-let lastDeliveredHandoffKey: string | null = null;
+
+// ── Durable delivered-key set ───────────────────────────────────────
+// In-process dedupe alone dies with the owner: a Send delivered just
+// before a crash, whose HANDOFF_DELIVERED never reached the extension,
+// would re-deliver to the next wait after a restart. The delivered keys
+// therefore persist to a bounded, owner-only file so dedupe survives
+// restarts. Keys are the Sends' UUIDs (or a `requestedAt|pageUrl`
+// fallback for pre-UUID markers) — never page content. A missing or
+// corrupt file degrades safely: the set starts empty, which is the
+// pre-existing in-process-only behavior, and can only ever cost an extra
+// delivery, never a lost one.
+const DEFAULT_DELIVERED_FILE = process.env.NODE_TEST_CONTEXT
+  ? join(tmpdir(), 'design-mode-handoff-delivered-test.json')
+  : join(homedir(), '.design-mode', 'handoff-delivered.json');
+const DELIVERED_MAX_ENTRIES = 128;
+const DELIVERED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+let deliveredFile = process.env.DESIGN_MODE_HANDOFF_ACKS?.trim() || DEFAULT_DELIVERED_FILE;
+let deliveredKeys = new Map<string, number>();
+let deliveredLoaded = false;
+
+export function setDeliveredAckFileForTests(path: string | null) {
+  deliveredFile = path || DEFAULT_DELIVERED_FILE;
+  deliveredKeys = new Map();
+  deliveredLoaded = true;
+  deliveredPersistWarned = false;
+}
+
+// Raw, latch-free read of one ack file: missing or corrupt degrades to an
+// empty set (the pre-persistence behavior — an extra delivery, never a
+// lost one).
+function readDeliveredEntries(file: string): Map<string, number> {
+  const entries = new Map<string, number>();
+  let raw: string;
+  try { raw = readFileSync(file, 'utf8'); } catch { return entries; }
+  try {
+    const parsed = JSON.parse(raw) as { version?: unknown; entries?: unknown };
+    if (parsed?.version !== 1 || !Array.isArray(parsed.entries)) return entries;
+    const now = Date.now();
+    for (const entry of parsed.entries) {
+      const e = entry as { k?: unknown; at?: unknown } | null;
+      if (typeof e?.k !== 'string' || !e.k || typeof e.at !== 'number' || !Number.isFinite(e.at)) continue;
+      if (now - e.at > DELIVERED_MAX_AGE_MS) continue;
+      entries.set(e.k, e.at);
+    }
+  } catch { /* corrupt file → treat as empty */ }
+  return entries;
+}
+
+function loadDeliveredKeys(): void {
+  if (deliveredLoaded) return;
+  deliveredLoaded = true;
+  deliveredKeys = readDeliveredEntries(deliveredFile);
+  trimDeliveredKeys();
+}
+
+function trimDeliveredKeys(): void {
+  while (deliveredKeys.size > DELIVERED_MAX_ENTRIES) {
+    let oldestKey = '';
+    let oldestAt = Infinity;
+    for (const [k, at] of deliveredKeys) {
+      if (at < oldestAt) { oldestAt = at; oldestKey = k; }
+    }
+    deliveredKeys.delete(oldestKey);
+  }
+}
+
+function isDeliveredKey(key: string): boolean {
+  loadDeliveredKeys();
+  const at = deliveredKeys.get(key);
+  if (at === undefined) return false;
+  if (Date.now() - at > DELIVERED_MAX_AGE_MS) {
+    deliveredKeys.delete(key);
+    return false;
+  }
+  return true;
+}
+
+// Written synchronously and best-effort: the whole point is surviving a
+// SIGKILL, so a debounced write would miss exactly the restarts this
+// exists for. The file is tiny (≤128 id/timestamp pairs) and deliveries
+// are user-Send-paced. The file is shared per user across ports/projects,
+// so every write first re-reads and merges what other owners recorded —
+// a plain write of the in-memory map would erase acknowledgements this
+// process never saw. The replacement itself goes through a same-directory
+// temp file + rename (atomic on POSIX and Windows), so a crash mid-write
+// leaves the previous file intact instead of a truncated one.
+let deliveredPersistWarned = false;
+function rememberDeliveredKey(key: string): void {
+  loadDeliveredKeys();
+  deliveredKeys.set(key, Date.now());
+  for (const [k, at] of readDeliveredEntries(deliveredFile)) {
+    const known = deliveredKeys.get(k);
+    if (known === undefined || at > known) deliveredKeys.set(k, at);
+  }
+  trimDeliveredKeys();
+  const tmpFile = `${deliveredFile}.${process.pid}.tmp`;
+  try {
+    mkdirSync(dirname(deliveredFile), { recursive: true });
+    writeFileSync(
+      tmpFile,
+      JSON.stringify({ version: 1, entries: Array.from(deliveredKeys, ([k, at]) => ({ k, at })) }),
+      { mode: 0o600 },
+    );
+    // The mode applies at creation only — a temp file a crashed earlier run
+    // left behind could be wider, so tighten it before the swap.
+    chmodSync(tmpFile, 0o600);
+    renameSync(tmpFile, deliveredFile);
+    deliveredPersistWarned = false;
+  } catch (err) {
+    try { unlinkSync(tmpFile); } catch { /* nothing to clean up */ }
+    if (!deliveredPersistWarned) {
+      deliveredPersistWarned = true;
+      console.warn(`[design-mode] could not persist handoff delivery acknowledgements to ${deliveredFile} — in-process dedupe still holds for this owner`, err);
+    }
+  }
+}
 
 // Stable handoff identity across reconnects and session boundaries. The
-// extension stamps every Send with requestedAt; the same marker can reach
-// this module more than once (HANDOFF message, then a reconnecting
-// SESSION_UPDATE that still carries it), and dedupe must not confuse that
-// re-arm with a genuinely new Send.
-function handoffKeyOf(handoff: { requestedAt: number; pageUrl: string }): string {
-  return `${handoff.requestedAt}|${handoff.pageUrl}`;
+// same marker can reach this module more than once (HANDOFF message, then
+// a reconnecting SESSION_UPDATE that still carries it), and dedupe must
+// not confuse that re-arm with a genuinely new Send. The UUID is the
+// identity; `requestedAt|pageUrl` keeps markers from extensions predating
+// UUID identity dedupeable (server and extension update independently).
+function handoffKeyOf(handoff: HandoffIdentity): string {
+  if (typeof handoff.id === 'string' && handoff.id) return handoff.id;
+  return `at|${handoff.requestedAt}|${handoff.pageUrl}`;
 }
 
 export function setFeedbackSessionNotifier(fn: ((view: FeedbackSessionView | null) => void) | null) {
@@ -79,8 +200,10 @@ export function setFeedbackSessionNotifier(fn: ((view: FeedbackSessionView | nul
 
 // Fired exactly when a round reaches an agent (wait_for_handoff returned
 // feedback). The extension clears its pendingHandoff on this — on send
-// would break recovery after a timeout or disconnect.
-export function setHandoffDeliveredNotifier(fn: ((handoff: { requestedAt: number; pageUrl: string }) => void) | null) {
+// would break recovery after a timeout or disconnect. Also fired when a
+// re-armed marker is recognized as already delivered, so an extension
+// that missed the first ack can still clear its (persisted) marker.
+export function setHandoffDeliveredNotifier(fn: ((handoff: HandoffIdentity) => void) | null) {
   notifyDelivered = fn;
 }
 
@@ -100,7 +223,8 @@ export function resetFeedbackSessionForTests() {
   live = null;
   lastStopped = null;
   sessionDocumentId = null;
-  lastDeliveredHandoffKey = null;
+  deliveredKeys = new Map();
+  deliveredLoaded = true;
 }
 
 export function getFeedbackSessionView(): FeedbackSessionView | null {
@@ -202,10 +326,14 @@ function createSession(pageUrl: string): LiveSession {
   // Freeze the report before consuming the marker.
   const handoff = state.getHandoff();
   if (handoff && (!handoff.pageUrl || handoff.pageUrl === pageUrl)) {
-    // A marker whose Send an agent already received (earlier session) must
-    // not re-deliver here — reconnects re-arm it from the extension's
-    // pendingHandoff. Consume it without a round.
-    if (handoffKeyOf(handoff) !== lastDeliveredHandoffKey) {
+    // A marker whose Send an agent already received (earlier session, or a
+    // previous owner process) must not re-deliver here — reconnects re-arm
+    // it from the extension's persisted pendingHandoff. Consume it without
+    // a round, and re-ack so an extension that missed the first
+    // HANDOFF_DELIVERED can still drop its marker.
+    if (isDeliveredKey(handoffKeyOf(handoff))) {
+      notifyDelivered?.(handoff);
+    } else {
       live.cursor = 1;
       live.queue.push({ cursor: 1, report: freeze(state.getFullChangeReport()), handoff });
     }
@@ -226,7 +354,7 @@ function consumeNext(session: LiveSession, after: number): PendingRound | null {
 function deliverFeedback(session: LiveSession, round: PendingRound): FeedbackWaitResult {
   session.state = 'implementing';
   if (round.handoff) {
-    lastDeliveredHandoffKey = handoffKeyOf(round.handoff);
+    rememberDeliveredKey(handoffKeyOf(round.handoff));
     notifyDelivered?.(round.handoff);
   }
   notify();
@@ -323,6 +451,20 @@ export function waitForHandoff(args: Record<string, unknown> = {}, extra?: ToolE
 
 export function onHandoff() {
   if (!live) return;
+  const handoff = state.getHandoff();
+  // A re-arm of a marker whose Send an agent already received is consumed
+  // without a round — checked BEFORE the busy/queued guards, because the
+  // extension re-arms precisely while the session may be implementing or
+  // already holding a queued round, and the point of this branch is to let
+  // an extension that missed the first HANDOFF_DELIVERED finally drop its
+  // (persisted) marker. It earns a fresh HANDOFF_DELIVERED, never a second
+  // delivery.
+  if (handoff && isDeliveredKey(handoffKeyOf(handoff))) {
+    state.setHandoff(null);
+    notifyDelivered?.(handoff);
+    notify();
+    return;
+  }
   // While implementing (or with a round still queued) a HANDOFF is ignored:
   // the panel rejects the send with a clear message, the changes stay in the
   // page ledger, and the user's next accepted Send becomes the next round.
@@ -330,19 +472,11 @@ export function onHandoff() {
     notify();
     return;
   }
-  const handoff = state.getHandoff();
   if (!handoff) {
     notify();
     return;
   }
   if (handoff.pageUrl && handoff.pageUrl !== live.pageUrl) {
-    notify();
-    return;
-  }
-  // A re-send of a marker whose Send an agent already received is consumed
-  // without a round — never a second delivery of the same changes.
-  if (handoffKeyOf(handoff) === lastDeliveredHandoffKey) {
-    state.setHandoff(null);
     notify();
     return;
   }
