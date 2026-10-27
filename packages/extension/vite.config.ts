@@ -41,6 +41,9 @@ export default defineConfig({
   build: {
     outDir: process.env.DM_BROWSER === 'safari' ? 'dist-safari' : 'dist',
     emptyOutDir: entry === 'content', // Only clear on first build
+    // Each entry is one inlined IIFE loaded from the extension package, so
+    // splitting can't shrink it; sidepanel.js is ~504 kB.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       input: current.input,
       output: {

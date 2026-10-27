@@ -149,6 +149,9 @@ step('web-ext lint (0 errors)', () => {
     console.warn(`   web-ext lint died by signal ${result.signal} — retrying once`);
     result = lint();
     if (result.error) throw result.error;
+    if (result.signal) {
+      throw new Error(`web-ext lint crashed twice (signal ${result.signal}); no lint result was produced — a tooling crash, not lint findings\n${result.stderr ?? ''}`);
+    }
   }
   if (result.status !== 0) {
     throw new Error(`web-ext lint failed (exit ${result.status})\n${result.stdout ?? ''}${result.stderr ?? ''}`);
