@@ -1,7 +1,6 @@
-import { Background } from "@/components/background";
 import { WhyThisExists } from "@/components/blocks/about";
 import { AboutHero } from "@/components/blocks/about-hero";
-import { DashedLine } from "@/components/dashed-line";
+import { PageSection } from "@/components/layout/page-section";
 import { JsonLd, personSchema } from "@/components/site/json-ld";
 
 export const metadata = {
@@ -52,21 +51,16 @@ export default function AboutPage() {
     <>
       <JsonLd data={personSchema} />
       {/* Hero — yellow background slab */}
-      <Background>
-        <section className="py-12 lg:py-16">
-          <AboutHero />
-        </section>
-      </Background>
+      <PageSection tone="hero">
+        <AboutHero />
+      </PageSection>
 
       {/* Why this exists — yellow background slab */}
-      <Background variant="bottom">
-        <section className="py-20 lg:py-28">
-          <DashedLine className="container max-w-5xl" />
-          <div className="mt-16">
-            <WhyThisExists />
-          </div>
-        </section>
-      </Background>
+      <PageSection tone="bottom" width="5xl">
+        <div className="mt-16">
+          <WhyThisExists />
+        </div>
+      </PageSection>
     </>
   );
 }

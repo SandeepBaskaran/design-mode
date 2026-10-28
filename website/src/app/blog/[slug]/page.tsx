@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
-import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import {
   JsonLd,
   blogPostingSchema,
@@ -122,26 +122,19 @@ export default async function BlogPostPage({
         ])}
       />
 
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-4xl">
-            <time
-              dateTime={p.datePublished}
-              className="text-muted-foreground text-base font-medium tracking-wide uppercase"
-            >
-              {dateFmt.format(new Date(p.datePublished))}
-            </time>
-            <h1 className="mt-4 text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              {p.title}
-            </h1>
-            <p className="text-muted-foreground mt-4 text-base">{p.excerpt}</p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title={p.title}
+        description={p.excerpt}
+        eyebrow={
+          <time dateTime={p.datePublished}>
+            {dateFmt.format(new Date(p.datePublished))}
+          </time>
+        }
+        width="4xl"
+      />
 
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-4xl" />
-        <article className="container mt-12 max-w-4xl space-y-10">
+      <PageSection tone="body" width="4xl">
+        <article data-ds-inline="Post body" className="container mt-12 max-w-4xl space-y-10">
           {p.body.map((block, i) => (
             <div key={i}>
               {block.heading && (
@@ -184,7 +177,7 @@ export default async function BlogPostPage({
             },
           ]}
         />
-      </section>
+      </PageSection>
     </>
   );
 }

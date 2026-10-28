@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
 
-import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { useCases } from "@/content/use-cases";
 
@@ -70,24 +70,19 @@ export default function UseCasesIndex() {
           })),
         })}
       />
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Workflows for visual editing and agent hand-off
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              Start with the shared loop: make the intended change on the
-              rendered interface, capture the exact specification, then ask a
-              coding agent or developer to update and verify the source. The
-              examples below apply that loop to specific jobs.
-            </p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title="Workflows for visual editing and agent hand-off"
+        description={
+          <>
+            Start with the shared loop: make the intended change on the rendered
+            interface, capture the exact specification, then ask a coding agent
+            or developer to update and verify the source. The examples below
+            apply that loop to specific jobs.
+          </>
+        }
+      />
 
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-5xl" />
+      <PageSection tone="body" width="5xl">
         <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-2 lg:grid-cols-3">
           {useCases.map((u) => (
             <Link
@@ -111,7 +106,7 @@ export default function UseCasesIndex() {
             </Link>
           ))}
         </div>
-      </section>
+      </PageSection>
     </>
   );
 }

@@ -1,12 +1,11 @@
 import React from "react";
 
-import { Background } from "@/components/background";
 import {
   ContactChannels,
   ContactHero,
   ContactReports,
 } from "@/components/blocks/contact";
-import { DashedLine } from "@/components/dashed-line";
+import { PageSection } from "@/components/layout/page-section";
 
 export const metadata = {
   title: { absolute: "Contact and support | Design Mode" },
@@ -54,29 +53,23 @@ const Page = () => {
   return (
     <>
       {/* Hero — yellow background slab */}
-      <Background>
-        <section className="py-12 lg:py-16">
-          <ContactHero />
-        </section>
-      </Background>
+      <PageSection tone="hero">
+        <ContactHero />
+      </PageSection>
 
       {/* Middle — channels */}
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-5xl" />
+      <PageSection tone="body" width="5xl">
         <div className="mt-12">
           <ContactChannels />
         </div>
-      </section>
+      </PageSection>
 
       {/* Bottom — reports + security in yellow slab */}
-      <Background variant="bottom">
-        <section className="py-20 lg:py-28">
-          <DashedLine className="container max-w-5xl" />
-          <div className="mt-16">
-            <ContactReports />
-          </div>
-        </section>
-      </Background>
+      <PageSection tone="bottom" width="5xl">
+        <div className="mt-16">
+          <ContactReports />
+        </div>
+      </PageSection>
     </>
   );
 };

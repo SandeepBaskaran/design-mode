@@ -6,8 +6,20 @@ type BackgroundProps = {
   children: React.ReactNode;
   variant?: "top" | "bottom";
   className?: string;
+  "data-ds"?: string;
 };
 
-export const Background = ({ children, className }: BackgroundProps) => {
-  return <div className={cn("relative", className)}>{children}</div>;
+export const Background = ({
+  children,
+  className,
+  "data-ds": outer,
+}: BackgroundProps) => {
+  return (
+    <div
+      className={cn("relative", className)}
+      data-ds={outer ? `${outer} Background` : "Background"}
+    >
+      {children}
+    </div>
+  );
 };

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import {
   JsonLd,
   breadcrumbSchema,
@@ -105,20 +105,10 @@ export default async function DocPage({
         ])}
       />
 
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-4xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              {d.title}
-            </h1>
-            <p className="text-muted-foreground mt-4 text-base">{d.intro}</p>
-          </div>
-        </section>
-      </Background>
+      <PageHero title={d.title} description={d.intro} width="4xl" />
 
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-4xl" />
-        <article className="container mt-12 max-w-4xl space-y-10 break-words">
+      <PageSection tone="body" width="4xl">
+        <article data-ds-inline="Doc body" className="container mt-12 max-w-4xl space-y-10 break-words">
           {d.sections.map((s, i) => (
             <div key={i} id={`step-${i + 1}`}>
               <h2 className="text-2xl tracking-tight md:text-3xl">
@@ -175,7 +165,7 @@ export default async function DocPage({
             },
           ]}
         />
-      </section>
+      </PageSection>
     </>
   );
 }

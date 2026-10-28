@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import {
   JsonLd,
   breadcrumbSchema,
@@ -97,23 +97,15 @@ export default async function UseCasePage({
         ])}
       />
 
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-4xl">
-            <div className="text-muted-foreground mb-4 text-base font-medium tracking-wide uppercase">
-              {u.persona}
-            </div>
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              {u.title}
-            </h1>
-            <p className="text-muted-foreground mt-4 text-base">{u.intro}</p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title={u.title}
+        description={u.intro}
+        eyebrow={u.persona}
+        width="4xl"
+      />
 
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-4xl" />
-        <article className="container mt-12 max-w-4xl space-y-12">
+      <PageSection tone="body" width="4xl">
+        <article data-ds-inline="Workflow body" className="container mt-12 max-w-4xl space-y-12">
           <div>
             <h2 className="text-2xl tracking-tight md:text-3xl">The problem</h2>
             <p className="text-muted-foreground mt-4 leading-relaxed">
@@ -177,7 +169,7 @@ export default async function UseCasePage({
               })),
           ]}
         />
-      </section>
+      </PageSection>
     </>
   );
 }

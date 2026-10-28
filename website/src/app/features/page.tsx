@@ -25,8 +25,9 @@ import {
   Type,
 } from "lucide-react";
 
-import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = {
@@ -166,31 +167,25 @@ export default function FeaturesPage() {
   return (
     <>
       {/* Hero — yellow background confined to this slab */}
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Every control, where you need it
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              The Design Mode side panel is split into three rows. A header row
-              to pick what you're working on, three middle panels for the actual
-              editing, and a bottom row for handing changes to your AI coding
-              agent. These are browser previews, not source edits or published
-              changes. Try the{" "}
-              <Link href="/demo" className="underline underline-offset-4">
-                guided demo
-              </Link>{" "}
-              on a supported page.
-            </p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title="Every control, where you need it"
+        description={
+          <>
+            The Design Mode side panel is split into three rows. A header row to
+            pick what you're working on, three middle panels for the actual
+            editing, and a bottom row for handing changes to your AI coding
+            agent. These are browser previews, not source edits or published
+            changes. Try the{" "}
+            <Link href="/demo" className="underline underline-offset-4">
+              guided demo
+            </Link>{" "}
+            on a supported page.
+          </>
+        }
+      />
 
       {/* Middle — plain background */}
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-5xl" />
-
+      <PageSection tone="body" width="5xl">
         {/* Section 1: Header row + Action toolbar (one merged card) */}
         <div className="container mt-16 max-w-5xl">
           <div className="mb-8 flex items-baseline gap-4">
@@ -360,78 +355,75 @@ export default function FeaturesPage() {
             </Card>
           </div>
         </div>
-      </section>
+      </PageSection>
 
       {/* Bottom — yellow background slab */}
-      <Background variant="bottom">
-        <section className="py-20 lg:py-28">
-          <DashedLine className="container max-w-5xl" />
-          <div className="container mt-16 max-w-5xl">
-            <div className="mb-8 flex items-baseline gap-4">
-              <span className="text-muted-foreground font-mono text-base tracking-wide uppercase">
-                Row 3
-              </span>
-              <h2 className="text-2xl tracking-tight md:text-3xl">
-                Bottom — ship your edits
-              </h2>
-            </div>
-            <p className="text-muted-foreground mb-10 max-w-2xl">
-              Two primary hand-off buttons — one to the clipboard, one to a
-              connected AI coding agent. JSON export and MCP reads are also
-              sharing paths. Review the{" "}
-              <Link href="/privacy" className="underline underline-offset-4">
-                privacy and sharing boundaries
-              </Link>{" "}
-              before sending.
-            </p>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardContent className="flex flex-col gap-2 p-6">
-                  <div className="flex items-center gap-2">
-                    <Copy className="text-foreground size-6" />
-                    <h3 className="text-2xl font-semibold">Copy as Prompt</h3>
-                  </div>
-                  <p className="text-muted-foreground text-base leading-relaxed">
-                    Copies your recorded changes as a Markdown prompt. In the
-                    next-release source this can include all saved routes on the
-                    current site, even collapsed groups. Review it before
-                    pasting; no MCP setup is required. See the{" "}
-                    <Link
-                      href="/blog/turn-visual-edits-into-precise-ai-prompts"
-                      className="underline underline-offset-4"
-                    >
-                      illustrative prompt and review checklist
-                    </Link>
-                    .
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="flex flex-col gap-2 p-6">
-                  <div className="flex items-center gap-2">
-                    <Send className="text-foreground size-6" />
-                    <h3 className="text-2xl font-semibold">Send to Agent</h3>
-                  </div>
-                  <p className="text-muted-foreground text-base leading-relaxed">
-                    Marks recorded changes as ready over MCP. A connected agent
-                    retrieves the live changes and hand-off marker through the
-                    MCP tools. Without an attached agent, Design Mode opens
-                    setup guidance instead of claiming the hand-off succeeded.
-                    Local mode can continue into explicit feedback rounds with
-                    immutable snapshots and a Stop action in the next-release
-                    implementation. Follow the{" "}
-                    <Link href="/mcp" className="underline underline-offset-4">
-                      MCP setup guide
-                    </Link>
-                    ; the agent still needs authorised repository access and its
-                    changes need review.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+      <PageSection tone="bottom" width="5xl">
+        <div className="container mt-16 max-w-5xl">
+          <div className="mb-8 flex items-baseline gap-4">
+            <span className="text-muted-foreground font-mono text-base tracking-wide uppercase">
+              Row 3
+            </span>
+            <h2 className="text-2xl tracking-tight md:text-3xl">
+              Bottom — ship your edits
+            </h2>
           </div>
-        </section>
-      </Background>
+          <p className="text-muted-foreground mb-10 max-w-2xl">
+            Two primary hand-off buttons — one to the clipboard, one to a
+            connected AI coding agent. JSON export and MCP reads are also
+            sharing paths. Review the{" "}
+            <Link href="/privacy" className="underline underline-offset-4">
+              privacy and sharing boundaries
+            </Link>{" "}
+            before sending.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardContent className="flex flex-col gap-2 p-6">
+                <div className="flex items-center gap-2">
+                  <Copy className="text-foreground size-6" />
+                  <h3 className="text-2xl font-semibold">Copy as Prompt</h3>
+                </div>
+                <p className="text-muted-foreground text-base leading-relaxed">
+                  Copies your recorded changes as a Markdown prompt. In the
+                  next-release source this can include all saved routes on the
+                  current site, even collapsed groups. Review it before pasting;
+                  no MCP setup is required. See the{" "}
+                  <Link
+                    href="/blog/turn-visual-edits-into-precise-ai-prompts"
+                    className="underline underline-offset-4"
+                  >
+                    illustrative prompt and review checklist
+                  </Link>
+                  .
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex flex-col gap-2 p-6">
+                <div className="flex items-center gap-2">
+                  <Send className="text-foreground size-6" />
+                  <h3 className="text-2xl font-semibold">Send to Agent</h3>
+                </div>
+                <p className="text-muted-foreground text-base leading-relaxed">
+                  Marks recorded changes as ready over MCP. A connected agent
+                  retrieves the live changes and hand-off marker through the MCP
+                  tools. Without an attached agent, Design Mode opens setup
+                  guidance instead of claiming the hand-off succeeded. Local
+                  mode can continue into explicit feedback rounds with immutable
+                  snapshots and a Stop action in the next-release
+                  implementation. Follow the{" "}
+                  <Link href="/mcp" className="underline underline-offset-4">
+                    MCP setup guide
+                  </Link>
+                  ; the agent still needs authorised repository access and its
+                  changes need review.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </PageSection>
     </>
   );
 }

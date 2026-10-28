@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
 
-import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { comparisons, isComparisonIndexable } from "@/content/comparisons";
 
@@ -67,24 +67,21 @@ export default function ComparisonsIndex() {
         })}
       />
 
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Which browser visual editor fits your workflow?
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed">
-              There is no single best tool for every job. Choose a direct
-              live-page editor when you need to make the intended visual change,
-              an annotation tool when feedback is enough, browser automation for
-              agent verification, or Figma-to-code software when the design file
-              is the source of truth.
-            </p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title="Which browser visual editor fits your workflow?"
+        description={
+          <>
+            There is no single best tool for every job. Choose a direct
+            live-page editor when you need to make the intended visual change,
+            an annotation tool when feedback is enough, browser automation for
+            agent verification, or Figma-to-code software when the design file
+            is the source of truth.
+          </>
+        }
+        descriptionClassName="leading-relaxed"
+      />
 
-      <section className="py-16 lg:py-20">
+      <section data-ds-inline="Evaluation criteria and comparison list" className="py-16 lg:py-20">
         <div className="container max-w-5xl">
           <h2 className="text-2xl tracking-tight md:text-3xl">
             How to evaluate the options

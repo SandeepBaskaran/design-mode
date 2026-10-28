@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import { FaqAnswer } from "@/components/site/faq-answer";
 import { JsonLd, faqSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
@@ -55,32 +55,28 @@ export default function FaqPage() {
   return (
     <>
       <JsonLd data={faqSchema(flatQA)} />
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Frequently asked questions
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed">
-              Direct answers about browser editing, source-code hand-off, MCP,
-              storage and privacy. For setup steps, use the{" "}
-              <Link
-                href="/docs"
-                className="text-foreground underline underline-offset-8"
-              >
-                documentation
-              </Link>
-              .
-            </p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title="Frequently asked questions"
+        description={
+          <>
+            Direct answers about browser editing, source-code hand-off, MCP,
+            storage and privacy. For setup steps, use the{" "}
+            <Link
+              href="/docs"
+              className="text-foreground underline underline-offset-8"
+            >
+              documentation
+            </Link>
+            .
+          </>
+        }
+        descriptionClassName="leading-relaxed"
+      />
 
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-5xl" />
+      <PageSection tone="body" width="5xl">
         <div className="container mt-12 max-w-5xl space-y-12">
           {faqGroups.map((group, groupIndex) => (
-            <section
+            <section data-ds-inline="FAQ group"
               key={group.title}
               aria-labelledby={`faq-group-${groupIndex}`}
             >
@@ -137,7 +133,7 @@ export default function FaqPage() {
             },
           ]}
         />
-      </section>
+      </PageSection>
     </>
   );
 }

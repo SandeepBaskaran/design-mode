@@ -140,7 +140,7 @@ export default function McpPage() {
   return (
     <>
       <Background>
-        <section className="py-32" aria-labelledby="mcp-title">
+        <section data-ds-inline="MCP hero" className="py-32" aria-labelledby="mcp-title">
           <div className="container max-w-5xl">
             <p className="text-muted-foreground text-base font-medium tracking-widest">
               DESIGN MODE + YOUR AI APP
@@ -167,7 +167,7 @@ export default function McpPage() {
         </section>
       </Background>
 
-      <section className="py-32" aria-labelledby="what-mcp">
+      <section data-ds-inline="What MCP makes possible" className="py-32" aria-labelledby="what-mcp">
         <div className="container max-w-5xl">
           <h2 id="what-mcp" className="text-3xl tracking-tight md:text-4xl">
             What MCP makes possible
@@ -259,7 +259,7 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section id="connect" className="py-32" aria-labelledby="connect-title">
+      <section data-ds-inline="Choose how to connect" id="connect" className="py-32" aria-labelledby="connect-title">
         <div className="container max-w-5xl">
           <h2
             id="connect-title"
@@ -389,7 +389,7 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section className="py-32" aria-labelledby="apps-title">
+      <section data-ds-inline="Mode comparison and client setup" className="py-32" aria-labelledby="apps-title">
         <div className="container max-w-5xl">
           <h2 className="text-2xl tracking-tight md:text-3xl">
             Mode comparison
@@ -495,7 +495,7 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section className="py-32" aria-labelledby="tools-title">
+      <section data-ds-inline="Tools your agent can use" className="py-32" aria-labelledby="tools-title">
         <div className="container max-w-5xl">
           <h2 id="tools-title" className="text-3xl tracking-tight md:text-4xl">
             Tools your agent can use
@@ -549,7 +549,7 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section className="py-32" aria-labelledby="reads-title">
+      <section data-ds-inline="Read progressively, act on a bounded scope" className="py-32" aria-labelledby="reads-title">
         <div className="container max-w-5xl">
           <h2 id="reads-title" className="text-3xl tracking-tight md:text-4xl">
             Read progressively, act on a bounded scope
@@ -597,7 +597,7 @@ export default function McpPage() {
       </section>
 
       <Background variant="bottom">
-        <section className="py-32" aria-labelledby="skill-title">
+        <section data-ds-inline="Give your agent the workflow" className="py-32" aria-labelledby="skill-title">
           <div className="container max-w-5xl">
             <Send aria-hidden="true" className="size-8" />
             <h2

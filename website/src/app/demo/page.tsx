@@ -5,7 +5,7 @@ import { renderDemoTarget } from "./DemoTargets";
 import { ExtensionDetected } from "./ExtensionDetected";
 import { STEPS } from "./steps";
 
-import { Background } from "@/components/background";
+import { PageHero } from "@/components/layout/page-hero";
 
 export const metadata = {
   title: { absolute: "Try the browser visual editor | Design Mode" },
@@ -54,28 +54,23 @@ export default function DemoPage() {
   return (
     <>
       {/* Hero — yellow background slab */}
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Live demo
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              <span className="md:hidden">
-                Try this guided walkthrough in a desktop browser with the Design
-                Mode extension installed.
-              </span>
-              <span className="max-md:hidden">
-                Open the side panel on this page and try every feature with the
-                demo targets below — no recordings, the canvas is the real
-                thing.
-              </span>
-            </p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title="Live demo"
+        description={
+          <>
+            <span className="md:hidden">
+              Try this guided walkthrough in a desktop browser with the Design
+              Mode extension installed.
+            </span>
+            <span className="max-md:hidden">
+              Open the side panel on this page and try every feature with the
+              demo targets below — no recordings, the canvas is the real thing.
+            </span>
+          </>
+        }
+      />
 
-      <section className="px-4 py-12 md:hidden">
+      <section data-ds-inline="Continue on desktop (mobile only)" className="px-4 py-12 md:hidden">
         <div className="border-border bg-card container max-w-xl rounded-2xl border p-6 text-center shadow-sm">
           <h2 className="text-xl font-semibold">Continue on desktop</h2>
           <p className="text-muted-foreground mt-3 text-base leading-7">
@@ -87,7 +82,7 @@ export default function DemoPage() {
       </section>
 
       {/* Middle — interactive canvas */}
-      <section className="hidden py-12 md:block lg:py-16">
+      <section data-ds-inline="Demo canvas (desktop only)" className="hidden py-12 md:block lg:py-16">
         <div className={`${styles.extensionBannerWrap} container max-w-5xl`}>
           <ExtensionDetected />
         </div>

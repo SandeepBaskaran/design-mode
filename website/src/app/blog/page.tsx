@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
 
-import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { posts } from "@/content/blog";
 
@@ -75,23 +75,18 @@ export default function BlogIndex() {
           })),
         })}
       />
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Blog
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              Build notes from Design Mode and walkthroughs of real workflows —
-              MCP architecture, vibe coding, Tailwind redesigns, changelog
-              deep-dives.
-            </p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title="Blog"
+        description={
+          <>
+            Build notes from Design Mode and walkthroughs of real workflows —
+            MCP architecture, vibe coding, Tailwind redesigns, changelog
+            deep-dives.
+          </>
+        }
+      />
 
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-5xl" />
+      <PageSection tone="body" width="5xl">
         <div className="container mt-12 max-w-5xl space-y-6">
           {sorted.map((p) => (
             <Link
@@ -118,7 +113,7 @@ export default function BlogIndex() {
             </Link>
           ))}
         </div>
-      </section>
+      </PageSection>
     </>
   );
 }

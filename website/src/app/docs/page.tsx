@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
 
-import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { docs } from "@/content/docs";
 
@@ -65,22 +65,17 @@ export default function DocsIndex() {
           })),
         })}
       />
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Docs
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              How to install Design Mode, set up MCP for your AI coding agent,
-              work with the Changes tab, and fix common issues.
-            </p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title="Docs"
+        description={
+          <>
+            How to install Design Mode, set up MCP for your AI coding agent,
+            work with the Changes tab, and fix common issues.
+          </>
+        }
+      />
 
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-5xl" />
+      <PageSection tone="body" width="5xl">
         <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-2 lg:grid-cols-3">
           {docs.map((d) => (
             <Link
@@ -99,7 +94,7 @@ export default function DocsIndex() {
             </Link>
           ))}
         </div>
-      </section>
+      </PageSection>
     </>
   );
 }

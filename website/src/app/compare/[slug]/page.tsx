@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 
 import { Check } from "lucide-react";
 
-import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import { JsonLd, breadcrumbSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
 import { Button } from "@/components/ui/button";
@@ -95,23 +95,11 @@ export default async function ComparePage({
         ])}
       />
 
-      <Background>
-        <section className="py-12 lg:py-16">
-          <div className="container max-w-4xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              {c.title}
-            </h1>
-            <p className="text-muted-foreground mt-4 text-base">
-              {c.oneLiner}
-            </p>
-          </div>
-        </section>
-      </Background>
+      <PageHero title={c.title} description={c.oneLiner} width="4xl" />
 
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-4xl" />
-        <article className="container mt-12 max-w-4xl space-y-12">
-          <aside className="bg-muted text-muted-foreground rounded-xl border p-4 text-base leading-relaxed">
+      <PageSection tone="body" width="4xl">
+        <article data-ds-inline="Comparison body" className="container mt-12 max-w-4xl space-y-12">
+          <aside data-ds-inline="Research status" className="bg-muted text-muted-foreground rounded-xl border p-4 text-base leading-relaxed">
             <strong className="text-foreground">Research status:</strong>{" "}
             {isComparisonIndexable(c)
               ? "Source-backed comparison. Review the dated sources and methodology below for what was documented, inspected or tested. Pricing and capabilities can change."
@@ -222,7 +210,7 @@ export default async function ComparePage({
           </div>
 
           {c.research && (
-            <section aria-label="Comparison sources">
+            <section data-ds-inline="Sources and scope" aria-label="Comparison sources">
               <h2 className="text-2xl tracking-tight md:text-3xl">
                 Sources and scope
               </h2>
@@ -265,7 +253,7 @@ export default async function ComparePage({
               description: r.oneLiner,
             }))}
         />
-      </section>
+      </PageSection>
     </>
   );
 }

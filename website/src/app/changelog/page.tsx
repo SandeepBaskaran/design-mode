@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
 
-import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
+import { PageHero } from "@/components/layout/page-hero";
+import { PageSection } from "@/components/layout/page-section";
 import { releases } from "@/content/changelog";
 
 const REPO_CHANGELOG =
@@ -62,34 +62,32 @@ function formatDate(iso: string): string {
 export default function ChangelogPage() {
   return (
     <>
-      <Background>
-        <section className="py-16 lg:py-24">
-          <div className="container max-w-3xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Changelog
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-2xl text-base">
-              Release highlights in plain language, with the date each version
-              shipped — not a complete inventory of every change.
-            </p>
-            <p className="text-muted-foreground mt-3 text-base">
-              Want the technical detail?{" "}
-              <a
-                href={REPO_CHANGELOG}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-foreground/80 inline-flex items-center gap-1 font-medium underline underline-offset-4"
-              >
-                Full CHANGELOG on GitHub
-                <ArrowUpRight className="size-3.5" />
-              </a>
-            </p>
-          </div>
-        </section>
-      </Background>
+      <PageHero
+        title="Changelog"
+        description={
+          <>
+            Release highlights in plain language, with the date each version
+            shipped — not a complete inventory of every change.
+          </>
+        }
+        width="3xl"
+        spacing="spacious"
+      >
+        <p className="text-muted-foreground mt-3 text-base">
+          Want the technical detail?{" "}
+          <a
+            href={REPO_CHANGELOG}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground/80 inline-flex items-center gap-1 font-medium underline underline-offset-4"
+          >
+            Full CHANGELOG on GitHub
+            <ArrowUpRight className="size-3.5" />
+          </a>
+        </p>
+      </PageHero>
 
-      <section className="py-16 lg:py-20">
-        <DashedLine className="container max-w-3xl" />
+      <PageSection tone="body" width="3xl">
         <div className="container mt-12 max-w-3xl">
           <ol className="flex flex-col gap-16">
             {releases.map((r) => (
@@ -144,7 +142,7 @@ export default function ChangelogPage() {
             .
           </p>
         </div>
-      </section>
+      </PageSection>
     </>
   );
 }
