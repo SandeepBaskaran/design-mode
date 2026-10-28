@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Design-system module
+// DIVE — Design-system module
 //
 // Two concerns share this file (token DISCOVERY lives in
 // token-engine.ts):

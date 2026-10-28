@@ -153,13 +153,13 @@ const PREVIEWS: Record<string, { node: ReactNode; frame?: "full" }> = {
   },
   "site/back-to-top": { node: <div className="text-muted-foreground text-sm">Fixed bottom-right button; appears after scrolling (visible on this page).<BackToTop /></div> },
   "site/browser-banner": { node: <BrowserBanner /> },
-  "site/copy-prompt": { node: <CopyPrompt text="Use Design Mode to apply the recorded changes." /> },
+  "site/copy-prompt": { node: <CopyPrompt text="Use DIVE to apply the recorded changes." /> },
   "site/faq-answer": { node: <FaqAnswer qa={faqGroups[0].items[0]} /> },
   "site/related-links": {
     node: (
       <RelatedLinks
         links={[
-          { href: "/docs", title: "Docs", description: "Set up and use Design Mode." },
+          { href: "/docs", title: "Docs", description: "Set up and use DIVE." },
           { href: "/mcp", title: "MCP", description: "Connect a coding agent." },
         ]}
       />

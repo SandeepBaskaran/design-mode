@@ -9,7 +9,7 @@ import { useCases } from "@/content/use-cases";
 
 export const metadata = {
   title: {
-    absolute: "Visual editing workflows for AI coding agents | Design Mode",
+    absolute: "Visual editing workflows for AI coding agents | DIVE",
   },
   description:
     "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
@@ -26,7 +26,7 @@ export const metadata = {
   alternates: { canonical: "https://designmode.app/use-cases" },
   openGraph: {
     type: "website",
-    title: "Visual editing workflows for AI coding agents | Design Mode",
+    title: "Visual editing workflows for AI coding agents | DIVE",
     description:
       "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
     url: "https://designmode.app/use-cases",
@@ -35,13 +35,13 @@ export const metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Visual editing workflows for AI coding agents | Design Mode",
+    title: "Visual editing workflows for AI coding agents | DIVE",
     description:
       "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
     images: [
@@ -49,7 +49,7 @@ export const metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },

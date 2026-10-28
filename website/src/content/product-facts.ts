@@ -7,35 +7,35 @@ export type QA = {
 export type FaqGroup = { title: string; items: QA[] };
 
 export const PRODUCT_DEFINITION =
-  "Design Mode is a free, open-source browser extension for Chrome, Firefox and Safari. It lets you edit a webpage visually, records the exact changes, and hands them to a coding agent. The browser edit is a preview; the agent updates source code in a repository it can access.";
+  "DIVE is a free, open-source browser extension for Chrome, Firefox and Safari. It lets you edit a webpage visually, records the exact changes, and hands them to a coding agent. The browser edit is a preview; the agent updates source code in a repository it can access.";
 
 export const faqGroups: FaqGroup[] = [
   {
     title: "Product and workflow",
     items: [
       {
-        question: "What is Design Mode?",
+        question: "What is DIVE?",
         answer: PRODUCT_DEFINITION,
       },
       {
         question: "What can I edit?",
         answer:
-          "On a scriptable webpage, you can inspect elements and change layout, typography, colour, spacing, effects, motion, text and DOM structure. Design Mode records style, text, DOM and comment changes in the Changes tab. Browser-internal pages, extension stores and other protected surfaces cannot be scripted by browser extensions.",
+          "On a scriptable webpage, you can inspect elements and change layout, typography, colour, spacing, effects, motion, text and DOM structure. DIVE records style, text, DOM and comment changes in the Changes tab. Browser-internal pages, extension stores and other protected surfaces cannot be scripted by browser extensions.",
       },
       {
         question: "Does it work on localhost and sites I'm logged into?",
         answer:
-          "Yes on a normal webpage your browser can script — including localhost, staging, and pages where you are already logged in — because the editor runs in that tab. It cannot run on browser-internal pages (chrome://, about:), extension stores, or other blocked surfaces such as some enterprise policies. file:// pages need the browser's local-file permission and are not guaranteed. Cookie-authenticated apps work only while that tab is already signed in; Design Mode does not bypass login, SSO or publisher access controls. Edits are a local preview; they do not change the publisher's source.",
+          "Yes on a normal webpage your browser can script — including localhost, staging, and pages where you are already logged in — because the editor runs in that tab. It cannot run on browser-internal pages (chrome://, about:), extension stores, or other blocked surfaces such as some enterprise policies. file:// pages need the browser's local-file permission and are not guaranteed. Cookie-authenticated apps work only while that tab is already signed in; DIVE does not bypass login, SSO or publisher access controls. Edits are a local preview; they do not change the publisher's source.",
       },
       {
-        question: "Does Design Mode change my production source code?",
+        question: "Does DIVE change my production source code?",
         answer:
           "No. It only changes what you see in your browser and records those changes. You can copy the notes or send them to a coding agent. The agent still needs access to your project and must make the real code change.",
       },
       {
         question: "Can I edit a third-party website?",
         answer:
-          "You can use Design Mode to make a local visual experiment on a webpage that allows extension scripts. That does not change the publisher's website or deploy anything. Reload persistence depends on the browser session and storage implementation described on the privacy page.",
+          "You can use DIVE to make a local visual experiment on a webpage that allows extension scripts. That does not change the publisher's website or deploy anything. Reload persistence depends on the browser session and storage implementation described on the privacy page.",
       },
       {
         question: "Who is it for?",
@@ -50,7 +50,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Which browsers are supported?",
         answer:
-          "Design Mode works in Chrome, Firefox and Safari. Features differ a little between them; the browser support and install guides have the details. Chrome and Firefox work right away: install it from the Chrome Web Store or Firefox Add-ons. Safari needs a quick manual setup that takes under 30 seconds.",
+          "DIVE works in Chrome, Firefox and Safari. Features differ a little between them; the browser support and install guides have the details. Chrome and Firefox work right away: install it from the Chrome Web Store or Firefox Add-ons. Safari needs a quick manual setup that takes under 30 seconds.",
         links: [
           { label: "Browser support", href: "/docs/browser-support" },
           { label: "Install guides", href: "/docs" },
@@ -75,7 +75,7 @@ export const faqGroups: FaqGroup[] = [
         question:
           "How do I communicate visual changes to Claude Code or another coding agent?",
         answer:
-          "Use Copy as Prompt when you want a portable Markdown specification that you can paste anywhere. Use Send to Agent when your coding agent is connected through Design Mode's MCP server. In both cases, review the agent's source diff and the rendered result before shipping.",
+          "Use Copy as Prompt when you want a portable Markdown specification that you can paste anywhere. Use Send to Agent when your coding agent is connected through DIVE's MCP server. In both cases, review the agent's source diff and the rendered result before shipping.",
       },
       {
         question: "What does the MCP server expose?",
@@ -85,7 +85,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Which agents are supported?",
         answer:
-          "Design Mode uses Model Context Protocol, so it can work with clients that support a compatible local or Streamable HTTP MCP server. Configuration files, transport support and authentication syntax differ by client and version. Use the tested, version-stamped instructions in the MCP setup documentation instead of assuming one JSON block works everywhere.",
+          "DIVE uses Model Context Protocol, so it can work with clients that support a compatible local or Streamable HTTP MCP server. Configuration files, transport support and authentication syntax differ by client and version. Use the tested, version-stamped instructions in the MCP setup documentation instead of assuming one JSON block works everywhere.",
       },
       {
         question:
@@ -114,12 +114,12 @@ export const faqGroups: FaqGroup[] = [
           "Relay request and response queues request a 60-second Redis expiry and responses are normally deleted as soon as they are consumed. The expiry call is separate and best-effort, so 60 seconds is not a guaranteed maximum. The server retains a SHA-256 hash of the anonymous device token, a tenant identifier and created/last-seen timestamps until the credential is revoked. Operational logs contain metadata such as tenant identifier, message type, byte count, latency, status and errors—not selectors, screenshots or payload bodies.",
       },
       {
-        question: "Does Design Mode train on my edits?",
+        question: "Does DIVE train on my edits?",
         answer:
-          "Design Mode does not train a model and its relay does not send edits to a model on its own. When you deliberately hand changes to Claude, Cursor or another agent, that provider processes the content under its own account settings and privacy terms.",
+          "DIVE does not train a model and its relay does not send edits to a model on its own. When you deliberately hand changes to Claude, Cursor or another agent, that provider processes the content under its own account settings and privacy terms.",
       },
       {
-        question: "Is Design Mode free and open source?",
+        question: "Is DIVE free and open source?",
         answer:
           "The extension and repository are published under the MIT licence and the current store listings are free to install. MIT permits commercial use, modification and redistribution subject to its licence notice. Future hosting or service policy should be judged from the terms published at that time rather than a promise that can never change.",
       },
@@ -143,13 +143,13 @@ export const faqGroups: FaqGroup[] = [
 ];
 
 const homepageQuestions = new Set([
-  "What is Design Mode?",
-  "Does Design Mode change my production source code?",
+  "What is DIVE?",
+  "Does DIVE change my production source code?",
   "Which browsers are supported?",
   "How do I communicate visual changes to Claude Code or another coding agent?",
   "What is the difference between Cloud, Local and Self-hosted?",
   "What data leaves my machine by default?",
-  "Is Design Mode free and open source?",
+  "Is DIVE free and open source?",
 ]);
 
 export const homepageFaqQA = faqGroups

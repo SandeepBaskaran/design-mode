@@ -19,12 +19,12 @@ export const dynamicParams = false;
 
 const socialCopy: Record<string, { title: string; description: string }> = {
   "vibe-coding-visual-editing-workflow": {
-    title: "Visual editing in the AI coding loop | Design Mode",
+    title: "Visual editing in the AI coding loop | DIVE",
     description:
       "Where browser visual editing fits between an initial coding-agent build and the reviewed source-code correction.",
   },
   "redesigning-a-tailwind-landing-page-with-claude-code": {
-    title: "Redesign a Tailwind page with Claude Code | Design Mode",
+    title: "Redesign a Tailwind page with Claude Code | DIVE",
     description:
       "An illustrative workflow for editing a rendered Tailwind page, briefing Claude Code and reviewing its source changes. Not a measured case study.",
   },
@@ -67,7 +67,7 @@ export async function generateMetadata({
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode — The visual editor for all your agent’s work",
+          alt: "DIVE — The visual editor for all your agent’s work",
         },
       ],
     },
@@ -80,7 +80,7 @@ export async function generateMetadata({
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode — The visual editor for all your agent’s work",
+          alt: "DIVE — The visual editor for all your agent’s work",
         },
       ],
     },

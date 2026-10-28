@@ -74,7 +74,7 @@ export const Navbar = () => {
             className="size-6"
           />
           <span className="font-display text-foreground text-base font-semibold tracking-tight">
-            Design Mode
+            DIVE
           </span>
         </Link>
 
@@ -104,7 +104,7 @@ export const Navbar = () => {
               href={REPO_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Design Mode source code on GitHub"
+              aria-label="DIVE source code on GitHub"
               onClick={() => trackCtaClick("github")}
             >
               <GithubMark size={16} />

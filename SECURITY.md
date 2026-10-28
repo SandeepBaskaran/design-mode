@@ -34,7 +34,7 @@ Out of scope:
 
 ### Why the extension asks for `<all_urls>`
 
-Design Mode is a visual editor for whatever page you are looking at, so
+DIVE is a visual editor for whatever page you are looking at, so
 the content script must run on any origin the user opens — there is no
 fixed list of sites to declare. The manifest therefore requests
 `<all_urls>` as a host permission and content-script match. The
@@ -94,7 +94,7 @@ recover a plaintext token from the relay are in scope and high priority.
 
 - Local MCP binds its owner bridge to `127.0.0.1` and requires the ephemeral
   owner token for both WebSocket and HTTP tool-proxy requests. Concurrent
-  Design Mode clients attach to that owner; a foreign port occupant is never
+  DIVE clients attach to that owner; a foreign port occupant is never
   killed. Cloud mode talks to `https://mcp.designmode.app` (or a configured
   self-hosted deployment) over HTTPS with a bearer token stored in
   `chrome.storage.local`. Don't introduce a new outbound service without an

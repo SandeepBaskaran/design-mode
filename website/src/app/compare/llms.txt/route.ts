@@ -15,9 +15,9 @@ export function GET() {
         comparison.positioning,
         ...comparison.table.map(
           (row) =>
-            `- ${row.feature}: Design Mode — ${row.designMode} ${comparison.competitor} — ${row.competitor}`,
+            `- ${row.feature}: DIVE — ${row.designMode} ${comparison.competitor} — ${row.competitor}`,
         ),
-        `Choose Design Mode: ${comparison.whenToPickDesignMode.join(" ")}`,
+        `Choose DIVE: ${comparison.whenToPickDesignMode.join(" ")}`,
         `Choose ${comparison.competitor}: ${comparison.whenToPickCompetitor.join(" ")}`,
         comparison.honesty,
         `Methodology: ${research.methodology}`,
@@ -29,8 +29,8 @@ export function GET() {
 
   return new Response(
     [
-      "# Design Mode comparisons",
-      "Publisher: Design Mode. These are vendor-authored comparisons, not independent reviews. Sources and test limitations accompany each entry. Prices and capabilities can change. Unverified drafts are excluded.",
+      "# DIVE comparisons",
+      "Publisher: DIVE. These are vendor-authored comparisons, not independent reviews. Sources and test limitations accompany each entry. Prices and capabilities can change. Unverified drafts are excluded.",
       ...entries,
     ].join("\n\n"),
     { headers: { "Content-Type": "text/plain; charset=utf-8" } },

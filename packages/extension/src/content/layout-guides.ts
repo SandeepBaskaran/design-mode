@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Layout Guides overlay (session-only)
+// DIVE — Layout Guides overlay (session-only)
 // ============================================================
 //
 // Side panel sends SET_LAYOUT_GUIDES with a JSON array of layers per

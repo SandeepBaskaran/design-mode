@@ -209,7 +209,7 @@ async function handleToolCall(tenantId: string, name: string, args: any): Promis
     return { content: tool.toContent(reply.payload, args || {}) };
   } catch {
     return {
-      content: [{ type: 'text', text: 'Browser offline. Open the Design Mode side panel and try again.' }],
+      content: [{ type: 'text', text: 'Browser offline. Open the DIVE side panel and try again.' }],
       isError: true,
     };
   }

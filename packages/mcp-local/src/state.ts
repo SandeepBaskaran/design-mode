@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode Server — State Management
+// DIVE Server — State Management
 // Stores style/text/DOM changes, comments, and active sessions.
 // ============================================================
 

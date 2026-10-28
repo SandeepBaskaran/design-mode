@@ -22,16 +22,16 @@ export const docs: DocPage[] = [
     title: "Browser support & parity",
     metaTitle: "Browser support — Chrome, Firefox, Safari and feature parity",
     metaDescription:
-      "Design Mode runs on Chrome, Edge, Brave, Arc, Firefox and Safari on Mac. What's identical across browsers, and the few browser-specific features (including Safari's manual setup).",
+      "DIVE runs on Chrome, Edge, Brave, Arc, Firefox and Safari on Mac. What's identical across browsers, and the few browser-specific features (including Safari's manual setup).",
     keywords: [
-      "Design Mode browser support",
-      "Design Mode Firefox",
+      "DIVE browser support",
+      "DIVE Firefox",
       "Firefox add-on",
       "Chrome vs Firefox extension",
       "browser feature parity",
     ],
     intro:
-      "Design Mode runs on Chromium browsers (Chrome, Edge, Brave, Arc), Firefox 121+ and Safari on Mac. Everything core is available across browsers; a few extras depend on browser APIs, and Safari needs a short manual setup.",
+      "DIVE runs on Chromium browsers (Chrome, Edge, Brave, Arc), Firefox 121+ and Safari on Mac. Everything core is available across browsers; a few extras depend on browser APIs, and Safari needs a short manual setup.",
     sections: [
       {
         heading: "Supported browsers",
@@ -51,7 +51,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Firefox specifics",
-        body: "Design Mode opens as Firefox's native sidebar rather than a right-docked panel; the toolbar button, the View → Sidebar menu, and Alt+D all toggle it. For local files, Firefox manages file:// access from about:addons (there's no per-extension “Allow access to file URLs” toggle like Chrome's).",
+        body: "DIVE opens as Firefox's native sidebar rather than a right-docked panel; the toolbar button, the View → Sidebar menu, and Alt+D all toggle it. For local files, Firefox manages file:// access from about:addons (there's no per-extension “Allow access to file URLs” toggle like Chrome's).",
       },
     ],
     related: ["keyboard-shortcuts", "troubleshooting"],
@@ -60,17 +60,17 @@ export const docs: DocPage[] = [
     slug: "keyboard-shortcuts",
     title: "Keyboard shortcuts",
     metaTitle:
-      "Keyboard shortcuts — Design Mode side panel shortcuts reference",
+      "Keyboard shortcuts — DIVE side panel shortcuts reference",
     metaDescription:
-      "Every keyboard shortcut in Design Mode — inspector, comments, tabs, undo/redo, screenshot, export CSS — including the two browser-level commands you can rebind. Designed for fast iteration without leaving the keyboard.",
+      "Every keyboard shortcut in DIVE — inspector, comments, tabs, undo/redo, screenshot, export CSS — including the two browser-level commands you can rebind. Designed for fast iteration without leaving the keyboard.",
     keywords: [
-      "Design Mode keyboard shortcuts",
+      "DIVE keyboard shortcuts",
       "design tool shortcuts",
       "Chrome extension shortcuts",
       "keyboard reference",
     ],
     intro:
-      "Design Mode has 12 shortcuts that work directly on the page while the side panel is open, plus two browser-level commands for opening the panel and taking a screenshot — 14 in total.",
+      "DIVE has 12 shortcuts that work directly on the page while the side panel is open, plus two browser-level commands for opening the panel and taking a screenshot — 14 in total.",
     sections: [
       {
         heading: "In-page shortcuts",
@@ -86,7 +86,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Browser-level commands",
-        body: "Alt+D opens Design Mode on both Chrome and Firefox; Alt+S takes a screenshot using the same target and destination as the camera button. They are browser commands rather than page handlers, so both can be rebound at chrome://extensions/shortcuts on Chrome or about:addons › Manage Extension Shortcuts on Firefox. Browsers treat the supplied keys as suggestions and may leave either command unassigned after an update or conflict. The 12 in-page shortcuts above cannot be remapped from Settings — that list is read-only.",
+        body: "Alt+D opens DIVE on both Chrome and Firefox; Alt+S takes a screenshot using the same target and destination as the camera button. They are browser commands rather than page handlers, so both can be rebound at chrome://extensions/shortcuts on Chrome or about:addons › Manage Extension Shortcuts on Firefox. Browsers treat the supplied keys as suggestions and may leave either command unassigned after an update or conflict. The 12 in-page shortcuts above cannot be remapped from Settings — that list is read-only.",
       },
     ],
     related: ["changes-tab", "mcp-setup"],
@@ -96,7 +96,7 @@ export const docs: DocPage[] = [
     title: "MCP setup",
     metaTitle: "MCP setup for AI apps — Cloud, Local and Self-hosted",
     metaDescription:
-      "Connect Design Mode using anonymous bearer-token pairing, protected client configuration and read-only tests. Examples for Claude Code, Cursor and VS Code.",
+      "Connect DIVE using anonymous bearer-token pairing, protected client configuration and read-only tests. Examples for Claude Code, Cursor and VS Code.",
     keywords: [
       "MCP setup",
       "Claude Code MCP",
@@ -109,7 +109,7 @@ export const docs: DocPage[] = [
     sections: [
       {
         heading: "1. Cloud — the default",
-        body: "Open the extension's MCP page from its header chip. Select Cloud and create an anonymous credential. The agent endpoint is https://mcp.designmode.app/mcp (Streamable HTTP). The extension and agent use the same bearer token; there is no Design Mode OAuth login, account check or subscription verification. Enter the token locally through a protected client input or securely supplied environment variable, never in AI chat, shell history, screenshots or committed configuration.",
+        body: "Open the extension's MCP page from its header chip. Select Cloud and create an anonymous credential. The agent endpoint is https://mcp.designmode.app/mcp (Streamable HTTP). The extension and agent use the same bearer token; there is no DIVE OAuth login, account check or subscription verification. Enter the token locally through a protected client input or securely supplied environment variable, never in AI chat, shell history, screenshots or committed configuration.",
       },
       {
         heading: "2. Local — run from source",
@@ -150,9 +150,9 @@ export const docs: DocPage[] = [
     title: "The Changes tab",
     metaTitle: "Changes tab — Searchable, exportable design change history",
     metaDescription:
-      "Every edit in Design Mode lands in the Changes tab — style, text, DOM, comments. Search, filter, resolve, export or import JSON, and copy a Markdown prompt.",
+      "Every edit in DIVE lands in the Changes tab — style, text, DOM, comments. Search, filter, resolve, export or import JSON, and copy a Markdown prompt.",
     keywords: [
-      "Design Mode Changes tab",
+      "DIVE Changes tab",
       "design change history",
       "structured design diff",
       "design export",
@@ -183,12 +183,12 @@ export const docs: DocPage[] = [
     slug: "troubleshooting",
     title: "Troubleshooting",
     metaTitle:
-      "Troubleshooting Design Mode — side panel won't open, MCP not connecting",
+      "Troubleshooting DIVE — side panel won't open, MCP not connecting",
     metaDescription:
-      "Fix common Design Mode issues: side panel won't open, MCP not connecting, edits not persisting, the Send-to-Agent button greyed out.",
+      "Fix common DIVE issues: side panel won't open, MCP not connecting, edits not persisting, the Send-to-Agent button greyed out.",
     keywords: [
-      "Design Mode troubleshooting",
-      "Design Mode not working",
+      "DIVE troubleshooting",
+      "DIVE not working",
       "MCP not connecting",
       "Chrome extension fix",
       "side panel won't open",
@@ -202,7 +202,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "MCP status chip stays offline",
-        body: "Cloud mode: confirm your bearer token is pasted on the extension's dedicated MCP page (opened from the header MCP chip) and the same token is in your agent's config. Local mode: confirm the companion server is running (clone the repo, npm install, npm start) and your config's cwd points at the repo root. Multiple Design Mode clients can share port 9960; never add a kill -9 startup command. If another application owns 9960, choose a different DM_PORT such as 9961 and set the extension's Local port to match. Self-hosted: confirm the relay URL is correct and Redis is healthy.",
+        body: "Cloud mode: confirm your bearer token is pasted on the extension's dedicated MCP page (opened from the header MCP chip) and the same token is in your agent's config. Local mode: confirm the companion server is running (clone the repo, npm install, npm start) and your config's cwd points at the repo root. Multiple DIVE clients can share port 9960; never add a kill -9 startup command. If another application owns 9960, choose a different DM_PORT such as 9961 and set the extension's Local port to match. Self-hosted: confirm the relay URL is correct and Redis is healthy.",
       },
       {
         heading: "Send to Agent button is greyed out",

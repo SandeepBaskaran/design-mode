@@ -18,7 +18,7 @@ export function ProductHunt() {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1146657&theme=light&t=1779274729933"
-        alt="Design Mode — Featured on Product Hunt"
+        alt="DIVE — Featured on Product Hunt"
         width={250}
         height={54}
       />

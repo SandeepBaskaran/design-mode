@@ -102,7 +102,7 @@ export function PersonaBlock() {
             Designers, developers, QA testers, PMs, content people, indie
             hackers, agencies, and vibe coders all share the same problem —
             getting from a visual idea to working code without losing
-            intent. Design Mode is the single surface that fits every step
+            intent. DIVE is the single surface that fits every step
             of that loop.
           </p>
         </div>

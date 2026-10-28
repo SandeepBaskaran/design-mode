@@ -8,42 +8,42 @@ import {
 import { PageSection } from "@/components/layout/page-section";
 
 export const metadata = {
-  title: { absolute: "Contact and support | Design Mode" },
+  title: { absolute: "Contact and support | DIVE" },
   description:
-    "Get in touch about Design Mode — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
+    "Get in touch about DIVE — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
   keywords: [
-    "Design Mode contact",
-    "bug report Design Mode",
-    "Design Mode support",
-    "Design Mode security disclosure",
+    "DIVE contact",
+    "bug report DIVE",
+    "DIVE support",
+    "DIVE security disclosure",
   ],
   alternates: { canonical: "https://designmode.app/contact" },
   openGraph: {
     type: "website",
-    title: "Contact and support | Design Mode",
+    title: "Contact and support | DIVE",
     description:
-      "Get in touch about Design Mode — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
+      "Get in touch about DIVE — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
     url: "https://designmode.app/contact",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Contact and support | Design Mode",
+    title: "Contact and support | DIVE",
     description:
-      "Get in touch about Design Mode — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
+      "Get in touch about DIVE — email, GitHub issues, Discussions, and security disclosure. Bug? Feature idea? Sponsorship question?",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },

@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Region (freeform rectangle) annotation draw mode
+// DIVE — Region (freeform rectangle) annotation draw mode
 // ============================================================
 //
 // Lets the user drop a comment box anywhere on the page (Figma-style) without

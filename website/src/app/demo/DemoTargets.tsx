@@ -78,7 +78,7 @@ export const DEMO_TARGETS: Record<string, () => ReactElement> = {
       <img
         id="demo-photo"
         src={PHOTO_URL}
-        alt="Design Mode's visual editor on a webpage"
+        alt="DIVE's visual editor on a webpage"
         width={160}
         height={120}
         className={styles.targetPhoto}

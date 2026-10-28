@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Side Panel v0.8.0
+// DIVE — Side Panel v0.8.0
 // Figma-quality layers panel + property inspector
 // Phase 1: morphdom + event delegation
 // Phase 2: Tree layers with collapse/expand, icons, search
@@ -916,7 +916,7 @@ port.onMessage.addListener((msg) => {
     return;
   }
   if (IS_SAFARI && msg.type === 'INSPECTOR_ERROR') {
-    inspectorError = String(msg.error || 'Connection lost. Reopen the Design Mode tab.');
+    inspectorError = String(msg.error || 'Connection lost. Reopen the DIVE tab.');
     render();
     return;
   }
@@ -1011,7 +1011,7 @@ function savePipSizeDebounced() {
 function beginFirefoxDock() {
   if (myTabId == null) return;
   if (captureToastTimer) clearTimeout(captureToastTimer);
-  captureToast = { kind: 'success', text: 'In the page window, click the Design Mode toolbar button (or use its shortcut) to finish docking. This editor stays open until the sidebar is ready.' };
+  captureToast = { kind: 'success', text: 'In the page window, click the DIVE toolbar button (or use its shortcut) to finish docking. This editor stays open until the sidebar is ready.' };
   render();
   void send({ type: 'SP_FIREFOX_DOCK_BEGIN' }).then(result => {
     if (!result.ok) showCaptureToast('error', result.error || 'Could not prepare the sidebar. This editor is still open.');
@@ -6807,12 +6807,12 @@ function renderHeader(): string {
     // separate group after Settings. Safari remains Inspector-only.
     (!launchCapabilities.floating ? '' : isPip
       ? '<button data-dm-action="pip-unpin" title="Pinned on top — click to unpin back to the floating window" aria-label="Pinned on top — click to unpin back to the floating window" style="background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:5px;color:var(--dm-accent);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>' +
-        '<button data-dm-action="pip-dock-back" title="' + (IS_FIREFOX ? 'Focus the page, then click Design Mode there to finish docking' : 'Dock back to the side panel') + '" aria-label="' + (IS_FIREFOX ? 'Prepare docking; finish from the page toolbar' : 'Dock back to side panel') + '" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
+        '<button data-dm-action="pip-dock-back" title="' + (IS_FIREFOX ? 'Focus the page, then click DIVE there to finish docking' : 'Dock back to the side panel') + '" aria-label="' + (IS_FIREFOX ? 'Prepare docking; finish from the page toolbar' : 'Dock back to side panel') + '" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
       : isPopout
         ? (pipAvailable
             ? '<button data-dm-action="pip-pin" title="Pin on top of every window" aria-label="Pin on top of every window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('pictureInPicture2', 15) + '</button>'
             : '') +
-          '<button data-dm-action="dock-back" title="' + (IS_FIREFOX ? 'Focus the page, then click Design Mode there to finish docking' : 'Dock back to the side panel') + '" aria-label="' + (IS_FIREFOX ? 'Prepare docking; finish from the page toolbar' : 'Dock back to side panel') + '" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
+          '<button data-dm-action="dock-back" title="' + (IS_FIREFOX ? 'Focus the page, then click DIVE there to finish docking' : 'Dock back to the side panel') + '" aria-label="' + (IS_FIREFOX ? 'Prepare docking; finish from the page toolbar' : 'Dock back to side panel') + '" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('panelRight', 15) + '</button>'
         : '<button data-dm-action="pop-out" title="Pop out into a floating window" aria-label="Pop out into a floating window" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('externalLink', 15) + '</button>') +
     '</div>';
 }
@@ -6989,7 +6989,7 @@ function renderSealedFrameNotice(): string {
   return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;gap:12px;">' +
     '<div style="color:var(--dm-text-dimmer);">' + icon('squareDashed', 32) + '</div>' +
     '<div style="font-size:12px;font-weight:600;color:var(--dm-text-muted);">This page wraps a sandboxed HTML artifact</div>' +
-    '<div style="font-size:11px;line-height:1.55;color:var(--dm-text-dim);max-width:280px;">The visible content lives inside an <code style="font-family:SF Mono,monospace;font-size:10px;">&lt;iframe sandbox&gt;</code> with its own locked-down origin. The browser walls that off from every extension, so Design Mode can’t inspect or edit the <b>wrapped</b> content — this isn’t a bug.</div>' +
+    '<div style="font-size:11px;line-height:1.55;color:var(--dm-text-dim);max-width:280px;">The visible content lives inside an <code style="font-family:SF Mono,monospace;font-size:10px;">&lt;iframe sandbox&gt;</code> with its own locked-down origin. The browser walls that off from every extension, so DIVE can’t inspect or edit the <b>wrapped</b> content — this isn’t a bug.</div>' +
     '<div style="font-size:11px;line-height:1.55;color:var(--dm-text-dim);max-width:280px;">You can still inspect and edit the <b>wrapper</b> HTML (the outer document). To reach the inner content, open the artifact’s own HTML file directly.</div>' +
     '<button data-dm-action="inspect-wrapper" style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;">' + icon('code', 13) + ' Inspect wrapper HTML</button>' +
     '</div>';
@@ -9662,7 +9662,7 @@ function renderSettingsView(): string {
     '<span style="font-size:10px;color:var(--dm-text-dim);">px</span>' +
     '</div></div>' +
     '<div style="' + sS + '"><div style="' + sT + '">Page cursor</div>' +
-    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Show the Design Mode icon as the mouse cursor on the page while the panel is open.</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Show the DIVE icon as the mouse cursor on the page while the panel is open.</div>' +
     '<div style="display:flex;gap:4px;">' +
     '<button data-dm-custom-cursor="on" style="' + (customCursor ? activeBtn : inactiveBtn) + '">On</button>' +
     '<button data-dm-custom-cursor="off" style="' + (!customCursor ? activeBtn : inactiveBtn) + '">Off</button>' +
@@ -9675,7 +9675,7 @@ function renderSettingsView(): string {
     '</div></div>' +
     (!launchCapabilities.floating ? '' :
     '<div style="' + sS + '"><div style="' + sT + '">Launch</div>' +
-    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Where the toolbar icon and Alt+D open Design Mode. Pin on top starts a floating opener — your browser needs a click in that window to pin.</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">Where the toolbar icon and Alt+D open DIVE. Pin on top starts a floating opener — your browser needs a click in that window to pin.</div>' +
     '<div role="group" aria-label="Launch surface" style="display:flex;gap:4px;">' +
     '<button data-dm-launch-surface="side-panel" aria-pressed="' + (launchSurface === 'side-panel') + '" style="' + (launchSurface === 'side-panel' ? activeBtn : inactiveBtn) + '">Side panel</button>' +
     '<button data-dm-launch-surface="floating" aria-pressed="' + (launchSurface === 'floating') + '" style="' + (launchSurface === 'floating' ? activeBtn : inactiveBtn) + '">Floating</button>' +
@@ -9699,7 +9699,7 @@ function renderSettingsView(): string {
     '<button data-dm-action="show-shortcuts" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('keyboard', 11) + ' Keyboard shortcuts</button>' +
     '<button data-dm-action="reset-settings" style="flex:1;padding:6px;background:var(--dm-danger-bg);border:1px solid var(--dm-danger-border);border-radius:6px;color:var(--dm-text);cursor:pointer;font-size:10px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:4px;">' + icon('rotateCcw', 11) + ' Reset settings</button>' +
     '</div>' +
-    '</div><div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v' + extensionVersion() + '</div></div></div>';
+    '</div><div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">DIVE v' + extensionVersion() + '</div></div></div>';
 }
 
 function renderPipLaunchInterstitial(): string {
@@ -9734,7 +9734,7 @@ function detectBrowser(): string {
 
 function buildDiagnostics(): string {
   const lines = [
-    pad('Design Mode') + (extensionVersion() || 'dev'),
+    pad('DIVE') + (extensionVersion() || 'dev'),
     pad('Browser') + detectBrowser(),
     pad('Platform') + (navigator.platform || 'unknown') + ', ' + (navigator.language || 'unknown'),
     pad('Theme') + resolvedTheme,
@@ -9834,7 +9834,7 @@ function renderHelpView(): string {
     '<a href="mailto:hello@sandeepbaskaran.com" data-dm-help-target="email" style="' + linkStyle + '">Security disclosure ↗</a>' +
     '</div></div>' +
     '</div>' +
-    '<div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v' + extensionVersion() + '</div></div>' +
+    '<div style="margin-top:16px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">DIVE v' + extensionVersion() + '</div></div>' +
     '</div>';
 }
 
@@ -9943,9 +9943,9 @@ function renderFileAccessView(): string {
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Local file</span></div>' +
     '<div style="' + card + '">' +
     '<p style="margin:0 0 12px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">' +
-    (IS_FIREFOX ? 'Firefox has not allowed Design Mode to access this local file. Enable local-file access in the add-on’s permissions:' : 'Chrome blocks extensions from local files by default. To edit this file, allow Design Mode to access file URLs:') + '</p>' +
+    (IS_FIREFOX ? 'Firefox has not allowed DIVE to access this local file. Enable local-file access in the add-on’s permissions:' : 'Chrome blocks extensions from local files by default. To edit this file, allow DIVE to access file URLs:') + '</p>' +
     '<ol style="margin:0 0 12px 0;padding-left:18px;">' +
-    step(IS_FIREFOX ? 'Type <strong style="color:var(--dm-text);">about:addons</strong> in Firefox’s address bar, select Design Mode, then open <strong style="color:var(--dm-text);">Permissions</strong>.' : 'Open Design Mode’s extension settings — the button below takes you there.') +
+    step(IS_FIREFOX ? 'Type <strong style="color:var(--dm-text);">about:addons</strong> in Firefox’s address bar, select DIVE, then open <strong style="color:var(--dm-text);">Permissions</strong>.' : 'Open DIVE’s extension settings — the button below takes you there.') +
     step('Turn on <strong style="color:var(--dm-text);">“' + (IS_FIREFOX ? 'Access local files on your computer' : 'Allow access to file URLs') + '”</strong>.') +
     step(IS_FIREFOX ? 'Come back to this file tab, reload the page, and reopen the sidebar.' : 'Chrome reloads the extension — come back to this tab and reopen the panel.') +
     '</ol>' +
@@ -9966,9 +9966,9 @@ function renderHoverGuideView(): string {
   const li = (t: string) => '<li style="margin:0 0 6px 0;font-size:12px;line-height:1.5;color:var(--dm-text-secondary);">' + t + '</li>';
 
   const steps = IS_SAFARI
-    ? li('Leave touch emulation and return to a normal macOS Safari webpage for mouse hover. Dock Web Inspector and use Design Mode’s own picker.')
+    ? li('Leave touch emulation and return to a normal macOS Safari webpage for mouse hover. Dock Web Inspector and use DIVE’s own picker.')
     : IS_FIREFOX
-    ? li('In the ' + b('Responsive Design Mode') + ' toolbar, click the ' + b('touch simulation') + ' button (the finger / pointer icon) to turn it ' + b('off') + '.') +
+    ? li('In the ' + b('Responsive DIVE') + ' toolbar, click the ' + b('touch simulation') + ' button (the finger / pointer icon) to turn it ' + b('off') + '.') +
       li('Keep any width you like — only touch simulation matters for hover.')
     : li('Click the ' + b('⋮') + ' menu in the device toolbar, then ' + b('Add device type') + ' (skip if you see ' + b('Remove device type') + ' already there).') +
       li('Open the ' + b('device type') + ' dropdown and pick ' + b('Desktop') + ' or ' + b('Mobile (no touch)') + '.') +
@@ -10020,7 +10020,7 @@ function renderContributeView(): string {
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
     '<button data-dm-action="back-from-contribute" style="background:none;border:none;color:var(--dm-text-secondary);cursor:pointer;display:flex;padding:4px;">' + icon('chevronLeft', 14) + '</button>' +
     '<span style="font-size:14px;font-weight:600;color:var(--dm-text);">Contribute</span></div>' +
-    '<p style="margin:0 0 18px 2px;font-size:12px;line-height:1.55;color:var(--dm-text-secondary);">Design Mode is free, forever — and open source. If it’s useful to you, here are a few ways to help.</p>' +
+    '<p style="margin:0 0 18px 2px;font-size:12px;line-height:1.55;color:var(--dm-text-secondary);">DIVE is free, forever — and open source. If it’s useful to you, here are a few ways to help.</p>' +
     '<div style="display:flex;flex-direction:column;gap:16px;">' +
 
     '<div><div style="' + sectionLabel + '">Spread the word</div>' +
@@ -10047,7 +10047,7 @@ function renderContributeView(): string {
     '</div></div>' +
 
     '</div>' +
-    '<div style="margin-top:18px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">Design Mode v' + extensionVersion() + '</div></div>' +
+    '<div style="margin-top:18px;text-align:center;"><div style="font-size:10px;color:var(--dm-text-dimmer);">DIVE v' + extensionVersion() + '</div></div>' +
     '</div>';
 }
 
@@ -10190,7 +10190,7 @@ function render() {
     html = '<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">' +
       renderHeader() + renderTokensView() + renderCaptureToast() + '</div>';
   } else if (pageUnavailable) {
-    html = renderHeader() + '<div role="status" style="box-sizing:border-box;width:100vw;max-width:100%;padding:24px 16px;text-align:center;overflow-wrap:anywhere;"><h2 style="font-size:16px;">Page unavailable</h2><p>Design Mode cannot inspect this page. Open a regular website, then reopen the panel.</p></div>';
+    html = renderHeader() + '<div role="status" style="box-sizing:border-box;width:100vw;max-width:100%;padding:24px 16px;text-align:center;overflow-wrap:anywhere;"><h2 style="font-size:16px;">Page unavailable</h2><p>DIVE cannot inspect this page. Open a regular website, then reopen the panel.</p></div>';
   } else if (fileAccessBlocked) {
     html = renderHeader() + renderFileAccessView() + renderCaptureToast();
   } else if (!hoverAvailable && !hoverGuideProceeded) {
@@ -10712,10 +10712,10 @@ function setupDelegation() {
         }
         case 'copy-share-text': {
           const payload = IS_SAFARI
-            ? 'I’ve been using Design Mode in Safari Web Inspector to live-edit CSS and send changes to coding agents. Free + open source.\nhttps://designmode.app'
+            ? 'I’ve been using DIVE in Safari Web Inspector to live-edit CSS and send changes to coding agents. Free + open source.\nhttps://designmode.app'
             : IS_FIREFOX
-            ? 'I’ve been using Design Mode — a Firefox sidebar add-on that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://addons.mozilla.org/firefox/addon/design-mode-add-on/'
-            : 'I’ve been using Design Mode — a Chrome side-panel extension that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih';
+            ? 'I’ve been using DIVE — a Firefox sidebar add-on that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://addons.mozilla.org/firefox/addon/design-mode-add-on/'
+            : 'I’ve been using DIVE — a Chrome side-panel extension that lets you live-edit CSS on any page, with MCP support for Claude/Cursor. Free + open source.\nhttps://chromewebstore.google.com/detail/design-mode/ighgobegfcmjagombgnfhgioflinojih';
           const flash = (msg: string) => {
             const lbl = document.querySelector('[data-dm-share-label]') as HTMLElement | null;
             if (!lbl) return;
@@ -13018,7 +13018,7 @@ function setupDelegation() {
         try { parsed = JSON.parse(ev.target?.result as string); }
         catch { showCaptureToast('error', 'Invalid JSON.'); return; }
         if (!parsed || typeof parsed !== 'object' || parsed.kind !== 'design-mode-design-system') {
-          showCaptureToast('error', 'Not a Design Mode design-system file.');
+          showCaptureToast('error', 'Not a DIVE design-system file.');
           return;
         }
         const incoming = Array.isArray(parsed.tokens) ? parsed.tokens : [];
@@ -13059,7 +13059,7 @@ function setupDelegation() {
         try { parsed = JSON.parse(ev.target?.result as string); }
         catch { showCaptureToast('error', 'Invalid JSON.'); return; }
         if (!parsed || typeof parsed !== 'object' || parsed.kind !== 'design-mode-changes') {
-          showCaptureToast('error', 'Not a Design Mode changes file.');
+          showCaptureToast('error', 'Not a DIVE changes file.');
           return;
         }
         const payload = Array.isArray(parsed.routeGroups) ? parsed : {

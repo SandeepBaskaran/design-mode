@@ -20,7 +20,7 @@ export const FAQ = () => {
             Questions before you install
           </h2>
           <p className="text-muted-foreground mx-auto max-w-2xl leading-relaxed">
-            The short version of how Design Mode edits a rendered page, hands
+            The short version of how DIVE edits a rendered page, hands
             changes to an agent, and handles browser data. Read the{" "}
             <Link href="/faq" className="underline underline-offset-8">
               complete FAQ

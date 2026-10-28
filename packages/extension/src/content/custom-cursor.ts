@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Custom cursor (app icon while the panel is open)
+// DIVE — Custom cursor (app icon while the panel is open)
 // ============================================================
 
 const SETTING_KEY = 'dm-custom-cursor';

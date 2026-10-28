@@ -1,13 +1,13 @@
 # Privacy
 
-Design Mode's editor runs in your browser. Configured Cloud or Self-hosted MCP
+DIVE's editor runs in your browser. Configured Cloud or Self-hosted MCP
 connections can transmit page data, edits and tool results through the selected
 relay; Local MCP uses your machine. Release builds send usage analytics to
 PostHog without an opt-in. Those events do not include page content or edits.
 An unconfigured source build sends nothing. The flows and exceptions are
 described below.
 
-Design Mode is free and MIT-licensed, with no paid version of the extension.
+DIVE is free and MIT-licensed, with no paid version of the extension.
 It is a self-sustained project focused on features people regularly use.
 Coding-agent subscriptions, API usage and self-hosting costs are separate.
 This is not a promise of permanent free hosting.

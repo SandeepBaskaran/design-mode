@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Token engine
+// DIVE — Token engine
 //
 // Single source of truth for CSS custom-property (design token)
 // discovery. Tokens are collected from every same-origin stylesheet

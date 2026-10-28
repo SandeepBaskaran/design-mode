@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — DOM Tree Builder
+// DIVE — DOM Tree Builder
 // ============================================================
 
 import { getOrAssignId } from './helpers';

@@ -52,7 +52,7 @@ export const blogContextualLinks: Record<string, ContextualLink[]> = {
     {
       href: "/about",
       title: "About the creator",
-      description: "Design Mode is an independent project by Sandeep Baskaran.",
+      description: "DIVE is an independent project by Sandeep Baskaran.",
     },
   ],
   "design-mode-1-5-0-changelog-deep-dive": [

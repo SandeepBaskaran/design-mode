@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Measurement guides (VisBug-style)
+// DIVE — Measurement guides (VisBug-style)
 // Axis lines on hover, edge-to-edge distance pills between two
 // elements, and corner resize dots on the selected element.
 // All overlays are session-only visual aids; only the resize

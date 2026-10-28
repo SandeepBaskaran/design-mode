@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { withNavRef } from "@/lib/nav-ref";
 
-const REPO_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");
+const UPSTREAM_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");
 
 // Exported separately so the page can wrap it in <Background variant="bottom">.
 export function WhyThisExists() {
@@ -13,15 +13,22 @@ export function WhyThisExists() {
         title="Why this exists"
         paragraphs={[
           "Screenshots and prose are useful for broad direction, but they often lose selectors, computed values and the relationship between the intended change and the rendered page.",
-          "Design Mode lets you make the intended change on the rendered page, records a structured specification, and hands it to a coding agent as Markdown or through MCP. The agent still has to find the source, implement the change and return a diff for review.",
-          "Built in the open under MIT. Read the source, file an issue, or open a PR.",
+          "DIVE lets you make the intended change on the rendered page, records a structured specification, and hands it to a coding agent as Markdown or through MCP. The agent still has to find the source, implement the change and return a diff for review.",
         ]}
-        ctaButton={{
-          href: REPO_URL,
-          text: "View on GitHub",
-          external: true,
-        }}
       />
+      <div className="mt-16">
+        <TextSection
+          title="Credits"
+          paragraphs={[
+            "Built on Design Mode by Sandeep Baskaran (MIT). DIVE keeps the upstream licence and copyright notice.",
+          ]}
+          ctaButton={{
+            href: UPSTREAM_URL,
+            text: "View Design Mode on GitHub",
+            external: true,
+          }}
+        />
+      </div>
     </section>
   );
 }

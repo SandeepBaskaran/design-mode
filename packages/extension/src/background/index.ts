@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Background (service worker on Chrome, event page on Firefox)
+// DIVE — Background (service worker on Chrome, event page on Firefox)
 // Opens the side panel / sidebar on action click, relays messages.
 // Pins to the tab that was active when the panel opened.
 // Auto-activates design mode (with inspect) on open.
@@ -722,7 +722,7 @@ function dispatchPanelMessage(msg: any, sender: chrome.runtime.MessageSender, se
   }
   if (msg.type === 'SP_SCREENSHOT') {
     if (msg.target === 'viewport') {
-      // Route through the content script so it can hide Design Mode overlays
+      // Route through the content script so it can hide DIVE overlays
       // (selection outline, margin/padding bands, guides, pins) before the
       // capture, then restore them — same clean shot as the element path.
       forwardToPinnedTab({ type: 'SCREENSHOT_VIEWPORT' }, sendResponse);
@@ -758,7 +758,7 @@ function dispatchPanelMessage(msg: any, sender: chrome.runtime.MessageSender, se
       sendResponse({
         connected: false, serverRunning: false, agentConnected: false, mcpState: 'offline',
         state: 'error',
-        error: (res && typeof res.error === 'string' && res.error) || 'Design Mode is not active in the pinned tab',
+        error: (res && typeof res.error === 'string' && res.error) || 'DIVE is not active in the pinned tab',
       });
     });
     return true;
@@ -1037,4 +1037,4 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
 // debug level: hidden at the default DevTools verbosity so a release build
 // does not write to every service-worker console on load.
-console.debug('[Design Mode] Background service worker loaded.');
+console.debug('[DIVE] Background service worker loaded.');

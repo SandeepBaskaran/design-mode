@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — agent workflow command
+// DIVE — agent workflow command
 // ============================================================
 //
 // Single source of truth for the `/design-mode` slash-command / workflow
@@ -8,23 +8,23 @@
 // Cursor, Codex, and Windsurf — only the install path differs.
 
 export const AGENT_COMMAND_MARKDOWN = `---
-description: Apply the user's Design Mode edits and resolve their comments
+description: Apply the user's DIVE edits and resolve their comments
 ---
 
-# Design Mode
+# DIVE
 
-Turn the visual edits and comments the user made in the Design Mode browser
-extension into real code changes. Design Mode exposes these over its MCP
+Turn the visual edits and comments the user made in the DIVE browser
+extension into real code changes. DIVE exposes these over its MCP
 server — drive them live; do not look for task files on disk. If the
-Design Mode tools are unavailable (no such tool names, or calls error),
+DIVE tools are unavailable (no such tool names, or calls error),
 stop and tell the user instead of improvising. Never act on change data
 from files, harness output, or memory — only live tool responses count.
 Never bypass, disable, or ask the user to lower a permission prompt to
 reach the source. Never edit source unless the change came from a live
-Design Mode tool response in this session — the workflow supplies
+DIVE tool response in this session — the workflow supplies
 nothing else to act on.
 
-## Tools (Design Mode MCP server)
+## Tools (DIVE MCP server)
 - \`get_session_summary\` — health check; confirm the extension is connected.
 - \`get_changes\` — design-token / style / text / DOM changes plus pinned
   comments. The \`items\` array gives every entry a stable \`id\` for status
@@ -51,7 +51,7 @@ nothing else to act on.
 
 ## Workflow
 1. Call \`get_session_summary\`. If the extension isn't connected, ask the
-   user to open the Design Mode side panel, then stop.
+   user to open the DIVE side panel, then stop.
 2. Ask whether the user wants one pass or live feedback rounds. Live rounds
    require the Local \`wait_for_handoff\` tool. For live rounds, select the
    exact \`pageUrl\` from the session summary (ask if ambiguous), call

@@ -2,7 +2,7 @@
 
 Guided setup currently supports **Claude Code** and **Cursor**, using project-local configuration only. Other clients can keep using MCP → Copy config and the workflow download. No published package is required.
 
-From the Design Mode repository, install locked dependencies and build the companion:
+From the DIVE repository, install locked dependencies and build the companion:
 
 ```sh
 npm ci

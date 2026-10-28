@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Message Types (Extension <-> Content <-> Server)
+// DIVE — Message Types (Extension <-> Content <-> Server)
 // ============================================================
 
 import type {

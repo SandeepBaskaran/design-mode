@@ -11,7 +11,7 @@ export default function NotFound() {
           404 · Page not found
         </p>
         <h1 className="mt-4 text-3xl tracking-tight sm:text-4xl md:text-5xl">
-          This route is not part of Design Mode.
+          This route is not part of DIVE.
         </h1>
         <p className="text-muted-foreground mt-4 max-w-2xl text-base leading-relaxed">
           The link may be outdated. Start with the product workflow,

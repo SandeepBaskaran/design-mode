@@ -157,8 +157,8 @@ function closeServer(server: http.Server): Promise<void> {
 
 export function foreignOccupantError(port: number): Error {
   return new Error(
-    `Port ${port} is occupied by another process that is not Design Mode. ` +
-    `Stop that process or set DM_PORT to a free port. Design Mode will not kill it.`
+    `Port ${port} is occupied by another process that is not DIVE. ` +
+    `Stop that process or set DM_PORT to a free port. DIVE will not kill it.`
   );
 }
 
@@ -212,7 +212,7 @@ export async function proxyToolCall(
     return {
       content: [{
         type: 'text',
-        text: `Design Mode owner is unreachable on localhost:${port}: ${e?.message || e}`,
+        text: `DIVE owner is unreachable on localhost:${port}: ${e?.message || e}`,
       }],
       isError: true,
     };

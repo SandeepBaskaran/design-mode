@@ -43,7 +43,7 @@ export const Features = () => {
             From visual edit to reviewed source diff
           </h2>
           <p className="text-muted-foreground max-w-2xl leading-snug">
-            Edit the rendered interface with visual controls. Design Mode
+            Edit the rendered interface with visual controls. DIVE
             records selectors, properties, old values, new values, text edits,
             DOM changes and comments. Use{" "}
             <Link

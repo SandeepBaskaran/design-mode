@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode Cloud — single Redis client (node-redis).
+// DIVE Cloud — single Redis client (node-redis).
 // `REDIS_URL` is auto-injected by the Vercel Marketplace Redis
 // integration. We connect lazily so cold-start cost is paid only
 // once per function instance, then reused across invocations.

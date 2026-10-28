@@ -8,11 +8,11 @@ import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { posts } from "@/content/blog";
 
 export const metadata = {
-  title: { absolute: "Build notes and visual editing guides | Design Mode" },
+  title: { absolute: "Build notes and visual editing guides | DIVE" },
   description:
-    "Stories from building Design Mode and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
+    "Stories from building DIVE and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
   keywords: [
-    "Design Mode blog",
+    "DIVE blog",
     "vibe coding articles",
     "MCP articles",
     "Claude Code blog",
@@ -21,30 +21,30 @@ export const metadata = {
   alternates: { canonical: "https://designmode.app/blog" },
   openGraph: {
     type: "website",
-    title: "Build notes and visual editing guides | Design Mode",
+    title: "Build notes and visual editing guides | DIVE",
     description:
-      "Stories from building Design Mode and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
+      "Stories from building DIVE and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
     url: "https://designmode.app/blog",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Build notes and visual editing guides | Design Mode",
+    title: "Build notes and visual editing guides | DIVE",
     description:
-      "Stories from building Design Mode and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
+      "Stories from building DIVE and walkthroughs of real workflows: MCP architecture, vibe coding loops, changelog deep-dives, Tailwind redesigns with Claude Code.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -65,7 +65,7 @@ export default function BlogIndex() {
     <>
       <JsonLd
         data={collectionPageSchema({
-          name: "Design Mode build notes and guides",
+          name: "DIVE build notes and guides",
           description:
             "Build notes and workflow guides for browser visual editing and coding-agent hand-off.",
           url: "https://designmode.app/blog",
@@ -79,7 +79,7 @@ export default function BlogIndex() {
         title="Blog"
         description={
           <>
-            Build notes from Design Mode and walkthroughs of real workflows —
+            Build notes from DIVE and walkthroughs of real workflows —
             MCP architecture, vibe coding, Tailwind redesigns, changelog
             deep-dives.
           </>

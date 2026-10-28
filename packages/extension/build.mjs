@@ -35,7 +35,7 @@ try {
 }
 
 
-console.log('\n◆ Building Design Mode extension...\n');
+console.log('\n◆ Building DIVE extension...\n');
 
 for (const entry of entries) {
   console.log(`  Building ${entry}...`);

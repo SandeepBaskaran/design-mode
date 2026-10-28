@@ -292,7 +292,7 @@ describe('mcp-local guided setup', { concurrency: false, timeout: 15_000 }, () =
     const disconnected = await runDoctor({ cliPath, port }, { log() {} });
     assert.equal(disconnected.cliOk, true);
     assert.equal(disconnected.ok, false);
-    assert.match(disconnected.issues.join('\n'), /No Design Mode owner/);
+    assert.match(disconnected.issues.join('\n'), /No DIVE owner/);
 
     const server = http.createServer((_req, res) => {
       res.writeHead(200, { 'content-type': 'application/json' });

@@ -6,7 +6,7 @@ Use synthetic edits only. Do not clear changes on a site containing work you wan
 
 The build is `packages/extension/dist/` in the main checkout, not a task worktree.
 
-- **Chrome:** open `chrome://extensions`, reload the existing unpacked Design Mode extension (or Load unpacked → that directory), then reload your fixture tabs.
+- **Chrome:** open `chrome://extensions`, reload the existing unpacked DIVE extension (or Load unpacked → that directory), then reload your fixture tabs.
 - **Firefox:** open `about:debugging#/runtime/this-firefox`, Load Temporary Add-on → `packages/extension/dist/manifest.json`. Reload if already loaded; permit access to the fixture if prompted.
 - Keep MCP disconnected for this round. No real agent or external service is needed.
 

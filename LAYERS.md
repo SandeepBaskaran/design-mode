@@ -10,7 +10,7 @@ Last updated: 2026-05-11.
 
 The Layers tab **mirrors the live DOM** rather than holding parallel state on top of it. That principle decides what's in and what's out:
 
-- **No rename / no custom label**. The page already names every node via tag, id, class, and component name. Layering a panel-only renaming map on top drifts the moment the user changes a class or swaps components — and Design Mode's job is to surface what the page actually is, not to maintain a second-order naming graph.
+- **No rename / no custom label**. The page already names every node via tag, id, class, and component name. Layering a panel-only renaming map on top drifts the moment the user changes a class or swaps components — and DIVE's job is to surface what the page actually is, not to maintain a second-order naming graph.
 - **No lock / pin-from-selection**. Lock state is a UX layer that prevents selecting an element from the canvas or the panel. We dropped it because it (a) lives only in the panel — the page itself doesn't know about it — and (b) the same outcome is reachable in milliseconds by hovering away or clicking elsewhere. The cost of teaching, persisting, and policing locks across reloads outweighed the benefit.
 - **No bookmarking / starring layers**. Same reason as renaming — it's panel-only state that disappears on reload. If a layer matters, it's already discoverable by class / id / tag.
 
@@ -209,7 +209,7 @@ Two icon buttons, in order:
 | Icon | Action |
 |---|---|
 | `crosshair` | Scroll the page so this layer is in view, **without** selecting it. Same icon as the Changes-tab "select element" button so the affordance reads consistently. Sends `SP_SCROLL_TO_ELEMENT` to the content script. |
-| `eye` / `eye-closed` | Toggle visibility. The icon swaps to `eye-closed` (Lucide) when the layer is hidden so the row reads at a glance. Three-state under the hood: drops the Design Mode override if we hid it; pushes `display: revert` if author CSS was hiding it (so the cascade falls back to the user-agent default and the element actually reappears); otherwise injects `display: none`. The change is recorded in the Changes tab and is revertable. |
+| `eye` / `eye-closed` | Toggle visibility. The icon swaps to `eye-closed` (Lucide) when the layer is hidden so the row reads at a glance. Three-state under the hood: drops the DIVE override if we hid it; pushes `display: revert` if author CSS was hiding it (so the cascade falls back to the user-agent default and the element actually reappears); otherwise injects `display: none`. The change is recorded in the Changes tab and is revertable. |
 
 ---
 

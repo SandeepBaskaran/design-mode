@@ -22,9 +22,9 @@ export function generateStaticParams() {
 export const dynamicParams = false;
 
 const comparisonTitles: Record<string, string> = {
-  "design-mode-vs-cursor-design-mode": "Design Mode vs Cursor visual editor",
+  "design-mode-vs-cursor-design-mode": "DIVE vs Cursor visual editor",
   "design-mode-vs-builder-io-visual-copilot":
-    "Design Mode vs Builder.io Visual Copilot",
+    "DIVE vs Builder.io Visual Copilot",
 };
 
 export async function generateMetadata({
@@ -54,7 +54,7 @@ export async function generateMetadata({
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode — The visual editor for all your agent’s work",
+          alt: "DIVE — The visual editor for all your agent’s work",
         },
       ],
     },
@@ -67,7 +67,7 @@ export async function generateMetadata({
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode — The visual editor for all your agent’s work",
+          alt: "DIVE — The visual editor for all your agent’s work",
         },
       ],
     },
@@ -121,7 +121,7 @@ export default async function ComparePage({
             <div className="mt-6 overflow-x-auto">
               <table className="w-full border-collapse text-base">
                 <caption className="sr-only">
-                  Feature comparison between Design Mode and {c.competitor}
+                  Feature comparison between DIVE and {c.competitor}
                 </caption>
                 <thead>
                   <tr className="border-b">
@@ -135,7 +135,7 @@ export default async function ComparePage({
                       scope="col"
                       className="text-foreground py-4 pr-4 text-left font-semibold"
                     >
-                      Design Mode
+                      DIVE
                     </th>
                     <th
                       scope="col"
@@ -170,7 +170,7 @@ export default async function ComparePage({
           <div className="grid gap-8 md:grid-cols-2">
             <div>
               <h2 className="text-2xl tracking-tight md:text-3xl">
-                When to pick Design Mode
+                When to pick DIVE
               </h2>
               <ul className="mt-4 space-y-2">
                 {c.whenToPickDesignMode.map((item, i) => (
@@ -234,7 +234,7 @@ export default async function ComparePage({
 
           <div className="flex flex-wrap items-center gap-4 pt-4">
             <Button asChild>
-              <Link href="/demo">Try Design Mode</Link>
+              <Link href="/demo">Try DIVE</Link>
             </Button>
             <Button variant="outline" asChild>
               <Link href="/use-cases">See use cases</Link>

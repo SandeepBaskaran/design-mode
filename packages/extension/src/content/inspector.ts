@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Inspector (hover, click to select elements)
+// DIVE — Inspector (hover, click to select elements)
 // ============================================================
 
 import { getOrAssignId, getElementById, getElementRect, generateSelector, getBreadcrumbs, getComputedStyleSubset } from './helpers';
@@ -129,7 +129,7 @@ export function buildElementInfo(el: HTMLElement, skipTokens = false): ElementIn
 }
 
 function isDMElement(el: HTMLElement): boolean {
-  // Any Design Mode UI is transparent to the inspector: the hover/select/dim
+  // Any DIVE UI is transparent to the inspector: the hover/select/dim
   // overlays, the axis-guide / distance / resize-dot layers (all `dm-*` ids),
   // the panel, the toolbar, and comment pins. Without this, hovering a resize
   // dot would draw hover outlines + distance pills on our own browser.

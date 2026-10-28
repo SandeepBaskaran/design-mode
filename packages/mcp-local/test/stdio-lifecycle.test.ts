@@ -225,7 +225,7 @@ describe('mcp-local stdio lifecycle', { concurrency: false, timeout: 20_000 }, (
     const port = await getFreePort();
     const child = spawnCli([], { ...process.env, DM_PORT: String(port) });
     try {
-      await waitForStderr(child, /DESIGN MODE MCP READY/);
+      await waitForStderr(child, /DIVE MCP READY/);
       child.stdin?.end();
       const code = await waitForExit(child, 5_000);
       assert.equal(code, 0, 'server should exit 0 after stdin EOF');
@@ -238,7 +238,7 @@ describe('mcp-local stdio lifecycle', { concurrency: false, timeout: 20_000 }, (
     const port = await getFreePort();
     const child = spawnCli([], { ...process.env, DM_PORT: String(port) });
     try {
-      await waitForStderr(child, /DESIGN MODE MCP READY/);
+      await waitForStderr(child, /DIVE MCP READY/);
       assert.equal(await canBind(port), false, 'owner should hold the port while running');
       child.stdin?.end();
       const code = await waitForExit(child, 5_000);
@@ -253,7 +253,7 @@ describe('mcp-local stdio lifecycle', { concurrency: false, timeout: 20_000 }, (
     const port = await getFreePort();
     const owner = spawnCli([], { ...process.env, DM_PORT: String(port) });
     try {
-      await waitForStderr(owner, /DESIGN MODE MCP READY/);
+      await waitForStderr(owner, /DIVE MCP READY/);
       const attacher = spawnCli([], { ...process.env, DM_PORT: String(port) });
       try {
       await waitForStderr(attacher, /attached|Attached/);
@@ -279,7 +279,7 @@ describe('mcp-local stdio lifecycle', { concurrency: false, timeout: 20_000 }, (
     let ws: WebSocket | undefined;
     let keepalive: { close: () => void } | undefined;
     try {
-      await waitForStderr(child, /DESIGN MODE MCP READY/);
+      await waitForStderr(child, /DIVE MCP READY/);
       ws = await openExtensionSocket(port);
       keepalive = await holdHttpKeepAlive(port);
       assert.equal(await canBind(port), false);
@@ -310,7 +310,7 @@ describe('mcp-local stdio lifecycle', { concurrency: false, timeout: 20_000 }, (
     const port = await getFreePort();
     const child = spawnCli([], { ...process.env, DM_PORT: String(port) });
     try {
-      await waitForStderr(child, /DESIGN MODE MCP READY/);
+      await waitForStderr(child, /DIVE MCP READY/);
       assert.equal(child.kill('SIGINT'), true);
       const code = await waitForExit(child, 5_000);
       assert.equal(code, 0);
@@ -324,7 +324,7 @@ describe('mcp-local stdio lifecycle', { concurrency: false, timeout: 20_000 }, (
     const port = await getFreePort();
     const child = spawnCli([], { ...process.env, DM_PORT: String(port) });
     try {
-      await waitForStderr(child, /DESIGN MODE MCP READY/);
+      await waitForStderr(child, /DIVE MCP READY/);
       assert.equal(child.kill('SIGTERM'), true);
       const code = await waitForExit(child, 5_000);
       assert.equal(code, 0);
@@ -343,7 +343,7 @@ describe('mcp-local stdio lifecycle', { concurrency: false, timeout: 20_000 }, (
       const code = await waitForExit(child, 5_000);
       assert.equal(code, 0);
       assert.match(stderr.text(), /Usage: design-mode-mcp setup/);
-      assert.doesNotMatch(stderr.text(), /DESIGN MODE MCP READY/);
+      assert.doesNotMatch(stderr.text(), /DIVE MCP READY/);
       assert.equal(await canBind(port), true, 'setup must not claim a port');
     } finally {
       killChild(child);
@@ -359,7 +359,7 @@ describe('mcp-local stdio lifecycle', { concurrency: false, timeout: 20_000 }, (
       const code = await waitForExit(child, 5_000);
       assert.equal(code, 0);
       assert.match(stderr.text(), /Usage: design-mode-mcp doctor/);
-      assert.doesNotMatch(stderr.text(), /DESIGN MODE MCP READY/);
+      assert.doesNotMatch(stderr.text(), /DIVE MCP READY/);
       assert.equal(await canBind(port), true);
     } finally {
       killChild(child);

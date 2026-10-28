@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Design Mode",
-    short_name: "Design Mode",
+    name: "DIVE",
+    short_name: "DIVE",
     description:
       "An open-source Chrome, Firefox and Safari visual editor that records rendered-page changes for coding-agent hand-off.",
     start_url: "/",

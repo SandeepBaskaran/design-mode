@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Inline Lucide SVG Icons (Phase 1-9 Complete)
+// DIVE — Inline Lucide SVG Icons (Phase 1-9 Complete)
 // All icons match Lucide's 24x24 viewBox, stroke-width 2
 // ============================================================
 

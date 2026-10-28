@@ -1,6 +1,6 @@
-# Design Mode — Parity
+# DIVE — Parity
 
-This document audits Design Mode's Design tab against the web CSS specification and Figma's properties panel, by section and by property.
+This document audits DIVE's Design tab against the web CSS specification and Figma's properties panel, by section and by property.
 
 Each entry is bucketed:
 
@@ -709,7 +709,7 @@ _Nothing planned for Comments._ Markdown body, Open/Resolved sub-filter, and hov
 
 | Feature | Reason |
 |---|---|
-| **Reply threads** | Multiple replies per comment is a collaboration concept that doesn't fit a solo workflow. Reconsider only if Design Mode grows multi-user editing. |
+| **Reply threads** | Multiple replies per comment is a collaboration concept that doesn't fit a solo workflow. Reconsider only if DIVE grows multi-user editing. |
 | **Mentions / @user** | Single-user extension; no concept of "another user" to mention. |
 | **Reactions / read state / notifications** | Same — collaboration features don't apply to a solo workflow. |
 | **Comment export as JSON** | Comments already ship in the Copy Prompt payload. |

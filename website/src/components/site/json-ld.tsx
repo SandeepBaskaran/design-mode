@@ -35,14 +35,14 @@ export const personSchema = {
   jobTitle: "Design Engineer",
   sameAs: [X_URL, REPO_URL, AUTHOR_URL],
   description:
-    "Design engineer based in Bengaluru and creator of Design Mode, an open-source browser visual editor for AI coding agents.",
+    "Design engineer based in Bengaluru and creator of Design Mode, the open-source browser visual editor DIVE is built on.",
 };
 
 export const websiteSchema = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   "@id": IDS.website,
-  name: "Design Mode",
+  name: "DIVE",
   url: SITE_URL,
   description:
     "A browser visual editor that captures changes to a rendered webpage and hands them to AI coding agents.",
@@ -53,7 +53,7 @@ export const softwareApplicationSchema = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "@id": IDS.software,
-  name: "Design Mode",
+  name: "DIVE",
   description:
     "A browser extension for Chrome, Firefox and Safari for visually editing a rendered webpage, recording the changes, and handing them to a coding agent.",
   applicationCategory: "DesignApplication",

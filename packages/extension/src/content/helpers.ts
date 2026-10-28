@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Content Script Helpers
+// DIVE — Content Script Helpers
 // ============================================================
 
 import { DATA_ATTR } from '../shared';

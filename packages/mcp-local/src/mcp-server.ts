@@ -16,7 +16,7 @@ export function createMcpServer(dispatch: ToolDispatch = executeLocalTool): McpS
     'Push CSS changes back to the browser for live preview. Pass an array of element changes — single edits use a one-element array. Style values are CSS strings (cubic-bezier, var(--token), keyframe names — anything you would write in a stylesheet).',
     {
       changes: z.array(z.object({
-        elementId: z.string().describe('Design Mode element ID (dm-*)'),
+        elementId: z.string().describe('DIVE element ID (dm-*)'),
         styles: z.record(z.string()).describe('CSS property-value pairs'),
       })).describe('Array of element changes (single edit = single-element array)'),
     },
@@ -66,10 +66,10 @@ export function createMcpServer(dispatch: ToolDispatch = executeLocalTool): McpS
 
   server.tool(
     'get_screenshot',
-    'Capture a PNG screenshot of the page. Pass the unique `selector` string from `get_changes` output (e.g. "main > section.hero > button:nth-of-type(2)") or a Design Mode element id (dm-*) to crop to one element; pass a `commentId` from get_changes to crop to that comment\'s flagged region (or its element); otherwise the visible viewport is returned. A generic selector like "button" or "h1" matches multiple elements and will fail with a list of candidate unique paths to pick from.',
+    'Capture a PNG screenshot of the page. Pass the unique `selector` string from `get_changes` output (e.g. "main > section.hero > button:nth-of-type(2)") or a DIVE element id (dm-*) to crop to one element; pass a `commentId` from get_changes to crop to that comment\'s flagged region (or its element); otherwise the visible viewport is returned. A generic selector like "button" or "h1" matches multiple elements and will fail with a list of candidate unique paths to pick from.',
     {
       selector: z.string().optional().describe('Unique CSS path for the element. Use the `selector` value from get_changes. Mutually exclusive with elementId.'),
-      elementId: z.string().optional().describe('Design Mode element id (dm-*). Mutually exclusive with selector.'),
+      elementId: z.string().optional().describe('DIVE element id (dm-*). Mutually exclusive with selector.'),
       commentId: z.string().optional().describe('A comment id from get_changes — crops to that comment\'s region rectangle (or its element). Takes precedence over selector/elementId.'),
     },
     async ({ selector, elementId, commentId }) => dispatch('get_screenshot', { selector, elementId, commentId })

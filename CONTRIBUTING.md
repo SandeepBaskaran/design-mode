@@ -1,4 +1,4 @@
-# Contributing to Design Mode
+# Contributing to DIVE
 
 Thanks for taking the time. This is a small, focused project — most useful
 contributions are bug fixes, small UX polish, and CSS-property coverage gaps.

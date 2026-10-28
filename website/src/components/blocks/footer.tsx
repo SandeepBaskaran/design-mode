@@ -72,11 +72,11 @@ export function Footer() {
               unoptimized
             />
             <span className="text-2xl font-semibold tracking-tight">
-              Design Mode
+              DIVE
             </span>
           </Link>
           <p className="mt-4 max-w-xs text-base leading-relaxed text-[#444444]">
-            Make the change you want to see.
+            Where Design Meets Intelligence.
             <br />
             Give your agent the details.
           </p>
@@ -118,7 +118,7 @@ export function Footer() {
           ))}
         </nav>
         <div className="text-muted-foreground col-span-full flex w-full flex-col items-center gap-2 text-center text-base md:flex-row md:justify-between md:text-left">
-          <p>© {new Date().getFullYear()} Design Mode</p>
+          <p>© {new Date().getFullYear()} DIVE</p>
           <p>
             Made by{" "}
             <a

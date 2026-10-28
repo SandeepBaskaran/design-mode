@@ -1,19 +1,19 @@
-# Design Mode — verified product summary
+# DIVE — verified product summary
 
-Last reviewed against the Design Mode 3.1.0 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 16 October 2026.
+Last reviewed against the DIVE 3.1.0 repository (not a guaranteed Chrome Web Store or Firefox Add-ons listing) and first-party Claude Code and Cursor MCP documentation: 16 October 2026.
 
 This file is a versioned agent-oriented summary of product mechanics, privacy and setup. It is not a dump of every marketing page and does not guarantee search or chat ranking.
 
-## What Design Mode is
+## What DIVE is
 
-Design Mode is a free-to-install, MIT-licensed browser visual editor for AI coding agents. The Chrome/Firefox/Safari extension lets a user inspect and edit the webpage rendered in the current tab. It records exact style, text, DOM and comment changes so the user can copy a Markdown specification or expose the session to a connected Model Context Protocol client.
+DIVE is a free-to-install, MIT-licensed browser visual editor for AI coding agents. The Chrome/Firefox/Safari extension lets a user inspect and edit the webpage rendered in the current tab. It records exact style, text, DOM and comment changes so the user can copy a Markdown specification or expose the session to a connected Model Context Protocol client.
 
-The browser edit is a preview and specification. Design Mode does not commit to a repository or deploy a website. Claude Code, Cursor or another coding agent must have separate repository access, identify the relevant source, implement the change, run the project's checks and return a diff for human review.
+The browser edit is a preview and specification. DIVE does not commit to a repository or deploy a website. Claude Code, Cursor or another coding agent must have separate repository access, identify the relevant source, implement the change, run the project's checks and return a diff for human review.
 
 ## The core workflow
 
 1. Install the extension from the Chrome Web Store or Firefox Add-ons, or manually install the Safari Web Inspector zip from the latest GitHub release.
-2. Open a scriptable webpage and activate Design Mode. Chrome opens the launch surface selected in Settings (Side panel by default, Floating, or a Pin-on-top opener); Firefox opens its sidebar.
+2. Open a scriptable webpage and activate DIVE. Chrome opens the launch surface selected in Settings (Side panel by default, Floating, or a Pin-on-top opener); Firefox opens its sidebar.
 3. Inspect an element and change layout, typography, colour, spacing, effects, motion, text or DOM structure.
 4. Review the structured change session in the Changes tab.
 5. Use **Copy as Prompt** for a portable Markdown specification, or **Send to Agent** for a live MCP hand-off.
@@ -37,7 +37,7 @@ The Changes tab supports search, kind filters, grouping, resolve/reopen, individ
 
 ## Browser support
 
-Design Mode targets desktop browsers:
+DIVE targets desktop browsers:
 
 - current Chrome-family browsers with the Manifest V3 side-panel API; the extension manifest does not declare an exact Chrome minimum;
 - Firefox 121+ through the native sidebar;
@@ -123,7 +123,7 @@ On a fresh install no MCP transport opens. Local mode connects only to the confi
 
 Cloud request/response queues request a 60-second Redis expiry and responses are normally deleted when consumed. Because queue insertion and expiry are separate operations and expiry failure is suppressed, 60 seconds is best-effort rather than a guaranteed maximum. Operational logs may include anonymous tenant identifier, event or message type, byte count, latency, status and bounded errors. The logging API does not accept selectors, screenshots or request/response payload bodies.
 
-Design Mode does not train a model. When the user deliberately hands content to an external coding agent, that provider processes it under its own account settings and privacy terms.
+DIVE does not train a model. When the user deliberately hands content to an external coding agent, that provider processes it under its own account settings and privacy terms.
 
 The marketing site may load Google Analytics when `NEXT_PUBLIC_GA_ID` is configured and sends page views plus bounded installation, outbound-link and contact-link events.
 
@@ -152,12 +152,12 @@ The source is published under the MIT licence. Current Chrome and Firefox listin
 
 Article: https://designmode.app/blog/turn-visual-edits-into-precise-ai-prompts
 
-The guide explains how to edit an existing rendered page with Design Mode, review the Changes tab, and give a coding agent exact changes alongside intent, scope and acceptance criteria. Its pricing-card example is illustrative, not a benchmark or a verbatim export.
+The guide explains how to edit an existing rendered page with DIVE, review the Changes tab, and give a coding agent exact changes alongside intent, scope and acceptance criteria. Its pricing-card example is illustrative, not a benchmark or a verbatim export.
 
 Use Copy as Prompt for a portable Markdown specification, or Send to Agent with a configured MCP client. The agent still needs separate repository access. Preserve project conventions and matching design tokens, state which component instances and breakpoints should change, and add relevant keyboard-focus, contrast and reduced-motion checks. Verify the source diff and rendered application without temporary preview overrides; neither exact values nor an export guarantees a correct or accessible implementation.
 
 ## Comparison-content status
 
-The comparison index at https://designmode.app/compare distinguishes source-backed comparisons from unverified drafts. Source-backed comparisons are indexable and include dated first-party references and explicit documentation or testing limitations. Unverified drafts remain excluded from search indexing. These are Design Mode-authored comparisons, not independent reviews.
+The comparison index at https://designmode.app/compare distinguishes source-backed comparisons from unverified drafts. Source-backed comparisons are indexable and include dated first-party references and explicit documentation or testing limitations. Unverified drafts remain excluded from search indexing. These are DIVE-authored comparisons, not independent reviews.
 
 The source-backed comparison collection is available at https://designmode.app/compare/llms.txt and is generated from the same content as the HTML pages. It includes use cases, costs, sources and methodology without a separately maintained copy of competitor claims.

@@ -140,7 +140,7 @@ describe('mcp-local owner/attacher', { concurrency: false, timeout: 15_000 }, ()
     await assert.rejects(
       () => claimOrAttach(port),
       (err: unknown) => {
-        assert.match((err as Error).message, /not Design Mode/);
+        assert.match((err as Error).message, /not DIVE/);
         assert.match((err as Error).message, /will not kill/);
         return true;
       },
@@ -159,7 +159,7 @@ describe('mcp-local owner/attacher', { concurrency: false, timeout: 15_000 }, ()
     await assert.rejects(
       () => claimOrAttach(port),
       (err: unknown) => {
-        assert.match((err as Error).message, /not Design Mode/);
+        assert.match((err as Error).message, /not DIVE/);
         return true;
       },
     );
@@ -302,7 +302,7 @@ describe('mcp-local owner/attacher', { concurrency: false, timeout: 15_000 }, ()
 
     const result = await dispatch('get_changes');
     assert.equal(result.isError, true);
-    assert.match((result.content[0] as { text: string }).text, /not Design Mode/i);
+    assert.match((result.content[0] as { text: string }).text, /not DIVE/i);
     assert.equal(foreign.listening, true);
     await closeListening(foreign);
   });

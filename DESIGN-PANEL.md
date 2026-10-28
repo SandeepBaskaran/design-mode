@@ -1,6 +1,6 @@
 # Design Panel — Reference
 
-User-facing reference for every property surfaced in Design Mode's Design tab. For each property: what it does, when to use it, accepted values, value range, example values, and the closest Figma equivalent.
+User-facing reference for every property surfaced in DIVE's Design tab. For each property: what it does, when to use it, accepted values, value range, example values, and the closest Figma equivalent.
 
 For implementation status (At parity / Planned / Skipped) and CSS-spec coverage tracking, see **PARITY.md**. This document is for **understanding what each control does**.
 
@@ -66,7 +66,7 @@ When detected, the section shows:
 | Element | What | Behavior |
 |---|---|---|
 | **Library** | The detected library name in accent color: `lucide`, `fontawesome`, etc. | Read-only label. |
-| **Icon** | The detected icon name when available. | Read-only label; Design Mode never loads icon packages or rewrites SVG markup. |
+| **Icon** | The detected icon name when available. | Read-only label; DIVE never loads icon packages or rewrites SVG markup. |
 
 **Examples**:
 - Lucide button uses `<svg class="lucide lucide-search">` → detected; the label shows `search`.

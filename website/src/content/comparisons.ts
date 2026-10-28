@@ -80,19 +80,19 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-magicpath",
     competitor: "MagicPath",
-    title: "Design Mode vs MagicPath",
-    metaTitle: "Design Mode vs MagicPath — browser edits or a shared AI canvas",
+    title: "DIVE vs MagicPath",
+    metaTitle: "DIVE vs MagicPath — browser edits or a shared AI canvas",
     metaDescription:
-      "Compare Design Mode's live-page edits and agent hand-off with MagicPath's shared cloud canvas, interactive prototypes, external agents and credit-based plans.",
+      "Compare DIVE's live-page edits and agent hand-off with MagicPath's shared cloud canvas, interactive prototypes, external agents and credit-based plans.",
     keywords: [
-      "Design Mode vs MagicPath",
+      "DIVE vs MagicPath",
       "MagicPath alternative",
       "AI design canvas",
     ],
     oneLiner:
-      "Design Mode refines an existing webpage and records changes for your coding agent. MagicPath provides a shared cloud canvas for creating interactive designs with humans and agents.",
+      "DIVE refines an existing webpage and records changes for your coding agent. MagicPath provides a shared cloud canvas for creating interactive designs with humans and agents.",
     positioning:
-      "Choose by starting point: a rendered product you want to refine, or a canvas where you want to create and collaborate. MagicPath 2.0 positions itself as a shared workspace for interactive prototypes and apps, with external-agent access and code export. Design Mode keeps the visual review on your existing page and leaves source implementation to your agent. Neither workflow removes the need to review and test the resulting code.",
+      "Choose by starting point: a rendered product you want to refine, or a canvas where you want to create and collaborate. MagicPath 2.0 positions itself as a shared workspace for interactive prototypes and apps, with external-agent access and code export. DIVE keeps the visual review on your existing page and leaves source implementation to your agent. Neither workflow removes the need to review and test the resulting code.",
     whenToPickDesignMode: [
       "You want to refine localhost, staging or production without moving the project into another design workspace.",
       "You want a free MIT-licensed editor for Chrome, Firefox or Safari with portable prompt exports and optional MCP hand-off.",
@@ -141,7 +141,7 @@ export const comparisons: Comparison[] = [
       },
     ],
     honesty:
-      "MagicPath is the broader creation and collaboration workspace; Design Mode is the focused browser-editing and hand-off tool. MagicPath's credits fund its own AI generation, not external-agent usage, and its pricing FAQ says manual edits, exports and library use do not spend credits. Annual equivalents are not month-to-month prices. Validate code export, repository integration and collaboration with a representative project before committing.",
+      "MagicPath is the broader creation and collaboration workspace; DIVE is the focused browser-editing and hand-off tool. MagicPath's credits fund its own AI generation, not external-agent usage, and its pricing FAQ says manual edits, exports and library use do not spend credits. Annual equivalents are not month-to-month prices. Validate code export, repository integration and collaboration with a representative project before committing.",
     research: {
       checkedOn: "16 September 2026",
       methodology:
@@ -163,19 +163,19 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-backdraft",
     competitor: "Backdraft",
-    title: "Design Mode vs Backdraft",
-    metaTitle: "Design Mode vs Backdraft — browser hand-off or source editing",
+    title: "DIVE vs Backdraft",
+    metaTitle: "DIVE vs Backdraft — browser hand-off or source editing",
     metaDescription:
-      "Compare Design Mode's free browser editing and agent hand-off with Backdraft's paid code-and-canvas workspace, responsive previews and source editing.",
+      "Compare DIVE's free browser editing and agent hand-off with Backdraft's paid code-and-canvas workspace, responsive previews and source editing.",
     keywords: [
-      "Design Mode vs Backdraft",
+      "DIVE vs Backdraft",
       "Backdraft alternative",
       "visual source code editor",
     ],
     oneLiner:
-      "Design Mode previews changes on a live page and hands them to your agent. Backdraft brings source files, a visual canvas and coding agents into one paid workspace.",
+      "DIVE previews changes on a live page and hands them to your agent. Backdraft brings source files, a visual canvas and coding agents into one paid workspace.",
     positioning:
-      "The main difference is who owns the source-editing step. Design Mode runs on a scriptable webpage, records your visual changes and lets your existing coding agent implement them. Backdraft's documented workflow imports a project into a code-and-canvas editor, where visual edits write back to source. It is a broader development environment, not just a browser feedback tool.",
+      "The main difference is who owns the source-editing step. DIVE runs on a scriptable webpage, records your visual changes and lets your existing coding agent implement them. Backdraft's documented workflow imports a project into a code-and-canvas editor, where visual edits write back to source. It is a broader development environment, not just a browser feedback tool.",
     whenToPickDesignMode: [
       "You want to review localhost, staging or production without importing a project into another editor.",
       "You prefer to keep source edits, Git and deployment in your existing development tools.",
@@ -224,7 +224,7 @@ export const comparisons: Comparison[] = [
       },
     ],
     honesty:
-      "Backdraft is worth evaluating if you want to move more of development into a visual workspace. Design Mode is the lighter choice when you want precise browser feedback without replacing your editor or deployment process. Backdraft also advertises a $135 one-year desktop licence available to Pro users: it is not a lifetime purchase. Validate its source round-trip behaviour on a disposable project before trusting it with your app.",
+      "Backdraft is worth evaluating if you want to move more of development into a visual workspace. DIVE is the lighter choice when you want precise browser feedback without replacing your editor or deployment process. Backdraft also advertises a $135 one-year desktop licence available to Pro users: it is not a lifetime purchase. Validate its source round-trip behaviour on a disposable project before trusting it with your app.",
     research: {
       checkedOn: "16 September 2026",
       methodology:
@@ -254,19 +254,19 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-uiprompt",
     competitor: "UIPrompt",
-    title: "Design Mode vs UIPrompt",
-    metaTitle: "Design Mode vs UIPrompt — live-page edits or component specs",
+    title: "DIVE vs UIPrompt",
+    metaTitle: "DIVE vs UIPrompt — live-page edits or component specs",
     metaDescription:
-      "Compare Design Mode's live-page editing with UIPrompt's component specifications, interaction-state diffs, theme tokens and prompt exports. Includes free and paid limits.",
+      "Compare DIVE's live-page editing with UIPrompt's component specifications, interaction-state diffs, theme tokens and prompt exports. Includes free and paid limits.",
     keywords: [
-      "Design Mode vs UIPrompt",
+      "DIVE vs UIPrompt",
       "UIPrompt alternative",
       "component design prompts",
     ],
     oneLiner:
-      "Design Mode starts with your rendered product. UIPrompt starts with a component design and turns its values, states and tokens into an implementation prompt.",
+      "DIVE starts with your rendered product. UIPrompt starts with a component design and turns its values, states and tokens into an implementation prompt.",
     positioning:
-      "These tools solve different stages of the same problem: communicating precise design intent to a coding agent. Design Mode captures changes in the context of an existing page. UIPrompt offers a standalone component playground with exact values, interaction-state overrides and theme-aware tokens. It specifies what to build rather than editing your deployed interface.",
+      "These tools solve different stages of the same problem: communicating precise design intent to a coding agent. DIVE captures changes in the context of an existing page. UIPrompt offers a standalone component playground with exact values, interaction-state overrides and theme-aware tokens. It specifies what to build rather than editing your deployed interface.",
     whenToPickDesignMode: [
       "The component already exists in your product and you need to refine it alongside real layout and content.",
       "You need page-level edits, element or region comments, and optional direct MCP hand-off.",
@@ -315,7 +315,7 @@ export const comparisons: Comparison[] = [
       },
     ],
     honesty:
-      "UIPrompt is a useful specification tool, not a direct substitute for live-page editing. Its strongest idea is making interaction states and implementation constraints explicit. Use it to define a component library; use Design Mode to refine how components actually behave in a product. The vendor's exact-match experiment is not a guarantee that every agent will reproduce every design correctly.",
+      "UIPrompt is a useful specification tool, not a direct substitute for live-page editing. Its strongest idea is making interaction states and implementation constraints explicit. Use it to define a component library; use DIVE to refine how components actually behave in a product. The vendor's exact-match experiment is not a guarantee that every agent will reproduce every design correctly.",
     research: {
       checkedOn: "16 September 2026",
       methodology:
@@ -337,21 +337,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-handle-extension",
     competitor: "Handle Extension",
-    title: "Design Mode vs Handle Extension",
+    title: "DIVE vs Handle Extension",
     metaTitle:
-      "Design Mode vs Handle Extension — two free browser editing tools",
+      "DIVE vs Handle Extension — two free browser editing tools",
     metaDescription:
-      "Compare Design Mode and Handle Extension: two free MIT-licensed visual browser tools with different agent setup, connection and feedback workflows.",
+      "Compare DIVE and Handle Extension: two free MIT-licensed visual browser tools with different agent setup, connection and feedback workflows.",
     keywords: [
-      "Design Mode vs Handle",
+      "DIVE vs Handle",
       "Handle Extension alternative",
       "handle-ext",
       "browser editing for AI agents",
     ],
     oneLiner:
-      "Both are free, MIT-licensed browser tools for visual changes and agent hand-off. The choice is between Design Mode's exports and connection modes, and Handle's local agent-session workflow.",
+      "Both are free, MIT-licensed browser tools for visual changes and agent hand-off. The choice is between DIVE's exports and connection modes, and Handle's local agent-session workflow.",
     positioning:
-      "Handle Extension is a close alternative, not just an annotation tool. Its Chrome side panel supports visual refinements, inline text editing and natural-language feedback, then returns context to your coding agent. Design Mode offers live editing, recorded changes and comments with copy/export hand-off or Cloud, Local and Self-hosted MCP. The meaningful difference is workflow, not a free-versus-paid split.",
+      "Handle Extension is a close alternative, not just an annotation tool. Its Chrome side panel supports visual refinements, inline text editing and natural-language feedback, then returns context to your coding agent. DIVE offers live editing, recorded changes and comments with copy/export hand-off or Cloud, Local and Self-hosted MCP. The meaningful difference is workflow, not a free-versus-paid split.",
     whenToPickDesignMode: [
       "You use Firefox as well as Chromium, or want to review a scriptable page without first starting an agent session.",
       "You want a portable copied/exported specification as well as direct MCP hand-off.",
@@ -400,7 +400,7 @@ export const comparisons: Comparison[] = [
       },
     ],
     honesty:
-      "Handle deserves consideration if your work already revolves around a local coding-agent session. Design Mode is the better fit when browser choice, portable hand-off or relay choice matters more. Do not confuse Handle Extension with Handle Studio: the separate Studio app's macOS requirement is not an extension restriction. Neither browser tool independently guarantees a correct source-code change.",
+      "Handle deserves consideration if your work already revolves around a local coding-agent session. DIVE is the better fit when browser choice, portable hand-off or relay choice matters more. Do not confuse Handle Extension with Handle Studio: the separate Studio app's macOS requirement is not an extension restriction. Neither browser tool independently guarantees a correct source-code change.",
     research: {
       checkedOn: "16 September 2026",
       methodology:
@@ -433,20 +433,20 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-ui-ticket-mcp",
     competitor: "UI Ticket MCP",
-    title: "Design Mode vs UI Ticket MCP",
-    metaTitle: "Design Mode vs UI Ticket MCP — visual edits or review tickets",
+    title: "DIVE vs UI Ticket MCP",
+    metaTitle: "DIVE vs UI Ticket MCP — visual edits or review tickets",
     metaDescription:
-      "Compare Design Mode and UI Ticket MCP by visual editing, review threads, setup, storage and commercial-use licensing. Choose the workflow that fits your review.",
+      "Compare DIVE and UI Ticket MCP by visual editing, review threads, setup, storage and commercial-use licensing. Choose the workflow that fits your review.",
     keywords: [
-      "Design Mode vs UI Ticket MCP",
+      "DIVE vs UI Ticket MCP",
       "UI Ticket MCP alternative",
       "ui-ticket-mcp",
       "visual feedback for AI coding agents",
     ],
     oneLiner:
-      "Design Mode lets you make the visual change and hand off the specification. UI Ticket MCP turns annotated feedback into a review queue for your coding agent.",
+      "DIVE lets you make the visual change and hand off the specification. UI Ticket MCP turns annotated feedback into a review queue for your coding agent.",
     positioning:
-      "Both connect browser feedback to an AI coding agent, but they start with different jobs. Design Mode combines live style, text and DOM editing with comment pins and structured change exports. UI Ticket MCP centres on tickets: point at an element, describe the problem, discuss it in a thread and let an agent read, implement and resolve the feedback. Choose based on whether you need to demonstrate the intended result or manage a conversation about what should change.",
+      "Both connect browser feedback to an AI coding agent, but they start with different jobs. DIVE combines live style, text and DOM editing with comment pins and structured change exports. UI Ticket MCP centres on tickets: point at an element, describe the problem, discuss it in a thread and let an agent read, implement and resolve the feedback. Choose based on whether you need to demonstrate the intended result or manage a conversation about what should change.",
     whenToPickDesignMode: [
       "You want to set the spacing, typography or copy yourself rather than describe the intended result in a ticket.",
       "You review scriptable localhost, staging or production pages without adding a review component to each app.",
@@ -502,11 +502,11 @@ export const comparisons: Comparison[] = [
       },
     ],
     honesty:
-      "UI Ticket MCP has a stronger documented ticket-discussion workflow: tags, reply chains and a project-level queue are useful when feedback needs clarification before implementation. Design Mode is the better fit when you want to show the exact visual change, work without modifying the app, or use a permissively licensed tool commercially. Both can mark feedback resolved; neither status proves the resulting code is correct. Review the source diff and rendered result before accepting a fix.",
+      "UI Ticket MCP has a stronger documented ticket-discussion workflow: tags, reply chains and a project-level queue are useful when feedback needs clarification before implementation. DIVE is the better fit when you want to show the exact visual change, work without modifying the app, or use a permissively licensed tool commercially. Both can mark feedback resolved; neither status proves the resulting code is correct. Review the source diff and rendered result before accepting a fix.",
     research: {
       checkedOn: "14 September 2026",
       methodology:
-        "Documentation comparison of the official site, public README, licence and changelog through v1.6.0, checked against Design Mode's implementation. UI Ticket MCP was not installed or hands-on tested. The site lists 11 MCP tools while the README lists 10; tool count is not used as a differentiator. Hub support comes from the newer changelog, not the README's local-only setup description.",
+        "Documentation comparison of the official site, public README, licence and changelog through v1.6.0, checked against DIVE's implementation. UI Ticket MCP was not installed or hands-on tested. The site lists 11 MCP tools while the README lists 10; tool count is not used as a differentiator. Hub support comes from the newer changelog, not the README's local-only setup description.",
       sources: [
         {
           label: "UI Ticket MCP official site",
@@ -535,20 +535,20 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-css-studio",
     competitor: "CSS Studio",
-    title: "Design Mode vs CSS Studio",
-    metaTitle: "Design Mode vs CSS Studio — workflow and cost compared",
+    title: "DIVE vs CSS Studio",
+    metaTitle: "DIVE vs CSS Studio — workflow and cost compared",
     metaDescription:
-      "Compare Design Mode's free browser extension with CSS Studio's project-installed visual editor: live-page reviews, animation workflows, AI hand-off and cost.",
+      "Compare DIVE's free browser extension with CSS Studio's project-installed visual editor: live-page reviews, animation workflows, AI hand-off and cost.",
     keywords: [
-      "Design Mode vs CSS Studio",
+      "DIVE vs CSS Studio",
       "CSS Studio alternative",
       "CSS Studio pricing",
       "visual CSS editor",
     ],
     oneLiner:
-      "Design Mode is a free extension for live-page editing and hand-off. CSS Studio installs into your site, with a free visual editor and a $99 one-time AI integration.",
+      "DIVE is a free extension for live-page editing and hand-off. CSS Studio installs into your site, with a free visual editor and a $99 one-time AI integration.",
     positioning:
-      "Both let you make visual changes on a rendered website and ask your existing coding agent to implement them. The useful distinction is where you work: Design Mode suits reviews across localhost, staging and production without adding code to each site. CSS Studio's documented setup adds an editor to your own site in development mode, bringing visual controls, chat and animation authoring into that project.",
+      "Both let you make visual changes on a rendered website and ask your existing coding agent to implement them. The useful distinction is where you work: DIVE suits reviews across localhost, staging and production without adding code to each site. CSS Studio's documented setup adds an editor to your own site in development mode, bringing visual controls, chat and animation authoring into that project.",
     whenToPickDesignMode: [
       "You review multiple live sites or staging builds and do not want to install an editor into each project.",
       "You want to inspect recorded changes and export a specification for a developer, or connect an MCP agent without buying a tool licence.",
@@ -597,17 +597,17 @@ export const comparisons: Comparison[] = [
       {
         feature: "AI costs beyond the tool",
         designMode:
-          "Bring your own agent. Any paid agent subscription or model usage is separate from Design Mode.",
+          "Bring your own agent. Any paid agent subscription or model usage is separate from DIVE.",
         competitor:
           "Bring your own agent. The one-time purchase does not include paid agent or model usage.",
       },
     ],
     honesty:
-      "CSS Studio is a credible choice for project-local editing, especially when timeline-based animation work matters. Design Mode is the simpler fit for reviewing pages without modifying their setup and for free structured hand-off. Neither tool removes the need to review the agent's source diff and test the result: Design Mode's Changes tab records browser edits, not a guarantee that generated code is correct.",
+      "CSS Studio is a credible choice for project-local editing, especially when timeline-based animation work matters. DIVE is the simpler fit for reviewing pages without modifying their setup and for free structured hand-off. Neither tool removes the need to review the agent's source diff and test the result: DIVE's Changes tab records browser edits, not a guarantee that generated code is correct.",
     research: {
       checkedOn: "14 September 2026",
       methodology:
-        "Documentation comparison using CSS Studio's first-party pricing and guides, and Design Mode's documented workflow. CSS Studio was not installed or hands-on tested; no tested version is claimed. Pricing and capabilities may change.",
+        "Documentation comparison using CSS Studio's first-party pricing and guides, and DIVE's documented workflow. CSS Studio was not installed or hands-on tested; no tested version is claimed. Pricing and capabilities may change.",
       sources: [
         { label: "CSS Studio pricing", url: "https://cssstudio.ai/pricing" },
         {
@@ -629,12 +629,12 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-stagewise",
     competitor: "Stagewise",
-    title: "Design Mode vs Stagewise",
-    metaTitle: "Design Mode vs Stagewise — open-source visual editor with MCP",
+    title: "DIVE vs Stagewise",
+    metaTitle: "DIVE vs Stagewise — open-source visual editor with MCP",
     metaDescription:
-      "Honest comparison: Design Mode and Stagewise both ship visual edits to AI coding agents. Design Mode is MIT-licensed with a hosted Cloud relay, broader design controls, and built-in change history.",
+      "Honest comparison: DIVE and Stagewise both ship visual edits to AI coding agents. DIVE is MIT-licensed with a hosted Cloud relay, broader design controls, and built-in change history.",
     keywords: [
-      "Design Mode vs Stagewise",
+      "DIVE vs Stagewise",
       "Stagewise alternative",
       "Stagewise comparison",
       "visual editor for AI agents",
@@ -665,7 +665,7 @@ export const comparisons: Comparison[] = [
       fit: "Developers using AI coding agents",
     }),
     honesty:
-      "Stagewise is genuinely good and was earlier to this space. If you're happy with it, stay with it. Design Mode's case is breadth: it covers personas (QA, PMs, content, design system maintenance) Stagewise doesn't centre.",
+      "Stagewise is genuinely good and was earlier to this space. If you're happy with it, stay with it. DIVE's case is breadth: it covers personas (QA, PMs, content, design system maintenance) Stagewise doesn't centre.",
     related: [
       "design-mode-vs-cursor-design-mode",
       "design-mode-vs-pls-fix",
@@ -675,21 +675,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-pls-fix",
     competitor: "pls-fix",
-    title: "Design Mode vs pls-fix",
-    metaTitle: "Design Mode vs pls-fix — visual editor vs comment-pin bug tool",
+    title: "DIVE vs pls-fix",
+    metaTitle: "DIVE vs pls-fix — visual editor vs comment-pin bug tool",
     metaDescription:
-      "Comparison: pls-fix is a comment-pin tool for filing visual bugs. Design Mode covers comment pins plus full visual editing, MCP handoff, persistent change history, and exports.",
+      "Comparison: pls-fix is a comment-pin tool for filing visual bugs. DIVE covers comment pins plus full visual editing, MCP handoff, persistent change history, and exports.",
     keywords: [
-      "Design Mode vs pls-fix",
+      "DIVE vs pls-fix",
       "pls-fix alternative",
       "visual bug report tool",
       "comment pin tool",
       "design feedback tool",
     ],
     oneLiner:
-      "pls-fix focuses on comment-pinning bugs. Design Mode covers comments plus full visual editing, MCP handoff, and structured exports.",
+      "pls-fix focuses on comment-pinning bugs. DIVE covers comments plus full visual editing, MCP handoff, and structured exports.",
     positioning:
-      "pls-fix is a specialised tool for filing visual bug reports with annotations. Design Mode is a broader design surface — comment pins are one feature among many (Layers tree, Design controls, Changes tab, MCP).",
+      "pls-fix is a specialised tool for filing visual bug reports with annotations. DIVE is a broader design surface — comment pins are one feature among many (Layers tree, Design controls, Changes tab, MCP).",
     whenToPickDesignMode: [
       "You want to fix the bug, not just annotate it.",
       "You want to ship the structured diff to an AI agent.",
@@ -709,7 +709,7 @@ export const comparisons: Comparison[] = [
       fit: "Bug reporting & feedback",
     }),
     honesty:
-      "If you only need to pin comments on a deployed page, pls-fix is purpose-built. If you also want to make the fix, ship the spec to engineering, or run a full design review, Design Mode covers more ground.",
+      "If you only need to pin comments on a deployed page, pls-fix is purpose-built. If you also want to make the fix, ship the spec to engineering, or run a full design review, DIVE covers more ground.",
     related: [
       "design-mode-vs-drawbridge",
       "design-mode-vs-ui-inspector",
@@ -719,24 +719,24 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-drawbridge",
     competitor: "Drawbridge",
-    title: "Design Mode vs Drawbridge",
+    title: "DIVE vs Drawbridge",
     metaTitle:
-      "Design Mode vs Drawbridge — visual edits to AI agents without folder lock-in",
+      "DIVE vs Drawbridge — visual edits to AI agents without folder lock-in",
     metaDescription:
-      "Comparison: Drawbridge captures annotations and writes task files into one connected project folder. Design Mode edits the live page, hands off over MCP with no folder binding, and closes the loop by letting the agent resolve your comments.",
+      "Comparison: Drawbridge captures annotations and writes task files into one connected project folder. DIVE edits the live page, hands off over MCP with no folder binding, and closes the loop by letting the agent resolve your comments.",
     keywords: [
-      "Design Mode vs Drawbridge",
+      "DIVE vs Drawbridge",
       "Drawbridge alternative",
       "visual annotation for AI agents",
       "drawbridge moat tasks",
       "AI coding visual feedback",
     ],
     oneLiner:
-      "Drawbridge captures annotations and drops task files into your project folder; Design Mode edits the live page and hands off over MCP — no folder binding, so it works across parallel agents and worktrees.",
+      "Drawbridge captures annotations and drops task files into your project folder; DIVE edits the live page and hands off over MCP — no folder binding, so it works across parallel agents and worktrees.",
     positioning:
-      "Both turn visual feedback into work for an AI coding agent. Drawbridge is annotate-and-queue: you comment or draw a box, it writes screenshots + `.moat/` task files into one connected project directory, and the agent reads them via a `/bridge` command. Design Mode is a live two-way loop: you edit the page directly (or pin element/region comments), and the agent pulls the diff over MCP and pushes changes back — then marks your comments resolved.",
+      "Both turn visual feedback into work for an AI coding agent. Drawbridge is annotate-and-queue: you comment or draw a box, it writes screenshots + `.moat/` task files into one connected project directory, and the agent reads them via a `/bridge` command. DIVE is a live two-way loop: you edit the page directly (or pin element/region comments), and the agent pulls the diff over MCP and pushes changes back — then marks your comments resolved.",
     whenToPickDesignMode: [
-      "You run multiple agents or git worktrees at once — Design Mode's MCP attaches per session with no folder binding, so nothing pins you to a single directory or risks writing tasks into the wrong tree.",
+      "You run multiple agents or git worktrees at once — DIVE's MCP attaches per session with no folder binding, so nothing pins you to a single directory or risks writing tasks into the wrong tree.",
       "You want to actually edit the design (typography, colour, layout, motion, effects), not just describe the change.",
       "You want the loop to close: the agent applies changes to the live page and marks your comments resolved (mark_comment_resolved), instead of a one-way file drop.",
       "You want a persistent, searchable Changes history and CSS / Tailwind / SCSS / JSX export.",
@@ -758,7 +758,7 @@ export const comparisons: Comparison[] = [
       fit: "Annotate-and-queue for AI coding agents",
     }),
     honesty:
-      "Drawbridge is a clean, focused tool, and its no-server file handoff is genuinely simpler if you never run a companion: annotations land as git-friendly task files an agent reads on its own. The trade-off is the folder binding — it persists one project directory handle, which gets awkward when you're juggling parallel agents or worktrees, and it captures intent rather than letting you make the change. Design Mode deliberately skipped file handoff for exactly that reason and leans on a live MCP connection instead. If you want async, checked-in task files, Drawbridge fits; if you want to edit directly and close the loop live across many sessions, Design Mode does.",
+      "Drawbridge is a clean, focused tool, and its no-server file handoff is genuinely simpler if you never run a companion: annotations land as git-friendly task files an agent reads on its own. The trade-off is the folder binding — it persists one project directory handle, which gets awkward when you're juggling parallel agents or worktrees, and it captures intent rather than letting you make the change. DIVE deliberately skipped file handoff for exactly that reason and leans on a live MCP connection instead. If you want async, checked-in task files, Drawbridge fits; if you want to edit directly and close the loop live across many sessions, DIVE does.",
     related: [
       "design-mode-vs-pls-fix",
       "design-mode-vs-stagewise",
@@ -768,21 +768,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-agentation",
     competitor: "Agentation",
-    title: "Design Mode vs Agentation",
+    title: "DIVE vs Agentation",
     metaTitle:
-      "Design Mode vs Agentation — open-source visual editor for AI agents",
+      "DIVE vs Agentation — open-source visual editor for AI agents",
     metaDescription:
-      "Comparison: Agentation focuses on AI agent integration; Design Mode adds a full visual design surface, three MCP modes, and a broader persona fit.",
+      "Comparison: Agentation focuses on AI agent integration; DIVE adds a full visual design surface, three MCP modes, and a broader persona fit.",
     keywords: [
-      "Design Mode vs Agentation",
+      "DIVE vs Agentation",
       "Agentation alternative",
       "AI agent design tool",
       "visual editor for AI agents",
     ],
     oneLiner:
-      "Both tools wire visual edits into AI coding agents — Design Mode adds an open-source design surface, three MCP connection modes, and use-case-specific workflows.",
+      "Both tools wire visual edits into AI coding agents — DIVE adds an open-source design surface, three MCP connection modes, and use-case-specific workflows.",
     positioning:
-      "Agentation centres the agent integration; Design Mode centres the design tool that happens to integrate with agents. Different starting points; overlapping outcomes.",
+      "Agentation centres the agent integration; DIVE centres the design tool that happens to integrate with agents. Different starting points; overlapping outcomes.",
     whenToPickDesignMode: [
       "You want MIT open source.",
       "You need a richer visual control set (motion, effects, contrast checker).",
@@ -811,20 +811,20 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-dialkit",
     competitor: "Dialkit",
-    title: "Design Mode vs Dialkit",
-    metaTitle: "Design Mode vs Dialkit — comparison for live website editing",
+    title: "DIVE vs Dialkit",
+    metaTitle: "DIVE vs Dialkit — comparison for live website editing",
     metaDescription:
-      "Comparison: Dialkit and Design Mode are both browser-based design tools. Design Mode adds MCP handoff to AI coding agents and a full Changes-tab history.",
+      "Comparison: Dialkit and DIVE are both browser-based design tools. DIVE adds MCP handoff to AI coding agents and a full Changes-tab history.",
     keywords: [
-      "Design Mode vs Dialkit",
+      "DIVE vs Dialkit",
       "Dialkit alternative",
       "browser design tool",
       "live editing tool",
     ],
     oneLiner:
-      "Both are browser-based visual editors. Design Mode's differentiator is the MCP handoff and the persistent, exportable change history.",
+      "Both are browser-based visual editors. DIVE's differentiator is the MCP handoff and the persistent, exportable change history.",
     positioning:
-      "Dialkit and Design Mode share the in-browser editing premise. The fork in the road is what you do with the edits — Design Mode treats them as a structured diff to ship to engineering or an AI agent.",
+      "Dialkit and DIVE share the in-browser editing premise. The fork in the road is what you do with the edits — DIVE treats them as a structured diff to ship to engineering or an AI agent.",
     whenToPickDesignMode: [
       "You want to hand edits to Claude Code, Cursor, or any MCP agent.",
       "You need a Changes tab with search, filter, and export.",
@@ -843,7 +843,7 @@ export const comparisons: Comparison[] = [
       fit: "Designers / developers editing in-browser",
     }),
     honesty:
-      "If you don't need AI agent handoff, Dialkit and Design Mode are both reasonable choices. If you do, Design Mode's three MCP modes are the deciding factor.",
+      "If you don't need AI agent handoff, Dialkit and DIVE are both reasonable choices. If you do, DIVE's three MCP modes are the deciding factor.",
     related: [
       "design-mode-vs-agentation",
       "design-mode-vs-stagewise",
@@ -853,21 +853,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-ui-inspector",
     competitor: "UI Inspector",
-    title: "Design Mode vs UI Inspector",
+    title: "DIVE vs UI Inspector",
     metaTitle:
-      "Design Mode vs UI Inspector — design surface vs inspection tool",
+      "DIVE vs UI Inspector — design surface vs inspection tool",
     metaDescription:
-      "Comparison: UI Inspector tools focus on reading CSS off live pages. Design Mode reads, edits, exports, and ships to AI agents over MCP.",
+      "Comparison: UI Inspector tools focus on reading CSS off live pages. DIVE reads, edits, exports, and ships to AI agents over MCP.",
     keywords: [
-      "Design Mode vs UI Inspector",
+      "DIVE vs UI Inspector",
       "UI Inspector alternative",
       "Chrome inspector tool",
       "CSS inspector",
     ],
     oneLiner:
-      "UI Inspector tools read CSS; Design Mode reads, edits, and ships the diff.",
+      "UI Inspector tools read CSS; DIVE reads, edits, and ships the diff.",
     positioning:
-      "Inspector tools tell you what's on the page. Design Mode lets you change it, log the change, and hand the diff to engineering or an AI agent.",
+      "Inspector tools tell you what's on the page. DIVE lets you change it, log the change, and hand the diff to engineering or an AI agent.",
     whenToPickDesignMode: [
       "You want to make changes, not just read them.",
       "You want to ship the changes somewhere.",
@@ -886,7 +886,7 @@ export const comparisons: Comparison[] = [
       fit: "Inspecting layouts",
     }),
     honesty:
-      "If you literally just need to peek at CSS, Chrome DevTools is free and built-in. If you want to make changes that go somewhere, Design Mode is the next step up.",
+      "If you literally just need to peek at CSS, Chrome DevTools is free and built-in. If you want to make changes that go somewhere, DIVE is the next step up.",
     related: [
       "design-mode-vs-chrome-devtools",
       "design-mode-vs-csspeeper",
@@ -896,21 +896,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-cursor-design-mode",
     competitor: "Cursor's built-in design mode",
-    title: "Design Mode vs Cursor's design mode",
+    title: "DIVE vs Cursor's design mode",
     metaTitle:
-      "Design Mode vs Cursor's design mode — browser surface vs editor surface",
+      "DIVE vs Cursor's design mode — browser surface vs editor surface",
     metaDescription:
-      "Comparison: Cursor's design mode lives in the editor; Design Mode lives on the live web page. Edit the real rendered UI with real layout context, then ship the diff back to Cursor.",
+      "Comparison: Cursor's design mode lives in the editor; DIVE lives on the live web page. Edit the real rendered UI with real layout context, then ship the diff back to Cursor.",
     keywords: [
-      "Design Mode vs Cursor design mode",
+      "DIVE vs Cursor design mode",
       "Cursor design mode",
       "Cursor visual editing",
       "in-browser vs in-editor design",
     ],
     oneLiner:
-      "Cursor's mode lives inside the editor. Design Mode lives on the live web page — edit the real rendered UI, then ship the diff back to Cursor.",
+      "Cursor's mode lives inside the editor. DIVE lives on the live web page — edit the real rendered UI, then ship the diff back to Cursor.",
     positioning:
-      "The fork is: do you want to edit the design inside your code editor (Cursor's mode), or on the actual rendered page in your browser (Design Mode)? The answer depends on which surface gives you more context.",
+      "The fork is: do you want to edit the design inside your code editor (Cursor's mode), or on the actual rendered page in your browser (DIVE)? The answer depends on which surface gives you more context.",
     whenToPickDesignMode: [
       "You want to edit on the rendered page, not in a code-adjacent surface.",
       "You want real device pixels, real fonts, real hover/focus/animation states.",
@@ -930,7 +930,7 @@ export const comparisons: Comparison[] = [
       fit: "Cursor power users",
     }),
     honesty:
-      "Cursor's mode is great for in-editor work. Design Mode is great when you want the canvas to be the actual rendered page. Many people use both.",
+      "Cursor's mode is great for in-editor work. DIVE is great when you want the canvas to be the actual rendered page. Many people use both.",
     related: [
       "design-mode-vs-stagewise",
       "design-mode-vs-chrome-devtools",
@@ -940,19 +940,19 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-csspeeper",
     competitor: "CSSPeeper",
-    title: "Design Mode vs CSSPeeper",
-    metaTitle: "Design Mode vs CSSPeeper — design surface vs CSS inspector",
+    title: "DIVE vs CSSPeeper",
+    metaTitle: "DIVE vs CSSPeeper — design surface vs CSS inspector",
     metaDescription:
-      "Comparison: CSSPeeper is a popular CSS reader; Design Mode is a full visual editor that reads, edits, and ships the diff over MCP.",
+      "Comparison: CSSPeeper is a popular CSS reader; DIVE is a full visual editor that reads, edits, and ships the diff over MCP.",
     keywords: [
-      "Design Mode vs CSSPeeper",
+      "DIVE vs CSSPeeper",
       "CSSPeeper alternative",
       "CSS inspector",
       "Chrome CSS extension",
     ],
-    oneLiner: "CSSPeeper reads. Design Mode reads, edits, and ships.",
+    oneLiner: "CSSPeeper reads. DIVE reads, edits, and ships.",
     positioning:
-      "CSSPeeper is a beautiful read-only inspector. Design Mode covers the read use case and adds editing, persistence, exports, and MCP.",
+      "CSSPeeper is a beautiful read-only inspector. DIVE covers the read use case and adds editing, persistence, exports, and MCP.",
     whenToPickDesignMode: [
       "You want to change values, not just read them.",
       "You want to ship structured edits to engineering or an AI agent.",
@@ -968,7 +968,7 @@ export const comparisons: Comparison[] = [
       fit: "Learning, inspecting",
     }),
     honesty:
-      "Different tools for different tasks. CSSPeeper is a wonderful learning aid; Design Mode is a working surface.",
+      "Different tools for different tasks. CSSPeeper is a wonderful learning aid; DIVE is a working surface.",
     related: [
       "design-mode-vs-ui-inspector",
       "design-mode-vs-hover-inspector",
@@ -978,20 +978,20 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-hover-inspector",
     competitor: "Hover Inspector",
-    title: "Design Mode vs Hover Inspector",
+    title: "DIVE vs Hover Inspector",
     metaTitle:
-      "Design Mode vs Hover Inspector — full design surface vs hover-only inspection",
+      "DIVE vs Hover Inspector — full design surface vs hover-only inspection",
     metaDescription:
-      "Comparison: Hover Inspector tools surface element info on hover. Design Mode adds full visual editing, persistent history, exports, and AI agent handoff.",
+      "Comparison: Hover Inspector tools surface element info on hover. DIVE adds full visual editing, persistent history, exports, and AI agent handoff.",
     keywords: [
-      "Design Mode vs Hover Inspector",
+      "DIVE vs Hover Inspector",
       "Hover Inspector alternative",
       "live element inspector",
       "CSS hover tool",
     ],
-    oneLiner: "Hover-only inspectors are a feature; Design Mode is a tool.",
+    oneLiner: "Hover-only inspectors are a feature; DIVE is a tool.",
     positioning:
-      "Hover-on-element info is one capability inside Design Mode (the inspector overlay). The broader product adds editing, exports, and MCP.",
+      "Hover-on-element info is one capability inside DIVE (the inspector overlay). The broader product adds editing, exports, and MCP.",
     whenToPickDesignMode: ["You need to make changes, not just see info."],
     whenToPickCompetitor: ["You only need a hover tooltip and nothing else."],
     table: baseFeatures({
@@ -1004,7 +1004,7 @@ export const comparisons: Comparison[] = [
       fit: "Casual inspection",
     }),
     honesty:
-      "If hover info is all you need, the small footprint of those extensions wins. Otherwise, Design Mode includes that capability among many.",
+      "If hover info is all you need, the small footprint of those extensions wins. Otherwise, DIVE includes that capability among many.",
     related: [
       "design-mode-vs-csspeeper",
       "design-mode-vs-ui-inspector",
@@ -1014,21 +1014,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-builder-io-visual-copilot",
     competitor: "Builder.io Visual Copilot",
-    title: "Design Mode vs Builder.io Visual Copilot",
+    title: "DIVE vs Builder.io Visual Copilot",
     metaTitle:
-      "Design Mode vs Builder.io Visual Copilot — direction of design-to-code",
+      "DIVE vs Builder.io Visual Copilot — direction of design-to-code",
     metaDescription:
-      "Comparison: Builder.io Visual Copilot converts Figma designs into code. Design Mode goes the other direction — tweak the live page, hand the agent precise CSS deltas.",
+      "Comparison: Builder.io Visual Copilot converts Figma designs into code. DIVE goes the other direction — tweak the live page, hand the agent precise CSS deltas.",
     keywords: [
-      "Design Mode vs Builder.io",
+      "DIVE vs Builder.io",
       "Builder.io Visual Copilot alternative",
       "Figma to code",
       "design to code tool",
     ],
     oneLiner:
-      "Builder.io goes Figma → code. Design Mode goes live page → code.",
+      "Builder.io goes Figma → code. DIVE goes live page → code.",
     positioning:
-      "Different problems. Builder.io is great for greenfield Figma-driven workflows. Design Mode is great for iterating on an already-deployed product.",
+      "Different problems. Builder.io is great for greenfield Figma-driven workflows. DIVE is great for iterating on an already-deployed product.",
     whenToPickDesignMode: [
       "Your codebase and design system already exist.",
       "You iterate on the rendered page, not in Figma.",
@@ -1058,18 +1058,18 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-locofy",
     competitor: "Locofy",
-    title: "Design Mode vs Locofy",
-    metaTitle: "Design Mode vs Locofy — Figma-to-code vs live-page-to-code",
+    title: "DIVE vs Locofy",
+    metaTitle: "DIVE vs Locofy — Figma-to-code vs live-page-to-code",
     metaDescription:
-      "Comparison: Locofy converts Figma to code. Design Mode lets you edit the live page and hand the structured diff to your AI coding agent.",
+      "Comparison: Locofy converts Figma to code. DIVE lets you edit the live page and hand the structured diff to your AI coding agent.",
     keywords: [
-      "Design Mode vs Locofy",
+      "DIVE vs Locofy",
       "Locofy alternative",
       "Figma to React",
       "design to code tool",
     ],
     oneLiner:
-      "Locofy generates code from Figma. Design Mode emits diffs from the live page.",
+      "Locofy generates code from Figma. DIVE emits diffs from the live page.",
     positioning:
       "Same comparison shape as Builder.io: Figma-first generation vs live-page-first iteration. Different starting points, different fits.",
     whenToPickDesignMode: [
@@ -1089,7 +1089,7 @@ export const comparisons: Comparison[] = [
       fit: "Figma-first teams",
     }),
     honesty:
-      "Both can coexist — Locofy for the first-pass component, Design Mode for the production-tuning loop.",
+      "Both can coexist — Locofy for the first-pass component, DIVE for the production-tuning loop.",
     related: [
       "design-mode-vs-builder-io-visual-copilot",
       "design-mode-vs-figma-dev-mode",
@@ -1099,21 +1099,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-chrome-devtools",
     competitor: "Chrome DevTools",
-    title: "Design Mode vs Chrome DevTools",
+    title: "DIVE vs Chrome DevTools",
     metaTitle:
-      "Design Mode vs Chrome DevTools — design surface vs developer inspector",
+      "DIVE vs Chrome DevTools — design surface vs developer inspector",
     metaDescription:
-      "Comparison: Chrome DevTools is a developer inspector. Design Mode is a design surface with persistent change history, real visual controls, and one-click ship-to-AI-agent over MCP.",
+      "Comparison: Chrome DevTools is a developer inspector. DIVE is a design surface with persistent change history, real visual controls, and one-click ship-to-AI-agent over MCP.",
     keywords: [
-      "Design Mode vs Chrome DevTools",
+      "DIVE vs Chrome DevTools",
       "DevTools alternative",
       "Chrome design tool",
       "live CSS editing alternative",
     ],
     oneLiner:
-      "DevTools is a debugger. Design Mode is a design surface that emits structured diffs and ships them to AI agents.",
+      "DevTools is a debugger. DIVE is a design surface that emits structured diffs and ships them to AI agents.",
     positioning:
-      "Chrome DevTools is the universal default — free, built-in, every web developer knows it. Design Mode is what you reach for when DevTools' lack of persistence, lack of visual controls, and lack of agent handoff start to bite.",
+      "Chrome DevTools is the universal default — free, built-in, every web developer knows it. DIVE is what you reach for when DevTools' lack of persistence, lack of visual controls, and lack of agent handoff start to bite.",
     whenToPickDesignMode: [
       "You want edits that persist across reloads and sessions.",
       "You want real visual controls (sliders, colour pickers, motion, effects) instead of typed CSS strings.",
@@ -1134,7 +1134,7 @@ export const comparisons: Comparison[] = [
       fit: "Developers debugging behaviour",
     }),
     honesty:
-      "DevTools is irreplaceable. Design Mode lives on top of it — same browser, complementary surface. Most users keep both pinned.",
+      "DevTools is irreplaceable. DIVE lives on top of it — same browser, complementary surface. Most users keep both pinned.",
     related: [
       "design-mode-vs-cursor-design-mode",
       "design-mode-vs-figma-dev-mode",
@@ -1144,21 +1144,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-figma-dev-mode",
     competitor: "Figma Dev Mode",
-    title: "Design Mode vs Figma Dev Mode",
+    title: "DIVE vs Figma Dev Mode",
     metaTitle:
-      "Design Mode vs Figma Dev Mode — file-based handoff vs live-page editing",
+      "DIVE vs Figma Dev Mode — file-based handoff vs live-page editing",
     metaDescription:
-      "Comparison: Figma Dev Mode reads a static design file. Design Mode edits the live deployed page. Pair them: design in Figma, refine on the rendered page in Design Mode.",
+      "Comparison: Figma Dev Mode reads a static design file. DIVE edits the live deployed page. Pair them: design in Figma, refine on the rendered page in DIVE.",
     keywords: [
-      "Design Mode vs Figma Dev Mode",
+      "DIVE vs Figma Dev Mode",
       "Figma Dev Mode alternative",
       "design handoff tool",
       "Figma to code workflow",
     ],
     oneLiner:
-      "Figma Dev Mode reads a static design file; Design Mode edits the live deployed page.",
+      "Figma Dev Mode reads a static design file; DIVE edits the live deployed page.",
     positioning:
-      "These tools sit on opposite ends of the design-to-code pipeline. Figma Dev Mode is where designers hand off a spec; Design Mode is where the deployed page gets refined back into the source.",
+      "These tools sit on opposite ends of the design-to-code pipeline. Figma Dev Mode is where designers hand off a spec; DIVE is where the deployed page gets refined back into the source.",
     whenToPickDesignMode: [
       "You're working on the deployed product, not the Figma file.",
       "You want edits that translate directly into PRs.",
@@ -1178,7 +1178,7 @@ export const comparisons: Comparison[] = [
       fit: "Engineers reading a Figma spec",
     }),
     honesty:
-      "Different tools, different stages. Most teams that use Figma Dev Mode will also benefit from Design Mode on the deployed side.",
+      "Different tools, different stages. Most teams that use Figma Dev Mode will also benefit from DIVE on the deployed side.",
     related: [
       "design-mode-vs-builder-io-visual-copilot",
       "design-mode-vs-locofy",
@@ -1188,12 +1188,12 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-visbug",
     competitor: "VisBug",
-    title: "Design Mode vs VisBug",
-    metaTitle: "Design Mode vs VisBug — live page editor with AI agent handoff",
+    title: "DIVE vs VisBug",
+    metaTitle: "DIVE vs VisBug — live page editor with AI agent handoff",
     metaDescription:
-      "Comparison: VisBug edits live pages with a small toolbar. Design Mode adds a full side panel, persistent Changes history, exports, and MCP handoff to AI coding agents.",
+      "Comparison: VisBug edits live pages with a small toolbar. DIVE adds a full side panel, persistent Changes history, exports, and MCP handoff to AI coding agents.",
     keywords: [
-      "Design Mode vs VisBug",
+      "DIVE vs VisBug",
       "VisBug alternative",
       "live page editor",
       "browser design extension",
@@ -1201,7 +1201,7 @@ export const comparisons: Comparison[] = [
     oneLiner:
       "VisBug edits the live page but has no agent / MCP handoff and no session persistence.",
     positioning:
-      "VisBug is the OG of in-browser visual editing — small toolbar, quick edits, no persistence. Design Mode is the version of that idea built for the AI-coding-agent era.",
+      "VisBug is the OG of in-browser visual editing — small toolbar, quick edits, no persistence. DIVE is the version of that idea built for the AI-coding-agent era.",
     whenToPickDesignMode: [
       "You want edits that persist and export to a structured diff.",
       "You want to ship the diff to an AI agent.",
@@ -1220,7 +1220,7 @@ export const comparisons: Comparison[] = [
       fit: "Quick in-browser tweaks",
     }),
     honesty:
-      "VisBug is fantastic and influential. Design Mode is closest in spirit to it but built for a different era and a different handoff target.",
+      "VisBug is fantastic and influential. DIVE is closest in spirit to it but built for a different era and a different handoff target.",
     related: [
       "design-mode-vs-chrome-devtools",
       "design-mode-vs-stagewise",
@@ -1230,21 +1230,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-figma-make",
     competitor: "Figma Make",
-    title: "Design Mode vs Figma Make",
+    title: "DIVE vs Figma Make",
     metaTitle:
-      "Design Mode vs Figma Make — open live-page editing vs credit-metered Figma generation",
+      "DIVE vs Figma Make — open live-page editing vs credit-metered Figma generation",
     metaDescription:
-      "Figma Make generates UIs and now references local / GitHub repos — but it's locked to Figma, needs a paid seat plus metered Make credits. Design Mode is free, open-source, edits your live deployed page, and hands off to any AI agent.",
+      "Figma Make generates UIs and now references local / GitHub repos — but it's locked to Figma, needs a paid seat plus metered Make credits. DIVE is free, open-source, edits your live deployed page, and hands off to any AI agent.",
     keywords: [
-      "Design Mode vs Figma Make",
+      "DIVE vs Figma Make",
       "Figma Make alternative",
       "Figma Make pricing credits",
       "Figma Make vs open source",
     ],
     oneLiner:
-      "Figma Make generates UIs inside Figma on metered credits; Design Mode edits your live deployed page for free and hands the diff to any agent.",
+      "Figma Make generates UIs inside Figma on metered credits; DIVE edits your live deployed page for free and hands the diff to any agent.",
     positioning:
-      "Figma Make has grown well past basic colours and typography — it now generates whole working UIs and can even reference local or GitHub repos. The catch is where it lives: inside Figma, on a paid seat, metered by Make credits that Figma bills separately from whatever LLM you already pay for. Design Mode runs in your browser on the real deployed page, is MIT-licensed and free, and brings your own agent over MCP.",
+      "Figma Make has grown well past basic colours and typography — it now generates whole working UIs and can even reference local or GitHub repos. The catch is where it lives: inside Figma, on a paid seat, metered by Make credits that Figma bills separately from whatever LLM you already pay for. DIVE runs in your browser on the real deployed page, is MIT-licensed and free, and brings your own agent over MCP.",
     whenToPickDesignMode: [
       "You want to edit the actual deployed page, not regenerate it in a canvas.",
       "You don't want a second metered bill (Make credits) on top of your LLM provider.",
@@ -1275,7 +1275,7 @@ export const comparisons: Comparison[] = [
       },
     ],
     honesty:
-      "Figma Make is genuinely powerful inside Figma's ecosystem, and the local / GitHub-repo support is real. But it's a paid, credit-metered, Figma-locked generator. Design Mode is the opposite trade: free, open, bring-your-own-LLM, and pointed at the live page you've already shipped.",
+      "Figma Make is genuinely powerful inside Figma's ecosystem, and the local / GitHub-repo support is real. But it's a paid, credit-metered, Figma-locked generator. DIVE is the opposite trade: free, open, bring-your-own-LLM, and pointed at the live page you've already shipped.",
     related: [
       "design-mode-vs-figma-dev-mode",
       "design-mode-vs-builder-io-visual-copilot",
@@ -1285,21 +1285,21 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-editui",
     competitor: "EditUI",
-    title: "Design Mode vs EditUI",
-    metaTitle: "Design Mode vs EditUI — recorded edits vs written instructions",
+    title: "DIVE vs EditUI",
+    metaTitle: "DIVE vs EditUI — recorded edits vs written instructions",
     metaDescription:
-      "Honest comparison: EditUI lets you click elements in Chrome, type an instruction per element and paste the batch into Claude Code, Cursor or Codex. Design Mode records the actual values you change, streams them over MCP, and runs on Chrome, Firefox and Safari.",
+      "Honest comparison: EditUI lets you click elements in Chrome, type an instruction per element and paste the batch into Claude Code, Cursor or Codex. DIVE records the actual values you change, streams them over MCP, and runs on Chrome, Firefox and Safari.",
     keywords: [
-      "Design Mode vs EditUI",
+      "DIVE vs EditUI",
       "EditUI alternative",
       "EditUI Chrome extension",
-      "Cursor Design Mode for any agent",
+      "Cursor DIVE for any agent",
       "visual UI feedback for coding agents",
     ],
     oneLiner:
       "EditUI is the closest 'point at it' competitor: a free Chrome extension that collects per-element instructions and copies them into your agent.",
     positioning:
-      "Both tools exist to stop you describing which element you mean. EditUI's answer is annotation: click, type what should change, collect, copy a prompt that carries DOM, class and computed-style context. Design Mode's answer is editing: change the value on the page, see it, and hand the agent the before/after diff over MCP. EditUI edits are still words; Design Mode edits are numbers and tokens.",
+      "Both tools exist to stop you describing which element you mean. EditUI's answer is annotation: click, type what should change, collect, copy a prompt that carries DOM, class and computed-style context. DIVE's answer is editing: change the value on the page, see it, and hand the agent the before/after diff over MCP. EditUI edits are still words; DIVE edits are numbers and tokens.",
     whenToPickDesignMode: [
       "You want to try the change on the page first and hand over the exact value, not a sentence the agent has to interpret.",
       "You work in Firefox or Safari — EditUI is Chrome-only.",
@@ -1323,7 +1323,7 @@ export const comparisons: Comparison[] = [
       fit: "Developers reviewing a running app in Chrome who paste into an agent",
     }),
     honesty:
-      "EditUI's copy-everything prompt is well designed: element, text, DOM, classes, parent, neighbours, URL, viewport and computed styles. If your agent is good at turning 'tighten this spacing' into code, the copy-paste loop is fine. Design Mode's case is precision and reach: you record 16px → 12px rather than 'tighter', the agent gets it over MCP without a paste, and the same workflow runs in Firefox and Safari.",
+      "EditUI's copy-everything prompt is well designed: element, text, DOM, classes, parent, neighbours, URL, viewport and computed styles. If your agent is good at turning 'tighten this spacing' into code, the copy-paste loop is fine. DIVE's case is precision and reach: you record 16px → 12px rather than 'tighter', the agent gets it over MCP without a paste, and the same workflow runs in Firefox and Safari.",
     research: {
       checkedOn: "11 October 2026",
       methodology:
@@ -1349,13 +1349,13 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-airship",
     competitor: "Airship",
-    title: "Design Mode vs Airship",
+    title: "DIVE vs Airship",
     metaTitle:
-      "Design Mode vs Airship — browser extension vs local design canvas",
+      "DIVE vs Airship — browser extension vs local design canvas",
     metaDescription:
-      "Honest comparison: Airship wraps your local dev server in a Figma-like canvas and drives Claude Code, Codex or OpenCode to edit source. Design Mode is a browser extension that edits any scriptable page — localhost, staging or production — and hands the diff to any MCP client.",
+      "Honest comparison: Airship wraps your local dev server in a Figma-like canvas and drives Claude Code, Codex or OpenCode to edit source. DIVE is a browser extension that edits any scriptable page — localhost, staging or production — and hands the diff to any MCP client.",
     keywords: [
-      "Design Mode vs Airship",
+      "DIVE vs Airship",
       "Airship alternative",
       "airship.design",
       "visual editor for your codebase",
@@ -1364,12 +1364,12 @@ export const comparisons: Comparison[] = [
     oneLiner:
       "Airship is a local reverse proxy that puts an infinite design canvas with real viewports in front of your dev server and lets an agent edit the source.",
     positioning:
-      "Airship and Design Mode disagree about where the editor should live. Airship says: run `npx @airshiplabs/cli --target 3000`, open the canvas on localhost:3001, select an element, and the agent resolves it back to file and line and edits the source. Design Mode says: the page you already have open is the canvas, whichever origin it is on, and the extension streams what you changed to the agent over MCP.",
+      "Airship and DIVE disagree about where the editor should live. Airship says: run `npx @airshiplabs/cli --target 3000`, open the canvas on localhost:3001, select an element, and the agent resolves it back to file and line and edits the source. DIVE says: the page you already have open is the canvas, whichever origin it is on, and the extension streams what you changed to the agent over MCP.",
     whenToPickDesignMode: [
       "You need to edit a staging or production page, or any site you don't run locally — Airship is localhost-only.",
       "You want to share a session or stream edits to an agent on another machine (Cloud mode).",
       "You want the native browser, DevTools and extensions you already use rather than a proxied canvas.",
-      "Your agent is not Claude Code, Codex or OpenCode — Design Mode speaks MCP to any client.",
+      "Your agent is not Claude Code, Codex or OpenCode — DIVE speaks MCP to any client.",
     ],
     whenToPickCompetitor: [
       "You want side-by-side real viewports (desktop, tablet, mobile) of the same local app.",
@@ -1389,7 +1389,7 @@ export const comparisons: Comparison[] = [
       fit: "Developers iterating on a local React/Next/Vite app with a terminal agent",
     }),
     honesty:
-      "Airship's multi-viewport canvas and file:line resolution are things Design Mode does not do, and 'edit the source, revert the file' is a tighter loop than a diff handoff when everything is on one laptop. Design Mode's case is reach: it works on pages you don't host, in three browsers, and with any MCP client, and it keeps a persistent record of what changed.",
+      "Airship's multi-viewport canvas and file:line resolution are things DIVE does not do, and 'edit the source, revert the file' is a tighter loop than a diff handoff when everything is on one laptop. DIVE's case is reach: it works on pages you don't host, in three browsers, and with any MCP client, and it keeps a persistent record of what changed.",
     research: {
       checkedOn: "11 October 2026",
       methodology:
@@ -1414,13 +1414,13 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-layerdock",
     competitor: "LayerDock",
-    title: "Design Mode vs LayerDock",
+    title: "DIVE vs LayerDock",
     metaTitle:
-      "Design Mode vs LayerDock — visual editor vs client feedback pins",
+      "DIVE vs LayerDock — visual editor vs client feedback pins",
     metaDescription:
-      "Honest comparison: LayerDock pins client feedback on a live site with screenshot, device and console errors, and exposes pins to Claude Code or Cursor over MCP. Design Mode records the design change itself and hands the diff to the agent.",
+      "Honest comparison: LayerDock pins client feedback on a live site with screenshot, device and console errors, and exposes pins to Claude Code or Cursor over MCP. DIVE records the design change itself and hands the diff to the agent.",
     keywords: [
-      "Design Mode vs LayerDock",
+      "DIVE vs LayerDock",
       "LayerDock alternative",
       "website feedback tool MCP",
       "client feedback pins Claude Code",
@@ -1429,7 +1429,7 @@ export const comparisons: Comparison[] = [
     oneLiner:
       "LayerDock is a client-feedback tool: comments pinned to elements on a live site, with context an agent can read over MCP.",
     positioning:
-      "LayerDock solves 'which button?' for clients who will never install anything: share a review link, they click and comment, each pin carries a screenshot, device, browser and page errors, and your agent can read and resolve pins through LayerDock's MCP server. Design Mode solves a different step — the person who knows what the fix is makes it on the page and the agent receives the exact change. Comments versus edits.",
+      "LayerDock solves 'which button?' for clients who will never install anything: share a review link, they click and comment, each pin carries a screenshot, device, browser and page errors, and your agent can read and resolve pins through LayerDock's MCP server. DIVE solves a different step — the person who knows what the fix is makes it on the page and the agent receives the exact change. Comments versus edits.",
     whenToPickDesignMode: [
       "The reviewer is a designer or developer who can make the change, not just describe it.",
       "You want typography, colour, spacing and layout values recorded as a diff, not a sentence.",
@@ -1454,7 +1454,7 @@ export const comparisons: Comparison[] = [
       fit: "Agencies, freelancers and in-house teams collecting client feedback on live sites",
     }),
     honesty:
-      "If your bottleneck is getting usable feedback out of clients, LayerDock is built for that and Design Mode is not. The two can coexist: a client pins 'this feels off' in LayerDock, and the designer answers with a recorded change in Design Mode. LayerDock was in beta with around 50 users when its founder posted on DEV, so expect the product to move.",
+      "If your bottleneck is getting usable feedback out of clients, LayerDock is built for that and DIVE is not. The two can coexist: a client pins 'this feels off' in LayerDock, and the designer answers with a recorded change in DIVE. LayerDock was in beta with around 50 users when its founder posted on DEV, so expect the product to move.",
     research: {
       checkedOn: "11 October 2026",
       methodology:
@@ -1480,13 +1480,13 @@ export const comparisons: Comparison[] = [
   {
     slug: "design-mode-vs-vex",
     competitor: "Vex",
-    title: "Design Mode vs Vex",
+    title: "DIVE vs Vex",
     metaTitle:
-      "Design Mode vs Vex — lightweight MCP handoff vs full agent orchestrator",
+      "DIVE vs Vex — lightweight MCP handoff vs full agent orchestrator",
     metaDescription:
-      "Honest comparison: Vex pairs a Chrome extension with its own Python orchestrator, Electron app and NATS bus to run Claude against structured visual edits. Design Mode is a single extension that hands the diff to whichever MCP agent you already run.",
+      "Honest comparison: Vex pairs a Chrome extension with its own Python orchestrator, Electron app and NATS bus to run Claude against structured visual edits. DIVE is a single extension that hands the diff to whichever MCP agent you already run.",
     keywords: [
-      "Design Mode vs Vex",
+      "DIVE vs Vex",
       "Vex alternative",
       "lukaskellerstein vex",
       "visual editing browser AI code changes",
@@ -1495,7 +1495,7 @@ export const comparisons: Comparison[] = [
     oneLiner:
       "Vex captures visual edits as 12 structured action types and ships them to its own agent orchestrator, which runs Claude and streams results back.",
     positioning:
-      "Vex and Design Mode agree that edits should be structured data, not prose. They part ways on how much to own. Vex is a platform: Chrome extension, FastAPI orchestrator with SQLite, Electron desktop app, NATS for streaming, Claude Agent SDK adapters, execution traces with token cost per batch, and framework detection that generates idiomatic React, Vue, Svelte, Django or Rails code. Design Mode is an extension plus an optional relay: it records the change and speaks MCP to the agent you already have.",
+      "Vex and DIVE agree that edits should be structured data, not prose. They part ways on how much to own. Vex is a platform: Chrome extension, FastAPI orchestrator with SQLite, Electron desktop app, NATS for streaming, Claude Agent SDK adapters, execution traces with token cost per batch, and framework detection that generates idiomatic React, Vue, Svelte, Django or Rails code. DIVE is an extension plus an optional relay: it records the change and speaks MCP to the agent you already have.",
     whenToPickDesignMode: [
       "You already run Claude Code, Cursor, Codex, Windsurf or any MCP client and don't want a second agent runtime.",
       "You want to install from a store and be editing in a minute — Vex needs Node 20+, Python 3.11+, uv, an orchestrator and a desktop app.",
@@ -1518,7 +1518,7 @@ export const comparisons: Comparison[] = [
       fit: "Developers who want a self-hosted end-to-end visual-edit-to-code pipeline",
     }),
     honesty:
-      "Vex is ambitious and its execution-trace view (steps, tool calls, tokens, cost) is something Design Mode does not offer. It is also early — version 0.1.5 at the time of checking, a handful of stars, and a non-open licence despite the public repository. Design Mode's case is that most people already have an agent; they need a clean, portable way to hand it a change, not another orchestrator.",
+      "Vex is ambitious and its execution-trace view (steps, tool calls, tokens, cost) is something DIVE does not offer. It is also early — version 0.1.5 at the time of checking, a handful of stars, and a non-open licence despite the public repository. DIVE's case is that most people already have an agent; they need a clean, portable way to hand it a change, not another orchestrator.",
     research: {
       checkedOn: "11 October 2026",
       methodology:

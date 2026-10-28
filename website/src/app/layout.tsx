@@ -23,15 +23,16 @@ const inter = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL("https://designmode.app"),
   title: {
-    default: "Design Mode — Browser visual editor for AI coding agents",
-    template: "%s | Design Mode",
+    default: "DIVE — Design Intelligence & Visual Engineering",
+    template: "%s | DIVE",
   },
   description:
     "Edit a live webpage visually in Chrome, Firefox or Safari, capture the exact changes, and send them to Claude Code, Cursor or another MCP-compatible coding agent.",
-  applicationName: "Design Mode",
+  applicationName: "DIVE",
   category: "Developer Tools",
   keywords: [
-    "Design Mode",
+    "DIVE",
+    "Design Intelligence & Visual Engineering",
     "Chrome extension",
     "Firefox add-on",
     "Firefox extension",
@@ -77,17 +78,17 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    title: "Design Mode — Browser visual editor for AI coding agents",
+    title: "DIVE — Design Intelligence & Visual Engineering",
     description:
       "Edit a live webpage visually, capture the exact changes, and send them to Claude Code, Cursor or another MCP-compatible coding agent.",
-    siteName: "Design Mode",
+    siteName: "DIVE",
     url: "https://designmode.app",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -100,7 +101,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },

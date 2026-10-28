@@ -19,11 +19,11 @@ export const STEPS: Step[] = [
     id: "get-started",
     title: "Get started",
     body: [
-      "Design Mode is a Chrome and Firefox extension for previewing visual changes on scriptable webpages. This practice canvas requires the extension; it is not an editor by itself. Start with one card: inspect it, change its padding, review Changes, then use Copy as prompt to copy the Markdown specification. An authorised developer or agent still implements the source.",
-      "First time? Pin the extension to your toolbar, then click the Design Mode icon. Chrome opens the launch surface selected in Settings; Firefox opens its sidebar. Once it's open, every shortcut is listed in Settings. Alt+D and Alt+S are browser commands you can rebind through chrome://extensions/shortcuts on Chrome or about:addons on Firefox.",
+      "DIVE is a Chrome and Firefox extension for previewing visual changes on scriptable webpages. This practice canvas requires the extension; it is not an editor by itself. Start with one card: inspect it, change its padding, review Changes, then use Copy as prompt to copy the Markdown specification. An authorised developer or agent still implements the source.",
+      "First time? Pin the extension to your toolbar, then click the DIVE icon. Chrome opens the launch surface selected in Settings; Firefox opens its sidebar. Once it's open, every shortcut is listed in Settings. Alt+D and Alt+S are browser commands you can rebind through chrome://extensions/shortcuts on Chrome or about:addons on Firefox.",
     ],
     tryIt:
-      "Pin Design Mode in your browser toolbar, then click its icon to open the side panel (the sidebar on Firefox).",
+      "Pin DIVE in your browser toolbar, then click its icon to open the side panel (the sidebar on Firefox).",
   },
   {
     id: "panel-modes",
@@ -40,7 +40,7 @@ export const STEPS: Step[] = [
     title: "Local HTML files",
     body: [
       "Local HTML editing depends on browser permissions and the page’s resources. On Chrome, allow file URL access before trying inspect, restyle, comment and copy on a file:// page. Some page features or resources may not work from a saved file.",
-      "Chrome blocks extensions from file:// pages by default, so there's a one-time switch: enable 'Allow access to file URLs' for Design Mode in chrome://extensions. If it's off, the side panel detects it and walks you through exactly that step.",
+      "Chrome blocks extensions from file:// pages by default, so there's a one-time switch: enable 'Allow access to file URLs' for DIVE in chrome://extensions. If it's off, the side panel detects it and walks you through exactly that step.",
     ],
     tryIt:
       "Save any web page (or a scrappy prototype) as an .html file, open it in Chrome via file://, and pop the side panel open. If Chrome blocks it, follow the panel's built-in instructions to flip the file-access toggle.",
@@ -89,7 +89,7 @@ export const STEPS: Step[] = [
     id: "annotate-draw",
     title: "Comments & regions",
     body: [
-      "Design Mode overlays two annotation tools on the live page. Comment pins (the comment icon in the action row, or Alt+C) drop a numbered marker on any element — resolve, reopen, or edit them, and they collect in the Changes tab under the Comments filter so they ship alongside your edits.",
+      "DIVE overlays two annotation tools on the live page. Comment pins (the comment icon in the action row, or Alt+C) drop a numbered marker on any element — resolve, reopen, or edit them, and they collect in the Changes tab under the Comments filter so they ship alongside your edits.",
       "Region comment (Alt+R) works the same way but lets you drag a rectangle over an area first, for feedback that isn't tied to a single element. Both are overlay-only — they annotate without ever touching the page's own styles.",
     ],
     tryIt:
@@ -295,7 +295,7 @@ export const STEPS: Step[] = [
     id: "settings",
     title: "Settings",
     body: [
-      "Click the gear icon in the panel header to open Settings. Pick your color format (HEX / RGB), screenshot capture mode (clipboard / download / both), and, on Chrome, the launch surface (Side panel / Floating / Pin on top). MCP connection settings live on the dedicated MCP page. The page cursor defaults to the Design Mode app icon — turn off Page cursor for a plain crosshair.",
+      "Click the gear icon in the panel header to open Settings. Pick your color format (HEX / RGB), screenshot capture mode (clipboard / download / both), and, on Chrome, the launch surface (Side panel / Floating / Pin on top). MCP connection settings live on the dedicated MCP page. The page cursor defaults to the DIVE app icon — turn off Page cursor for a plain crosshair.",
     ],
     tryIt:
       "Open Settings. Switch the color format from HEX to RGBA. Notice how color values in the Design tab re-render in the chosen format.",
@@ -314,7 +314,7 @@ export const STEPS: Step[] = [
     id: "mcp",
     title: "MCP server",
     body: [
-      "Design Mode ships with an optional MCP companion that bridges the extension to your coding agent (Claude Code, Cursor, etc.). With MCP running and an agent connected, your changes can be sent live with one click instead of being copied through the clipboard.",
+      "DIVE ships with an optional MCP companion that bridges the extension to your coding agent (Claude Code, Cursor, etc.). With MCP running and an agent connected, your changes can be sent live with one click instead of being copied through the clipboard.",
       "MCP configuration lives on its own dedicated page inside the extension — not in Settings. Click the MCP chip in the panel header (its trailing chevron opens the page) to pick a connection mode, watch status, and manage the token.",
       "Three connection modes: Cloud (selected on a fresh install but disconnected until you create a credential), Local (a companion process started by your MCP client), and Self-hosted (relay code on infrastructure you operate).",
     ],

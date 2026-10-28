@@ -3,7 +3,7 @@
 ## Implemented
 
 - Firefox: capability-detected floating editor, Document Picture-in-Picture and launch preferences. Older runtimes retain sidebar fallback.
-- Firefox docking: Dock prepares/focuses the target page; the next Design Mode toolbar/command gesture finishes in that window. The source stays alive until an initialised, explicitly target-bound native sidebar acknowledges takeover. Unpin, source/target closure and tab movement cancel pending handoffs.
+- Firefox docking: Dock prepares/focuses the target page; the next DIVE toolbar/command gesture finishes in that window. The source stays alive until an initialised, explicitly target-bound native sidebar acknowledges takeover. Unpin, source/target closure and tab movement cancel pending handoffs.
 - Shared colour picker: native EyeDropper where callable; otherwise an explicitly labelled viewport snapshot sampler in the existing editor. Keyboard cursor, pixel/hex feedback, cancellation, permission errors and stale-target guards included. This is not a screen-wide eyedropper.
 - Safari Inspector: synchronous promised-text clipboard reservation for Copy as Prompt and panel-focused Export CSS. Oversized bridge responses return actionable errors rather than silently timing out.
 - Safari remains Inspector-only. No in-page editor, native companion or new floating surface was added.

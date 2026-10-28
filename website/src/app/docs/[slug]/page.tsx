@@ -19,15 +19,15 @@ export const dynamicParams = false;
 
 const docDescriptions: Record<string, string> = {
   "browser-support":
-    "Install Design Mode from the Chrome Web Store or Firefox Add-ons, or add the Safari Web Inspector zip from the latest GitHub release.",
+    "Install DIVE from the Chrome Web Store or Firefox Add-ons, or add the Safari Web Inspector zip from the latest GitHub release.",
   "mcp-setup":
     "Bearer-token Cloud, Local and Self-hosted MCP setup for Claude Code, Cursor and VS Code, with protected configuration and read-only verification.",
   troubleshooting:
-    "Fix common Design Mode installation, side-panel, editing, clipboard and MCP issues in Chrome, Chromium browsers and Firefox.",
+    "Fix common DIVE installation, side-panel, editing, clipboard and MCP issues in Chrome, Chromium browsers and Firefox.",
 };
 
 const docTitles: Record<string, string> = {
-  "mcp-setup": "MCP setup for coding agents | Design Mode",
+  "mcp-setup": "MCP setup for coding agents | DIVE",
 };
 
 export async function generateMetadata({
@@ -39,7 +39,7 @@ export async function generateMetadata({
   const d = getDoc(slug);
   if (!d) return {};
   const url = `https://designmode.app/docs/${d.slug}`;
-  const title = docTitles[d.slug] ?? `${d.title} | Design Mode`;
+  const title = docTitles[d.slug] ?? `${d.title} | DIVE`;
   const description = docDescriptions[d.slug] ?? d.intro;
   return {
     title: { absolute: title },
@@ -56,7 +56,7 @@ export async function generateMetadata({
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode — The visual editor for all your agent’s work",
+          alt: "DIVE — The visual editor for all your agent’s work",
         },
       ],
     },
@@ -69,7 +69,7 @@ export async function generateMetadata({
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode — The visual editor for all your agent’s work",
+          alt: "DIVE — The visual editor for all your agent’s work",
         },
       ],
     },

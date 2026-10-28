@@ -14,7 +14,7 @@ body:
   - type: dropdown
     id: scope
     attributes:
-      label: Which part of Design Mode?
+      label: Which part of DIVE?
       options:
         - Extension (side panel / sidebar / inspector / content script)
         - MCP local server (packages/mcp-local)
@@ -29,13 +29,13 @@ body:
     attributes:
       label: Diagnostics
       description: |
-        Open the Design Mode side panel → click the **?** icon in the
+        Open the DIVE side panel → click the **?** icon in the
         header → click **Copy diagnostics** → paste the result here.
         (If the panel won't open, paste your Chrome version from
-        `chrome://version`, your OS, and the Design Mode version from
+        `chrome://version`, your OS, and the DIVE version from
         `chrome://extensions`.)
       placeholder: |
-        Design Mode: 1.1.0
+        DIVE: 1.1.0
         Chrome:      131.0.6778.86
         Platform:    macOS (arm64), en-US
         Theme:       light

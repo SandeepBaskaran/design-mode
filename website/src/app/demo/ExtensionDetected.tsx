@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import styles from "./demo.module.scss";
 
-// Detects whether the Design Mode extension is active on this page by
+// Detects whether the DIVE extension is active on this page by
 // watching for the override stylesheet (`<style id="dm-applied-styles">`)
 // that the content script injects when the side panel attaches, OR for
 // any element with a `data-dm` attribute (which is set on every layer the

@@ -1,4 +1,4 @@
-# Design Mode — Features
+# DIVE — Features
 
 Every feature in the extension, the side panel, and the MCP server, with what
 it does and how to use it. Grouped by where you find it.
@@ -7,7 +7,7 @@ it does and how to use it. Grouped by where you find it.
 
 ## 1. The browser viewport (canvas)
 
-The extension turns any web page into an editable surface. While Design Mode
+The extension turns any web page into an editable surface. While DIVE
 is on, hovering an element shows a blue outline; clicking selects it (orange
 outline). The side panel mirrors whatever you have selected.
 
@@ -20,7 +20,7 @@ outline). The side panel mirrors whatever you have selected.
 - **Use**: just move the mouse. The Design tab updates with the hovered
   element's styles when nothing is selected.
 - **Responsive / touch mode**: when the browser's device toolbar (Chrome) or
-  Responsive Design Mode (Firefox) emulates touch, the page reports
+  Responsive DIVE (Firefox) emulates touch, the page reports
   `(hover: none)` and stops firing hover events — so inspect goes dead. The
   panel detects this and shows a browser-aware full-panel guide (turn off the
   device *type*, not the width) with a **Continue anyway** button for
@@ -355,7 +355,7 @@ Never mutates the page `classList` to discover rules, never exposes
 `:visited`, and skips cross-origin sheets. Force-state chips under the
 Design indicator reuse the existing `.dm-force-*` / `FORCE_STATE` preview
 path so page rules and Motion variants can be previewed without hovering.
-Forced state clears on deselect and when Design Mode disables.
+Forced state clears on deselect and when DIVE disables.
 
 ### 2.14 Custom curves
 
@@ -834,9 +834,9 @@ dedicated **MCP page** instead — see §5.1b.
 | **Color format** | Display colours in the editor as `HEX` / `RGBA` / `HSL`. | `HEX` |
 | **Screenshot capture** | What the camera button does. `Clipboard` copies the PNG; `Download` saves it; `Both` does both. | `Clipboard` |
 | **Nudge amount** | Shift+Arrow step for numeric fields in the Design panel (Figma-style big-nudge). Plain Arrow keys still nudge by 1. Persisted to `chrome.storage.local`. | `10` |
-| **Page cursor** | Show the Design Mode app icon as the mouse cursor on the inspected page while the panel is open. Turning it off falls back to the plain crosshair. Persisted to `chrome.storage.local`; the content script picks up changes live via `storage.onChanged`. | on |
+| **Page cursor** | Show the DIVE app icon as the mouse cursor on the inspected page while the panel is open. Turning it off falls back to the plain crosshair. Persisted to `chrome.storage.local`; the content script picks up changes live via `storage.onChanged`. | on |
 | **Source maps** | Resolve edited elements to source files (file:line for agent reports) by fetching the page's own scripts, stylesheets and `.map` files — same-origin only, 5 MB / 5 s per file. Off keeps framework hints and skips all source-map network calls; React reports keep their raw bundler-intermediate lines. Persisted as `dm-sourcemap-fetch`; see PRIVACY.md. | on |
-| **Launch** (Chrome only) | Where the toolbar icon and `Alt+D` open Design Mode. `Side panel` (default) uses Chrome's native side panel (`openPanelOnActionClick`). `Floating` turns that off and opens the existing pop-out window. `Pin on top` opens that floating window with a focused Pin-on-top button — Document PiP cannot auto-open (needs a click in the opener). Firefox always uses the sidebar and omits this setting. Persisted as `dm-launch-surface`. Reset restores side panel. | `side-panel` |
+| **Launch** (Chrome only) | Where the toolbar icon and `Alt+D` open DIVE. `Side panel` (default) uses Chrome's native side panel (`openPanelOnActionClick`). `Floating` turns that off and opens the existing pop-out window. `Pin on top` opens that floating window with a focused Pin-on-top button — Document PiP cannot auto-open (needs a click in the opener). Firefox always uses the sidebar and omits this setting. Persisted as `dm-launch-surface`. Reset restores side panel. | `side-panel` |
 | **Theme** | `System` / `Dark` / `Light`. | `System` |
 | **Keyboard shortcuts** (button) | Opens a popover card listing every shortcut grouped by category (driven by `DEFAULT_SHORTCUTS`), keys shown as `<kbd>` chips. Chrome may leave the browser commands `Alt+D` / `Alt+S` unassigned after an update or conflict; assign them at `chrome://extensions/shortcuts`. Backdrop click / ✕ / `Esc` closes it. | — |
 | **Reset settings** (button) | Wipes every setting above back to its default. Toasts on success. | — |
@@ -862,7 +862,7 @@ dedicated **MCP page** instead — see §5.1b.
 
 | Shortcut | Action |
 |---|---|
-| `Alt+D` | Open Design Mode on the preferred Chrome launch surface (side panel / floating / pin-on-top opener). Firefox always opens the sidebar. |
+| `Alt+D` | Open DIVE on the preferred Chrome launch surface (side panel / floating / pin-on-top opener). Firefox always opens the sidebar. |
 | `Alt+S` | Capture the selected element or viewport using Settings → Screenshot capture. This is a browser command and may need assigning in the browser's extension-shortcuts page. |
 | `Ctrl+Z` / `Cmd+Z` | Undo last change (style / text / DOM / visibility / token) |
 | `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |
@@ -891,7 +891,7 @@ reconnects to the same port.
 | **`clear_changes`** | none | Reset the session — server state and the live page. Edits revert, comment pins disappear, undo stacks reset (same path as the panel's Clear All). |
 | **`get_session_summary`** | none | Connection status, active sessions, counts. Use this as a health check before `apply_changes`. |
 | **`export_changes`** | `format: 'css' | 'tailwind' | 'scss' | 'jsx'` | Emits the change set in the requested format. Spring / cubic-bezier values pass through inside the underlying CSS strings — no separate animation tool. |
-| **`get_screenshot`** | `selector?: string` OR `elementId?: string` OR `commentId?: string` | A PNG of the viewport, or cropped to one element, or cropped to a comment's flagged **region** (or its element) — pass the `commentId` from `get_changes`. Pass the unique selector you got from `get_changes` (e.g. `"main > section.hero > button:nth-of-type(2)"`). Generic selectors that match many elements fail with a list of candidate unique paths. Every capture hides Design Mode's own overlays first, so the image is clean. Returned as an MCP image content block — vision-capable agents read it directly. |
+| **`get_screenshot`** | `selector?: string` OR `elementId?: string` OR `commentId?: string` | A PNG of the viewport, or cropped to one element, or cropped to a comment's flagged **region** (or its element) — pass the `commentId` from `get_changes`. Pass the unique selector you got from `get_changes` (e.g. `"main > section.hero > button:nth-of-type(2)"`). Generic selectors that match many elements fail with a list of candidate unique paths. Every capture hides DIVE's own overlays first, so the image is clean. Returned as an MCP image content block — vision-capable agents read it directly. |
 | **`mark_comment_resolved`** | `commentId: string`, `resolved?: boolean` | Marks a pinned comment resolved (done) or reopens it. Pass the comment `id` from `get_changes`. Converges on the same path as the UI's Resolve toggle, so the page pin recolours and the Changes tab updates — closing the loop after the agent implements what a comment asked for. |
 
 ### Example agent flow

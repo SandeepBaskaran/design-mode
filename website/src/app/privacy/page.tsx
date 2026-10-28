@@ -14,7 +14,7 @@ export default function PrivacyPage() {
         title="Privacy"
         description={
           <>
-            Design Mode runs in your browser. Release builds send usage
+            DIVE runs in your browser. Release builds send usage
             analytics without page content. Here is what else can leave your
             machine, when, and why.
           </>

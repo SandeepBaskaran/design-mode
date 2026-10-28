@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Change Tracker
+// DIVE — Change Tracker
 // Records style/text/DOM changes, generates CSS diffs, syncs to server
 // ============================================================
 
@@ -2059,7 +2059,7 @@ async function connectLocal(port: number) {
         if (ws !== socket || transportMode !== 'local') return;
         localReconnectAttempt = 0;
         setAgentConnected(false);
-        console.debug('[Design Mode] Connected to companion server');
+        console.debug('[DIVE] Connected to companion server');
         // Back-fill everything recorded before the server came up (it is
         // spawned by the agent, usually after the user already edited).
         syncAllChanges();
@@ -2106,10 +2106,10 @@ async function runCloudStream() {
         signal: controller.signal,
       });
       if (!resp.ok || !resp.body) {
-        if (resp.status === 401) { console.warn('[Design Mode] cloud stream auth failed'); return; }
+        if (resp.status === 401) { console.warn('[DIVE] cloud stream auth failed'); return; }
         throw new Error(`stream status ${resp.status}`);
       }
-      console.debug('[Design Mode] cloud stream open');
+      console.debug('[DIVE] cloud stream open');
       backoff = 1000;
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
@@ -2128,7 +2128,7 @@ async function runCloudStream() {
       if (controller.signal.aborted) return;
       // Quieted from warn → debug. Reconnect storms during a redeploy or
       // a brief network blip aren't worth crowding the console for.
-      console.debug('[Design Mode] cloud stream lost, retrying:', err);
+      console.debug('[DIVE] cloud stream lost, retrying:', err);
     }
     if (controller.signal.aborted) return;
     await new Promise(r => setTimeout(r, backoff));

@@ -122,7 +122,7 @@ const sections = [
 const headerNotes = [
   { icon: ChevronRight, text: "MCP status & connection settings" },
   { icon: Moon, text: "Switch light / dark theme" },
-  { icon: HeartHandshake, text: "Contribute to Design Mode" },
+  { icon: HeartHandshake, text: "Contribute to DIVE" },
   { icon: HelpCircle, text: "Help & diagnostics" },
   { icon: Settings, text: "Open settings" },
   { icon: ExternalLink, text: "Pop out a floating window (Chrome)" },
@@ -358,7 +358,7 @@ function PanelReplica({ active }: { active: string }) {
         <div
           ref={replica}
           role="img"
-          aria-label={`Illustrative Design Mode side panel. ${tab} tab selected. Controls are not interactive.`}
+          aria-label={`Illustrative DIVE side panel. ${tab} tab selected. Controls are not interactive.`}
           className={styles.replica}
         >
           <div aria-hidden="true">

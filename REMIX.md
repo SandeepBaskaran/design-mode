@@ -1,6 +1,6 @@
 # Remix
 
-Projects in this section are independent experiments, forks and specialised tools built on top of Design Mode. They are not contributions to the core extension, and inclusion does not imply compatibility, endorsement or support from the Design Mode maintainers.
+Projects in this section are independent experiments, forks and specialised tools built on top of DIVE. They are not contributions to the core extension, and inclusion does not imply compatibility, endorsement or support from the DIVE maintainers.
 
 | **The Art Director — SuperStories** |
 | :--- |
@@ -11,4 +11,4 @@ Projects in this section are independent experiments, forks and specialised tool
 
 ## What belongs here
 
-A remix should build a distinct workflow, interface or product on top of Design Mode rather than propose a change to the core extension. Each entry should identify its maintainer, explain what it keeps or changes, link to a working public project and state its relationship to Design Mode clearly.
+A remix should build a distinct workflow, interface or product on top of DIVE rather than propose a change to the core extension. Each entry should identify its maintainer, explain what it keeps or changes, link to a working public project and state its relationship to DIVE clearly.

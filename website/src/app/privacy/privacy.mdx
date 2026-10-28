@@ -1,6 +1,6 @@
 ## The short version
 
-Design Mode edits the page rendered in your browser and records a local change
+DIVE edits the page rendered in your browser and records a local change
 session. Release builds send usage analytics to PostHog without an opt-in and
 without a Settings off-switch. An unconfigured source build sends nothing.
 Events do not include page content or edits. A fresh install selects Cloud mode,
@@ -20,7 +20,7 @@ privacy terms.
   className="max-w-full overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-4"
 >
   <table>
-    <caption>Design Mode extension storage</caption>
+    <caption>DIVE extension storage</caption>
     <thead>
       <tr>
         <th scope="col">Storage</th>
@@ -78,7 +78,7 @@ A session key is based on the page origin, path and query string. Comments are
 stored separately in local extension storage. Use the Changes tab to inspect,
 revert or clear recorded changes.
 
-Design Mode reads the rendered DOM, computed styles and geometry required for
+DIVE reads the rendered DOM, computed styles and geometry required for
 features you invoke. It cannot run on browser-internal pages, extension-store
 pages or other surfaces where the browser blocks extension scripts. Do not use
 it to capture passwords, private form data, confidential screenshots or content
@@ -97,7 +97,7 @@ panel memory.
 ### No MCP connection
 
 On a fresh install, Cloud is the selected mode but no Cloud credential exists.
-Design Mode leaves all MCP transports closed until you connect one. Copy as
+DIVE leaves all MCP transports closed until you connect one. Copy as
 Prompt continues to work without MCP.
 
 Normal webpage and browser actions can still make requests—for example, loading
@@ -108,7 +108,7 @@ Mode.
 ### Local mode
 
 Local mode connects the extension to the companion server on your machine over
-the token-authenticated `ws://127.0.0.1:9960` connection by default. Design Mode does not route that transport
+the token-authenticated `ws://127.0.0.1:9960` connection by default. DIVE does not route that transport
 through its hosted relay.
 
 The optional guided Local setup previews project configuration before writing
@@ -141,7 +141,7 @@ Structured service logs may include:
 - bounded error codes or messages.
 
 The logging API does not accept selectors, screenshots or message payload
-bodies. Design Mode does not use relay traffic to train a model.
+bodies. DIVE does not use relay traffic to train a model.
 
 ### Self-hosted mode
 
@@ -159,12 +159,12 @@ it under that provider's terms.
 
 Copy as Prompt writes a Markdown specification to your clipboard. Send to Agent
 makes the recorded changes available to a connected MCP client. Neither action
-grants Design Mode access to your repository; the coding agent must already have
+grants DIVE access to your repository; the coding agent must already have
 that access.
 
 ## Usage analytics
 
-Design Mode is free and MIT-licensed, with no paid version of the extension. It
+DIVE is free and MIT-licensed, with no paid version of the extension. It
 is a self-sustained project focused on features people regularly use. Release
 builds send usage analytics to PostHog without an opt-in and without a Settings
 off-switch. An unconfigured source build sends nothing. Analytics does not

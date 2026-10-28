@@ -1,11 +1,11 @@
-# Releasing Design Mode
+# Releasing DIVE
 
 Releases are gated on the maintainer's explicit consent — never
 auto-trigger a tag or release. When asked to "cut a release":
 
 ## Recommending the next version
 
-Design Mode follows [semver](https://semver.org) (`MAJOR.MINOR.PATCH`).
+DIVE follows [semver](https://semver.org) (`MAJOR.MINOR.PATCH`).
 Pick the bump from the diff since the last `v*.*.*` tag:
 
 - **MAJOR** (`a`) — a landmark release: a complete architecture

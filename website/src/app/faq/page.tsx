@@ -14,36 +14,36 @@ import {
 import { faqGroups } from "@/content/product-facts";
 
 export const metadata = {
-  title: { absolute: "Design Mode FAQ — Browser editing, MCP and privacy" },
+  title: { absolute: "DIVE FAQ — Browser editing, MCP and privacy" },
   description:
-    "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari, and handles storage and Cloud relay data.",
+    "How DIVE edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari, and handles storage and Cloud relay data.",
   alternates: { canonical: "https://designmode.app/faq" },
   openGraph: {
     type: "website",
-    title: "Design Mode FAQ — Browser editing, MCP and privacy",
+    title: "DIVE FAQ — Browser editing, MCP and privacy",
     description:
-      "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari, and handles storage and Cloud relay data.",
+      "How DIVE edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari, and handles storage and Cloud relay data.",
     url: "https://designmode.app/faq",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Design Mode FAQ — Browser editing, MCP and privacy",
+    title: "DIVE FAQ — Browser editing, MCP and privacy",
     description:
-      "How Design Mode edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari, and handles storage and Cloud relay data.",
+      "How DIVE edits a rendered webpage, sends changes to coding agents, supports Chrome, Firefox and Safari, and handles storage and Cloud relay data.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },

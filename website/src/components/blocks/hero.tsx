@@ -51,7 +51,7 @@ export const Hero = () => {
         <p className="text-muted-foreground mx-auto mt-8 max-w-[848px] text-base">
           <span className="sm:hidden">Edit</span>
           <span className="max-sm:hidden">
-            Design Mode is a free, open-source extension for Chrome, Firefox and Safari
+            DIVE is a free, open-source extension for Chrome, Firefox and Safari
             that lets you edit
           </span>{" "}
           a rendered webpage visually, record the exact changes, and hand them
@@ -85,7 +85,7 @@ export const Hero = () => {
             poster="/designmode-demo-poster.jpg"
             width={1280}
             height={800}
-            aria-label="Design Mode demo: edit a page, then hand the changes to an agent"
+            aria-label="DIVE demo: edit a page, then hand the changes to an agent"
           >
             <source src="/designmode-demo.mp4" type="video/mp4" />
           </video>
@@ -107,7 +107,7 @@ export const HeroShowcase = () => {
           <div className="relative mx-auto aspect-square w-full max-w-[400px]">
             <Image
               src="/cover.png"
-              alt="The Design Mode side panel on a live website"
+              alt="The DIVE side panel on a live website"
               fill
               sizes="(min-width: 1024px) 400px, (min-width: 640px) 50vw, 90vw"
               className="rounded-2xl object-cover object-top shadow-lg"

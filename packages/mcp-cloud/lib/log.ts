@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode Cloud — Structured logging helper.
+// DIVE Cloud — Structured logging helper.
 // PRIVACY RULE: this is the ONLY way routes should log. It prints
 // metadata only — never selectors, payload bodies, or screenshots.
 // ============================================================

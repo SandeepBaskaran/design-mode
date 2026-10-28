@@ -41,7 +41,7 @@ export async function openPanel(target: { tabId?: number; windowId?: number }): 
     // open() has no target argument. Never race asynchronous focus against it.
     // Cross-window docking uses the deliberate two-gesture handoff instead.
     if (windowId != null || target.tabId != null) {
-      throw new Error('Open Design Mode from the target window to finish docking');
+      throw new Error('Open DIVE from the target window to finish docking');
     }
     await sidebar.open();
     return;

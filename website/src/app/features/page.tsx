@@ -31,11 +31,11 @@ import { PageSection } from "@/components/layout/page-section";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = {
-  title: { absolute: "Browser visual editor features | Design Mode" },
+  title: { absolute: "Browser visual editor features | DIVE" },
   description:
     "Inspect and edit a rendered webpage with Layers, visual controls, structured change history, Copy as Prompt and MCP agent hand-off.",
   keywords: [
-    "Design Mode features",
+    "DIVE features",
     "side panel design editor",
     "Layers tab",
     "Changes tab",
@@ -49,7 +49,7 @@ export const metadata = {
   alternates: { canonical: "https://designmode.app/features" },
   openGraph: {
     type: "website",
-    title: "Browser visual editor features | Design Mode",
+    title: "Browser visual editor features | DIVE",
     description:
       "Inspect and edit a rendered webpage with Layers, visual controls, structured change history, Copy as Prompt and MCP agent hand-off.",
     url: "https://designmode.app/features",
@@ -58,13 +58,13 @@ export const metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Browser visual editor features | Design Mode",
+    title: "Browser visual editor features | DIVE",
     description:
       "Inspect and edit a rendered webpage with Layers, visual controls, structured change history, Copy as Prompt and MCP agent hand-off.",
     images: [
@@ -72,7 +72,7 @@ export const metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -171,7 +171,7 @@ export default function FeaturesPage() {
         title="Every control, where you need it"
         description={
           <>
-            The Design Mode side panel is split into three rows. A header row to
+            The DIVE side panel is split into three rows. A header row to
             pick what you're working on, three middle panels for the actual
             editing, and a bottom row for handing changes to your AI coding
             agent. These are browser previews, not source edits or published
@@ -408,7 +408,7 @@ export default function FeaturesPage() {
                 <p className="text-muted-foreground text-base leading-relaxed">
                   Marks recorded changes as ready over MCP. A connected agent
                   retrieves the live changes and hand-off marker through the MCP
-                  tools. Without an attached agent, Design Mode opens setup
+                  tools. Without an attached agent, DIVE opens setup
                   guidance instead of claiming the hand-off succeeded. Local
                   mode can continue into explicit feedback rounds with immutable
                   snapshots and a Stop action in the next-release

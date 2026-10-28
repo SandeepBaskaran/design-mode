@@ -21,8 +21,8 @@ for sig in [signal.SIGINT,signal.SIGTERM]:
  for _ in range(80):
   readable,_,_=select.select([master],[],[],.1)
   if readable:output+=os.read(master,65536)
-  if b'DESIGN MODE MCP READY' in output:break
- assert b'DESIGN MODE MCP READY' in output
+  if b'DIVE MCP READY' in output:break
+ assert b'DIVE MCP READY' in output
  live=proc.poll() is None;proc.send_signal(sig)
  deadline=time.monotonic()+5
  while proc.poll() is None and time.monotonic()<deadline:

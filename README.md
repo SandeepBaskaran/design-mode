@@ -1,4 +1,8 @@
-# Design Mode ✦
+# DIVE ✦
+
+**Design Intelligence & Visual Engineering** — *Where Design Meets Intelligence.*
+
+An intelligent engineering platform for designing, building, and improving digital experiences. DIVE is built on [Design Mode](https://github.com/SandeepBaskaran/design-mode) by Sandeep Baskaran (MIT).
 
 [README](./README.md) · [Code of conduct](./CODE_OF_CONDUCT.md) · [Contributing](./CONTRIBUTING.md) · **[Remix](./REMIX.md)** · [MIT licence](./LICENSE) · [Security](./SECURITY.md)
 
@@ -18,13 +22,13 @@ A free, open-source browser extension (Chrome + Firefox) that turns any website 
 
 That's it. Pin the extension to your toolbar, open any website, and click the toolbar icon. Chrome opens your chosen surface (side panel by default, floating, or Pin on top); Firefox opens its sidebar. Hover any element to highlight it; click to edit. Everything you change is tracked in the Changes tab and can be sent to your AI coding agent with one click.
 
-> **Editing a local HTML file?** Chrome blocks extensions from `file://` pages by default — enable **"Allow access to file URLs"** for Design Mode in `chrome://extensions` (on Firefox, manage file access from `about:addons`). The side panel walks you through it when needed.
+> **Editing a local HTML file?** Chrome blocks extensions from `file://` pages by default — enable **"Allow access to file URLs"** for DIVE in `chrome://extensions` (on Firefox, manage file access from `about:addons`). The side panel walks you through it when needed.
 
 ---
 
 ## What is it?
 
-Design Mode is a visual editor that lives in your browser. Instead of describing UI changes in chat ("make the button rounder, add more spacing, change the blue"), you just **drag, click, and type** on the live site — and your AI coding agent reads those edits as a real diff. It works on any URL already in your tab: localhost, staging, or production. No Storybook, no mock files, no copy-paste.
+DIVE is a visual editor that lives in your browser. Instead of describing UI changes in chat ("make the button rounder, add more spacing, change the blue"), you just **drag, click, and type** on the live site — and your AI coding agent reads those edits as a real diff. It works on any URL already in your tab: localhost, staging, or production. No Storybook, no mock files, no copy-paste.
 
 **Why people use it:**
 
@@ -37,7 +41,7 @@ Design Mode is a visual editor that lives in your browser. Instead of describing
 
 ## Three ways to connect your AI agent
 
-Design Mode brings a coding agent inside the page through a small bridge called MCP. There are three connection modes — pick whichever fits how you work:
+DIVE brings a coding agent inside the page through a small bridge called MCP. There are three connection modes — pick whichever fits how you work:
 
 - **Cloud (default)** — Use the hosted relay at `mcp.designmode.app`. Paste a bearer token into your agent's config and you're done — no install, no terminal. Free and anonymous.
 - **Local** — Run a tiny companion server on your laptop with one `npm` command. Fastest path, nothing leaves your machine — power-user mode with a terminal. Concurrent agent sessions automatically attach to one shared local owner, so they reuse port 9960 and the same browser connection.
@@ -156,7 +160,7 @@ Design Mode brings a coding agent inside the page through a small bridge called 
 configuration](docs/agent-setup.md), check connectivity with `doctor`, and use
 opt-in live feedback rounds with an explicit Stop.
 
-The rest of this README is for people who want to build the project from source, run the MCP server locally, or hack on the codebase. If you just want to use Design Mode, the [60-second install path](#-install-in-60-seconds) above is all you need.
+The rest of this README is for people who want to build the project from source, run the MCP server locally, or hack on the codebase. If you just want to use DIVE, the [60-second install path](#-install-in-60-seconds) above is all you need.
 
 ## Repo layout
 
@@ -197,7 +201,7 @@ Output: `packages/extension/dist/`.
 1. `chrome://extensions`
 2. Enable **Developer mode**
 3. **Load unpacked** → select `packages/extension/dist`
-4. Pin **Design Mode** in the toolbar; click it on any page to open your configured Chrome surface or the Firefox sidebar
+4. Pin **DIVE** in the toolbar; click it on any page to open your configured Chrome surface or the Firefox sidebar
 
 Firefox: `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** → select `packages/extension/dist/manifest.json`. The same `dist/` serves both browsers; on Firefox the panel opens as the native sidebar (`Alt+D`).
 
@@ -208,10 +212,10 @@ npm run start
 ```
 
 Starts a WebSocket bridge on `ws://localhost:9960` and an MCP server on stdio.
-The first process owns the extension socket and session state. A second Design Mode
+The first process owns the extension socket and session state. A second DIVE
 MCP client on the same port attaches and proxies tools to that owner instead of
-failing with `EADDRINUSE`. A non-Design Mode process on the port still fails
-clearly; Design Mode never kills it. If the owner closes, a surviving client
+failing with `EADDRINUSE`. A non-DIVE process on the port still fails
+clearly; DIVE never kills it. If the owner closes, a surviving client
 claims the port on its next tool call. Use `DM_PORT=9961` only when a foreign
 process legitimately needs 9960, then set the extension's Local port to match;
 the extension connects to one local port at a time.

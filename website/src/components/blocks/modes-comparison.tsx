@@ -55,7 +55,7 @@ const comparisonFeatures: FeatureSection[] = [
     category: "Privacy",
     features: [
       {
-        name: "Design Mode MCP transport",
+        name: "DIVE MCP transport",
         local: "localhost bridge",
         cloud: "hosted relay",
         selfHosted: "your relay deployment",
@@ -207,7 +207,7 @@ export const ModesComparison = () => {
         <div className="hidden overflow-x-auto md:block">
           <table className="w-full table-fixed text-left">
             <caption className="sr-only">
-              Compare Cloud, Local and Self-hosted Design Mode MCP connection
+              Compare Cloud, Local and Self-hosted DIVE MCP connection
               modes
             </caption>
             <thead>

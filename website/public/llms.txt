@@ -1,8 +1,8 @@
-# Design Mode
+# DIVE
 
 > This file is an agent-oriented workflow index: product boundary, verified facts, and primary URLs. It is not marketing copy and does not rank, recommend, or guarantee placement in search or chat answers.
 
-> Design Mode is the open-source browser visual editor for AI coding agents. It lets you edit a rendered webpage visually, records the exact changes, and hands them to Claude Code, Cursor or another compatible coding agent as Markdown or through Model Context Protocol (MCP).
+> DIVE is the open-source browser visual editor for AI coding agents. It lets you edit a rendered webpage visually, records the exact changes, and hands them to Claude Code, Cursor or another compatible coding agent as Markdown or through Model Context Protocol (MCP).
 
 ## Verified facts
 
@@ -17,7 +17,7 @@
 
 ## Product boundary
 
-Design Mode changes the rendered page in the browser and records style, text, DOM and comment changes. It does not update production source code or deploy a website. Copy as Prompt creates a portable Markdown specification. Send to Agent exposes the session to a connected MCP client; that coding agent must have separate repository access and must implement and verify the source-code change.
+DIVE changes the rendered page in the browser and records style, text, DOM and comment changes. It does not update production source code or deploy a website. Copy as Prompt creates a portable Markdown specification. Send to Agent exposes the session to a connected MCP client; that coding agent must have separate repository access and must implement and verify the source-code change.
 
 Browser-internal pages, extension stores and other protected surfaces cannot be scripted by browser extensions. Localhost, staging and already-logged-in tabs work when the page is a normal scriptable webpage; the editor does not bypass login, SSO or publisher access controls.
 
@@ -83,11 +83,11 @@ The comparison hub distinguishes source-backed comparisons from unverified draft
 
 ## Agent skill and setup
 
-- [Design Mode agent skill](https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md): canonical setup, protected token entry, read-only verification and scoped design-to-code workflow.
+- [DIVE agent skill](https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md): canonical setup, protected token entry, read-only verification and scoped design-to-code workflow.
 - [Skill discovery index](https://designmode.app/.well-known/agent-skills/index.json)
 - [Prompt-first MCP connection guide](https://designmode.app/mcp)
 
-Cloud uses anonymous bearer-token pairing at https://mcp.designmode.app/mcp, not OAuth or a Design Mode account/subscription check. Use a protected local client input or securely supplied environment variable; never paste tokens into AI chat. HTTP clients need custom Authorization-header support. Otherwise use Local stdio or Copy as Prompt. The agent CLI package is private; no published CLI install is assumed.
+Cloud uses anonymous bearer-token pairing at https://mcp.designmode.app/mcp, not OAuth or a DIVE account/subscription check. Use a protected local client input or securely supplied environment variable; never paste tokens into AI chat. HTTP clients need custom Authorization-header support. Otherwise use Local stdio or Copy as Prompt. The agent CLI package is private; no published CLI install is assumed.
 
 Start with get_session_summary({}), then get_changes({}) with permission to read the page. get_changes has no pagination or status filter: select unresolved IDs locally. Fetch only needed screenshots by selector, elementId or commentId. Updates happen on agent requests; Local wait_for_handoff is an explicit opt-in bounded loop, not always-on monitoring.
 

@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Content Script (thin layer)
+// DIVE — Content Script (thin layer)
 // Handles DOM inspection, overlays, editing. NO panel UI.
 // Communicates with Side Panel via browser.runtime messages.
 // Phases 1-9 integrated + new: parent/child, undo/redo, dom tree, comments
@@ -88,7 +88,7 @@ initCustomCursor(isInspectActive);
 // Region pending a comment — set when the user finishes drawing a freeform
 // rectangle, consumed by ADD_REGION_COMMENT once they type the note.
 let pendingRegion: Region | null = null;
-// True for Design Mode's own injected pins/boxes so a region's centre-point
+// True for DIVE's own injected pins/boxes so a region's centre-point
 // hit-test resolves the underlying page element, not our overlay.
 function isOverlayLike(el: HTMLElement): boolean {
   return !!el.closest('.dm-comment-pin,.dm-comment-region');
@@ -240,7 +240,7 @@ setMovePreviewHandler((id, left, top, promotedPosition) => {
 /* —— Helpers —— */
 
 // Hover-capability watcher. Chrome's device toolbar and Firefox's Responsive
-// Design Mode emulate touch, so the browser reports `(hover: none)` and stops
+// DIVE emulate touch, so the browser reports `(hover: none)` and stops
 // firing the mouseover events our hover overlay relies on (tap→click still
 // fires, which is why select survives but hover dies). We surface the state to
 // the panel so it can guide the user; the query flips back the instant touch
@@ -2628,7 +2628,7 @@ function handleContentMessage(msg: any, _: any, sendResponse: (payload: any) => 
       const el = getElementById(msg.elementId);
       if (el) {
         // Three-way state on the element:
-        //   1. We've previously injected `display: none` via Design Mode.
+        //   1. We've previously injected `display: none` via DIVE.
         //      → drop our rule; element returns to its author cascade.
         //   2. The element is hidden by something else (author / user CSS).
         //      → push our own `display: revert` so it falls back through the
@@ -2836,4 +2836,4 @@ window.addEventListener('dm-comment-pin-dragged', (e: any) => {
   },
 };
 
-console.debug(`[Design Mode] Content script loaded (v${browser.runtime.getManifest().version}). All phases active.`);
+console.debug(`[DIVE] Content script loaded (v${browser.runtime.getManifest().version}). All phases active.`);

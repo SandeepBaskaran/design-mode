@@ -1,7 +1,7 @@
-# CLAUDE.md — Project guide for Design Mode
+# CLAUDE.md — Project guide for DIVE
 
 Project-level instructions for anyone (or any AI assistant) working
-on Design Mode. Personal/per-maintainer workflow preferences live
+on DIVE. Personal/per-maintainer workflow preferences live
 outside the repo — this file is purely about the project.
 
 If you're a contributor using Claude Code (or any CLAUDE.md-aware

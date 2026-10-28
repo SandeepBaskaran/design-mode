@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — HTML Editing
+// DIVE — HTML Editing
 // Cut, copy, paste, duplicate, delete DOM elements
 // Records DOM changes in change tracker
 // ============================================================

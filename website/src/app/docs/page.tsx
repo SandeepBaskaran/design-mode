@@ -8,43 +8,43 @@ import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { docs } from "@/content/docs";
 
 export const metadata = {
-  title: { absolute: "Design Mode documentation" },
+  title: { absolute: "DIVE documentation" },
   description:
-    "Install Design Mode, configure Claude Code or Cursor, understand browser support and the Changes tab, and troubleshoot common issues.",
+    "Install DIVE, configure Claude Code or Cursor, understand browser support and the Changes tab, and troubleshoot common issues.",
   keywords: [
-    "Design Mode docs",
-    "Design Mode documentation",
-    "Design Mode install guide",
-    "Design Mode troubleshooting",
-    "Design Mode shortcuts",
+    "DIVE docs",
+    "DIVE documentation",
+    "DIVE install guide",
+    "DIVE troubleshooting",
+    "DIVE shortcuts",
   ],
   alternates: { canonical: "https://designmode.app/docs" },
   openGraph: {
     type: "website",
-    title: "Design Mode documentation",
+    title: "DIVE documentation",
     description:
-      "Install Design Mode, configure Claude Code or Cursor, understand browser support and the Changes tab, and troubleshoot common issues.",
+      "Install DIVE, configure Claude Code or Cursor, understand browser support and the Changes tab, and troubleshoot common issues.",
     url: "https://designmode.app/docs",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Design Mode documentation",
+    title: "DIVE documentation",
     description:
-      "Install Design Mode, configure Claude Code or Cursor, understand browser support and the Changes tab, and troubleshoot common issues.",
+      "Install DIVE, configure Claude Code or Cursor, understand browser support and the Changes tab, and troubleshoot common issues.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -55,7 +55,7 @@ export default function DocsIndex() {
     <>
       <JsonLd
         data={collectionPageSchema({
-          name: "Design Mode documentation",
+          name: "DIVE documentation",
           description:
             "Installation, browser support, MCP setup, the Changes tab and troubleshooting.",
           url: "https://designmode.app/docs",
@@ -69,7 +69,7 @@ export default function DocsIndex() {
         title="Docs"
         description={
           <>
-            How to install Design Mode, set up MCP for your AI coding agent,
+            How to install DIVE, set up MCP for your AI coding agent,
             work with the Changes tab, and fix common issues.
           </>
         }

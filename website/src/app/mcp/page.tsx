@@ -34,9 +34,9 @@ import {
   mcpClients,
 } from "@/lib/mcp-guide";
 
-const title = "Connect your AI app with MCP | Design Mode";
+const title = "Connect your AI app with MCP | DIVE";
 const description =
-  "Set up Design Mode with a compatible AI app. Connect through Cloud, Local or Self-hosted MCP, test safely and read your browser design changes.";
+  "Set up DIVE with a compatible AI app. Connect through Cloud, Local or Self-hosted MCP, test safely and read your browser design changes.";
 export const metadata = {
   title: { absolute: title },
   description,
@@ -51,7 +51,7 @@ export const metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -64,7 +64,7 @@ export const metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -143,7 +143,7 @@ export default function McpPage() {
         <section data-ds-inline="MCP hero" className="py-32" aria-labelledby="mcp-title">
           <div className="container max-w-5xl">
             <p className="text-muted-foreground text-base font-medium tracking-widest">
-              DESIGN MODE + YOUR AI APP
+              DIVE + YOUR AI APP
             </p>
             <h1
               id="mcp-title"
@@ -221,7 +221,7 @@ export default function McpPage() {
                 <div>
                   <p className="text-base font-semibold">You</p>
                   <p className="mt-2">
-                    What changes are left to complete in Design Mode?
+                    What changes are left to complete in DIVE?
                   </p>
                 </div>
                 <div>
@@ -283,7 +283,7 @@ export default function McpPage() {
                   anonymous credential.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
-                  Pair the agent using the same bearer token. No Design Mode
+                  Pair the agent using the same bearer token. No DIVE
                   account or subscription verification; this is not an OAuth
                   sign-in flow.
                 </p>
@@ -295,7 +295,7 @@ export default function McpPage() {
                 <h3 className="text-2xl font-semibold">Local</h3>
                 <p className="text-muted-foreground leading-relaxed">
                   Your MCP client starts the companion over stdio. It talks to
-                  the extension on localhost, with no Design Mode relay traffic.
+                  the extension on localhost, with no DIVE relay traffic.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
                   Requires a local repository checkout and Node.js. Select Local
@@ -607,7 +607,7 @@ export default function McpPage() {
               Give your agent the workflow
             </h2>
             <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
-              The Design Mode agent skill covers setup, safe connection checks
+              The DIVE agent skill covers setup, safe connection checks
               and a scoped design-to-code workflow. Download the Markdown and
               follow your app’s skill-install instructions, or ask a capable
               agent to read it. Reading a skill does not install an MCP
@@ -646,7 +646,7 @@ export default function McpPage() {
               remains available separately.
             </p>
             <p className="text-muted-foreground mt-8 text-base">
-              Local keeps Design Mode MCP traffic on your machine. Cloud and
+              Local keeps DIVE MCP traffic on your machine. Cloud and
               Self-hosted relay page data; queue expiry is best-effort.{" "}
               <Link href="/privacy" className="underline underline-offset-4">
                 Read the privacy disclosure →

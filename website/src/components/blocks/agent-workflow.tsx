@@ -32,7 +32,7 @@ export function AgentWorkflow() {
             Show your agent what needs to change.
           </h2>
           <p className="text-muted-foreground mx-auto mt-6 max-w-[640px] text-base leading-relaxed">
-            Make visual edits on the live page. Design Mode captures the details
+            Make visual edits on the live page. DIVE captures the details
             so your coding agent can work from the changes, not a description of
             them.
           </p>
@@ -41,7 +41,7 @@ export function AgentWorkflow() {
         <div className="mx-auto mt-16 flex w-full max-w-5xl flex-col items-center md:mt-24 md:flex-row md:items-stretch">
           <WorkflowWindow title="Your browser">
             <Image src="/brand-icon.png" width={40} height={40} alt="" unoptimized />
-            <h3 className="mt-6 text-2xl font-medium tracking-tight">Design Mode</h3>
+            <h3 className="mt-6 text-2xl font-medium tracking-tight">DIVE</h3>
             <p className="text-muted-foreground mt-3 text-base leading-relaxed">
               Select an element. Adjust the design. Record exactly what changed.
             </p>

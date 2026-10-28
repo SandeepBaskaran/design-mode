@@ -12,12 +12,12 @@ const pageDescription =
   "Compare live-page editors, browser inspectors, annotation tools, Figma-to-code products and editor-native design modes by the workflow they actually support.";
 
 export const metadata = {
-  title: { absolute: `${pageTitle} | Design Mode` },
+  title: { absolute: `${pageTitle} | DIVE` },
   description: pageDescription,
   alternates: { canonical: "https://designmode.app/compare" },
   openGraph: {
     type: "website",
-    title: `${pageTitle} | Design Mode`,
+    title: `${pageTitle} | DIVE`,
     description: pageDescription,
     url: "https://designmode.app/compare",
     images: [
@@ -25,20 +25,20 @@ export const metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${pageTitle} | Design Mode`,
+    title: `${pageTitle} | DIVE`,
     description: pageDescription,
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -61,7 +61,7 @@ export default function ComparisonsIndex() {
           description: pageDescription,
           url: "https://designmode.app/compare",
           items: comparisons.filter(isComparisonIndexable).map((item) => ({
-            name: `Design Mode vs ${item.competitor}`,
+            name: `DIVE vs ${item.competitor}`,
             url: `https://designmode.app/compare/${item.slug}`,
           })),
         })}
@@ -87,7 +87,7 @@ export default function ComparisonsIndex() {
             How to evaluate the options
           </h2>
           <p className="text-muted-foreground mt-4 max-w-3xl leading-relaxed">
-            Design Mode is strongest when you want to edit a rendered webpage,
+            DIVE is strongest when you want to edit a rendered webpage,
             record structured changes, and hand them to an independent coding
             agent. It is not a source-code editor, deployment system or
             substitute for a design file when you need greenfield exploration.
@@ -123,7 +123,7 @@ export default function ComparisonsIndex() {
                   : "Research draft"}
               </span>
               <h2 className="font-display mt-2 text-2xl font-semibold">
-                Design Mode vs {comparison.competitor}
+                DIVE vs {comparison.competitor}
               </h2>
               <p className="text-muted-foreground mt-2 text-base leading-relaxed">
                 {comparison.oneLiner}

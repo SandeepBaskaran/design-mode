@@ -56,7 +56,7 @@ module.exports=async h=>{
   if(h.panelPage){const downloaded=h.panelPage.waitForEvent('download');await action('tokens-export');const d=await downloaded;filename=path.join(out,d.suggestedFilename());await d.saveAs(filename)}else{const prior=new Set(fs.readdirSync(out));await action('tokens-export');for(let i=0;i<30;i++){const next=fs.readdirSync(out).find(f=>f.startsWith('design-system-')&&f.endsWith('.json')&&!prior.has(f));if(next){filename=path.join(out,next);break}await wait(200)}}
   assert(filename,'Download must exist');const text=fs.readFileSync(filename,'utf8'),payload=JSON.parse(text);assert.equal(payload.kind,'design-mode-design-system');assert(payload.tokens.some(t=>JSON.stringify(t).includes('--cert-space')));
   await panel(A.importFile,{selector:'[data-dm-tokens-import]',name:'roundtrip.json',text});await wait(800);const imported=await panel(A.panelText);assert(imported.includes('--cert-space'));
-  await panel(A.importFile,{selector:'[data-dm-tokens-import]',name:'foreign.json',text:'{"unrelated":true}'});await wait(100);const rejected=await panel(A.panelText);assert(/not a Design Mode|invalid|not.*valid|missing/i.test(rejected));
+  await panel(A.importFile,{selector:'[data-dm-tokens-import]',name:'foreign.json',text:'{"unrelated":true}'});await wait(100);const rejected=await panel(A.panelText);assert(/not a DIVE|invalid|not.*valid|missing/i.test(rejected));
   record(['8.15'],'pass',{filename:path.basename(filename),payload,imported,rejected});
  });
  save();console.log(JSON.stringify({target,results},null,2));assert.equal(results.filter(r=>r.error).length,0,'Every executed scenario must finish');

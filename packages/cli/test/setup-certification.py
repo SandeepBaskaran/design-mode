@@ -59,7 +59,7 @@ for dangling in [False,True]:
  results.append({'name':'symlink retained '+str(dangling),'retained':(d/'.mcp.json').is_symlink(),'targetExists':target.exists()})
 p=run([local,'setup','--project',project,'--agent','unsupported','--apply','--yes']);record('unsupported',p);assert p.returncode==1
 s=socket.socket();s.bind(('127.0.0.1',0));port=s.getsockname()[1];s.close()
-p=run([local,'doctor','--port',port]);record('doctor unavailable',p);assert p.returncode==1 and 'No Design Mode owner' in p.stderr
+p=run([local,'doctor','--port',port]);record('doctor unavailable',p);assert p.returncode==1 and 'No DIVE owner' in p.stderr
 owner=subprocess.Popen([node,str(local)],cwd=root,env=env|{'DM_PORT':str(port)},stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=(base/'owner.log').open('w'))
 try:
  for i in range(100):

@@ -51,7 +51,7 @@ was used.
   fixture popup metadata contained `sender.tab`, exact chrome-extension origin
   and panel path with query. EVENT and STOP were accepted; mock capture count
   stayed at **1** after a post-STOP event. Uses production guard/transport modules,
-  not the full installed Design Mode application. Only its report uses loopback.
+  not the full installed DIVE application. Only its report uses loopback.
 - `node packages/extension/tests/analytics-firefox.mjs`: passed, actual Firefox
   MV3 native data-consent/storage gates, **3 checks, 0 analytics fetch calls**.
   Native-grant dialog interaction remains a manual gate.

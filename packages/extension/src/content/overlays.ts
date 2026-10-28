@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Overlay Management (hover + selection highlights)
+// DIVE — Overlay Management (hover + selection highlights)
 // ============================================================
 
 import { Z_INDEX } from '../shared';

@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode Cloud — CORS helpers.
+// DIVE Cloud — CORS helpers.
 // The browser extension's content script fetches /api/extension/*
 // from third-party page origins (https://example.com etc.) and from
 // the extension origin (chrome-extension:// on Chromium,

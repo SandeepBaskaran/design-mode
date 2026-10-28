@@ -10,28 +10,28 @@ const REPO_CHANGELOG =
   "https://github.com/SandeepBaskaran/design-mode/blob/main/CHANGELOG.md";
 
 export const metadata = {
-  title: "Changelog — Design Mode release highlights",
+  title: "Changelog — DIVE release highlights",
   description:
-    "Dated release highlights for Design Mode: what each shipped version added, in plain language, with a link to the full technical changelog.",
+    "Dated release highlights for DIVE: what each shipped version added, in plain language, with a link to the full technical changelog.",
   keywords: [
-    "Design Mode changelog",
-    "Design Mode release notes",
-    "Design Mode features by version",
-    "Design Mode version history",
-    "when was Design Mode feature added",
+    "DIVE changelog",
+    "DIVE release notes",
+    "DIVE features by version",
+    "DIVE version history",
+    "when was DIVE feature added",
   ],
   alternates: { canonical: "https://designmode.app/changelog" },
   openGraph: {
-    title: "Changelog — Design Mode",
+    title: "Changelog — DIVE",
     description:
-      "Release highlights for Design Mode, in plain language, with the date each version shipped.",
+      "Release highlights for DIVE, in plain language, with the date each version shipped.",
     url: "https://designmode.app/changelog",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -125,7 +125,7 @@ export default function ChangelogPage() {
           </ol>
 
           <p className="text-muted-foreground mt-16 border-t pt-8 text-base">
-            Design Mode is free and open source.{" "}
+            DIVE is free and open source.{" "}
             <Link
               href="/demo"
               className="text-foreground/80 font-medium underline underline-offset-4"

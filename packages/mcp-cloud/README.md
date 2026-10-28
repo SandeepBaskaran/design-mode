@@ -1,6 +1,6 @@
 # @design-mode/mcp-cloud
 
-Hosted multi-tenant MCP server for Design Mode. Deploys to Vercel; storage is
+Hosted multi-tenant MCP server for DIVE. Deploys to Vercel; storage is
 provisioned through the **Vercel Marketplace Redis (Upstash) integration** —
 one click in the project's Storage tab, no separate signup, no separate bill.
 

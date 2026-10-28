@@ -13,7 +13,7 @@ body:
   - type: dropdown
     id: scope
     attributes:
-      label: Which part of Design Mode?
+      label: Which part of DIVE?
       options:
         - Extension — Design tab (Position, Layout, Typography, Fill, Stroke, Effects, Motion, Layout Guide)
         - Extension — Layers tab

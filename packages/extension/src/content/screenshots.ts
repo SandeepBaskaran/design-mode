@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Screenshots
+// DIVE — Screenshots
 // Captures the visible viewport via browser.tabs.captureVisibleTab and
 // crops to the selected element when needed. The previous SVG-foreignObject
 // approach was unreliable because it can't paint cross-origin images,
@@ -19,7 +19,7 @@ export async function captureViewportScreenshot(): Promise<string | null> {
   }
 }
 
-// Hide every Design Mode overlay (selection / hover outlines, margin & padding
+// Hide every DIVE overlay (selection / hover outlines, margin & padding
 // bands, axis / distance / resize guides, comment pins) for the duration of a
 // capture so the screenshot shows only the page, then restore them. A single
 // rAF fires *before* the hidden state composites, so captureVisibleTab would
@@ -52,7 +52,7 @@ export async function captureElementScreenshot(elementId: string): Promise<strin
   el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-  // Capture with every Design Mode overlay hidden so the crop shows only the
+  // Capture with every DIVE overlay hidden so the crop shows only the
   // element — no selection outline, margin/padding bands, guides, or pins.
   const viewportDataUrl = await withDmOverlaysHidden(() => captureViewportScreenshot());
   if (!viewportDataUrl) return null;

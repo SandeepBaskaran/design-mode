@@ -14,13 +14,13 @@ export const posts: BlogPost[] = [
   {
     slug: "turn-visual-edits-into-precise-ai-prompts",
     title: "Turn visual edits into precise AI prompts",
-    metaTitle: "Turn visual edits into precise AI prompts | Design Mode",
+    metaTitle: "Turn visual edits into precise AI prompts | DIVE",
     metaDescription:
-      "A practical Design Mode workflow: edit a rendered page, capture exact changes, add intent and constraints, then verify your coding agent's implementation.",
+      "A practical DIVE workflow: edit a rendered page, capture exact changes, add intent and constraints, then verify your coding agent's implementation.",
     keywords: [
       "AI UI prompts",
       "visual editing workflow",
-      "Design Mode",
+      "DIVE",
       "Claude Code design changes",
       "structured design feedback",
     ],
@@ -31,14 +31,14 @@ export const posts: BlogPost[] = [
       {
         paragraphs: [
           'You want the pricing cards to feel less cramped. You ask your coding agent to "give them more breathing room". It increases the gap between cards. You meant the space inside them. Neither interpretation was unreasonable; the request never made the distinction.',
-          "On an existing page, you can settle that decision before asking the agent to write code. Adjust the card in the browser, look at it alongside its neighbours, and hand over the change you actually chose. Design Mode records that visual edit; your coding agent still owns the source-code implementation.",
+          "On an existing page, you can settle that decision before asking the agent to write code. Adjust the card in the browser, look at it alongside its neighbours, and hand over the change you actually chose. DIVE records that visual edit; your coding agent still owns the source-code implementation.",
           "The useful hand-off combines three things: an exact change, a reason for it, and a boundary around what should stay untouched. Numbers remove ambiguity about the result. Context prevents the right numbers being applied in the wrong place.",
         ],
       },
       {
         heading: "Start with the page, not a blank prompt",
         paragraphs: [
-          "Open your app on a page that allows extension scripts, ideally a local development build connected to the repository your agent can access. Select the element in Design Mode and adjust its spacing, typography or other visual properties. Work on one coherent change at a time so the resulting specification stays reviewable.",
+          "Open your app on a page that allows extension scripts, ideally a local development build connected to the repository your agent can access. Select the element in DIVE and adjust its spacing, typography or other visual properties. Work on one coherent change at a time so the resulting specification stays reviewable.",
           "The surrounding page matters. A card that looks balanced alone may be too tall in a row, push its action below the fold, or wrap awkwardly beside a longer heading. Editing the rendered interface lets you judge those relationships while choosing the values.",
           "Review the Changes tab before exporting. Remove experiments you no longer want. A record of every idea you tried is not the same thing as a clear implementation request.",
         ],
@@ -48,7 +48,7 @@ export const posts: BlogPost[] = [
         paragraphs: [
           "Suppose a pricing card has 16px of internal padding and a 12px gap between its content groups. You try 24px padding and a 16px gap on desktop, while keeping the compact mobile layout. These are illustrative values, not a measured result or a recommendation for every pricing page.",
           "The visual changes answer what should change. Add a short note explaining why: the plan description and price need clearer separation, but the card should keep its current typography, colours and button treatment. Also say whether this is a shared change across all plan cards or an exception for one card.",
-          "A hand-written brief accompanying the exported changes could read as follows. This is an example of additional instructions, not a verbatim Design Mode export:",
+          "A hand-written brief accompanying the exported changes could read as follows. This is an example of additional instructions, not a verbatim DIVE export:",
           "Target: the shared pricing-card component on the pricing page. Apply the desktop spacing change to all three plan cards, not just the selected instance.",
           "Changes: increase internal padding from 16px to 24px and the gap between content groups from 12px to 16px at the existing desktop breakpoint. Keep the current mobile spacing. Preserve the title, price, colours, radius and button styling.",
           "Implementation: inspect the existing component and spacing tokens first. Reuse a token only if its resolved value matches the intended result. If the design system cannot represent the change without a new value, flag that decision rather than silently choosing the nearest size. Do not add page-wide overrides.",
@@ -62,7 +62,7 @@ export const posts: BlogPost[] = [
           "- section.py-24: padding-top 96px → 64px; padding-bottom 96px → 64px _(mobile · 404px)_",
           "A companion instruction could request that mobile side padding change from 24px to 16px while desktop spacing stays unchanged.",
           "Ask the agent to inspect the existing breakpoint and spacing conventions before selecting utilities. Check the intended 64px vertical and 16px side padding at a 404px viewport, and verify that desktop values remain unchanged at 1440px. Those are example acceptance checks, not reported test results.",
-          "This is not a speed benchmark. The browser preview is not the repository change: after implementation, inspect the source diff and re-check the page without Design Mode overrides.",
+          "This is not a speed benchmark. The browser preview is not the repository change: after implementation, inspect the source diff and re-check the page without DIVE overrides.",
         ],
       },
       {
@@ -85,14 +85,14 @@ export const posts: BlogPost[] = [
         heading: "Choose a hand-off that fits your setup",
         paragraphs: [
           "Copy as Prompt gives you a portable Markdown specification to paste into your coding tool alongside the intent and acceptance criteria. It does not require an MCP connection.",
-          "Send to Agent uses Design Mode's MCP connection so a configured client can read the session. The connection does not grant repository access: your coding agent separately needs permission to inspect and edit the project. Use the current MCP setup guide for your client rather than assuming every client accepts the same configuration.",
+          "Send to Agent uses DIVE's MCP connection so a configured client can read the session. The connection does not grant repository access: your coding agent separately needs permission to inspect and edit the project. Use the current MCP setup guide for your client rather than assuming every client accepts the same configuration.",
           "Before either hand-off, review what you are sharing. Page content, comments and screenshots can contain confidential information. Use representative test data and follow your team's rules for the agent provider and connection mode.",
         ],
       },
       {
         heading: "Verify the source change, not just the browser preview",
         paragraphs: [
-          "Design Mode changes the rendered page as a preview. That preview is not evidence that the repository now produces the same result. After the agent implements the request, inspect the source diff, run the relevant project checks, and reopen the app without the temporary Design Mode overrides affecting the comparison.",
+          "DIVE changes the rendered page as a preview. That preview is not evidence that the repository now produces the same result. After the agent implements the request, inspect the source diff, run the relevant project checks, and reopen the app without the temporary DIVE overrides affecting the comparison.",
           "Compare the result at the same viewport size, with the same content and fonts loaded. Check the edited values in browser developer tools where useful, then inspect the overall layout. Matching a padding value does not guarantee matching line wrapping or card height.",
           "Test a neighbouring viewport as well as the one you designed at. Exercise hover, keyboard focus and disabled states when applicable. If the agent changed a shared component, inspect another place that uses it. Report a mismatch with the element, state and expected value instead of restarting with a vague visual request.",
           "There is no guaranteed one-shot result here. Precise changes make the request easier to implement and the outcome easier to check; they do not remove the need to understand the codebase or review the work.",
@@ -102,7 +102,7 @@ export const posts: BlogPost[] = [
         heading: "Try it on one change",
         paragraphs: [
           "Pick a spacing or typography adjustment on a page you own. Make it visually, clean up the Changes tab, and copy the specification. Add one sentence about intent, one about scope and a short acceptance check. Ask your coding agent to implement it, then review the result without the preview overrides.",
-          "That is the distinction worth keeping: Design Mode captures the visual decision, while the agent translates it into maintainable source code. A useful prompt connects those two jobs without pretending they are the same job.",
+          "That is the distinction worth keeping: DIVE captures the visual decision, while the agent translates it into maintainable source code. A useful prompt connects those two jobs without pretending they are the same job.",
         ],
       },
     ],
@@ -115,14 +115,14 @@ export const posts: BlogPost[] = [
     slug: "why-we-built-an-mcp-server-for-design-edits",
     title: "Why we built an MCP server for design edits",
     metaTitle:
-      "Why we built an MCP server for design edits — Design Mode's origin story",
+      "Why we built an MCP server for design edits — DIVE's origin story",
     metaDescription:
-      "The story behind Design Mode's MCP integration: how visual design edits got first-class agent handoff, why MCP was the right protocol, and the three-mode (Cloud / Local / Self-hosted) architecture.",
+      "The story behind DIVE's MCP integration: how visual design edits got first-class agent handoff, why MCP was the right protocol, and the three-mode (Cloud / Local / Self-hosted) architecture.",
     keywords: [
       "MCP server",
       "Model Context Protocol",
       "design MCP",
-      "Design Mode origin",
+      "DIVE origin",
       "AI agent design tool",
     ],
     datePublished: "2026-03-12",
@@ -139,13 +139,13 @@ export const posts: BlogPost[] = [
         heading: "Why MCP and not a custom protocol",
         paragraphs: [
           "We could have built a bespoke WebSocket protocol and an SDK per client. We chose MCP because it provides a shared tool boundary and supports both local stdio and remote HTTP transports, while still requiring client-specific configuration and verification.",
-          "The current tool catalogue is documented on the MCP page. Those tools do not themselves grant filesystem or general network access; a coding client may have separate capabilities and repository permissions outside Design Mode.",
+          "The current tool catalogue is documented on the MCP page. Those tools do not themselves grant filesystem or general network access; a coding client may have separate capabilities and repository permissions outside DIVE.",
         ],
       },
       {
         heading: "Three connection modes",
         paragraphs: [
-          "Local mode uses a stdio MCP server on your machine. Design Mode MCP traffic stays on localhost, latency is low, and the agent must run on the same machine. The trade-off is a steeper setup for people who are not comfortable with terminal commands.",
+          "Local mode uses a stdio MCP server on your machine. DIVE MCP traffic stays on localhost, latency is low, and the agent must run on the same machine. The trade-off is a steeper setup for people who are not comfortable with terminal commands.",
           "Cloud mode exposes a Streamable HTTP endpoint at mcp.designmode.app and uses an authenticated event stream for the extension. Consult the canonical privacy disclosure for relay handling and retention limits. A client-specific configuration and bearer token are required; no local companion process is needed.",
           "Self-hosted mode is the same Cloud relay code (packages/mcp-cloud) deployed on infrastructure you operate. For teams who want Cloud ergonomics but their own infra.",
         ],
@@ -154,7 +154,7 @@ export const posts: BlogPost[] = [
         heading: "What changed in the loop",
         paragraphs: [
           "Before MCP, sending edits felt like a tax. With MCP, the hand-off can become the natural end of a design iteration: make the visual change, mark the session ready, then ask the connected client to read it and implement the source diff in a repository it can access.",
-          "MCP gives Design Mode a standard boundary for tools and prompts, but each client still has its own configuration, transport and authentication rules. The integration must be verified client by client.",
+          "MCP gives DIVE a standard boundary for tools and prompts, but each client still has its own configuration, transport and authentication rules. The integration must be verified client by client.",
         ],
       },
     ],
@@ -202,7 +202,7 @@ export const posts: BlogPost[] = [
       {
         heading: "What the loop looks like",
         paragraphs: [
-          "Open the page you're iterating on in your browser. Open Design Mode's side panel. Make the change visually — drag a handle, pick a colour, adjust spacing. Every edit lands in the Changes tab as a structured row: selector, property, before, after.",
+          "Open the page you're iterating on in your browser. Open DIVE's side panel. Make the change visually — drag a handle, pick a colour, adjust spacing. Every edit lands in the Changes tab as a structured row: selector, property, before, after.",
           "Use Send to Agent with a verified client such as Claude Code or Cursor. It can read the live session through MCP, find the source file through its separate repository access, and propose the production change for you to review.",
           'The loop is fast because the spec is exact. The agent isn\'t guessing what "more breathing room" means; it has a literal `padding-block: 24px` to write.',
         ],
@@ -210,8 +210,8 @@ export const posts: BlogPost[] = [
       {
         heading: "Where it doesn't work",
         paragraphs: [
-          "Greenfield UI from scratch — Design Mode needs a page to edit. Start with a prototype or another creation tool, then review the rendered result.",
-          'Pure logic changes — Design Mode is for visual surface. "Fix this race condition" is a job for the agent alone.',
+          "Greenfield UI from scratch — DIVE needs a page to edit. Start with a prototype or another creation tool, then review the rendered result.",
+          'Pure logic changes — DIVE is for visual surface. "Fix this race condition" is a job for the agent alone.',
           "Where a design system mandates tokens, provide its reference and ask the agent to inspect the source definitions. Verify that the selected token resolves to the intended value; instructions do not guarantee the correct utility choice.",
         ],
       },
@@ -223,15 +223,15 @@ export const posts: BlogPost[] = [
   },
   {
     slug: "design-mode-1-5-0-changelog-deep-dive",
-    title: "Design Mode 1.5.0 — changelog deep-dive",
+    title: "DIVE 1.5.0 — changelog deep-dive",
     metaTitle:
-      "Design Mode 1.5.0 changelog deep-dive — margin overlays, file size, WCAG contrast",
+      "DIVE 1.5.0 changelog deep-dive — margin overlays, file size, WCAG contrast",
     metaDescription:
-      "What shipped in Design Mode 1.5.0: margin/padding overlay bands, file size next to resolution in the Media section, the WCAG contrast checker in the colour picker, and the static OG image.",
+      "What shipped in DIVE 1.5.0: margin/padding overlay bands, file size next to resolution in the Media section, the WCAG contrast checker in the colour picker, and the static OG image.",
     keywords: [
-      "Design Mode 1.5.0",
-      "Design Mode changelog",
-      "Design Mode release notes",
+      "DIVE 1.5.0",
+      "DIVE changelog",
+      "DIVE release notes",
       "WCAG contrast checker",
       "margin padding overlay",
     ],
@@ -241,7 +241,7 @@ export const posts: BlogPost[] = [
     body: [
       {
         paragraphs: [
-          "Design Mode 1.5.0 is a small-features-only release. No protocol changes, no breaking changes — just quality-of-life upgrades that compound the daily loop.",
+          "DIVE 1.5.0 is a small-features-only release. No protocol changes, no breaking changes — just quality-of-life upgrades that compound the daily loop.",
         ],
       },
       {
@@ -287,7 +287,7 @@ export const posts: BlogPost[] = [
     title:
       "Illustrative walkthrough: redesigning a Tailwind landing page with Claude Code",
     metaTitle:
-      "Redesigning a Tailwind landing page with Claude Code and Design Mode",
+      "Redesigning a Tailwind landing page with Claude Code and DIVE",
     metaDescription:
       "An illustrative Tailwind workflow: preview browser changes, ask Claude Code to map exact values into source, then review tokens, shared scope and responsive behaviour.",
     keywords: [
@@ -303,13 +303,13 @@ export const posts: BlogPost[] = [
     body: [
       {
         paragraphs: [
-          "This illustrative walkthrough shows how to specify a change on a rendered Tailwind page. It is not a report of a completed project or a timing benchmark. Design Mode records the desired browser result; Claude Code needs separate repository access to implement it.",
+          "This illustrative walkthrough shows how to specify a change on a rendered Tailwind page. It is not a report of a completed project or a timing benchmark. DIVE records the desired browser result; Claude Code needs separate repository access to implement it.",
         ],
       },
       {
         heading: "Setup",
         paragraphs: [
-          "Open the landing page on localhost or staging. Open the Design Mode side panel. Follow the current MCP setup guide to configure Claude Code for the mode you choose. Confirm the MCP status chip is connected.",
+          "Open the landing page on localhost or staging. Open the DIVE side panel. Follow the current MCP setup guide to configure Claude Code for the mode you choose. Confirm the MCP status chip is connected.",
         ],
       },
       {
@@ -323,7 +323,7 @@ export const posts: BlogPost[] = [
         heading: "Send to Claude Code",
         paragraphs: [
           "After Send to Agent marks the session ready, ask Claude Code to read the changes through MCP, find the JSX file and propose the utility-class update. Type sizes can map to a Tailwind step or arbitrary value; colours and spacing should be checked against the project's actual tokens and conventions.",
-          "Review the source diff and run project checks. Reopen the page without Design Mode overrides at desktop and mobile widths. Commit only after the implementation is accepted.",
+          "Review the source diff and run project checks. Reopen the page without DIVE overrides at desktop and mobile widths. Commit only after the implementation is accepted.",
         ],
       },
       {
@@ -354,8 +354,8 @@ export const posts: BlogPost[] = [
       "What shipped in Design Mode 1.9.0: a design-system-aware token engine with swap/edit/detach badges, trigger-first Motion interaction cards, a dedicated in-extension MCP page, a step-based Send to Agent modal, and a Select matching layers checkbox.",
     keywords: [
       "Design Mode 1.9.0",
-      "Design Mode changelog",
-      "Design Mode release notes",
+      "DIVE changelog",
+      "DIVE release notes",
       "design system tokens",
       "trigger-first motion",
       "MCP page",
@@ -424,15 +424,15 @@ export const posts: BlogPost[] = [
       "Design Mode 2.0.0 brings the extension to Firefox (Gecko MV3) from a single shared build, adds Slides/Keynote-style alignment guides while dragging, and slims the color picker down to a compact solid picker with the full HSV surface behind a disclosure.",
     keywords: [
       "Design Mode 2.0.0",
-      "Design Mode Firefox",
+      "DIVE Firefox",
       "Firefox extension for designers",
       "browser extension for designers",
       "alignment guides",
-      "Design Mode changelog",
+      "DIVE changelog",
     ],
     datePublished: "2026-07-30",
     excerpt:
-      "The big one: Design Mode now runs on Firefox, from the same single build that already serves Chrome. Plus alignment guides while you drag, and a color picker that stops shouting at you.",
+      "The big one: DIVE now runs on Firefox, from the same single build that already serves Chrome. Plus alignment guides while you drag, and a color picker that stops shouting at you.",
     body: [
       {
         paragraphs: [
@@ -442,7 +442,7 @@ export const posts: BlogPost[] = [
       {
         heading: "Firefox, from a single build",
         paragraphs: [
-          "Design Mode now installs on Firefox 121+ from Firefox Add-ons (AMO), right alongside the Chrome Web Store build. The important part: it ships from one dist/ and one merged manifest.json. There is no separate Firefox build — the same bundle serves both browsers and detects the platform at runtime, with browser-dependent controls gated at runtime. This describes the 2.0 release architecture, not a guarantee of permanent feature parity.",
+          "DIVE now installs on Firefox 121+ from Firefox Add-ons (AMO), right alongside the Chrome Web Store build. The important part: it ships from one dist/ and one merged manifest.json. There is no separate Firefox build — the same bundle serves both browsers and detects the platform at runtime, with browser-dependent controls gated at runtime. This describes the 2.0 release architecture, not a guarantee of permanent feature parity.",
           "On Firefox the panel renders as the browser's native sidebar; on Chrome it's the native side panel. Alt+D opens it on both. A few things are genuinely Chrome-only because Firefox has no equivalent API — the pop-out floating window, the always-on-top Picture-in-Picture window, and the screen eyedropper — and those controls are simply hidden on Firefox rather than shown broken.",
         ],
       },

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * ===========================================================================
- * DESIGN MODE MCP SERVER — MASTER ORCHESTRATOR
+ * DIVE MCP SERVER — MASTER ORCHESTRATOR
  * ===========================================================================
  * Pure Node.js bootstrapper that:
  * 1. Claims the localhost WebSocket/owner bridge, or attaches to one
@@ -35,7 +35,7 @@ const { shutdown, isShuttingDown } = createProcessShutdown({
 
 function installServerLifecycle() {
   process.on('SIGINT', () => {
-    log('\n\ud83d\uded1 Shutting down Design Mode MCP...');
+    log('\n\ud83d\uded1 Shutting down DIVE MCP...');
     void shutdown(0);
   });
   process.on('SIGTERM', () => {
@@ -48,7 +48,7 @@ async function boot() {
   const port = parseInt(process.env.DM_PORT || String(DEFAULT_WS_PORT), 10);
 
   log('');
-  log(`\ud83d\ude80 Starting ${bold('Design Mode MCP')} v${VERSION}...`);
+  log(`\ud83d\ude80 Starting ${bold('DIVE MCP')} v${VERSION}...`);
   log('');
 
   let claim: LocalBridge;
@@ -62,13 +62,13 @@ async function boot() {
     if (claim.role === 'owner') {
       log(`  ${green('\u2713')} WebSocket server listening on ${cyan(`ws://localhost:${port}`)}`);
     } else {
-      log(`  ${green('\u2713')} Attached to existing Design Mode owner on ${cyan(`localhost:${port}`)} (pid ${claim.pid})`);
+      log(`  ${green('\u2713')} Attached to existing DIVE owner on ${cyan(`localhost:${port}`)} (pid ${claim.pid})`);
       log(`  ${dim('MCP tools proxy to the owner. The owner keeps the extension WebSocket.')}`);
     }
   } catch (error: any) {
     log(`  ${red('\u2717')} WebSocket server failed: ${error.message}`);
-    if (error.message?.includes('not Design Mode')) {
-      log(`  ${yellow('\u21b3')} Design Mode will not kill the process on that port`);
+    if (error.message?.includes('not DIVE')) {
+      log(`  ${yellow('\u21b3')} DIVE will not kill the process on that port`);
       log(`  ${yellow('\u21b3')} Stop that process yourself, or use a different port: ${cyan(`DM_PORT=9961 npm start`)}`);
     }
     process.exit(1);
@@ -89,7 +89,7 @@ async function boot() {
     log('');
 
     log(`==================================================`);
-    log(`${green('\u2705')} ${bold('DESIGN MODE MCP READY')}${claim.role === 'attacher' ? dim(' (attached)') : ''}`);
+    log(`${green('\u2705')} ${bold('DIVE MCP READY')}${claim.role === 'attacher' ? dim(' (attached)') : ''}`);
     log(`==================================================`);
     log('');
     log(`${bold('\ud83d\udd0c MCP CLIENT CONFIG')} ${dim('(for Cursor, Claude Desktop, etc.)')}`);

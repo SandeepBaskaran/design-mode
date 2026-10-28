@@ -39,7 +39,7 @@ function renderCss(changes: StyleChange[]): string {
 }
 
 function renderScss(changes: StyleChange[]): string {
-  return `// Design Mode SCSS export\n\n${renderCss(changes)}`;
+  return `// DIVE SCSS export\n\n${renderCss(changes)}`;
 }
 
 function renderTailwind(changes: StyleChange[]): string {

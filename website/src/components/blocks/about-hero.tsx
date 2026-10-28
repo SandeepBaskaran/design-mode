@@ -5,22 +5,15 @@ export function AboutHero() {
     <section data-ds="AboutHero">
       <div className="container max-w-5xl">
         <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-          About Sandeep
+          About DIVE
         </h1>
         <p className="text-muted-foreground mt-4 max-w-5xl text-base">
-          Sandeep Baskaran is a Senior UX Designer based in Bengaluru, currently
-          working in IBM&apos;s Z Infrastructure organisation where he helps
-          enterprises modernize legacy systems. He builds in the open —
-          automating workflows, writing about design, AI, and productivity,
-          mentoring aspiring designers, and leading design communities in
-          Chennai and Bengaluru. He also builds TypeScript and React tools for
-          agent-assisted product work.{" "}
-          <Link href="/" className="underline underline-offset-4">
-            Design Mode
-          </Link>{" "}
-          is his independent, MIT-licensed browser visual editor: it previews
-          changes on rendered pages and records a specification, while an
-          authorised developer or coding agent implements the source. Read the{" "}
+          DIVE stands for Design Intelligence &amp; Visual Engineering. It is an
+          MIT-licensed browser extension for editing live web pages visually:
+          you adjust styles, text and layout on the rendered page, and DIVE
+          records those edits as a structured specification that a coding agent
+          receives through MCP or as Markdown. The agent implements the source
+          change; you review the diff. Read the{" "}
           <Link href="/changelog" className="underline underline-offset-4">
             release history
           </Link>{" "}

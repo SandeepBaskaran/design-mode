@@ -414,7 +414,7 @@ export async function refineReactSourcePosition(
 
 // ── DOM: element → matched CSS rule → original position ──
 
-// A sheet Design Mode injected itself (marked at creation) is never authored
+// A sheet DIVE injected itself (marked at creation) is never authored
 // source: its rules shadow the authored ones only because the extension
 // appends late, so reading them as source starves the resolver before any
 // .map fetch.

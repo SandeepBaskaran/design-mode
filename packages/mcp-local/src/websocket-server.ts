@@ -56,7 +56,7 @@ export function attachWebSocketServer(server: HttpServer, token: string): WebSoc
   });
 
   wss.on('connection', (ws) => {
-    console.error('[Design Mode] Extension connected');
+    console.error('[DIVE] Extension connected');
     activeConnection = ws;
     ws.send(JSON.stringify({ type: 'HELLO', payload: { version: '3.1.0', agentConnected: true } }));
     onExtensionConnect();
@@ -67,12 +67,12 @@ export function attachWebSocketServer(server: HttpServer, token: string): WebSoc
         const msg = JSON.parse(data.toString());
         handleMessage(msg);
       } catch (e) {
-        console.error('[Design Mode] Failed to parse message:', e);
+        console.error('[DIVE] Failed to parse message:', e);
       }
     });
 
     ws.on('close', () => {
-      console.error('[Design Mode] Extension disconnected');
+      console.error('[DIVE] Extension disconnected');
       if (activeConnection !== ws) return;
       activeConnection = null;
       onExtensionDisconnect();
@@ -80,7 +80,7 @@ export function attachWebSocketServer(server: HttpServer, token: string): WebSoc
     });
 
     ws.on('error', (err) => {
-      console.error('[Design Mode] WebSocket error:', err.message);
+      console.error('[DIVE] WebSocket error:', err.message);
     });
   });
 

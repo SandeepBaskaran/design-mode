@@ -30,8 +30,8 @@ export async function generateMetadata({
   const url = `https://designmode.app/use-cases/${u.slug}`;
   const title =
     u.slug === "ui-testing-export-to-developers"
-      ? "Export visual UI bugs with context | Design Mode"
-      : `${u.title} | Design Mode`;
+      ? "Export visual UI bugs with context | DIVE"
+      : `${u.title} | DIVE`;
   const description = `${u.title}: edit the rendered page, capture the exact changes, and hand a structured specification to a coding agent.`;
   return {
     title: { absolute: title },
@@ -48,7 +48,7 @@ export async function generateMetadata({
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode — The visual editor for all your agent’s work",
+          alt: "DIVE — The visual editor for all your agent’s work",
         },
       ],
     },
@@ -61,7 +61,7 @@ export async function generateMetadata({
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "Design Mode — The visual editor for all your agent’s work",
+          alt: "DIVE — The visual editor for all your agent’s work",
         },
       ],
     },

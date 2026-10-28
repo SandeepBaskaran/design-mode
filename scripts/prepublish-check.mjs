@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Pre-publish gate for Design Mode.
+ * Pre-publish gate for DIVE.
  *
  * Runs every check that doesn't need a real Chrome browser, then prints a clear
  * pass/fail report and a pointer to docs/e2e-testcases.md for the manual phase.
@@ -57,7 +57,7 @@ function assertFile(path, label = path) {
   }
 }
 
-console.log(`\n${BOLD}◆ Design Mode — pre-publish check${RESET}\n`);
+console.log(`\n${BOLD}◆ DIVE — pre-publish check${RESET}\n`);
 
 step('Typecheck extension and shared project references', () => {
   run('npm run typecheck:extension', { stdio: 'pipe' });

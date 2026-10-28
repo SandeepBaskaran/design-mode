@@ -1,4 +1,4 @@
-# Design Mode agent CLI
+# DIVE agent CLI
 
 Package: **`@designmode-app/cli`**. Executable: **`designmode-app`**.
 Cloud is the default; Local and Self-hosted use the same existing MCP contracts.

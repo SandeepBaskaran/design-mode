@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Comments System
+// DIVE — Comments System
 // ============================================================
 
 import type { CommentOperation, CommentOwnership } from '../background/comment-store';
@@ -307,7 +307,7 @@ export function showCommentPin(comment: CommentData, ordinal?: number, measuredR
   let pin = pinElements.get(comment.id);
   // Pin colour by status — resolved pins fade to grey-green; open pins
   // stay yellow. Both keep the tear-drop shape so they're recognisable
-  // as Design Mode comments at a glance.
+  // as DIVE comments at a glance.
   const isResolved = !!comment.resolved;
   const bg = isResolved ? 'rgb(163, 163, 163)' : 'rgb(251, 191, 36)';
   if (!pin) {

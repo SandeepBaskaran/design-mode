@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode Cloud — relay store.
+// DIVE Cloud — relay store.
 //
 // One Redis instance holds everything: tokens, per-tenant inbound
 // queue, per-tenant/requestId outbound responses, and the daily quota counter.

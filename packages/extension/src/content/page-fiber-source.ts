@@ -1,5 +1,5 @@
 // ============================================================
-// MAIN-world React fiber source reader for elements Design Mode
+// MAIN-world React fiber source reader for elements DIVE
 // tagged. Values come from the page world and are untrusted until
 // sanitizeFiberSource validates them at the background boundary.
 // ============================================================

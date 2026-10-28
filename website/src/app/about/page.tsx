@@ -1,46 +1,44 @@
 import { WhyThisExists } from "@/components/blocks/about";
 import { AboutHero } from "@/components/blocks/about-hero";
 import { PageSection } from "@/components/layout/page-section";
-import { JsonLd, personSchema } from "@/components/site/json-ld";
 
 export const metadata = {
-  title: { absolute: "Why Design Mode exists | Design Mode" },
+  title: { absolute: "About DIVE | DIVE" },
   description:
-    "Why Sandeep Baskaran built an open-source browser visual editor that turns rendered-page changes into precise coding-agent instructions.",
+    "What DIVE — Design Intelligence & Visual Engineering — does: visual editing of live web pages, handed to coding agents through MCP. Built on Design Mode by Sandeep Baskaran (MIT).",
   keywords: [
-    "Sandeep Baskaran",
-    "design engineer",
-    "Design Mode creator",
+    "DIVE",
+    "Design Intelligence & Visual Engineering",
     "open source design tool",
-    "why Design Mode",
+    "Design Mode",
   ],
   alternates: { canonical: "https://designmode.app/about" },
   openGraph: {
     type: "website",
-    title: "Why Design Mode exists | Design Mode",
+    title: "About DIVE | DIVE",
     description:
-      "Why Sandeep Baskaran built an open-source browser visual editor that turns rendered-page changes into precise coding-agent instructions.",
+      "What DIVE — Design Intelligence & Visual Engineering — does: visual editing of live web pages, handed to coding agents through MCP. Built on Design Mode by Sandeep Baskaran (MIT).",
     url: "https://designmode.app/about",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Why Design Mode exists | Design Mode",
+    title: "About DIVE | DIVE",
     description:
-      "Why Sandeep Baskaran built an open-source browser visual editor that turns rendered-page changes into precise coding-agent instructions.",
+      "What DIVE — Design Intelligence & Visual Engineering — does: visual editing of live web pages, handed to coding agents through MCP. Built on Design Mode by Sandeep Baskaran (MIT).",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Design Mode — The visual editor for all your agent’s work",
+        alt: "DIVE — The visual editor for all your agent’s work",
       },
     ],
   },
@@ -49,7 +47,6 @@ export const metadata = {
 export default function AboutPage() {
   return (
     <>
-      <JsonLd data={personSchema} />
       {/* Hero — yellow background slab */}
       <PageSection tone="hero">
         <AboutHero />

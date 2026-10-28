@@ -1,4 +1,4 @@
-# Test fixture for Design Mode
+# Test fixture for DIVE
 
 A static HTML file you can iterate against without a server.
 

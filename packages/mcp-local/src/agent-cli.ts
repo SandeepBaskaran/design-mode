@@ -3,7 +3,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from './mcp-server.js';
 import { probeOwnerHealth, proxyToolCall } from './owner-bridge.js';
 
-const HELP = `Design Mode local agent CLI
+const HELP = `DIVE local agent CLI
 
 Usage:
   designmode-app --mode local tools                 List MCP tools and input schemas (offline)
@@ -80,7 +80,7 @@ export async function runAgentCli(
         port, extensionConnected: Boolean(health?.extensionConnected),
         ...(health ? { version: health.version, pid: health.pid } : {}),
         ...(!health ? { hint: 'Start design-mode-mcp in your MCP client. Check DM_PORT.' } :
-          !health.extensionConnected ? { hint: 'Open Design Mode in the browser and select Local mode.' } : {}),
+          !health.extensionConnected ? { hint: 'Open DIVE in the browser and select Local mode.' } : {}),
       });
       return !health ? 3 : health.extensionConnected ? 0 : 4;
     }
@@ -89,7 +89,7 @@ export async function runAgentCli(
       const health = await probeOwnerHealth(port);
       if (!health) dispatchError = new CliError('BRIDGE_UNAVAILABLE', 'Start design-mode-mcp in your MCP client. Check DM_PORT.', 3);
       else if (!health.extensionConnected && tool !== 'get_session_summary') {
-        dispatchError = new CliError('EXTENSION_OFFLINE', 'Open Design Mode in the browser and select Local mode. No tool was dispatched.', 4);
+        dispatchError = new CliError('EXTENSION_OFFLINE', 'Open DIVE in the browser and select Local mode. No tool was dispatched.', 4);
       }
       if (dispatchError) throw dispatchError;
       return proxyToolCall(port, tool, args, extra);

@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Export Code (Copy CSS / Export Changes)
+// DIVE — Export Code (Copy CSS / Export Changes)
 // Pure helpers behind the Changes-tab "Code" view: filename
 // stamping, MIME types, JSON serialization and payload counts.
 // ============================================================

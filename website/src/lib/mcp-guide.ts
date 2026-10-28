@@ -1,7 +1,7 @@
 export const DESIGN_MODE_SKILL =
   "/.well-known/agent-skills/design-mode/SKILL.md";
 
-export const MCP_SETUP_PROMPT = `Help me connect Design Mode to this AI app. Read https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md and https://designmode.app/docs/mcp-setup first. Check this app's real MCP support and current configuration before changing anything. Prefer Cloud at https://mcp.designmode.app/mcp; explain Local or Self-hosted if needed. Guide me to create an anonymous credential in the extension's MCP page and enter the bearer token locally through a protected client input or environment variable—never ask me to paste it into chat. With my approval, add the correct configuration without overwriting other servers, and tell me if a restart is needed. Discover the tools and test with get_session_summary({}), then get_changes({}) only if I approve reading the page. Do not modify, resolve or clear anything during setup. If this app cannot use the required MCP transport and authentication, explain the limitation and show me how to use Copy as Prompt instead.`;
+export const MCP_SETUP_PROMPT = `Help me connect DIVE to this AI app. Read https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md and https://designmode.app/docs/mcp-setup first. Check this app's real MCP support and current configuration before changing anything. Prefer Cloud at https://mcp.designmode.app/mcp; explain Local or Self-hosted if needed. Guide me to create an anonymous credential in the extension's MCP page and enter the bearer token locally through a protected client input or environment variable—never ask me to paste it into chat. With my approval, add the correct configuration without overwriting other servers, and tell me if a restart is needed. Discover the tools and test with get_session_summary({}), then get_changes({}) only if I approve reading the page. Do not modify, resolve or clear anything during setup. If this app cannot use the required MCP transport and authentication, explain the limitation and show me how to use Copy as Prompt instead.`;
 
 export const mcpClients = [
   {
@@ -63,7 +63,7 @@ export const mcpClients = [
           {
             type: "promptString",
             id: "designModeToken",
-            description: "Design Mode bearer token",
+            description: "DIVE bearer token",
             password: true,
           },
         ],

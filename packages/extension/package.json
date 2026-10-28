@@ -2,7 +2,7 @@
   "name": "@design-mode/extension",
   "version": "3.1.0",
   "private": true,
-  "description": "Design Mode — Visual DOM editor browser extension (Chrome + Firefox)",
+  "description": "DIVE — Visual DOM editor browser extension (Chrome + Firefox)",
   "scripts": {
     "dev": "NODE_ENV=development node build.mjs",
     "build": "node build.mjs",

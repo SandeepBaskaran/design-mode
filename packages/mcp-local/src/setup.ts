@@ -438,7 +438,7 @@ export function planSetup(opts: {
 
 export function formatPlan(plan: SetupPlan): string {
   const lines = [
-    'Design Mode local agent setup (project scope only)',
+    'DIVE local agent setup (project scope only)',
     `Project: ${plan.projectRoot}`,
     `CLI:     ${plan.nodePath} ${plan.cliPath}`,
     `Agents:  ${plan.agents.map((agent) => agent.label).join(', ')}`,
@@ -592,7 +592,7 @@ export async function runDoctor(opts: DoctorOptions, io: {
   const ownerPid = health?.pid ?? null;
   const extensionConnected = health ? health.extensionConnected : null;
   if (!health) {
-    issues.push(`No Design Mode owner on ${LOOPBACK_HOST}:${opts.port}. Start the local MCP server, then re-run doctor.`);
+    issues.push(`No DIVE owner on ${LOOPBACK_HOST}:${opts.port}. Start the local MCP server, then re-run doctor.`);
   } else if (!health.extensionConnected) {
     issues.push('Owner is up, but the browser extension is not connected.');
   }
@@ -612,7 +612,7 @@ export async function runDoctor(opts: DoctorOptions, io: {
 
 export function formatDoctor(report: DoctorReport): string {
   const lines = [
-    'Design Mode doctor',
+    'DIVE doctor',
     `CLI:        ${report.cliOk ? report.cliPath : 'missing'}`,
     `Owner:      ${report.ownerPid ? `pid ${report.ownerPid} on port ${report.port}` : `not reachable on port ${report.port}`}`,
     `Extension:  ${report.extensionConnected == null ? 'unknown' : report.extensionConnected ? 'connected' : 'disconnected'}`,

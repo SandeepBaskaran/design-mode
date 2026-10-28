@@ -1,8 +1,8 @@
 // ============================================================
-// Design Mode — Shared Constants
+// DIVE — Shared Constants
 // ============================================================
 
-export const APP_NAME = 'Design Mode';
+export const APP_NAME = 'DIVE';
 export const APP_VERSION = '3.1.0';
 
 // Default WebSocket port for companion server
@@ -23,7 +23,7 @@ export const MCP_SERVER_NAME = 'design-mode';
 // Element data attribute for tracking
 export const DATA_ATTR = 'data-dm-id';
 
-// Owner marker on Design Mode's own managed <style> sheets. Extension-injected
+// Owner marker on DIVE's own managed <style> sheets. Extension-injected
 // rules shadow authored ones purely by injection order, so the sourcemap
 // resolver must never treat them as authored source.
 export const MANAGED_SHEET_ATTR = 'data-dm-managed-sheet';
@@ -102,7 +102,7 @@ export const DEFAULT_SHORTCUTS = [
   { key: 'i', modifiers: ['alt'], action: 'toggle-inspect', label: 'Toggle Inspect', category: 'General' },
   { key: 'c', modifiers: ['alt'], action: 'add-annotation', label: 'Comment', category: 'Annotations' },
   { key: 'r', modifiers: ['alt'], action: 'region-comment', label: 'Region comment', category: 'Annotations' },
-  { key: 'd', modifiers: ['alt'], action: 'toggle-design-mode', label: 'Toggle Design Mode', category: 'General' },
+  { key: 'd', modifiers: ['alt'], action: 'toggle-design-mode', label: 'Toggle DIVE', category: 'General' },
   { key: 'p', modifiers: ['alt'], action: 'freeze-animations', label: 'Pause motion', category: 'Animation' },
   { key: 'Escape', modifiers: [], action: 'deselect', label: 'Deselect', category: 'General' },
   { key: 'Delete', modifiers: [], action: 'delete-element', label: 'Delete Element', category: 'Editing' },

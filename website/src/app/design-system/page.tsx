@@ -7,7 +7,7 @@ import { DesignSystem } from "./design-system";
 import { Gallery } from "./gallery";
 
 export const metadata: Metadata = {
-  title: { absolute: "Design system — Design Mode" },
+  title: { absolute: "Design system — DIVE" },
   robots: { index: false, follow: false, nocache: true },
 };
 

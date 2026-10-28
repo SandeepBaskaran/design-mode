@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode Cloud — Per-tenant daily quota.
+// DIVE Cloud — Per-tenant daily quota.
 //
 // One tool call = one INCR. The key is namespaced by UTC date so it
 // auto-rolls at midnight and old keys expire on their own. Cheap (one

@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode Cloud — Anonymous device tokens, KV-backed.
+// DIVE Cloud — Anonymous device tokens, KV-backed.
 // No email, no account. The token IS the credential. Lose it,
 // generate a new one. Revoking deletes the row.
 // ============================================================

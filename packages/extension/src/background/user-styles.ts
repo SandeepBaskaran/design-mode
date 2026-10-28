@@ -19,7 +19,7 @@ export async function replaceUserStyles(
     }
     return { ok: true };
   } catch {
-    const error = 'Page overrides could not be applied. Reload the page and reopen Design Mode. Page !important styles may still win.';
+    const error = 'Page overrides could not be applied. Reload the page and reopen DIVE. Page !important styles may still win.';
     void browser.runtime.sendMessage({ type: 'STYLE_OVERRIDE_ERROR', error, _dmTab: sender.tab.id }).catch(() => {});
     return { ok: false, error };
   }

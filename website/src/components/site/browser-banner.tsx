@@ -81,7 +81,7 @@ export function BrowserBanner() {
   return (
     <div data-ds="BrowserBanner" className="w-full bg-[color-mix(in_srgb,var(--primary)_12%,white)]">
       <p className="text-foreground mx-auto min-h-8 px-4 py-2 text-center text-base leading-snug break-words">
-        Design Mode is also available for{" "}
+        DIVE is also available for{" "}
         <BrowserLink href={first.href} icon={first.icon} name={first.name} />{" "}
         and{" "}
         <BrowserLink href={second.href} icon={second.icon} name={second.name} />

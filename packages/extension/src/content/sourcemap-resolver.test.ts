@@ -349,7 +349,7 @@ describe('managed-sheet skip', () => {
   function managedSheetFixture() {
     return {
       href: null,
-      ownerNode: { hasAttribute: (name: string) => name === 'data-dm-managed-sheet', textContent: '/* Design Mode override rules */' },
+      ownerNode: { hasAttribute: (name: string) => name === 'data-dm-managed-sheet', textContent: '/* DIVE override rules */' },
       cssRules: [{
         selectorText: '[data-dm-id="dm-9"]',
         style: { getPropertyValue: (name: string) => (name === 'color' ? 'seagreen' : '') },

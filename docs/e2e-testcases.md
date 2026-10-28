@@ -1,4 +1,4 @@
-# Design Mode — E2E Test Cases
+# DIVE — E2E Test Cases
 
 Run this checklist before every release. Build first:
 
@@ -37,17 +37,17 @@ These checks remain **pending** until exercised against the installed final buil
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
-| 0.1  | Extension loads | Load unpacked → check the icon in the toolbar | Design Mode icon appears, no error in `chrome://extensions` |
+| 0.1  | Extension loads | Load unpacked → check the icon in the toolbar | DIVE icon appears, no error in `chrome://extensions` |
 | 0.2  | Side panel opens | Click the toolbar icon | Chrome opens its side panel; Firefox opens its native sidebar on the browser-configured side |
-| 0.3  | Auto-activate inspect | Open the side panel for the first time | The page cursor becomes the **Design Mode app icon** (the default; Settings → Page cursor → Off falls back to a plain crosshair); Design tab shows the page-context view (`<body>` selected with a "Page" indicator chip) |
+| 0.3  | Auto-activate inspect | Open the side panel for the first time | The page cursor becomes the **DIVE app icon** (the default; Settings → Page cursor → Off falls back to a plain crosshair); Design tab shows the page-context view (`<body>` selected with a "Page" indicator chip) |
 | 0.4  | Pinned-tab behaviour | Open the panel on tab A, switch to tab B | The panel keeps showing data for tab A (it pins to the tab where it was opened) |
-| 0.5  | Side-panel close → inspect off | Close the side panel | The Design Mode page cursor disappears within ~50ms; hover overlays don't follow the mouse anymore |
+| 0.5  | Side-panel close → inspect off | Close the side panel | The DIVE page cursor disappears within ~50ms; hover overlays don't follow the mouse anymore |
 | 0.6  | Re-open keeps state | Re-open the panel on the same URL | Previously-applied edits are replayed (delete / hide / styles); changes badge counts match |
 | 0.7  | Page reload preserves changes | Make 3 style edits + 1 hide + 1 delete, reload | All 5 are re-applied automatically when the panel re-opens |
 | 0.8  | URL navigation isolates | Navigate to a different URL in the same tab | Changes from URL A do **not** apply to URL B; Changes tab resets |
 | 0.9  | Browser-session boundary | Close & reopen browser | Session storage is cleared (per `chrome.storage.session` semantics) — fresh state |
 | 0.10 | Theme toggle | Click sun/moon in header; compare panel and configured page-overlay colours, then reload | Side panel switches theme and persists across reloads; page overlay colours retain the configured overlay colours rather than following panel theme |
-| 0.11 | Side-panel toggle shortcut | Check `chrome://extensions/shortcuts`, assigning `Alt+D` if Chrome left the manifest suggestion blank; press it | Opens Design Mode on the current launch surface (default: side panel). Firefox: sidebar |
+| 0.11 | Side-panel toggle shortcut | Check `chrome://extensions/shortcuts`, assigning `Alt+D` if Chrome left the manifest suggestion blank; press it | Opens DIVE on the current launch surface (default: side panel). Firefox: sidebar |
 | 0.12 | Unscriptable page | Open the panel on a `chrome://` page, the Chrome Web Store, or a devtools page (on Firefox: an `about:` page such as `about:addons`) | No "cannot be scripted" / "could not establish connection" error spam in the background console; the panel shows a disabled / empty state, not a crash |
 
 ---
@@ -88,7 +88,7 @@ any one closes the other three.
 |-------|------|-------|----------|
 | 0.6.1 | Open / close Help | Click `?` icon → click `?` again | Help overlay replaces the tabs; second click closes |
 | 0.6.2 | Help links | From Help, inspect and activate Report an issue / Read the docs / Privacy; inspect Security disclosure without sending email | Report / docs / Privacy use HTTPS and open their documented destinations in a new tab via `target="_blank"`. Security disclosure uses `mailto:hello@sandeepbaskaran.com` per SECURITY.md (the configured mail handler, not an HTTPS page); never send a test disclosure |
-| 0.6.3 | Copy diagnostics | In Help, click Copy diagnostics | Clipboard contains `Design Mode: x.y.z` + Chrome + Platform + Theme; button label flashes "Copied ✓" then reverts after ~1.5s |
+| 0.6.3 | Copy diagnostics | In Help, click Copy diagnostics | Clipboard contains `DIVE: x.y.z` + Chrome + Platform + Theme; button label flashes "Copied ✓" then reverts after ~1.5s |
 | 0.6.4 | Open / close Contribute | Click heart-handshake icon → click again | Contribute overlay replaces the tabs; second click closes |
 | 0.6.5 | Contribute links | Click each row in Contribute (Star repo, Review, Report issue, Start a discussion, Open a pull request, Sponsor on GitHub) | Each opens the right URL in a new tab. The Review row is browser-aware: "Review on the Chrome Web Store" (CWS listing) on Chromium; "Review on Firefox Add-ons" (AMO listing `design-mode-add-on`) on Firefox |
 | 0.6.6 | Copy share text | In Contribute, click "Share with your network" | Clipboard contains the prefilled share blurb; browser-aware store link — CWS on Chromium, AMO on Firefox; label flashes "Copied ✓ — paste anywhere" then reverts |
@@ -133,7 +133,7 @@ limit on suggested command bindings does not apply to in-page handlers.
 | 0.10.0 | Shortcuts popover | Help (`?`) → **Keyboard shortcuts** | A popover card opens listing every shortcut grouped by category (General / Annotations / Animation / Export / Navigation, plus **Fixed** for built-in Deselect / Delete Element / Undo / Redo), keys as `<kbd>` chips. Backdrop click, ✕, and `Esc` each close it; clicking inside the card does not |
 | 0.10.1 | Alt+I — Toggle inspect | Press | Inspect crosshair toggles on/off |
 | 0.10.1a | macOS Option shortcuts | On macOS, press Option+I/C/R/P/X and Option+1/2/3 with page focus | Each action fires even when macOS produces an alternate glyph or dead key; extra modifiers do not trigger unrelated bindings |
-| 0.10.1b | Inspect button without selection | Enable Design Mode with no selection; toggle Inspect off/on, then repeat with a selection | Button stays available, exposes pressed state, and controls only inspection; edits and Design Mode remain active |
+| 0.10.1b | Inspect button without selection | Enable DIVE with no selection; toggle Inspect off/on, then repeat with a selection | Button stays available, exposes pressed state, and controls only inspection; edits and DIVE remain active |
 | 0.10.1c | Saved Option binding | With a saved custom Alt+letter binding in `dm-shortcuts`, reload and use it on the page | Logical-letter bindings remain usable when macOS emits an alternate glyph; an optional physical code preserves normalised bindings |
 | 0.10.1d | Keyboard layout and composition | Use a non-QWERTY layout; exercise logical-letter shortcuts, AltGr text entry and IME composition | Logical-letter shortcuts remain usable; AltGr/IME text entry is not intercepted |
 | 0.10.1e | Incomplete saved shortcuts | In a disposable test profile, try empty, partial and malformed `dm-shortcuts` values, then reload or update storage live | Default actions remain available; valid custom bindings are preserved; invalid entries do not disable other shortcuts |
@@ -197,7 +197,7 @@ The user's reported **Raycast global Option+C conflict is separate**: native tes
 | 1.16 | Resize follows scroll | Resize, then scroll | All eight handles stay anchored to the element |
 | 1.17 | Shift-select pairwise distances | Select an element, then Shift+click a second | Both outline (dashed); pairwise distance pills render between them; Shift+click more to extend |
 | 1.18 | Pairwise distances persist on hover/scroll | With ≥2 shift-selected, move the mouse away and scroll | Pairwise pills remain and stay anchored (not cleared by mouse-out) |
-| 1.19 | Move cursor over selection | Select an element; hover its body (not a handle), then a non-selected element; repeat with custom cursor Off | Selected body uses move; non-selected elements use the configured Design Mode cursor (crosshair only when custom cursor is Off) |
+| 1.19 | Move cursor over selection | Select an element; hover its body (not a handle), then a non-selected element; repeat with custom cursor Off | Selected body uses move; non-selected elements use the configured DIVE cursor (crosshair only when custom cursor is Off) |
 | 1.20 | Drag-to-move is live + guided | Select a non-static element, drag its body | Element moves live; orange outline + handles follow the cursor; Design-tab **X** / **Y** fields tick during the drag; magenta alignment guides appear when edges/centres line up with siblings (see 1.28) |
 | 1.21 | Move persists + exports | Release the drag, open Changes tab + Export CSS | New `left`/`top` appear as a single **Move** group in Changes and in the exported CSS; Cmd/Ctrl+Z reverts both offsets together |
 | 1.22 | Move under-threshold = click | Mousedown on the selected element, release without moving | No drag fires; no Changes entry; selection stays as-is |
@@ -290,7 +290,7 @@ The user's reported **Raycast global Option+C conflict is separate**: native tes
 | 3.25 | Layout guide: section eye visibility gating | Add one layout guide to an element, then add a second | With one guide, no section-level eye appears next to the Layout guide header — only the row's own eye. Once 2+ guides exist, a section eye appears top-right of the section header |
 | 3.26 | Layout guide: parent/child hide | With 2+ guides on an element, click the section eye to hide all guides, then click one dimmed row's own eye | Every guide disappears from the page; each row's own eye dims (~40% opacity) but still reflects and can toggle its individual on/off state; re-enabling the section eye reveals only the rows currently marked visible |
 | 3.27 | Layout guide: compact color panel | On a layout guide's expanded row, click the Colour swatch in Chrome and Firefox | The color panel opens with the essentials row (swatch + hex + format, plus eyedropper on Chrome; Firefox omits the unsupported eyedropper) and the HSV picker inline (compact mode keeps Custom expanded — no disclosure toggle) — no WCAG contrast row and no Site Colors token list |
-| 3.28 | Computed flex/grid overlay | Select a flex or grid container → click **Show computed layout** | A session-only overlay paints computed tracks / children on the element. It is not a layout guide and does not appear in Changes. Toggle off, deselect, or disable Design Mode removes it |
+| 3.28 | Computed flex/grid overlay | Select a flex or grid container → click **Show computed layout** | A session-only overlay paints computed tracks / children on the element. It is not a layout guide and does not appear in Changes. Toggle off, deselect, or disable DIVE removes it |
 
 ---
 
@@ -506,7 +506,7 @@ at `https://mcp.designmode.app`). Both expose the **same eight MCP tools**.
 | #     | Test | Steps | Expected |
 |-------|------|-------|----------|
 | 11.1  | Server starts | `cd packages/mcp-local && npm start` | ASCII banner; nine tools listed: `get_changes`, `apply_changes`, `set_change_status`, `mark_comment_resolved`, `clear_changes`, `get_session_summary`, `export_changes`, `get_screenshot`, `wait_for_handoff`; WebSocket bridge on `ws://localhost:9960` (or the configured port) |
-| 11.2  | Port conflict — foreign occupant | Another (non-Design Mode) process on 9960 | Clean error that the occupant is not Design Mode; process is left running; suggests stopping it yourself or `DM_PORT=9961`. Never auto-killed |
+| 11.2  | Port conflict — foreign occupant | Another (non-DIVE) process on 9960 | Clean error that the occupant is not DIVE; process is left running; suggests stopping it yourself or `DM_PORT=9961`. Never auto-killed |
 | 11.2a | Second MCP client attaches | Start a second `npm start` while the first is still running | Second process attaches to the owner (does not exit on EADDRINUSE); MCP tools proxy to the owner; WebSocket stays on the first process |
 | 11.2b | Owner survival + shared state | Stop the second process; call `get_changes` from a third client | Owner still listens on 9960; extension stays connected; session state is the owner's |
 | 11.2c | Owner failover | Start two MCP clients, stop the first process (the owner), then call `get_changes` from the surviving client | The surviving attacher claims the same port, logs that it is now the owner, and serves the tool without requiring an app restart; the extension reconnects to that port |
@@ -573,7 +573,7 @@ bleeding to duplicates and back.
 |------|------|-------|----------|
 | 13.1 | Hover doesn't override Selected | Select element X, hover element Y | Indicator stays "Selected" with X's data |
 | 13.2 | Persistence on URL revisit | Edit `/about`, navigate `/pricing`, navigate back | Edits on `/about` are still visible |
-| 13.3 | Reload extension mid-session | `chrome://extensions` → reload Design Mode | Extension reloads cleanly; saved session changes still replay |
+| 13.3 | Reload extension mid-session | `chrome://extensions` → reload DIVE | Extension reloads cleanly; saved session changes still replay |
 | 13.4 | CSP-strict site | Open a site with strict CSP (e.g. github.com) | Side panel still works; hover / select / inline edits succeed |
 | 13.5 | Color picker preserves cursor | Type partial hex in the inline picker | Cursor stays in the input; morphdom doesn't blur it on render |
 
@@ -611,12 +611,12 @@ bleeding to duplicates and back.
 
 ## Phase 16 — Local files (file://)
 
-Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome://extensions` (the default).
+Precondition: "Allow access to file URLs" toggle OFF for DIVE in `chrome://extensions` (the default).
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 16.1 | Blocked guidance card | Open a local `.html` file (`file://`) and open the side panel | A "Local file" card with numbered steps replaces the editing UI (no Layers/Design/Changes tabs); Settings/Help still open from the header |
-| 16.2 | Settings shortcut button | Chrome: click **Open extension settings** on the disabled-file card. Firefox: inspect the manual settings guidance | Chrome opens a new tab at `chrome://extensions/?id=<extension id>`. Firefox omits that button and instructs opening `about:addons` → Design Mode → Permissions manually; no permission is granted by this check |
+| 16.2 | Settings shortcut button | Chrome: click **Open extension settings** on the disabled-file card. Firefox: inspect the manual settings guidance | Chrome opens a new tab at `chrome://extensions/?id=<extension id>`. Firefox omits that button and instructs opening `about:addons` → DIVE → Permissions manually; no permission is granted by this check |
 | 16.3 | Editing after enabling | Turn the toggle ON (extension reloads), reopen the panel on the file tab | Full editing UI; inspect/select/edit/undo work; header shows the file name (e.g. `test.html`) |
 | 16.4 | Navigate pinned tab to file:// | Toggle OFF again. Open the panel on an http(s) tab, then navigate that tab to the file URL | The guidance card appears; navigating back to the http(s) page restores the editing UI |
 | 16.5 | Pop-out parity | Repeat 16.1 in the floating pop-out window | Same guidance card behaviour |
@@ -641,12 +641,12 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 14.1 | Build clean | `npm run build:website` | No type errors |
-| 14.2 | Landing page | Visit `/` | Header retains Design Mode icon/name, GitHub button and browser-adaptive install CTA (Add to Chrome / Add to Firefox), followed by divider, hero and the current landing-page sections in their approved rendered order; the historical section sequence is not required |
+| 14.2 | Landing page | Visit `/` | Header retains DIVE icon/name, GitHub button and browser-adaptive install CTA (Add to Chrome / Add to Firefox), followed by divider, hero and the current landing-page sections in their approved rendered order; the historical section sequence is not required |
 | 14.3 | Demo route | Visit `/demo` at widths below and above 768px | Mobile shows desktop-extension guidance after the hero and hides the walkthrough; desktop shows the interactive left nav and step targets; neither viewport has page-level horizontal overflow |
 | 14.4 | MCP route | Visit `/mcp` | MCP setup / docs page |
 | 14.5 | Browser store install CTA | Click the install button ("Add to Chrome" / "Add to Firefox") | The browser-adaptive install CTA targets its browser store rather than scrolling to #install |
 | 14.6 | GitHub button | Click GitHub icon | Opens repo in a new tab |
-| 14.7 | Favicon | Hard reload | Browser tab icon is the Design Mode logo (matches `/icon.png`) |
+| 14.7 | Favicon | Hard reload | Browser tab icon is the DIVE logo (matches `/icon.png`) |
 | 14.8 | Responsive centered columns | Inspect article and footer at representative desktop and narrow viewport widths | Article and footer use the current responsive centered columns, not a fixed 720px requirement |
 | 14.9 | Inter font | Inspect any text | font-family resolves to Inter first |
 | 14.10 | Static OG image | View `/`'s `<head>` (or unfurl the URL in Slack/iMessage) | `og:image` and `twitter:image` resolve to the static `/og-design-mode-inter-v3.png`, not a dynamic `opengraph-image` route |
@@ -673,8 +673,8 @@ everything not listed here must behave exactly as on Chrome.
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | F.1  | Add-on loads | Load the temporary add-on | Icon appears in the toolbar; no manifest error in the Browser Console (`data_collection_permissions` may log the advisory `KEY_FIREFOX_UNSUPPORTED_BY_MIN_VER` — expected) |
-| F.2  | Sidebar opens (toolbar) | Click the Design Mode toolbar button | The panel opens as Firefox's **native sidebar** on the browser-configured side |
-| F.3  | Sidebar opens (View menu) | View → Sidebar → Design Mode | Toggles the same sidebar |
+| F.2  | Sidebar opens (toolbar) | Click the DIVE toolbar button | The panel opens as Firefox's **native sidebar** on the browser-configured side |
+| F.3  | Sidebar opens (View menu) | View → Sidebar → DIVE | Toggles the same sidebar |
 | F.4  | `Alt+D` toggles sidebar | Press `Alt+D` | Sidebar opens / closes (routed through `sidebarAction.open()`, not `sidePanel`) |
 | F.5  | Core editing parity | Inspect an element, edit a style, add a comment, check the Changes tab | Identical to Chrome — selection, live style apply, comment pin, and change rows all work |
 | F.6  | Pop-out absent | Look at the sidebar header | The **external-link** (pop-out) icon is **not present** (Chrome-only; no `sidePanel`/`windows` popup surface on Firefox) |
@@ -704,9 +704,9 @@ Background and boundaries are in `docs/safari-inspector-parity-evidence.md`.
 
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
-| S.1  | Temporary extension loads | Add Temporary Extension from the release zip | Design Mode appears under Settings → Extensions with no manifest error; toolbar button shows the icon |
-| S.2  | Toolbar popup is the help card | Click the toolbar button | A small **Design Mode for Safari** popup explains: allow access, open Web Inspector (⌥⌘I), dock it, pick the Design Mode tab. No side panel opens |
-| S.3  | Inspector tab present | Open Web Inspector on an HTTPS page and dock it | A **Design Mode** tab exists in Web Inspector; the editor renders with the header badge `v3.1.0 · Safari` |
+| S.1  | Temporary extension loads | Add Temporary Extension from the release zip | DIVE appears under Settings → Extensions with no manifest error; toolbar button shows the icon |
+| S.2  | Toolbar popup is the help card | Click the toolbar button | A small **DIVE for Safari** popup explains: allow access, open Web Inspector (⌥⌘I), dock it, pick the DIVE tab. No side panel opens |
+| S.3  | Inspector tab present | Open Web Inspector on an HTTPS page and dock it | A **DIVE** tab exists in Web Inspector; the editor renders with the header badge `v3.1.0 · Safari` |
 | S.4  | Active-tab targeting | With the Inspector docked, pick an element, then switch Safari tabs and pick again | The editor follows the active tab in the last-focused window; the previous tab's selection is dropped and a fresh pick works on the new tab |
 | S.5  | Reconnect state | Navigate the inspected tab to a Safari-internal page (e.g. `favorites://`) or a site without permission | The **Reconnect to the active page** view appears with the error text, a *Pick element on active tab* button and a *Reload editor connection* button; no console spam |
 | S.6  | Reconnect actions work | From S.5, return to an HTTPS page → *Pick element on active tab*; then *Reload editor connection* | Repick restores the editor; reload re-initialises the Inspector panel without losing applied edits on the page |
@@ -718,7 +718,7 @@ Background and boundaries are in `docs/safari-inspector-parity-evidence.md`.
 | S.12 | Screenshot — download | Settings → Screenshot → Download → camera | Safari offers/saves a PNG via the anchor download; record whether the file actually saved (Safari has no `downloads` API) |
 | S.13 | Oversized capture fails explicitly | Capture a very tall page element beyond the bridge payload limit | A bounded Inspector error is shown immediately; the capture does not hang until timeout |
 | S.14 | `file://` is unsupported | Open a local HTML file and the Inspector | Editor shows the unavailable state; nothing binds or dispatches to the file page (fails closed). Serve the fixture over HTTP to test instead |
-| S.15 | Hover guidance | Help → hover/touch guidance | Safari copy: *leave touch emulation, return to a normal macOS Safari webpage, dock Web Inspector and use Design Mode's own picker* |
+| S.15 | Hover guidance | Help → hover/touch guidance | Safari copy: *leave touch emulation, return to a normal macOS Safari webpage, dock Web Inspector and use DIVE's own picker* |
 | S.16 | MCP local mode | Run `npm start` in `packages/mcp-local`; MCP page → Local | Status reaches **connected**; `get_changes` returns the Inspector-made edits (Phase 11.A parity) |
 | S.17 | Store links absent | Contribute panel | No Chrome Web Store / AMO review link is shown for the Safari build; share copy does not reference a store |
 

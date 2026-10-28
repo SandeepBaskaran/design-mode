@@ -1,5 +1,5 @@
 // ============================================================
-// Design Mode — Shared Type Definitions
+// DIVE — Shared Type Definitions
 // ============================================================
 
 // --- Element Style Interface (all visually editable properties) ---

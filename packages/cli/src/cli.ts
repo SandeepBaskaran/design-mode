@@ -2,7 +2,7 @@ import { runAgentCli, readArguments, CliError as LocalCliError } from '../../mcp
 import { CliError, loadConfig } from './config.js';
 import { runRemote } from './remote.js';
 
-const HELP = `Design Mode agent CLI — Cloud (default), Local, Self-hosted
+const HELP = `DIVE agent CLI — Cloud (default), Local, Self-hosted
 
 Usage:
   designmode-app [--mode cloud|local|self-hosted] tools

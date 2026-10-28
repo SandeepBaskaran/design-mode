@@ -30,7 +30,7 @@ assert.deepEqual(localTools, [...cloudTools, "wait_for_handoff"].sort());
 for (const name of localTools) assert(skill.includes("`" + name + "`"), name);
 assert(skill.startsWith("---\nname: design-mode\n"));
 assert.match(skill, /\ndescription: Use when .{1,60}\n/);
-assert.match(skill, /\n---\n\n# Design Mode/);
+assert.match(skill, /\n---\n\n# DIVE/);
 assert.equal(
   JSON.parse(index).skills[0].url,
   "https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md",
