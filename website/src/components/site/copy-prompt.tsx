@@ -23,7 +23,7 @@ export function CopyPrompt({ text }: { text: string }) {
   }
 
   return (
-    <div className="mt-6 flex flex-wrap items-center gap-4">
+    <div data-ds="CopyPrompt" className="mt-6 flex flex-wrap items-center gap-4">
       <Button
         onClick={copy}
         disabled={pending}

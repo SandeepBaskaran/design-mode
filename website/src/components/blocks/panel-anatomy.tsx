@@ -597,7 +597,7 @@ export function PanelAnatomy() {
   };
 
   return (
-    <section
+    <section data-ds="PanelAnatomy"
       id="panel-anatomy"
       aria-labelledby="panel-anatomy-title"
       className="py-16 md:py-24 lg:py-32"

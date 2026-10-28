@@ -62,7 +62,7 @@ export const Navbar = () => {
   const pathname = usePathname();
 
   return (
-    <header className="bg-background text-foreground sticky top-0 z-50 w-full border-b">
+    <header data-ds="Navbar" className="bg-background text-foreground sticky top-0 z-50 w-full border-b">
       <div className="mx-auto grid min-h-16 max-w-[1440px] grid-cols-[1fr_auto] items-center gap-4 px-6 py-2 xl:grid-cols-[1fr_auto_1fr]">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <Image

@@ -19,7 +19,7 @@ export function RelatedLinks({
 }) {
   if (!links.length) return null;
   return (
-    <section className="container mt-20 max-w-5xl">
+    <section data-ds="RelatedLinks" className="container mt-20 max-w-5xl">
       <DashedLine />
       <h2 className="mt-12 text-2xl font-semibold tracking-tight md:text-3xl">
         {title}

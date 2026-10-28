@@ -4,7 +4,7 @@ import { withNavRef } from "@/lib/nav-ref";
 
 export function ProductHunt() {
   return (
-    <a
+    <a data-ds="ProductHunt"
       href={withNavRef(
         "https://www.producthunt.com/products/design-mode?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-design-mode-2",
       )}

@@ -91,7 +91,7 @@ const personas = [
 
 export function PersonaBlock() {
   return (
-    <section id="who-is-this-for" className="py-20 lg:py-28">
+    <section data-ds="PersonaBlock" id="who-is-this-for" className="py-20 lg:py-28">
       <div className="container max-w-6xl">
         <DashedLine className="text-muted-foreground mb-16" />
         <div className="mb-12 max-w-3xl">

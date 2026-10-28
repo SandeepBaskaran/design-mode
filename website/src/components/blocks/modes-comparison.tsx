@@ -154,7 +154,7 @@ export const ModesComparison = () => {
   const [selectedPlan, setSelectedPlan] = useState(0); // Default to Cloud mode
 
   return (
-    <section className="pb-28 lg:py-32" aria-labelledby="mcp-mode-comparison">
+    <section data-ds="ModesComparison" className="pb-28 lg:py-32" aria-labelledby="mcp-mode-comparison">
       <div className="container">
         <h2 id="mcp-mode-comparison" className="sr-only">
           MCP connection mode comparison

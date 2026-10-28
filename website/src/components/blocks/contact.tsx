@@ -25,7 +25,7 @@ function GithubIcon({ className }: { className?: string }) {
 
 export function ContactHero() {
   return (
-    <div className="container max-w-5xl">
+    <div data-ds="ContactHero" className="container max-w-5xl">
       <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
         Get in touch
       </h1>
@@ -39,7 +39,7 @@ export function ContactHero() {
 
 export function ContactChannels() {
   return (
-    <div className="container max-w-5xl">
+    <div data-ds="ContactChannels" className="container max-w-5xl">
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="bg-card border-border rounded-2xl border p-6 shadow-sm">
           <h2 className="text-foreground flex items-center gap-2 text-base font-semibold">
@@ -97,7 +97,7 @@ export function ContactChannels() {
 
 export function ContactReports() {
   return (
-    <div className="container max-w-3xl">
+    <div data-ds="ContactReports" className="container max-w-3xl">
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="bg-card border-border rounded-2xl border p-6 shadow-sm">
           <h2 className="flex items-center gap-2 text-2xl font-semibold">

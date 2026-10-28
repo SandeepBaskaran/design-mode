@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function AboutHero() {
   return (
-    <section>
+    <section data-ds="AboutHero">
       <div className="container max-w-5xl">
         <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
           About Sandeep

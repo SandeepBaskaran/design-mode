@@ -57,7 +57,7 @@ export function Footer() {
   ];
 
   return (
-    <footer className="border-t py-16 md:pt-24 md:pb-8">
+    <footer data-ds="Footer" className="border-t py-16 md:pt-24 md:pb-8">
       <div className="container grid max-w-[1200px] gap-16 lg:grid-cols-[1.5fr_3fr] lg:gap-x-16 lg:gap-y-16">
         <div className="flex flex-col items-center text-center md:items-start md:text-left">
           <Link

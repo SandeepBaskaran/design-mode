@@ -12,7 +12,7 @@ export const DashedLine = ({
   const isHorizontal = orientation === "horizontal";
 
   return (
-    <div
+    <div data-ds="DashedLine"
       className={cn(
         "text-muted-foreground relative",
         isHorizontal ? "h-px w-full" : "h-full w-px",

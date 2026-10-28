@@ -71,7 +71,7 @@ export const Logos = () => {
   ];
 
   return (
-    <section className="overflow-hidden pb-28 lg:pb-32">
+    <section data-ds="Logos" className="overflow-hidden pb-28 lg:pb-32">
       <div className="container space-y-10 lg:space-y-16">
         <div className="text-center">
           <h2 className="mb-4 text-2xl text-balance md:text-3xl lg:text-4xl">

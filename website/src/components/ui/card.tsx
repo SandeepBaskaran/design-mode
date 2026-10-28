@@ -12,6 +12,7 @@ const Card = React.forwardRef<
       "bg-card text-card-foreground rounded-xl border shadow-sm",
       className,
     )}
+    data-slot="card"
     {...props}
   />
 ));

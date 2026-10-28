@@ -12,7 +12,7 @@ const agents = [
 
 export function AgentIcons({ size }: { size?: number }) {
   return (
-          <span className={styles.logos} aria-hidden="true" style={size ? { width: size, height: size, flex: `0 0 ${size}px` } : undefined}>
+          <span data-ds="AgentIcons" className={styles.logos} aria-hidden="true" style={size ? { width: size, height: size, flex: `0 0 ${size}px` } : undefined}>
             {agents.map((agent, index) => (
               <span
                 key={agent.logo}
@@ -46,7 +46,7 @@ export function AgentIcons({ size }: { size?: number }) {
 
 export function HeroHeadline() {
   return (
-    <div className={styles.headline}>
+    <div data-ds="HeroHeadline" className={styles.headline}>
       <h1 className="macro text-foreground">
         <span className={styles.line}>The visual editor for</span>
         <span className={`${styles.line} ${styles.agentLine}`}>

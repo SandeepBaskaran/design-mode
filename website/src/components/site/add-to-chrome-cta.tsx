@@ -65,7 +65,7 @@ export function AddToChromeCta({
 }) {
   const store = STORES[useInstallTarget()];
   return (
-    <Button asChild size={size} className={cn("gap-2", className)}>
+    <Button data-ds="AddToChromeCta" asChild size={size} className={cn("gap-2", className)}>
       <a
         href={store.href}
         target="_blank"
@@ -94,7 +94,7 @@ export function OtherStoreLink({ className }: { className?: string }) {
   const target = useInstallTarget();
   const other = target === "firefox" ? STORES.chrome : STORES.firefox;
   return (
-    <Button asChild variant="ghost" size="icon-sm" className={className}>
+    <Button data-ds="OtherStoreLink" asChild variant="ghost" size="icon-sm" className={className}>
       <a
         href={other.href}
         target="_blank"

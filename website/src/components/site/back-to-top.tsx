@@ -36,7 +36,7 @@ export function BackToTop() {
   }, [pathname]);
 
   return (
-    <button
+    <button data-ds="BackToTop"
       data-slot="button"
       type="button"
       aria-label="Back to top"

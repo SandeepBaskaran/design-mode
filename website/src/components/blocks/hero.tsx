@@ -43,7 +43,7 @@ const features = [
 
 export const Hero = () => {
   return (
-    <section className="py-16 md:py-24 lg:py-32">
+    <section data-ds="Hero" className="py-16 md:py-24 lg:py-32">
       {/* Hero — vertical stack, centred */}
       <div className="container max-w-[1200px] text-center max-sm:px-4">
         <HeroHeadline />
@@ -100,7 +100,7 @@ export const Hero = () => {
 
 export const HeroShowcase = () => {
   return (
-    <section className="py-32">
+    <section data-ds="HeroShowcase" className="py-32">
       <div className="container flex flex-col gap-10 lg:flex-row lg:items-center lg:gap-16">
         {/* Left — cover image */}
         <div className="flex-1">
