@@ -1,25 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
-import { ArrowRight, Check, Copy, RotateCcw } from "lucide-react";
+import { Check, Copy, RotateCcw } from "lucide-react";
 
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import type { ComponentFile, PageInfo } from "./analysis";
+import { PagesView } from "./pages-view";
+
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
 
 type TokenGroup = { title: string; tokens: string[] };
 
@@ -40,7 +30,7 @@ const TYPE_SCALE = [
   { label: "Small", className: "text-sm text-muted-foreground", spec: "0.875rem" },
 ];
 const STORAGE_KEY = "dm-design-system-draft";
-const TABS = ["Style guide", "Components"] as const;
+const TABS = ["Style guide", "Components", "Pages"] as const;
 
 function toHex6(value: string) {
   if (/^#[0-9a-f]{6}$/i.test(value)) return value;
@@ -52,7 +42,15 @@ function readToken(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-export function DesignSystem() {
+export function DesignSystem({
+  gallery,
+  pages,
+  components,
+}: {
+  gallery: ReactNode;
+  pages: PageInfo[];
+  components: ComponentFile[];
+}) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Style guide");
   const [base, setBase] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -87,6 +85,21 @@ export function DesignSystem() {
 
   const setToken = (name: string, value: string) => setDraft((d) => ({ ...d, [name]: value }));
   const valueOf = (name: string) => draft[name] ?? base[name] ?? "";
+
+  const [jumpTo, setJumpTo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!jumpTo || tab !== "Components") return;
+    const target = document.getElementById(`c-${jumpTo.replace("/", "-")}`);
+    target?.scrollIntoView({ block: "start" });
+    // Previews above the target load media and shift layout after the first scroll.
+    setTimeout(() => target?.scrollIntoView({ block: "start" }), 400);
+    setJumpTo(null);
+  }, [jumpTo, tab]);
+
+  function openComponent(id: string) {
+    setTab("Components");
+    setJumpTo(id);
+  }
 
   async function copyExport() {
     try {
@@ -141,12 +154,10 @@ export function DesignSystem() {
         </div>
       </header>
 
-      <main className="container mt-10" role="tabpanel" aria-label={tab}>
-        {tab === "Style guide" ? (
-          <StyleGuide valueOf={valueOf} setToken={setToken} draft={draft} base={base} />
-        ) : (
-          <Components />
-        )}
+      <main className={tab === "Pages" ? "mt-10 px-4 md:px-8" : "container mt-10"} role="tabpanel" aria-label={tab}>
+        {tab === "Style guide" && <StyleGuide valueOf={valueOf} setToken={setToken} draft={draft} base={base} />}
+        {tab === "Components" && gallery}
+        {tab === "Pages" && <PagesView pages={pages} components={components} openComponent={openComponent} />}
         {exportCss && (
           <section className="mt-16">
             <h2 className="font-display text-2xl">Pending changes</h2>
@@ -283,97 +294,6 @@ function StyleGuide({
               <code className="text-muted-foreground text-xs">{s}</code>
             </div>
           ))}
-        </div>
-      </Section>
-    </>
-  );
-}
-
-function Components() {
-  const variants = ["default", "ink", "outline", "secondary", "ghost", "link", "destructive"] as const;
-  const sizes = ["sm", "default", "lg"] as const;
-  return (
-    <>
-      <Section title="Button">
-        <div className="bg-card space-y-6 rounded-xl border p-6">
-          {sizes.map((size) => (
-            <div key={size} className="flex flex-wrap items-center gap-3">
-              <span className="text-muted-foreground w-16 text-xs">{size}</span>
-              {variants.map((v) => (
-                <Button key={v} variant={v} size={size}>
-                  {v}
-                </Button>
-              ))}
-            </div>
-          ))}
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-muted-foreground w-16 text-xs">states</span>
-            <Button>
-              Continue <ArrowRight />
-            </Button>
-            <Button disabled>Disabled</Button>
-            <Button size="icon" aria-label="Copy">
-              <Copy />
-            </Button>
-            <Button size="icon-sm" variant="outline" aria-label="Reset">
-              <RotateCcw />
-            </Button>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="Card">
-        <div className="grid gap-6 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Send to agent</CardTitle>
-              <CardDescription>Hand recorded changes to Claude Code or Cursor.</CardDescription>
-            </CardHeader>
-            <CardContent className="text-sm">Changes stay local until you send them.</CardContent>
-            <CardFooter>
-              <Button size="sm">Send</Button>
-            </CardFooter>
-          </Card>
-          <Card className="bg-ink text-ink-foreground">
-            <CardHeader>
-              <CardTitle>Ink card</CardTitle>
-              <CardDescription className="text-ink-foreground/70">High-contrast surface.</CardDescription>
-            </CardHeader>
-            <CardContent className="text-sm">Used for code and callouts.</CardContent>
-          </Card>
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle>Raised</CardTitle>
-              <CardDescription>shadow-lg</CardDescription>
-            </CardHeader>
-            <CardContent className="text-sm">Default cards use shadow-sm.</CardContent>
-          </Card>
-        </div>
-      </Section>
-
-      <Section title="Accordion">
-        <Accordion type="single" collapsible className="bg-card rounded-xl border px-5">
-          <AccordionItem value="a">
-            <AccordionTrigger>Does it work without an agent?</AccordionTrigger>
-            <AccordionContent>Yes — copy or export changes as CSS or JSON.</AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="b">
-            <AccordionTrigger>Which browsers?</AccordionTrigger>
-            <AccordionContent>Chrome, Firefox and Safari.</AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </Section>
-
-      <Section title="Form fields">
-        <div className="bg-card grid max-w-xl gap-4 rounded-xl border p-6">
-          <label className="grid gap-1.5 text-sm font-semibold">
-            Email
-            <input className="bg-background focus-visible:ring-ring/50 rounded-lg border px-3 py-2 font-normal outline-none focus-visible:ring-[3px]" placeholder="you@example.com" />
-          </label>
-          <label className="grid gap-1.5 text-sm font-semibold">
-            Message
-            <textarea rows={3} className="bg-background focus-visible:ring-ring/50 rounded-lg border px-3 py-2 font-normal outline-none focus-visible:ring-[3px]" />
-          </label>
         </div>
       </Section>
     </>
