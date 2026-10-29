@@ -23,6 +23,9 @@ export function logEvent(label: string, meta: LogMetadata = {}): void {
   if (typeof meta.latencyMs === 'number') safe.latencyMs = meta.latencyMs;
   if (typeof meta.status === 'number') safe.status = meta.status;
   if (meta.error) safe.error = meta.error;
-  // eslint-disable-next-line no-console
-  console.log(JSON.stringify(safe));
+  // Logging must never take a relay request down with it.
+  try {
+    // eslint-disable-next-line no-console
+    console.log(JSON.stringify(safe));
+  } catch { /* nothing left to report to */ }
 }

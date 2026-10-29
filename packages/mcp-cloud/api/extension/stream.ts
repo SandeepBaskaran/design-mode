@@ -8,7 +8,8 @@
 // ============================================================
 
 import { authenticate, isTokenActive } from '../../lib/auth.js';
-import { readInbound } from '../../lib/store.js';
+import { claimOwner, readInbound, releaseOwner, requeueInbound } from '../../lib/store.js';
+import { randomBytes } from 'node:crypto';
 import { logEvent } from '../../lib/log.js';
 import { getPresence } from '../../lib/presence.js';
 import { corsHeaders, preflight, withCors } from '../../lib/cors.js';
@@ -92,9 +93,21 @@ export async function GET(req: Request): Promise<Response> {
       }, 30_000);
       presenceTimer.unref?.();
 
+      // A superseded stream stays open but idle rather than closing, so older
+      // extension builds don't reconnect and displace the newer tab in a loop.
+      const streamId = randomBytes(12).toString('hex');
       try {
-        for await (const msg of readInbound({ tenantId, signal: ctrl.signal, isAuthorized })) {
-          if (!(await send('relay', JSON.stringify(msg)))) break;
+        await claimOwner(tenantId, streamId);
+        for await (const msg of readInbound({ tenantId, streamId, signal: ctrl.signal, isAuthorized })) {
+          let delivered = false;
+          try { delivered = await send('relay', JSON.stringify(msg)); } catch { /* stream already closed */ }
+          if (!delivered) {
+            try { await requeueInbound(tenantId, msg); }
+            catch (err: any) {
+              logEvent('stream.requeue_error', { tenantId, type: msg.type, error: err?.code || err?.name || 'unknown' });
+            }
+            break;
+          }
           logEvent('stream.forward', {
             tenantId, type: msg.type,
             byteCount: typeof msg.payload === 'string' ? Buffer.byteLength(msg.payload, 'utf8') : 0,
@@ -103,6 +116,10 @@ export async function GET(req: Request): Promise<Response> {
       } catch (err: any) {
         logEvent('stream.error', { tenantId, error: err?.code || 'unknown' });
       } finally {
+        // A failed release only delays takeover until the lease expires.
+        await releaseOwner(tenantId, streamId).catch((err: any) => {
+          logEvent('stream.release_error', { tenantId, error: err?.code || err?.name || 'unknown' });
+        });
         ctrl.abort();
         req.signal.removeEventListener('abort', onAbort);
         clearInterval(heartbeat);

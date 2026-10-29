@@ -110,6 +110,28 @@ test('relay lifecycle against an isolated real Redis', {
       const ttl = await client.ttl('inbound:t_expiry_success');
       assert.ok(ttl > 0 && ttl <= 60);
     });
+    await t.test('stream ownership scripts: only the owner pops, leases refresh, release is compare-and-delete', async () => {
+      const store = loadFixture(client)('lib/store.ts');
+      await store.claimOwner('t_owner', 'A');
+      await store.claimOwner('t_owner', 'B');
+      await store.publishInbound('t_owner', { type: 'ONE' });
+      assert.deepEqual(await store.consumeInbound('t_owner', 'A'), { owner: false, item: null });
+      assert.equal(await client.lLen('inbound:t_owner'), 1);
+      const taken = await store.consumeInbound('t_owner', 'B');
+      assert.equal(taken.owner, true);
+      assert.equal(JSON.parse(taken.item).type, 'ONE');
+      assert.deepEqual(await store.consumeInbound('t_owner', 'B'), { owner: true, item: null });
+      const ttl = await client.pTTL('owner:t_owner');
+      assert.ok(ttl > 0 && ttl <= store.OWNER_LEASE_MS);
+      await store.releaseOwner('t_owner', 'A');
+      assert.equal(await client.get('owner:t_owner'), 'B');
+      await store.releaseOwner('t_owner', 'B');
+      assert.equal(await client.exists('owner:t_owner'), 0);
+      assert.equal((await store.consumeInbound('t_owner', 'A')).owner, true);
+      assert.equal(await client.get('owner:t_owner'), 'A');
+      await store.requeueInbound('t_owner', { type: 'BACK' });
+      assert.equal(JSON.parse((await store.consumeInbound('t_owner', 'A')).item).type, 'BACK');
+    });
     await t.test('an already open SSE closes after revocation and does not forward later messages', async () => {
       const load = loadFixture(client);
       const auth = load('lib/auth.ts');
@@ -133,14 +155,14 @@ test('relay lifecycle against an isolated real Redis', {
         assert.equal(await client.lLen('inbound:t_stream'), 1);
       } finally { abort.abort(); await reader.cancel(); }
     });
-    await t.test('revocation after LPOP prevents forwarding its already-drained batch', async () => {
+    await t.test('revocation after a pop prevents forwarding and returns the message to the queue', async () => {
       let revokeAfterPop = false;
       let row;
       const load = loadFixture(new Proxy(client, {
         get(target, property) {
           if (property === 'sendCommand') return async args => {
             const value = await target.sendCommand(args);
-            if (revokeAfterPop && args[0] === 'LPOP' && value) {
+            if (revokeAfterPop && args[0] === 'EVAL' && Array.isArray(value) && value[1]) {
               await target.del(`tok:${row.tokenHash}`);
             }
             return value;
@@ -163,6 +185,7 @@ test('relay lifecycle against an isolated real Redis', {
         revokeAfterPop = true;
         await store.publishInbound('t_batch', { type: 'DRAINED_BEFORE_REVOKE' });
         assert.equal((await bounded(reader.read())).done, true);
+        assert.match(await client.lIndex('inbound:t_batch', 0), /DRAINED_BEFORE_REVOKE/);
       } finally { abort.abort(); await reader.cancel(); }
     });
     await t.test('a failed ongoing authorization lookup closes the stream', async () => {

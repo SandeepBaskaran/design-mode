@@ -215,6 +215,23 @@ tool), these rules are read automatically at session start.
   `AGENT_PRESENCE` and `HELLO` messages and broadcasts
   `AGENT_PRESENCE_UPDATE` via `chrome.runtime.sendMessage`. The
   side panel listens for that message and re-derives `mcpState`.
+- **Cloud / Self-hosted stream ownership** (`packages/mcp-cloud/lib/store.ts`):
+  one stream per account receives agent requests — there is no
+  simultaneous delivery to several tabs. Each SSE stream claims
+  `owner:{tenantId}` on connect (newest wins) under a 30 s lease that
+  the owner renews on every poll; the ownership check, renewal and
+  queue pop are one Lua script. When two panels are open for the same
+  account, the newest stream owns inbound requests and the older one
+  stays connected but idle (it is not closed, so older extension builds
+  don't reconnect and displace the newer tab). The older stream takes
+  over once the newer one releases ownership on close or its lease
+  expires. A stream that disappears without the relay noticing can
+  delay delivery by up to ~30 s; requests stay queued during that
+  lease (up to the queue's 60 s TTL) rather than being discarded, and
+  a request whose delivery fails is put back at the head of the queue.
+  **Known limitation:** the older tab still receives
+  `AGENT_PRESENCE` and may show Connected even though the agent's tool
+  calls go to the newer tab.
 
 ## Self-hosted relay
 
