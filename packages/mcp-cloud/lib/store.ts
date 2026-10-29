@@ -10,7 +10,7 @@
 //   RPUSH inbound:{tenantId}  the JSON message
 //   EXPIRE the list to 60 s so abandoned tenants don't leak entries
 //   LPOP one at a time on the SSE handler's poll cycle, only by the
-//   tenant's current stream (owner:{tenantId}, a leased stream ID)
+//   tenant's current stream ({inbound:<tenantId>}:owner, a leased stream ID)
 //
 // Outbound (extension → cloud, request/response):
 //   SET resp:{tenantId}:{requestId}  the JSON reply, EX 60 s
@@ -24,7 +24,10 @@ export const STREAM_TTL_S = 60;
 export const POLL_INTERVAL_MS = 250;
 export const OWNER_LEASE_MS = 30_000;
 
-export function ownerKey(tenantId: string): string { return `owner:${tenantId}`; }
+// The hash tag makes Redis Cluster slot the owner key by the full inbound key
+// name, so both keys of the consume script share a slot (no CROSSSLOT) while
+// the existing inbound:{tenantId} queue keeps its name and pending entries.
+export function ownerKey(tenantId: string): string { return `{${inboundKey(tenantId)}}:owner`; }
 
 export function inboundKey(tenantId: string): string { return `inbound:${tenantId}`; }
 export function responseKey(tenantId: string, requestId: string): string { return `resp:${tenantId}:${requestId}`; }

@@ -121,14 +121,14 @@ test('relay lifecycle against an isolated real Redis', {
       assert.equal(taken.owner, true);
       assert.equal(JSON.parse(taken.item).type, 'ONE');
       assert.deepEqual(await store.consumeInbound('t_owner', 'B'), { owner: true, item: null });
-      const ttl = await client.pTTL('owner:t_owner');
+      const ttl = await client.pTTL('{inbound:t_owner}:owner');
       assert.ok(ttl > 0 && ttl <= store.OWNER_LEASE_MS);
       await store.releaseOwner('t_owner', 'A');
-      assert.equal(await client.get('owner:t_owner'), 'B');
+      assert.equal(await client.get('{inbound:t_owner}:owner'), 'B');
       await store.releaseOwner('t_owner', 'B');
-      assert.equal(await client.exists('owner:t_owner'), 0);
+      assert.equal(await client.exists('{inbound:t_owner}:owner'), 0);
       assert.equal((await store.consumeInbound('t_owner', 'A')).owner, true);
-      assert.equal(await client.get('owner:t_owner'), 'A');
+      assert.equal(await client.get('{inbound:t_owner}:owner'), 'A');
       await store.requeueInbound('t_owner', { type: 'BACK' });
       assert.equal(JSON.parse((await store.consumeInbound('t_owner', 'A')).item).type, 'BACK');
     });
@@ -292,4 +292,33 @@ test('relay lifecycle against an isolated real Redis', {
     await exited;
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Explicit opt-in: a cluster-mode Redis (all slots on one node is enough, it still enforces CROSSSLOT).
+test('ownership scripts run on cluster-mode Redis without CROSSSLOT', {
+  skip: !process.env.REDIS_CLUSTER_TEST_URL && 'set REDIS_CLUSTER_TEST_URL to a disposable cluster-mode Redis',
+}, async () => {
+  const client = createClient({ url: process.env.REDIS_CLUSTER_TEST_URL, socket: { reconnectStrategy: false } });
+  client.on('error', () => {});
+  await client.connect();
+  try {
+    assert.match(String(await client.sendCommand(['INFO', 'cluster'])), /cluster_enabled:1/);
+    await assert.rejects(
+      client.sendCommand(['EVAL', "return redis.call('GET', KEYS[1])", '2', 'owner:t_slot', 'inbound:t_slot']),
+      /CROSSSLOT/, 'the fixture must enforce slot rules for this test to mean anything');
+    const store = loadFixture(client)('lib/store.ts');
+    const tenant = `t_slot_${Date.now()}`;
+    await store.claimOwner(tenant, 'A');
+    await store.claimOwner(tenant, 'B');
+    await store.publishInbound(tenant, { type: 'ONE' });
+    assert.deepEqual(await store.consumeInbound(tenant, 'A'), { owner: false, item: null });
+    assert.equal(JSON.parse((await store.consumeInbound(tenant, 'B')).item).type, 'ONE');
+    await store.requeueInbound(tenant, { type: 'BACK' });
+    await store.releaseOwner(tenant, 'A');
+    assert.equal(await client.get(store.ownerKey(tenant)), 'B');
+    await store.releaseOwner(tenant, 'B');
+    assert.equal(await client.exists(store.ownerKey(tenant)), 0);
+    assert.equal(JSON.parse((await store.consumeInbound(tenant, 'A')).item).type, 'BACK');
+    await client.del([store.ownerKey(tenant), store.inboundKey(tenant)]);
+  } finally { await client.quit(); }
 });

@@ -97,6 +97,7 @@ async function collect(store, tenantId, streamId, abort, sink) {
   for await (const msg of store.readInbound({ tenantId, streamId, signal: abort.signal, pollMs: 5 })) sink.push(msg.type);
 }
 
+const OWNER_T = '{inbound:t}:owner';
 const settle = (ms = 60) => new Promise(r => setTimeout(r, ms));
 
 async function waitFor(check, ms = 1000) {
@@ -149,20 +150,20 @@ test('regression: a stale stream no longer takes a share of requests (was 6/8 an
 test('a missing or expired ownership record is reclaimed by the next poll', async () => {
   const { store, values, redis } = fixture();
   await store.claimOwner('t', 'A');
-  await redis.del('owner:t');
+  await redis.del(OWNER_T);
   assert.equal((await store.consumeInbound('t', 'B')).owner, true);
-  assert.equal(values.get('owner:t'), 'B');
-  await redis.set('owner:t', 'B', { PX: 1 });
+  assert.equal(values.get(OWNER_T), 'B');
+  await redis.set(OWNER_T, 'B', { PX: 1 });
   await settle(5);
   assert.equal((await store.consumeInbound('t', 'A')).owner, true);
-  assert.equal(values.get('owner:t'), 'A');
+  assert.equal(values.get(OWNER_T), 'A');
 });
 
 test('the owner refreshes its lease while polling', async () => {
   const { store, redis } = fixture();
-  await redis.set('owner:t', 'A', { PX: 40 });
+  await redis.set(OWNER_T, 'A', { PX: 40 });
   for (let i = 0; i < 4; i++) { await settle(20); assert.equal((await store.consumeInbound('t', 'A')).owner, true); }
-  assert.equal(await redis.get('owner:t'), 'A');
+  assert.equal(await redis.get(OWNER_T), 'A');
 });
 
 test('an older stream cannot release or overwrite a newer owner', async () => {
@@ -170,11 +171,11 @@ test('an older stream cannot release or overwrite a newer owner', async () => {
   await store.claimOwner('t', 'A');
   await store.claimOwner('t', 'B');
   await store.releaseOwner('t', 'A');
-  assert.equal(values.get('owner:t'), 'B');
+  assert.equal(values.get(OWNER_T), 'B');
   await store.consumeInbound('t', 'A');
-  assert.equal(values.get('owner:t'), 'B');
+  assert.equal(values.get(OWNER_T), 'B');
   await store.releaseOwner('t', 'B');
-  assert.equal(values.has('owner:t'), false);
+  assert.equal(values.has(OWNER_T), false);
 });
 
 test('Redis errors while polling lose nothing, are logged once per outage, and the stream recovers', async () => {
@@ -305,4 +306,27 @@ test('logEvent never throws, even when the log sink does', () => {
   console.log = () => { throw new Error('sink down'); };
   try { assert.doesNotThrow(() => mod.exports.logEvent('stream.requeue_error', { tenantId: 't', error: 'X' })); }
   finally { console.log = original; }
+});
+
+// Redis Cluster's key slot: CRC16/XMODEM of the hash tag (first {...} with content) or the whole key, mod 16384.
+function keySlot(key) {
+  const open = key.indexOf('{');
+  const close = open >= 0 ? key.indexOf('}', open + 1) : -1;
+  const tagged = close > open + 1 ? key.slice(open + 1, close) : key;
+  let crc = 0;
+  for (const byte of Buffer.from(tagged)) {
+    crc ^= byte << 8;
+    for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+  }
+  return crc % 16384;
+}
+
+test('owner and inbound keys share a Redis Cluster slot, so the consume script cannot hit CROSSSLOT', () => {
+  const { store } = fixture();
+  assert.equal(keySlot('123456789'), 12739, 'CRC16/XMODEM reference vector');
+  for (const tenant of ['t', 't_0123456789abcdef', 't_ffffffffffffffff', 't_a1b2c3d4e5f60718']) {
+    assert.equal(store.inboundKey(tenant), `inbound:${tenant}`, 'the queue key must keep its deployed name');
+    assert.equal(keySlot(store.ownerKey(tenant)), keySlot(store.inboundKey(tenant)), tenant);
+  }
+  assert.notEqual(keySlot('owner:t_0123456789abcdef'), keySlot('inbound:t_0123456789abcdef'));
 });

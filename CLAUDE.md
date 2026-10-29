@@ -218,7 +218,8 @@ tool), these rules are read automatically at session start.
 - **Cloud / Self-hosted stream ownership** (`packages/mcp-cloud/lib/store.ts`):
   one stream per account receives agent requests — there is no
   simultaneous delivery to several tabs. Each SSE stream claims
-  `owner:{tenantId}` on connect (newest wins) under a 30 s lease that
+  `{inbound:<tenantId>}:owner` on connect (hash-tagged into the
+  inbound queue's Redis Cluster slot) (newest wins) under a 30 s lease that
   the owner renews on every poll; the ownership check, renewal and
   queue pop are one Lua script. When two panels are open for the same
   account, the newest stream owns inbound requests and the older one
