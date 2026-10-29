@@ -28,6 +28,9 @@ export const OWNER_LEASE_MS = 30_000;
 // name, so both keys of the consume script share a slot (no CROSSSLOT) while
 // the existing inbound:{tenantId} queue keeps its name and pending entries.
 export function ownerKey(tenantId: string): string { return `{${inboundKey(tenantId)}}:owner`; }
+export function evictedKey(tenantId: string): string { return `{${inboundKey(tenantId)}}:evicted`; }
+export function takerKey(tenantId: string, requestId: string): string { return `{${inboundKey(tenantId)}}:taker:${requestId}`; }
+export const EVICTED_TTL_MS = 600_000;
 
 export function inboundKey(tenantId: string): string { return `inbound:${tenantId}`; }
 export function responseKey(tenantId: string, requestId: string): string { return `resp:${tenantId}:${requestId}`; }
@@ -59,6 +62,7 @@ export async function publishResponse(tenantId: string, requestId: string, msg: 
 // script so no other stream can claim in between. A missing owner (expired
 // lease or released) is claimed by whichever stream polls next.
 export const CONSUME_SCRIPT = `
+if redis.call('SISMEMBER', KEYS[3], ARGV[1]) == 1 then return {2} end
 local owner = redis.call('GET', KEYS[1])
 if not owner then
   redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
@@ -70,6 +74,21 @@ end
 local item = redis.call('LPOP', KEYS[2])
 if not item then return {1} end
 return {1, item}
+`;
+
+// The extension answers every request it receives, so an unanswered one means
+// the stream that took it is dead even though the platform never told us (a
+// closed tab can keep its function, and its lease, alive for minutes). Evict
+// that stream: it may no longer consume, and its ownership is released so a
+// live stream takes over on its next poll.
+export const EVICT_SCRIPT = `
+local taker = redis.call('GET', KEYS[2])
+if not taker then return 0 end
+redis.call('SADD', KEYS[3], taker)
+redis.call('PEXPIRE', KEYS[3], ARGV[1])
+if redis.call('GET', KEYS[1]) == taker then redis.call('DEL', KEYS[1]) end
+redis.call('DEL', KEYS[2])
+return 1
 `;
 
 export const RELEASE_SCRIPT = `
@@ -89,13 +108,27 @@ export async function releaseOwner(tenantId: string, streamId: string): Promise<
   await c.sendCommand(['EVAL', RELEASE_SCRIPT, '1', ownerKey(tenantId), streamId]);
 }
 
-export async function consumeInbound(tenantId: string, streamId: string): Promise<{ owner: boolean; item: string | null }> {
+export async function consumeInbound(tenantId: string, streamId: string): Promise<{ owner: boolean; evicted: boolean; item: string | null }> {
   const c = await kv();
   const raw = (await c.sendCommand([
-    'EVAL', CONSUME_SCRIPT, '2', ownerKey(tenantId), inboundKey(tenantId), streamId, String(OWNER_LEASE_MS),
+    'EVAL', CONSUME_SCRIPT, '3', ownerKey(tenantId), inboundKey(tenantId), evictedKey(tenantId), streamId, String(OWNER_LEASE_MS),
   ])) as unknown[];
   const item = raw?.[1];
-  return { owner: Number(raw?.[0]) === 1, item: typeof item === 'string' ? item : null };
+  const state = Number(raw?.[0]);
+  return { owner: state === 1, evicted: state === 2, item: typeof item === 'string' ? item : null };
+}
+
+export async function recordTaker(tenantId: string, requestId: string, streamId: string): Promise<void> {
+  const c = await kv();
+  await c.set(takerKey(tenantId, requestId), streamId, { PX: STREAM_TTL_S * 1000 });
+}
+
+export async function evictTaker(tenantId: string, requestId: string): Promise<boolean> {
+  const c = await kv();
+  const evicted = await c.sendCommand([
+    'EVAL', EVICT_SCRIPT, '3', ownerKey(tenantId), takerKey(tenantId, requestId), evictedKey(tenantId), String(EVICTED_TTL_MS),
+  ]);
+  return Number(evicted) === 1;
 }
 
 // Puts an undeliverable message back at the head so the next owner gets it.
@@ -124,7 +157,12 @@ export async function* readInbound(opts: {
     if (opts.signal?.aborted) return;
     let item: string | null = null;
     try {
-      ({ item } = await consumeInbound(opts.tenantId, opts.streamId));
+      let evicted: boolean;
+      ({ item, evicted } = await consumeInbound(opts.tenantId, opts.streamId));
+      if (evicted) {
+        logEvent('relay.stream.evicted', { tenantId: opts.tenantId });
+        return;
+      }
       if (failing) {
         failing = false;
         logEvent('relay.inbound.consume_recovered', { tenantId: opts.tenantId });

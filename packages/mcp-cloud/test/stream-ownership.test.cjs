@@ -19,6 +19,8 @@ function fixture() {
     return values.has(key);
   };
   const list = key => { if (!lists.has(key)) lists.set(key, []); return lists.get(key); };
+  const sets = new Map();
+  const set = key => { if (!sets.has(key)) sets.set(key, new Set()); return sets.get(key); };
   const redis = {
     async get(key) { return live(key) ? values.get(key) : null; },
     async set(key, value, options) {
@@ -51,13 +53,24 @@ function fixture() {
       const [, script, , ...rest] = args;
       let result;
       if (script === scripts.CONSUME_SCRIPT) {
-        const [owner, queue, id, leaseMs] = rest;
+        const [owner, queue, evicted, id, leaseMs] = rest;
+        if (set(evicted).has(id)) return [2];
         const current = (await redis.get(owner));
         if (current === null) await redis.set(owner, id, { PX: Number(leaseMs) });
         else if (current !== id) return [0];
         else expiries.set(owner, Date.now() + Number(leaseMs));
         const item = list(queue).shift();
         result = item === undefined ? [1] : [1, item];
+      } else if (script === scripts.EVICT_SCRIPT) {
+        const [owner, taker, evicted] = rest;
+        const id = await redis.get(taker);
+        if (id === null) result = 0;
+        else {
+          set(evicted).add(id);
+          if ((await redis.get(owner)) === id) await redis.del(owner);
+          await redis.del(taker);
+          result = 1;
+        }
       } else if (script === scripts.RELEASE_SCRIPT) {
         const [owner, id] = rest;
         result = (await redis.get(owner)) === id ? await redis.del(owner) : 0;
@@ -90,7 +103,7 @@ function fixture() {
   }
   const store = load('lib/store.ts');
   scripts = store;
-  return { load, store, values, lists, hooks, redis, logs, queue: tenant => list(`inbound:${tenant}`) };
+  return { load, store, values, lists, sets, hooks, redis, logs, queue: tenant => list(`inbound:${tenant}`) };
 }
 
 async function collect(store, tenantId, streamId, abort, sink) {
@@ -125,7 +138,7 @@ test('a superseded stream cannot consume and the current stream receives the req
   await store.claimOwner('t', 'A');
   await store.claimOwner('t', 'B');
   await store.publishInbound('t', { type: 'REQ' });
-  assert.deepEqual(await store.consumeInbound('t', 'A'), { owner: false, item: null });
+  assert.deepEqual(await store.consumeInbound('t', 'A'), { owner: false, evicted: false, item: null });
   assert.equal(queue('t').length, 1);
   const { owner, item } = await store.consumeInbound('t', 'B');
   assert.equal(owner, true);
@@ -329,4 +342,48 @@ test('owner and inbound keys share a Redis Cluster slot, so the consume script c
     assert.equal(keySlot(store.ownerKey(tenant)), keySlot(store.inboundKey(tenant)), tenant);
   }
   assert.notEqual(keySlot('owner:t_0123456789abcdef'), keySlot('inbound:t_0123456789abcdef'));
+});
+
+test('regression (live staging): a closed newest stream that the platform keeps alive is evicted on the first unanswered request and the older stream takes over', async () => {
+  const f = fixture();
+  const older = await openStream(f, 'dm_zombie', 't_zombie');
+  await settle();
+  const zombie = await openStream(f, 'dm_zombie', 't_zombie');
+  await settle();
+  await f.store.publishInbound('t_zombie', { type: 'CLOUD_GET_CHANGES', requestId: 'req-1' });
+  await waitFor(() => zombie.relayed('CLOUD_GET_CHANGES'));
+  // The zombie never answers; the MCP handler times out and evicts whoever took req-1.
+  assert.equal(await f.store.evictTaker('t_zombie', 'req-1'), true);
+  await waitFor(() => zombie.isDone());
+  assert.ok(f.logs.some(l => l.label === 'relay.stream.evicted' && l.tenantId === 't_zombie'));
+  await f.store.publishInbound('t_zombie', { type: 'CLOUD_GET_CHANGES', requestId: 'req-2' });
+  await waitFor(() => older.frames.some(fr => fr.includes('req-2')));
+  assert.equal(older.isDone(), false);
+  older.abort.abort(); await older.reader.cancel();
+});
+
+test('evicting a stream that was already superseded leaves the newer owner in place', async () => {
+  const { store, values } = fixture();
+  await store.claimOwner('t', 'A');
+  await store.recordTaker('t', 'req-9', 'A');
+  await store.claimOwner('t', 'B');
+  assert.equal(await store.evictTaker('t', 'req-9'), true);
+  assert.equal(values.get(OWNER_T), 'B');
+  assert.deepEqual(await store.consumeInbound('t', 'A'), { owner: false, evicted: true, item: null });
+  assert.equal((await store.consumeInbound('t', 'B')).owner, true);
+});
+
+test('a timeout with no recorded taker (nobody took the request) evicts nothing', async () => {
+  const { store, values } = fixture();
+  await store.claimOwner('t', 'A');
+  assert.equal(await store.evictTaker('t', 'req-none'), false);
+  assert.equal(values.get(OWNER_T), 'A');
+});
+
+test('evicted and taker keys share the inbound key slot', () => {
+  const { store } = fixture();
+  for (const tenant of ['t_0123456789abcdef', 't_ffffffffffffffff']) {
+    assert.equal(keySlot(store.evictedKey(tenant)), keySlot(store.inboundKey(tenant)));
+    assert.equal(keySlot(store.takerKey(tenant, 'req-1793270000000-abcdef')), keySlot(store.inboundKey(tenant)));
+  }
 });

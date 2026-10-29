@@ -8,7 +8,7 @@
 // ============================================================
 
 import { authenticate, isTokenActive } from '../../lib/auth.js';
-import { claimOwner, readInbound, releaseOwner, requeueInbound } from '../../lib/store.js';
+import { claimOwner, readInbound, recordTaker, releaseOwner, requeueInbound } from '../../lib/store.js';
 import { randomBytes } from 'node:crypto';
 import { logEvent } from '../../lib/log.js';
 import { getPresence } from '../../lib/presence.js';
@@ -99,6 +99,11 @@ export async function GET(req: Request): Promise<Response> {
       try {
         await claimOwner(tenantId, streamId);
         for await (const msg of readInbound({ tenantId, streamId, signal: ctrl.signal, isAuthorized })) {
+          if (msg.requestId) {
+            await recordTaker(tenantId, msg.requestId, streamId).catch((err: any) => {
+              logEvent('stream.taker_error', { tenantId, error: err?.code || err?.name || 'unknown' });
+            });
+          }
           let delivered = false;
           try { delivered = await send('relay', JSON.stringify(msg)); } catch { /* stream already closed */ }
           if (!delivered) {

@@ -226,10 +226,15 @@ tool), these rules are read automatically at session start.
   stays connected but idle (it is not closed, so older extension builds
   don't reconnect and displace the newer tab). The older stream takes
   over once the newer one releases ownership on close or its lease
-  expires. A stream that disappears without the relay noticing can
-  delay delivery by up to ~30 s; requests stay queued during that
-  lease (up to the queue's 60 s TTL) rather than being discarded, and
-  a request whose delivery fails is put back at the head of the queue.
+  expires. On Vercel a closed tab's stream function is often not told
+  the client left, so it keeps renewing its lease (seen live for the
+  full 300 s `maxDuration`) and requests forwarded to it are lost. The
+  extension answers every request, so `/mcp` treats a 12 s timeout as
+  proof: it evicts the stream recorded as that request's taker
+  (`{inbound:<tenantId>}:taker:<requestId>`), which then stops
+  consuming and releases ownership, and a live stream takes over on
+  its next poll. That bounds the loss to the request that timed out.
+  A request whose delivery fails is put back at the head of the queue.
   **Known limitation:** the older tab still receives
   `AGENT_PRESENCE` and may show Connected even though the agent's tool
   calls go to the newer tab.

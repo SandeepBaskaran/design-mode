@@ -115,12 +115,12 @@ test('relay lifecycle against an isolated real Redis', {
       await store.claimOwner('t_owner', 'A');
       await store.claimOwner('t_owner', 'B');
       await store.publishInbound('t_owner', { type: 'ONE' });
-      assert.deepEqual(await store.consumeInbound('t_owner', 'A'), { owner: false, item: null });
+      assert.deepEqual(await store.consumeInbound('t_owner', 'A'), { owner: false, evicted: false, item: null });
       assert.equal(await client.lLen('inbound:t_owner'), 1);
       const taken = await store.consumeInbound('t_owner', 'B');
       assert.equal(taken.owner, true);
       assert.equal(JSON.parse(taken.item).type, 'ONE');
-      assert.deepEqual(await store.consumeInbound('t_owner', 'B'), { owner: true, item: null });
+      assert.deepEqual(await store.consumeInbound('t_owner', 'B'), { owner: true, evicted: false, item: null });
       const ttl = await client.pTTL('{inbound:t_owner}:owner');
       assert.ok(ttl > 0 && ttl <= store.OWNER_LEASE_MS);
       await store.releaseOwner('t_owner', 'A');
@@ -131,6 +131,14 @@ test('relay lifecycle against an isolated real Redis', {
       assert.equal(await client.get('{inbound:t_owner}:owner'), 'A');
       await store.requeueInbound('t_owner', { type: 'BACK' });
       assert.equal(JSON.parse((await store.consumeInbound('t_owner', 'A')).item).type, 'BACK');
+      await store.recordTaker('t_owner', 'req-x', 'A');
+      assert.equal(await store.evictTaker('t_owner', 'req-x'), true);
+      assert.equal(await client.exists(store.ownerKey('t_owner')), 0);
+      assert.deepEqual(await store.consumeInbound('t_owner', 'A'), { owner: false, evicted: true, item: null });
+      assert.equal((await store.consumeInbound('t_owner', 'B')).owner, true);
+      assert.equal(await store.evictTaker('t_owner', 'req-x'), false);
+      const evictedTtl = await client.pTTL(store.evictedKey('t_owner'));
+      assert.ok(evictedTtl > 0 && evictedTtl <= store.EVICTED_TTL_MS);
     });
     await t.test('an already open SSE closes after revocation and does not forward later messages', async () => {
       const load = loadFixture(client);
@@ -311,14 +319,17 @@ test('ownership scripts run on cluster-mode Redis without CROSSSLOT', {
     await store.claimOwner(tenant, 'A');
     await store.claimOwner(tenant, 'B');
     await store.publishInbound(tenant, { type: 'ONE' });
-    assert.deepEqual(await store.consumeInbound(tenant, 'A'), { owner: false, item: null });
+    assert.deepEqual(await store.consumeInbound(tenant, 'A'), { owner: false, evicted: false, item: null });
     assert.equal(JSON.parse((await store.consumeInbound(tenant, 'B')).item).type, 'ONE');
     await store.requeueInbound(tenant, { type: 'BACK' });
+    await store.recordTaker(tenant, 'req-c', 'B');
     await store.releaseOwner(tenant, 'A');
     assert.equal(await client.get(store.ownerKey(tenant)), 'B');
     await store.releaseOwner(tenant, 'B');
     assert.equal(await client.exists(store.ownerKey(tenant)), 0);
     assert.equal(JSON.parse((await store.consumeInbound(tenant, 'A')).item).type, 'BACK');
-    await client.del([store.ownerKey(tenant), store.inboundKey(tenant)]);
+    assert.equal(await store.evictTaker(tenant, 'req-c'), true);
+    assert.equal((await store.consumeInbound(tenant, 'B')).evicted, true);
+    await client.del([store.ownerKey(tenant), store.inboundKey(tenant), store.evictedKey(tenant)]);
   } finally { await client.quit(); }
 });

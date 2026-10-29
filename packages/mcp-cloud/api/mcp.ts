@@ -12,7 +12,7 @@
 // ============================================================
 
 import { authenticate } from '../lib/auth.js';
-import { awaitResponse, publishInbound } from '../lib/store.js';
+import { awaitResponse, evictTaker, publishInbound } from '../lib/store.js';
 import { logEvent } from '../lib/log.js';
 import { bumpPresence } from '../lib/presence.js';
 import { consumeQuota, consumeBurst, BURST_LIMIT, BURST_WINDOW_S } from '../lib/quota.js';
@@ -208,6 +208,11 @@ async function handleToolCall(tenantId: string, name: string, args: any): Promis
     }
     return { content: tool.toContent(reply.payload, args || {}) };
   } catch {
+    try {
+      if (await evictTaker(tenantId, requestId)) logEvent('mcp.unanswered.evicted', { tenantId, type: built.type });
+    } catch (err: any) {
+      logEvent('mcp.evict_error', { tenantId, error: err?.code || err?.name || 'unknown' });
+    }
     return {
       content: [{ type: 'text', text: 'Browser offline. Open the DIVE side panel and try again.' }],
       isError: true,
