@@ -22,6 +22,7 @@
     "package:extension:safari": "npm run build:extension:safari && cd packages/extension/dist-safari && rm -f ../designmode-for-safari.zip && zip -rq ../designmode-for-safari.zip . -x '*.DS_Store' -x '*.map'",
     "build:analytics": "npm run build:analytics --workspace @design-mode/extension",
     "test:analytics-build": "node --test packages/extension/analytics-build*.test.mjs",
+    "test:website": "tsx --test website/src/app/design-system/*.test.ts",
     "build:website": "cd website && npm run build",
     "package:extension": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-extension.zip && zip -rq ../design-mode-extension.zip . -x '*.DS_Store' -x '*.map'",
     "package:extension:firefox": "npm run build:extension && cd packages/extension/dist && rm -f ../design-mode-addon.zip && zip -rq ../design-mode-addon.zip . -x '*.DS_Store' -x '*.map'",

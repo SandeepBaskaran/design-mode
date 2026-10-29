@@ -67,6 +67,10 @@ step('Analytics build configuration tests', () => {
   run('npm run test:analytics-build', { stdio: 'pipe' });
 });
 
+step('Website design-system token tests', () => {
+  run('npm run test:website', { stdio: 'pipe' });
+});
+
 step('CLI typecheck', () => {
   run('npm run typecheck --workspace @designmode-app/cli', { stdio: 'pipe' });
 });

@@ -369,6 +369,21 @@ reminder. The manual checklist covers:
 - MCP server start / connection / tool calls
 - Cross-feature integration regressions
 
+### Website design-system page
+
+`/design-system` is an internal style guide, component gallery and page map
+built from the site's real tokens (`website/src/styles/globals.css`) and UI
+components. It is available under `npm run dev:website`; production builds
+return 404 unless built with `DESIGN_SYSTEM_ENABLED=1`, because the page shows
+source paths. It also sends `noindex, nofollow`, but that is not access
+control — anyone with the URL can open an enabled build.
+
+Token edits preview live and persist as a draft in the browser's
+`localStorage` (`dm-design-system-draft`) only. **Copy changes** exports the
+valid edited tokens as a `:root { … }` block; paste it into `globals.css` to
+apply it. Invalid values are flagged and never exported. Token validation is
+covered by `npm run test:website`.
+
 ## Tech stack
 
 - **Extension**: Vite, TypeScript, Manifest V3 (Chrome side panel / Firefox sidebar)

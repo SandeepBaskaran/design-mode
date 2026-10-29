@@ -6,6 +6,7 @@ import { Check, Copy, RotateCcw } from "lucide-react";
 
 import type { ComponentFile, PageInfo } from "./analysis";
 import { PagesView } from "./pages-view";
+import { buildExportCss, isValidTokenValue, sanitizeDraft } from "./tokens";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,9 @@ function toHex6(value: string) {
   return m ? `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}` : null;
 }
 
+const cssSupports = (property: string, value: string) => CSS.supports(property, value);
+const isValid = (name: string, value: string) => isValidTokenValue(name, value, cssSupports);
+
 function readToken(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
@@ -54,19 +58,21 @@ export function DesignSystem({
   const [tab, setTab] = useState<(typeof TABS)[number]>("Style guide");
   const [base, setBase] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   useEffect(() => {
     setBase(Object.fromEntries(EDITABLE.map((t) => [t, readToken(t)])));
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
-      if (saved && typeof saved === "object") setDraft(saved);
+      setDraft(sanitizeDraft(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"), EDITABLE, cssSupports));
     } catch {}
   }, []);
 
   useEffect(() => {
     const root = document.documentElement;
-    for (const [name, value] of Object.entries(draft)) root.style.setProperty(name, value);
+    for (const [name, value] of Object.entries(draft)) {
+      if (isValid(name, value)) root.style.setProperty(name, value.trim());
+      else root.style.removeProperty(name);
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
     } catch {}
@@ -76,12 +82,10 @@ export function DesignSystem({
   }, [draft]);
 
   const changed = useMemo(
-    () => Object.entries(draft).filter(([name, value]) => value && value !== base[name]),
+    () => Object.entries(draft).filter(([name, value]) => isValid(name, value) && value.trim() !== base[name]),
     [draft, base],
   );
-  const exportCss = changed.length
-    ? `:root {\n${changed.map(([n, v]) => `  ${n}: ${v};`).join("\n")}\n}\n`
-    : "";
+  const exportCss = buildExportCss(changed);
 
   const setToken = (name: string, value: string) => setDraft((d) => ({ ...d, [name]: value }));
   const valueOf = (name: string) => draft[name] ?? base[name] ?? "";
@@ -104,9 +108,11 @@ export function DesignSystem({
   async function copyExport() {
     try {
       await navigator.clipboard.writeText(exportCss);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {}
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+    setTimeout(() => setCopyState("idle"), 1600);
   }
 
   return (
@@ -130,7 +136,8 @@ export function DesignSystem({
               <RotateCcw /> Reset
             </Button>
             <Button size="sm" onClick={copyExport} disabled={!changed.length}>
-              {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy changes"}
+              {copyState === "copied" ? <Check /> : <Copy />}{" "}
+              {copyState === "copied" ? "Copied" : copyState === "failed" ? "Copy failed" : "Copy changes"}
             </Button>
           </div>
         </div>
@@ -201,7 +208,8 @@ function StyleGuide({
                 {group.tokens.map((name) => {
                   const value = valueOf(name);
                   const hex = toHex6(value);
-                  const dirty = draft[name] !== undefined && draft[name] !== base[name];
+                  const invalid = draft[name] !== undefined && !isValid(name, draft[name]);
+                  const dirty = !invalid && draft[name] !== undefined && draft[name] !== base[name];
                   return (
                     <div key={name} className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
                       <label className="relative size-9 shrink-0 overflow-hidden rounded-md border" style={{ background: `var(${name})` }}>
@@ -218,12 +226,17 @@ function StyleGuide({
                       <code className="flex-1 text-sm">
                         {name}
                         {dirty && <span className="text-primary ml-2 text-xs">edited</span>}
+                        {invalid && <span className="text-destructive ml-2 text-xs">invalid</span>}
                       </code>
                       <input
                         value={value}
                         onChange={(e) => setToken(name, e.target.value)}
                         aria-label={`${name} value`}
-                        className="bg-background w-40 rounded-md border px-2 py-1 font-mono text-xs"
+                        aria-invalid={invalid}
+                        className={cn(
+                          "bg-background w-40 rounded-md border px-2 py-1 font-mono text-xs",
+                          invalid && "border-destructive",
+                        )}
                       />
                     </div>
                   );
