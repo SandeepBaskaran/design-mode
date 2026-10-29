@@ -1804,6 +1804,8 @@ let cloudBaseUrl: string | null = null;
 let sseAbort: AbortController | null = null;
 let unhandledMessageHandler: ((msg: any) => void) | null = null;
 let agentConnected = false;
+// Cloud relay: false while another tab's stream owns agent requests.
+let streamOwner = true;
 
 export type FeedbackUiState = 'waiting' | 'implementing' | 'stopped';
 export type FeedbackSessionView = {
@@ -1854,6 +1856,8 @@ function flushFeedbackAckWaiters() {
 }
 
 export function isAgentConnected() { return agentConnected; }
+
+export function isStreamOwner() { return transportMode === 'local' || streamOwner; }
 
 export function isLiveFeedbackSupported() { return transportMode === 'local'; }
 
@@ -1929,6 +1933,11 @@ function dispatchIncoming(msg: any) {
     if (!msg || typeof msg.type !== 'string') return;
     if (msg.type === 'AGENT_PRESENCE') {
       setAgentConnected(!!msg.payload?.connected);
+      return;
+    }
+    if (msg.type === 'STREAM_OWNERSHIP') {
+      streamOwner = msg.payload?.owner !== false;
+      setAgentConnected(agentConnected);
       return;
     }
     if (msg.type === 'HELLO') {
@@ -2110,6 +2119,7 @@ async function runCloudStream() {
         throw new Error(`stream status ${resp.status}`);
       }
       console.debug('[DIVE] cloud stream open');
+      streamOwner = true;
       backoff = 1000;
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();

@@ -147,21 +147,27 @@ export async function* readInbound(opts: {
   signal?: AbortSignal;
   pollMs?: number;
   isAuthorized?: () => Promise<boolean>;
+  onOwnership?: (owner: boolean) => void;
 }): AsyncGenerator<RelayMessage, void, void> {
   const pollMs = opts.pollMs ?? POLL_INTERVAL_MS;
   // Logged once per run of failures, not on every poll tick; the queue is
   // untouched on failure, so the next successful poll still delivers.
   let failing = false;
+  let owner: boolean | null = null;
   while (!opts.signal?.aborted) {
     if (opts.isAuthorized && !(await opts.isAuthorized())) return;
     if (opts.signal?.aborted) return;
     let item: string | null = null;
     try {
-      let evicted: boolean;
-      ({ item, evicted } = await consumeInbound(opts.tenantId, opts.streamId));
-      if (evicted) {
+      const result = await consumeInbound(opts.tenantId, opts.streamId);
+      if (result.evicted) {
         logEvent('relay.stream.evicted', { tenantId: opts.tenantId });
         return;
+      }
+      item = result.item;
+      if (result.owner !== owner) {
+        owner = result.owner;
+        opts.onOwnership?.(owner);
       }
       if (failing) {
         failing = false;

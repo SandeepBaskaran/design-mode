@@ -173,7 +173,7 @@ interface DomNode {
 
 /* ── State ── */
 type Tab = 'layers' | 'design' | 'changes';
-type McpState = 'offline' | 'running' | 'connected';
+type McpState = 'offline' | 'running' | 'connected' | 'standby';
 type Theme = 'dark' | 'light' | 'system';
 type ColorFormat = 'hex' | 'rgba' | 'hsl';
 let tab: Tab = 'design';
@@ -949,7 +949,7 @@ port.onMessage.addListener((msg) => {
       void preparePanelTarget(msg.tabId).catch(() => {});
     }
     if (msg.pinnedUrl) resetChangesRoute(msg.pinnedUrl);
-    mcpState = !msg.connected ? 'offline' : msg.agentConnected ? 'connected' : 'running';
+    mcpState = !msg.connected ? 'offline' : msg.standby ? 'standby' : msg.agentConnected ? 'connected' : 'running';
     if (msg.pinnedUrl) { pinnedDomain = domainLabel(msg.pinnedUrl); }
     fileAccessBlocked = !!msg.fileAccessBlocked;
     if (fileAccessBlocked || pageUnavailable || (IS_SAFARI && (myTabId == null || inspectorError))) { render(); return; }
@@ -1072,6 +1072,7 @@ async function refreshMcpStatus(reping = false, operation = beginInspectorOperat
   // server with the tab socket still opening reports as running.
   mcpState = res.error ? 'offline'
     : !res.connected ? (res.serverRunning ? 'running' : 'offline')
+    : res.standby ? 'standby'
     : res.agentConnected ? 'connected' : 'running';
   await operation.wait(refreshFeedbackSession(operation));
   render();
@@ -6762,6 +6763,14 @@ function mcpStatusDisplay(): { dotStyle: string; textColor: string; label: strin
         : 'MCP not running. Start the server with `npm start --prefix packages/mcp-local`, then refresh.',
     };
   }
+  if (mcpState === 'standby') {
+    return {
+      dotStyle: 'width:7px;height:7px;border-radius:50%;background:#f59e0b;flex-shrink:0;',
+      textColor: '#f59e0b',
+      label: 'Standby',
+      detail: 'Another DIVE tab owns this cloud connection, so agent requests go there. Reload this tab to take over.',
+    };
+  }
   if (mcpState === 'running') {
     return {
       dotStyle: 'width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;animation:dm-pulse 2s ease-in-out infinite;',
@@ -6912,6 +6921,7 @@ function renderStickyBottom(): string {
   else if (!hasChanges) sendTitle = 'No changes to send.';
   else if (mcpState === 'offline') sendTitle = 'MCP is not connected — click for setup instructions.';
   else if (mcpState === 'running') sendTitle = 'No coding agent connected yet — click for instructions.';
+  else if (mcpState === 'standby') sendTitle = 'Another DIVE tab owns the cloud connection — reload this tab to take over.';
   const copyTitle = previewingOriginal ? 'Disable “Preview original” first.' : !hasChanges ? 'No changes to copy.' : 'Copy changes from every route on this site, including collapsed groups';
   const copyS = 'flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;' +
     (copyDis ? 'background:var(--dm-btn-bg-disabled);border:1px solid var(--dm-btn-border-disabled);color:var(--dm-text-dim);cursor:default;opacity:0.5;pointer-events:none;' : 'background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text-secondary);cursor:pointer;');
@@ -6934,7 +6944,13 @@ function renderSendAgentHelpOverlay(): string {
   const code = (t: string) => '<code style="font-family:SF Mono,Monaco,monospace;font-size:9px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:3px;padding:1px 4px;word-break:break-all;">' + t + '</code>';
   let intro: string;
   let steps: string[];
-  if (mcpState === 'running') {
+  if (mcpState === 'standby') {
+    intro = 'Another DIVE tab owns this cloud connection, so the agent’s requests go to that tab.';
+    steps = [
+      'Reload this tab to take over the connection.',
+      'Send again once the MCP chip up top turns green.',
+    ];
+  } else if (mcpState === 'running') {
     intro = 'The MCP server is reachable, but no coding agent has connected yet.';
     steps = [
       'Open the <b>MCP page</b> (click the MCP chip up top) and click <b>Copy MCP config</b>.',
@@ -10486,6 +10502,7 @@ function setupDelegation() {
             if (mcpState !== before) {
               if (mcpState === 'connected') showCaptureToast('success', 'MCP connected');
               else if (mcpState === 'running') showCaptureToast('success', 'MCP running — waiting for agent');
+              else if (mcpState === 'standby') showCaptureToast('success', 'MCP standby — another tab owns the cloud connection');
               else showCaptureToast('error', 'MCP offline');
             }
           }));

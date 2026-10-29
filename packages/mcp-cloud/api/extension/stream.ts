@@ -98,7 +98,12 @@ export async function GET(req: Request): Promise<Response> {
       const streamId = randomBytes(12).toString('hex');
       try {
         await claimOwner(tenantId, streamId);
-        for await (const msg of readInbound({ tenantId, streamId, signal: ctrl.signal, isAuthorized })) {
+        // Tells this tab whether it owns agent requests, so a superseded tab
+        // can show Standby instead of Connected.
+        const onOwnership = (owner: boolean) => {
+          void send('relay', JSON.stringify({ type: 'STREAM_OWNERSHIP', payload: { owner } })).catch(() => {});
+        };
+        for await (const msg of readInbound({ tenantId, streamId, signal: ctrl.signal, isAuthorized, onOwnership })) {
           if (msg.requestId) {
             await recordTaker(tenantId, msg.requestId, streamId).catch((err: any) => {
               logEvent('stream.taker_error', { tenantId, error: err?.code || err?.name || 'unknown' });

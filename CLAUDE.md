@@ -192,12 +192,19 @@ tool), these rules are read automatically at session start.
   Fresh installs land on Cloud. Existing users keep whatever
   `dm-mcp-mode` was stored. UI order in the Settings picker and
   on the website's `/mcp` page is Cloud · Local · Self-hosted.
-- **Three-state `mcpState`** (`packages/extension/src/sidepanel/sidepanel.ts`):
+- **Four-state `mcpState`** (`packages/extension/src/sidepanel/sidepanel.ts`):
   - `offline` — transport (WS / SSE) is down.
   - `running` — transport up, no agent activity seen recently.
   - `connected` — transport up AND an `AGENT_PRESENCE` event was
     received within the last 5 minutes. Send-to-Agent button only
     enables in this state.
+  - `standby` — cloud / self-hosted only: transport up, but another
+    tab's stream owns agent requests (the relay sent
+    `STREAM_OWNERSHIP { owner: false }`). Takes precedence over
+    `connected`; clicking Send is blocked and opens a reload-to-take-over
+    hint instead. On Vercel, closing the owning tab may not hand over
+    until its lease is evicted (next agent timeout) or its function ends,
+    so reloading the Standby tab is the reliable way to take over.
 - **Local presence**: `packages/mcp-local/src/websocket-server.ts`
   sends a `HELLO` message on every WS connection with
   `agentConnected: true`. The local server is spawned by the MCP
@@ -235,9 +242,12 @@ tool), these rules are read automatically at session start.
   consuming and releases ownership, and a live stream takes over on
   its next poll. That bounds the loss to the request that timed out.
   A request whose delivery fails is put back at the head of the queue.
-  **Known limitation:** the older tab still receives
-  `AGENT_PRESENCE` and may show Connected even though the agent's tool
-  calls go to the newer tab.
+  Each stream is told when it gains or loses ownership
+  (`STREAM_OWNERSHIP` relay message, no `requestId`, so older extension
+  builds ignore it); the extension shows `standby` while it is not the
+  owner. Cost: an idle stream polls every 250 ms with one consume script
+  plus the token-liveness `GET` and `EXISTS`, i.e. 12 Redis commands/s
+  per open stream (asserted in `test/stream-ownership.test.cjs`).
 
 ## Self-hosted relay
 

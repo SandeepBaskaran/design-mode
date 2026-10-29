@@ -44,6 +44,15 @@ async function bounded(promise) {
   } finally { clearTimeout(timer); }
 }
 
+// Streams also announce ownership changes (STREAM_OWNERSHIP); these lifecycle
+// tests assert the other frames, so skip those.
+async function nextFrame(reader) {
+  for (;;) {
+    const result = await bounded(reader.read());
+    if (result.done || !new TextDecoder().decode(result.value).includes('STREAM_OWNERSHIP')) return result;
+  }
+}
+
 // Explicit executable opt-in: never use REDIS_URL or a hosted Redis fixture.
 test('relay lifecycle against an isolated real Redis', {
   skip: !process.env.REDIS_SERVER_BIN && 'set REDIS_SERVER_BIN to a local redis-server executable',
@@ -152,13 +161,13 @@ test('relay lifecycle against an isolated real Redis', {
       assert.equal(response.status, 200);
       const reader = response.body.getReader();
       try {
-        assert.match(new TextDecoder().decode((await bounded(reader.read())).value), /event: hello/);
-        assert.match(new TextDecoder().decode((await bounded(reader.read())).value), /AGENT_PRESENCE/);
+        assert.match(new TextDecoder().decode((await nextFrame(reader)).value), /event: hello/);
+        assert.match(new TextDecoder().decode((await nextFrame(reader)).value), /AGENT_PRESENCE/);
         await store.publishInbound('t_stream', { type: 'BEFORE_REVOKE' });
-        assert.match(new TextDecoder().decode((await bounded(reader.read())).value), /BEFORE_REVOKE/);
+        assert.match(new TextDecoder().decode((await nextFrame(reader)).value), /BEFORE_REVOKE/);
         await auth.revokeToken('dm_local_stream');
         await store.publishInbound('t_stream', { type: 'AFTER_REVOKE' });
-        const next = await bounded(reader.read());
+        const next = await nextFrame(reader);
         assert.equal(next.done, true, new TextDecoder().decode(next.value));
         assert.equal(await client.lLen('inbound:t_stream'), 1);
       } finally { abort.abort(); await reader.cancel(); }
@@ -188,11 +197,11 @@ test('relay lifecycle against an isolated real Redis', {
       }));
       const reader = response.body.getReader();
       try {
-        await bounded(reader.read());
-        await bounded(reader.read());
+        await nextFrame(reader);
+        await nextFrame(reader);
         revokeAfterPop = true;
         await store.publishInbound('t_batch', { type: 'DRAINED_BEFORE_REVOKE' });
-        assert.equal((await bounded(reader.read())).done, true);
+        assert.equal((await nextFrame(reader)).done, true);
         assert.match(await client.lIndex('inbound:t_batch', 0), /DRAINED_BEFORE_REVOKE/);
       } finally { abort.abort(); await reader.cancel(); }
     });
@@ -215,10 +224,10 @@ test('relay lifecycle against an isolated real Redis', {
       }));
       const reader = response.body.getReader();
       try {
-        await bounded(reader.read());
-        await bounded(reader.read());
+        await nextFrame(reader);
+        await nextFrame(reader);
         failAuthorization = true;
-        assert.equal((await bounded(reader.read())).done, true);
+        assert.equal((await nextFrame(reader)).done, true);
       } finally { abort.abort(); await reader.cancel(); }
     });
     for (const mode of ['cancel', 'abort', 'heartbeat', 'presence']) {
@@ -255,8 +264,8 @@ test('relay lifecycle against an isolated real Redis', {
         const response = await load('api/extension/stream.ts').GET(request);
         const reader = response.body.getReader();
         try {
-          await bounded(reader.read());
-          await bounded(reader.read());
+          await nextFrame(reader);
+          await nextFrame(reader);
           await new Promise(resolve => setTimeout(resolve, 20));
           assert.equal(intervals.size, 2);
           if (mode === 'cancel') await bounded(reader.cancel());
@@ -267,7 +276,7 @@ test('relay lifecycle against an isolated real Redis', {
             const tick = [...intervals.values()].find(timer => timer.ms === (mode === 'heartbeat' ? 25000 : 30000));
             await bounded(tick.fn());
           }
-          assert.equal((await bounded(reader.read())).done, true);
+          assert.equal((await nextFrame(reader)).done, true);
           await new Promise(resolve => setTimeout(resolve, 300));
           assert.equal(intervals.size, 0);
           assert.equal(listeners, 0);
@@ -287,10 +296,10 @@ test('relay lifecycle against an isolated real Redis', {
       }));
       const reader = response.body.getReader();
       try {
-        await bounded(reader.read());
-        await bounded(reader.read());
+        await nextFrame(reader);
+        await nextFrame(reader);
         await auth.revokeToken('dm_local_idle');
-        assert.equal((await bounded(reader.read())).done, true);
+        assert.equal((await nextFrame(reader)).done, true);
       } finally { abort.abort(); await reader.cancel(); }
     });
   } finally {

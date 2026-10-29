@@ -36,7 +36,7 @@ DIVE is a visual editor that lives in your browser. Instead of describing UI cha
 - Show your AI agent *exactly* what you want — visually — instead of describing it.
 - Drop sticky-note comments on elements and ship them with the prompt.
 - Export your changes as ready-to-paste CSS, Tailwind, SCSS, or JSX.
-- Opt-in anonymous analytics helps prioritize what actually gets built next.
+- Release builds send bounded usage events keyed to a random install ID (never CSS values, page content or URLs) to help prioritize what gets built next; source builds send none. Details in [PRIVACY.md](./PRIVACY.md).
 - Tighten a layout in seconds, then commit the patch. The vibe-coding loop, minus the back-and-forth.
 
 ## Three ways to connect your AI agent
@@ -393,8 +393,11 @@ covered by `npm run test:website`.
 
 ## Privacy & security
 
-- No extension telemetry or analytics. Edits live in `chrome.storage` on your
-  machine and travel only through the MCP mode you configure. Cloud is selected
+- Edits live in `chrome.storage` on your machine and travel only through the
+  MCP mode you configure. Release builds (`npm run package:extension:release`)
+  also send bounded usage analytics without a separate in-app opt-in (Firefox
+  honours its data-collection permission); ordinary source builds
+  (`node build.mjs`) send none. Cloud is selected
   on fresh installs; Local keeps MCP traffic on `127.0.0.1`. Full details:
   [PRIVACY.md](./PRIVACY.md).
 - The marketing site at `designmode.app` loads Google Fonts and (when configured

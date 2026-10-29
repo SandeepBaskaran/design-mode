@@ -25,7 +25,7 @@ import { showHover, hideHover, showSelect, hideSelect, destroyOverlays, resetOve
 import { enableInspect, disableInspect, isInspectActive, getSelectedElementId, hasExplicitSelection, setSelectedElementId, buildElementInfo, getComputedStylesBlock } from './inspector';
 import type { ElementInfo } from './inspector';
 import { initCustomCursor, applyBaseCursor, clearBaseCursor } from './custom-cursor';
-import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, computeCompanions, applyTextChange, applyHtmlChange, applyAttributeChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, ensureLocalTransport, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff, getFeedbackSessionView, isLiveFeedbackSupported, stopFeedbackSessionFromUi } from './change-tracker';
+import { getStyleChanges, getTextChanges, getDomChanges, clearAllChanges, applyStyleChange, applyWithCompanions, computeCompanions, applyTextChange, applyHtmlChange, applyAttributeChange, removeStyleChange, removeDomChange, removeTextChange, recordDomChange, connectToServer, disconnectFromServer, isConnected, isAgentConnected, isStreamOwner, ensureLocalTransport, getChangeReport, reorderChange, getAllChanges, replaySession, setOverridesEnabled, applyChangesPayload, setUnhandledMessageHandler, sendRelayResponse, setChangesStatus, syncCommentChange, syncCommentDeleted, stageAgentHandoff, getFeedbackSessionView, isLiveFeedbackSupported, stopFeedbackSessionFromUi } from './change-tracker';
 import { isSafeRichTextHref } from '../rich-text-preservation';
 import { copyElement, pasteElement, duplicateElement, moveElement } from './html-editor';
 import { isTypingTarget } from './shortcut-binding';
@@ -257,6 +257,7 @@ function getFullState() {
     enabled: on,
     connected: isConnected(),
     agentConnected: isAgentConnected(),
+    standby: isConnected() && !isStreamOwner(),
     inspecting: isInspectActive(),
     hoverAvailable: isHoverAvailable(),
     frozen: isFrozen(),
@@ -1206,11 +1207,13 @@ function handleContentMessage(msg: any, _: any, sendResponse: (payload: any) => 
       const respond = (serverRunning = isConnected()) => {
         const connected = serverRunning && isConnected();
         const agent = connected && isAgentConnected();
+        const standby = connected && !isStreamOwner();
         sendResponse({
           connected,
           serverRunning,
           agentConnected: agent,
-          mcpState: !connected ? 'offline' : agent ? 'connected' : 'running',
+          standby,
+          mcpState: !connected ? 'offline' : standby ? 'standby' : agent ? 'connected' : 'running',
         });
       };
       if (msg.reping === true) {

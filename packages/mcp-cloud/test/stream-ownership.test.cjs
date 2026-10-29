@@ -21,8 +21,9 @@ function fixture() {
   const list = key => { if (!lists.has(key)) lists.set(key, []); return lists.get(key); };
   const sets = new Map();
   const set = key => { if (!sets.has(key)) sets.set(key, new Set()); return sets.get(key); };
+  const counts = { sendCommand: 0, get: 0, exists: 0, set: 0 };
   const redis = {
-    async get(key) { return live(key) ? values.get(key) : null; },
+    async get(key) { counts.get++; return live(key) ? values.get(key) : null; },
     async set(key, value, options) {
       if (options?.XX && !live(key)) return null;
       values.set(key, value);
@@ -32,7 +33,7 @@ function fixture() {
       return 'OK';
     },
     async del(key) { const had = live(key); values.delete(key); expiries.delete(key); return Number(had); },
-    async exists(key) { return Number(live(key)); },
+    async exists(key) { counts.exists++; return Number(live(key)); },
     async expire() { return true; },
     async incr(key) { const n = Number((live(key) && values.get(key)) || 0) + 1; values.set(key, String(n)); return n; },
     async rPush(key, raw) { return list(key).push(raw); },
@@ -48,6 +49,7 @@ function fixture() {
       return chain;
     },
     async sendCommand(args) {
+      counts.sendCommand++;
       assert.equal(args[0], 'EVAL');
       if (hooks.beforeEval) await hooks.beforeEval(args);
       const [, script, , ...rest] = args;
@@ -103,7 +105,7 @@ function fixture() {
   }
   const store = load('lib/store.ts');
   scripts = store;
-  return { load, store, values, lists, sets, hooks, redis, logs, queue: tenant => list(`inbound:${tenant}`) };
+  return { load, store, values, lists, sets, hooks, redis, logs, counts, queue: tenant => list(`inbound:${tenant}`) };
 }
 
 async function collect(store, tenantId, streamId, abort, sink) {
@@ -385,5 +387,39 @@ test('evicted and taker keys share the inbound key slot', () => {
   for (const tenant of ['t_0123456789abcdef', 't_ffffffffffffffff']) {
     assert.equal(keySlot(store.evictedKey(tenant)), keySlot(store.inboundKey(tenant)));
     assert.equal(keySlot(store.takerKey(tenant, 'req-1793270000000-abcdef')), keySlot(store.inboundKey(tenant)));
+  }
+});
+
+test('streams are told when they gain or lose ownership, so a superseded tab can show Standby', async () => {
+  const f = fixture();
+  const ownership = s => s.frames.filter(fr => fr.includes('STREAM_OWNERSHIP')).map(fr => JSON.parse(fr.slice(fr.indexOf('data: ') + 6)).payload.owner);
+  const older = await openStream(f, 'dm_standby', 't_standby');
+  await waitFor(() => ownership(older).length === 1);
+  const newer = await openStream(f, 'dm_standby', 't_standby');
+  await waitFor(() => ownership(older).length === 2 && ownership(newer).length === 1);
+  assert.deepEqual(ownership(older), [true, false]);
+  assert.deepEqual(ownership(newer), [true]);
+  newer.abort.abort(); await newer.reader.cancel();
+  await waitFor(() => ownership(older).length === 3);
+  assert.deepEqual(ownership(older), [true, false, true]);
+  older.abort.abort(); await older.reader.cancel();
+});
+
+test('an idle stream costs a bounded number of Redis commands per second', async () => {
+  const f = fixture();
+  const s = await openStream(f, 'dm_idle', 't_idle');
+  try {
+    await settle(300);
+    const before = { ...f.counts };
+    const t0 = Date.now();
+    await settle(2000);
+    const seconds = (Date.now() - t0) / 1000;
+    const perSecond = Object.fromEntries(Object.keys(before).map(k => [k, (f.counts[k] - before[k]) / seconds]));
+    const total = Object.values(perSecond).reduce((a, b) => a + b, 0);
+    // Per 250 ms poll: one consume EVAL plus the token-liveness GET and EXISTS, so 12 commands/s.
+    assert.ok(perSecond.sendCommand >= 3 && perSecond.sendCommand <= 4.5, JSON.stringify(perSecond));
+    assert.ok(total <= 13, `idle stream used ${total.toFixed(1)} commands/s: ${JSON.stringify(perSecond)}`);
+  } finally {
+    s.abort.abort(); await s.reader.cancel();
   }
 });

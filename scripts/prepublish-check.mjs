@@ -16,6 +16,8 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
+import { lintWithRetry } from './web-ext-lint-retry.mjs';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
 const require = createRequire(import.meta.url);
@@ -136,30 +138,27 @@ step('Manifest sanity (Chrome + Firefox)', () => {
 // errors; the ~29 warnings (innerHTML, Chrome-only APIs, ignored sidePanel
 // permission, service-worker-ignored) are expected and pass.
 //
-// web-ext 10.x intermittently dies by signal (SIGBUS/SIGSEGV on Node 24)
-// when launched via npx, so invoke its bin directly with this Node instead
-// and retry once on a signal death (never on a lint failure — a non-zero
-// exit without a signal is a real error and must still fail the gate).
+// On macOS with Node 24, web-ext intermittently dies by SIGBUS (about 30-40%
+// of runs measured): Node's built-in CommonJS export lexer
+// (lexer::CJSLexer::tryBacktrackAddStarExportBinding) reads past a page while
+// web-ext's ES modules import CommonJS dependencies. It is memory-layout
+// dependent, not caused by the linted files, and no Node flag avoids it
+// (--jitless, heap size and --no-experimental-require-module all still crash).
+// This works around the crash; it does not fix it. web-ext-lint-retry.mjs
+// retries only a SIGBUS death, up to 8 attempts (8 straight crashes at 30-40%
+// is about 0.01-0.07%). Any other signal (SIGSEGV, SIGKILL, SIGINT, ...) and
+// any lint failure (non-zero exit without a signal) fail the gate immediately.
 step('web-ext lint (0 errors)', () => {
   const distReal = realpathSync(resolve(root, 'packages/extension/dist'));
   const webExtBin = resolve(dirname(require.resolve('web-ext')), 'bin/web-ext.js');
-  const lint = () =>
+  lintWithRetry(() =>
     spawnSync(process.execPath, [webExtBin, 'lint', '-s', distReal, '--output', 'text'], {
       cwd: root, stdio: 'pipe', encoding: 'utf8',
-    });
-  let result = lint();
-  if (result.error) throw result.error;
-  if (result.signal) {
-    console.warn(`   web-ext lint died by signal ${result.signal} — retrying once`);
-    result = lint();
-    if (result.error) throw result.error;
-    if (result.signal) {
-      throw new Error(`web-ext lint crashed twice (signal ${result.signal}); no lint result was produced — a tooling crash, not lint findings\n${result.stderr ?? ''}`);
-    }
-  }
-  if (result.status !== 0) {
-    throw new Error(`web-ext lint failed (exit ${result.status})\n${result.stdout ?? ''}${result.stderr ?? ''}`);
-  }
+    }));
+});
+
+step('Gate script tests', () => {
+  run('node --test scripts/web-ext-lint-retry.test.mjs', { stdio: 'pipe' });
 });
 
 step('Focused extension logic tests', () => {
