@@ -7,7 +7,7 @@
 // ============================================================
 
 import { Z_INDEX } from '../shared';
-import { inspectAuthoredSizing } from './authored-sizing';
+import { cssSizeFromBorderBox, inspectAuthoredSizing } from './authored-sizing';
 import { setUserStylePreview, whenUserStylesPainted, userOverrideScope } from './user-styles';
 import { canEditRoute } from './route-edit-guard';
 import { getElementRect, getElementById, type Rect } from './helpers';
@@ -432,7 +432,10 @@ function startResize(el: HTMLElement, dir: string, e: MouseEvent) {
       showSelect(el);
       showAxisGuides(rect, 'select');
       repositionResizeDots();
-      if (id) schedulePreview(id, Math.round(rect.width) + 'px', Math.round(rect.height) + 'px');
+      if (id) {
+        const live = cssSizeFromBorderBox(rect, { x: extraX, y: extraY });
+        schedulePreview(id, live.width, live.height);
+      }
     });
   };
 

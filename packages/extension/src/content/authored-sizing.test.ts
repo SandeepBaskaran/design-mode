@@ -4,6 +4,7 @@ import {
   authoredDimensionFromWinner,
   classifyAuthoredValue,
   collectScopedSheets,
+  cssSizeFromBorderBox,
   declBeats,
   harvestSizeDecls,
   pickWinner,
@@ -487,5 +488,17 @@ describe('collectScopedSheets', () => {
     const scoped = collectScopedSheets({ getRootNode: () => ({}) });
     assert.equal(scoped.inaccessible, true);
     assert.equal(scoped.sheets.length, 0);
+  });
+});
+
+describe('cssSizeFromBorderBox', () => {
+  it('reports the border box unchanged for border-box elements', () => {
+    assert.deepEqual(cssSizeFromBorderBox({ width: 137.4, height: 102.6 }, { x: 0, y: 0 }), { width: '137px', height: '103px' });
+  });
+  it('subtracts padding and border so the live W/H match the committed CSS size', () => {
+    assert.deepEqual(cssSizeFromBorderBox({ width: 1097, height: 61 }, { x: 20, y: 20 }), { width: '1077px', height: '41px' });
+  });
+  it('never goes negative', () => {
+    assert.deepEqual(cssSizeFromBorderBox({ width: 10, height: 4 }, { x: 20, y: 20 }), { width: '0px', height: '0px' });
   });
 });

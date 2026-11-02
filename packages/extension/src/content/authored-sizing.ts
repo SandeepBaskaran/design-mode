@@ -295,6 +295,15 @@ function computedHint(computed: string): string {
   return String(n === 0 ? 0 : n) + (p.unit || 'px');
 }
 
+// W/H fields hold the CSS width/height, which exclude padding and border under
+// content-box; the dragged rect is the border box.
+export function cssSizeFromBorderBox(rect: { width: number; height: number }, extra: { x: number; y: number }): { width: string; height: string } {
+  return {
+    width: Math.round(Math.max(0, rect.width - extra.x)) + 'px',
+    height: Math.round(Math.max(0, rect.height - extra.y)) + 'px',
+  };
+}
+
 export function sizeFieldView(input: {
   dim?: AuthoredDimension | null;
   override?: string | null;

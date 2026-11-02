@@ -18,7 +18,7 @@ for (const paintBeforeTeardown of [false, true]) {
     const dependencies: Record<string, unknown> = {
       '../shared': { Z_INDEX: {} },
       './route-edit-guard': { canEditRoute: () => true },
-      './authored-sizing': { inspectAuthoredSizing: () => ({ width: { authored: '100px' }, height: { authored: '100px' } }) },
+      './authored-sizing': { cssSizeFromBorderBox: (rect: any) => ({ width: rect.width + 'px', height: rect.height + 'px' }), inspectAuthoredSizing: () => ({ width: { authored: '100px' }, height: { authored: '100px' } }) },
       './user-styles': { setUserStylePreview: (css: string) => previews.push(css), whenUserStylesPainted: () => painted, userOverrideScope: () => '' },
       './helpers': { getElementRect: () => rect },
       './overlays': { showSelect: () => selectionPaints++, setOverlayTransitions() {} },
