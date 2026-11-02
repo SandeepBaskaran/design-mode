@@ -36,6 +36,7 @@ import { configureShortcutStorage, enableShortcuts, loadShortcuts, registerShort
 import { diffWords } from './word-diff';
 import { writeScreenshotClipboard } from './screenshot-clipboard';
 import { writeInspectorTextClipboard } from '../inspector/clipboard';
+import { collapsedAncestorIds, layerScrollDelta } from './layer-reveal';
 import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, sanitizeRichTextHref, normalizeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, sanitizeRichTextEditorHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
@@ -110,7 +111,7 @@ interface ElementInfo extends Pick<SharedElementInfo, 'rect' | 'childGap'> {
   shadowVars?: Record<string, { vars: string[]; scope: string }>;
   boundingRect: { x: number; y: number; width: number; height: number };
   breadcrumbs: string[]; element?: any; imgSrc?: string;
-  textContent?: string; hasChildElements?: boolean;
+  textContent?: string; hasChildElements?: boolean; hasDirectText?: boolean;
   sourceLocation?: {
     file: string; line?: number; column?: number;
     component?: string; framework: string; cleanPath?: string;
@@ -1091,18 +1092,31 @@ async function refreshChanges(operation = beginInspectorOperation()) {
 }
 async function refreshDomTree(operation = beginInspectorOperation()) {
   operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_GET_DOM_TREE' }, operation)); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
+function revealLayerInTree(id: string): boolean {
+  const hidden = collapsedAncestorIds(domTree, id, collapsedNodes);
+  for (const ancestor of hidden) collapsedNodes.delete(ancestor);
+  return hidden.length > 0;
+}
+function scrollLayerRowIntoView(row: Element) {
+  const body = document.getElementById('dm-tab-body');
+  if (!body) return;
+  const sticky = body.querySelector<HTMLElement>('[data-dm-layers-header]');
+  const rect = row.getBoundingClientRect();
+  body.scrollTop += layerScrollDelta(rect, body.getBoundingClientRect(), sticky ? sticky.getBoundingClientRect().height : 0);
+}
 // Scroll the currently-selected layer row into view (Layers tab). Tolerates
 // the row not existing yet — caller may invoke it after a re-render where
 // morphdom hasn't placed the element by the next microtask.
 function scrollSelectedLayerIntoView() {
   const id = info?.id;
   if (!id) return;
+  if (revealLayerInTree(id)) render();
   const tryScroll = (attempts: number) => {
     const layerEl = root.querySelector('[data-dm-layer="' + id + '"]');
-    if (layerEl) { layerEl.scrollIntoView({ block: 'nearest' }); return; }
+    if (layerEl) { scrollLayerRowIntoView(layerEl); return; }
     if (attempts > 0) requestAnimationFrame(() => tryScroll(attempts - 1));
   };
-  // Three rAFs is plenty for morphdom + the auto-expand of collapsed ancestors.
+  // Three rAFs is plenty for morphdom to place the row once ancestors expand.
   requestAnimationFrame(() => tryScroll(3));
 }
 // Bring the token a field's "Edit token globally" jumped to into view.
@@ -1919,10 +1933,10 @@ async function selectElement(elementId: string, operation = beginInspectorOperat
   const res = await operation.wait(send({ type: 'SP_SELECT_ELEMENT', elementId }, operation));
   if (res.payload || res.info) info = res.payload || res.info;
   hydrateLayoutGuidesFromPayload(info);
-  hoverInfo = null; render();
+  hoverInfo = null; revealLayerInTree(elementId); render();
   setTimeout(() => {
     const layerEl = root.querySelector('[data-dm-layer="' + elementId + '"]');
-    if (layerEl) layerEl.scrollIntoView({ block: 'nearest' });
+    if (layerEl) scrollLayerRowIntoView(layerEl);
   }, 60);
 }
 
@@ -2402,11 +2416,14 @@ browser.runtime.onMessage.addListener((msg, sender) => {
     // Style commits refresh the same selection. Keep the matching checkbox
     // in sync with its active multi-selection until another element is picked.
     if (selectedElementChanged) matchingLayersChecked = false;
+    // Expand collapsed ancestors even off the Layers tab, so the row exists
+    // (and is scrolled to) when the user switches to it later.
+    if (selectedElementChanged && info?.id) revealLayerInTree(info.id);
     render();
     runInspectorAction(refreshMedia());
-    setTimeout(() => {
+    if (selectedElementChanged) setTimeout(() => {
       const layerEl = root.querySelector('[data-dm-layer="' + info?.id + '"]');
-      if (layerEl) layerEl.scrollIntoView({ block: 'nearest' });
+      if (layerEl) scrollLayerRowIntoView(layerEl);
     }, 60);
   }
   if (msg.type === 'ELEMENT_HOVERED_INFO') {
@@ -2465,7 +2482,11 @@ browser.runtime.onMessage.addListener((msg, sender) => {
       captureTabScroll();
       pendingTabScrollRestore = tabScrollPositions[requested] ?? { top: 0, left: 0 };
       tab = requested;
-      render();
+      if (requested === 'layers') {
+        runInspectorAction(refreshDomTree().then(() => scrollSelectedLayerIntoView()));
+      } else {
+        render();
+      }
     }
   }
   if (msg.type === 'STATE_UPDATE') {
@@ -7162,7 +7183,7 @@ function renderLayersTab(): string {
   // top-left of the viewport, and the bulk bar scrolls away vertically
   // with the list (it's transient and tied to the active selection, not
   // navigation) but pins horizontally so it never shifts out of view.
-  const stickyHeader = '<div style="position:sticky;top:0;left:0;z-index:5;background:var(--dm-bg);">' + searchBar + filterChipsRow + '</div>';
+  const stickyHeader = '<div data-dm-layers-header style="position:sticky;top:0;left:0;z-index:5;background:var(--dm-bg);">' + searchBar + filterChipsRow + '</div>';
   return stickyHeader + bulkBar + '<div style="width:max-content;min-width:100%;">' + rows + '</div>';
 }
 
@@ -7255,7 +7276,8 @@ function renderDesignTab(): string {
   const s = displayInfo.computedStyles;
   const tag = displayInfo.tagName?.toLowerCase() || 'div';
   const isImg = tag === 'img';
-  const kind = classifyTag(tag);
+  const tagKind = classifyTag(tag);
+  const kind: LayerKind = tagKind === 'container' && displayInfo.hasDirectText ? 'text' : tagKind;
   const vis = visibleSections(kind);
   const isPageContext = kind === 'page' && !isHovering;
 
@@ -7326,7 +7348,7 @@ function renderDesignTab(): string {
   // will replace its inner content, so we surface a one-line warning when that
   // would happen instead of hiding the field entirely.
   const directTextTags = ['p','h1','h2','h3','h4','h5','h6','span','a','li','td','th','label','button','strong','em','b','i','small','mark','figcaption','caption','dt','dd','abbr','cite','q','code','pre','blockquote'];
-  const isTextTag = directTextTags.includes(tag);
+  const isTextTag = directTextTags.includes(tag) || (tagKind === 'container' && !!displayInfo.hasDirectText);
   const showTextEdit = isTextTag && !!displayInfo.textContent;
   const textVal = displayInfo.textContent || '';
   // The rich-text editor preserves HTML structure (headings/links/spans),
@@ -14680,7 +14702,7 @@ document.addEventListener('keydown', (e) => {
     // Scroll into view
     setTimeout(() => {
       const el = root.querySelector('[data-dm-layer="' + visible[nextIdx].id + '"]');
-      if (el) el.scrollIntoView({ block: 'nearest' });
+      if (el) scrollLayerRowIntoView(el);
     }, 50);
     return;
   }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   collectEditableRichTextNodes,
   collectPreservedRichTextNodes,
+  hasDirectText,
   isSafeRichTextHref,
   replaceRichTextHtml,
   sanitizeRichTextHref,
@@ -187,5 +188,21 @@ describe('rich-text structural preservation', () => {
   it('treats custom and unknown elements as opaque page-owned subtrees', () => {
     assert.equal(shouldPreserveRichTextNode(node('product-icon', { text: 'star' })), true);
     assert.equal(shouldPreserveRichTextNode(node('script', { text: 'unsafe()' })), true);
+  });
+});
+
+describe('hasDirectText', () => {
+  const text = (value: string) => ({ nodeType: 3, textContent: value });
+  const element = () => ({ nodeType: 1, textContent: 'nested text' });
+
+  it('is true when the element owns a non-blank text node, with or without child elements', () => {
+    assert.equal(hasDirectText({ childNodes: [text('Hello')] }), true);
+    assert.equal(hasDirectText({ childNodes: [text('Lead '), element(), text(' tail')] }), true);
+  });
+
+  it('is false for wrappers whose text lives only in child elements or is whitespace', () => {
+    assert.equal(hasDirectText({ childNodes: [element()] }), false);
+    assert.equal(hasDirectText({ childNodes: [text('\n  '), element(), text('\t')] }), false);
+    assert.equal(hasDirectText({ childNodes: [] }), false);
   });
 });

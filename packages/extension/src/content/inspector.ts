@@ -10,6 +10,7 @@ import { isMultiSelectActive, enableMultiSelect, disableMultiSelect, toggleSelec
 import { showAxisGuides, hideAxisGuides, showDistance, hideDistance, showPairwiseDistances, showResizeDots, repositionResizeDots, armMoveDrag, isResizing } from './measure-guides';
 import { baseCursor, restoreBaseCursor } from './custom-cursor';
 import { measureChildGap } from './child-gap';
+import { hasDirectText } from '../rich-text-preservation';
 import type { ElementInfo as SharedElementInfo } from '@shared/types';
 
 export type IconInfo = { library: string; name: string };
@@ -24,6 +25,7 @@ export type ElementInfo = Pick<SharedElementInfo, 'rect' | 'childGap'> & {
   // multi-token shadow chip (a single `styleTokens` entry can't hold a stack).
   shadowVars: Record<string, ShadowVarInfo>;
   textContent: string | null; innerHTML: string;
+  hasDirectText: boolean;
   attributes: Record<string, string>; selector: string;
   iconInfo?: IconInfo;
   parentDisplay?: string;
@@ -115,6 +117,7 @@ export function buildElementInfo(el: HTMLElement, skipTokens = false): ElementIn
     rect: getElementRect(el),
     textContent: el.textContent?.slice(0, 500) || null,
     innerHTML,
+    hasDirectText: hasDirectText(el),
     attributes: attrs, selector: generateSelector(el),
     iconInfo: detectIconInfo(el),
     parentDisplay: pcs?.display || '',

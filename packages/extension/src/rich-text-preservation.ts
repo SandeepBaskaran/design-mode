@@ -24,6 +24,12 @@ export const RICH_TEXT_PRESERVED_NODE_ATTR = 'data-dm-preserve-node';
 export const RICH_TEXT_STRUCTURE_NODE_ATTR = 'data-dm-rich-node';
 export const RICH_TEXT_LINK_NODE_ATTR = 'data-dm-rich-link';
 
+const TEXT_NODE = 3;
+
+export function hasDirectText(node: { childNodes: Iterable<{ nodeType: number; textContent: string | null }> }): boolean {
+  return Array.from(node.childNodes).some(child => child.nodeType === TEXT_NODE && !!child.textContent?.trim());
+}
+
 export function shouldCommitRichTextKey(event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'isComposing'>): boolean {
   return event.key === 'Enter' && !event.shiftKey && !event.isComposing;
 }
