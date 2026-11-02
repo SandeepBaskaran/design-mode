@@ -10,7 +10,7 @@ const names: Record<string, string> = {
   feedback_stop: 'dm_feedback_stop', mcp_state: 'dm_mcp_state',
   copy_prompt: 'dm_copy_prompt', annotate: 'dm_annotate', token_edit: 'dm_token_edit',
   computed_css: 'dm_computed_css', theme: 'dm_theme', help: 'dm_help',
-  matching_layers: 'dm_matching_layers', media: 'dm_media', setup_popup: 'dm_setup_popup',
+  matching_layers: 'dm_matching_layers', media: 'dm_media', setup_popup: 'dm_setup_popup', panel_state: 'dm_panel_state',
 };
 for (const firefox of [false, true]) {
   test(`${firefox ? 'Firefox' : 'Chrome'}: semantic names, bounded payload, consent upgrade and revoke`, async () => {

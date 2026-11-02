@@ -50,13 +50,16 @@ const eventNames: Readonly<Record<string, string>> = Object.freeze({
   copy_prompt: 'dm_copy_prompt', annotate: 'dm_annotate', token_edit: 'dm_token_edit',
   computed_css: 'dm_computed_css', theme: 'dm_theme', help: 'dm_help',
   matching_layers: 'dm_matching_layers', media: 'dm_media', setup_popup: 'dm_setup_popup',
+  panel_state: 'dm_panel_state',
 });
 const features = Object.keys(eventNames);
-const outcomes = ['attempt', 'command_acknowledged', 'clipboard_completed', 'clipboard_failed', 'download_initiated', 'download_failed', 'failure', 'state', 'shown', 'step_action', 'resolved', 'dismissed'];
+const outcomes = ['attempt', 'command_acknowledged', 'clipboard_completed', 'clipboard_failed', 'download_initiated', 'download_failed', 'failure', 'state', 'shown', 'step_action', 'resolved', 'dismissed', 'completed', 'cancelled', 'blocked'];
 const reasons = ['unavailable', 'rejected', 'offline', 'waiting_for_agent', 'busy'];
+// Why the panel shows a blocked screen instead of the editor (dm_panel_state).
+const panelReasons = ['file_access', 'page_unavailable', 'restricted_url'];
 const modes = ['local', 'cloud', 'self-hosted'];
 const states = ['offline', 'running', 'connected', 'dark', 'light', 'system', 'on', 'off'];
-const actions = ['open', 'copy', 'download', 'delete', 'duplicate', 'move-up', 'move-down', 'reorder', 'wrap', 'unwrap', 'insert', 'text', 'html'];
+const actions = ['open', 'copy', 'download', 'delete', 'duplicate', 'move-up', 'move-down', 'reorder', 'wrap', 'unwrap', 'insert', 'text', 'html', 'edit', 'resolve', 'reopen'];
 const kinds = ['element', 'region'];
 const categories = ['typography', 'spacing', 'layout', 'color', 'border', 'effects', 'position', 'sizing', 'preset', 'text', 'dom'];
 const props = [
@@ -129,6 +132,7 @@ const resolvedVia = ['auto_recheck', 'send_button'];
 // Where a Send to Agent click came from: the toolbar button or the setup popup's own Send button.
 const triggers = ['toolbar', 'setup_popup'];
 export const SETUP_POPUP_MAX_MS = 1_800_000;
+export const DROPPED_COUNT_MAX = 1000;
 // Whole milliseconds, rounded to the nearest second and clamped to 0..30 min,
 // so a duration cannot be used to tell one session from another.
 export function clampDurationMs(value: unknown): number | undefined {
@@ -371,7 +375,7 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
   const result: AnalyticsEvent = { feature: e.feature, outcome: e.outcome };
   // The setup popup names the blocker it is open for with the same codes as
   // dm_send_to_agent_blocked (cloud_token_missing, local_server_offline, ...).
-  if (reasons.includes(e.reason || '') || (e.feature === 'setup_popup' && errorCodes.includes(e.reason || '') && e.reason !== 'unknown')) result.reason = e.reason;
+  if (reasons.includes(e.reason || '') || (e.feature === 'setup_popup' && errorCodes.includes(e.reason || '') && e.reason !== 'unknown') || (e.feature === 'panel_state' && panelReasons.includes(e.reason || ''))) result.reason = e.reason;
   if ((SETUP_POPUP_STEPS as readonly string[]).includes(e.step || '')) result.step = e.step;
   if (resolvedVia.includes(e.resolved_via || '')) result.resolved_via = e.resolved_via;
   if (triggers.includes(e.trigger || '')) result.trigger = e.trigger;
@@ -464,6 +468,10 @@ export function createAnalytics(config: AnalyticsConfig | null, deps: Dependenci
   const active = new Set<AbortController>();
   let windowStart = 0;
   let count = 0;
+  // Events this install dropped because of the in-flight cap or the 60/minute
+  // limit. Sent as dropped_count on the next event that does go out, so
+  // under-counting can be measured. Bounded, and never stored.
+  let dropped = 0;
   let cachedDistinctId: string | null = null;
   let distinctIdPending: Promise<string> | null = null;
   function resolveDistinctId(): Promise<string> {
@@ -499,17 +507,22 @@ export function createAnalytics(config: AnalyticsConfig | null, deps: Dependenci
   function refresh() { stop(); blocked = false; }
   async function capture(value: unknown): Promise<void> {
     const event = boundedEvent(value);
-    if (!config || !event || blocked || active.size >= 4) return;
+    if (!config || !event || blocked) return;
+    if (active.size >= 4) { dropped = Math.min(dropped + 1, DROPPED_COUNT_MAX); return; }
     const epoch = generation;
     try {
       if (!nativeConsentAllowed(deps.firefox, await deps.permissions())) return;
-      if (epoch !== generation || blocked || active.size >= 4) return;
+      if (epoch !== generation || blocked) return;
+      if (active.size >= 4) { dropped = Math.min(dropped + 1, DROPPED_COUNT_MAX); return; }
       const distinctId = await resolveDistinctId();
-      if (epoch !== generation || blocked || active.size >= 4) return;
+      if (epoch !== generation || blocked) return;
+      if (active.size >= 4) { dropped = Math.min(dropped + 1, DROPPED_COUNT_MAX); return; }
       const now = Date.now();
       if (now - windowStart >= 60_000) { count = 0; windowStart = now; }
-      if (count >= 60) return;
+      if (count >= 60) { dropped = Math.min(dropped + 1, DROPPED_COUNT_MAX); return; }
       count++;
+      const droppedBefore = dropped;
+      dropped = 0;
       const controller = new AbortController();
       active.add(controller);
       const timeout = setTimeout(() => controller.abort(), 5000);
@@ -529,7 +542,7 @@ export function createAnalytics(config: AnalyticsConfig | null, deps: Dependenci
           method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error',
           headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
           body: JSON.stringify({ api_key: config.key, distinct_id: distinctId, event: eventNames[event.feature],
-            properties: { ...event, schema_version: ANALYTICS_SCHEMA_VERSION, surface: 'extension',
+            properties: { ...event, ...(droppedBefore > 0 ? { dropped_count: droppedBefore } : {}), schema_version: ANALYTICS_SCHEMA_VERSION, surface: 'extension',
               ...envProps, version: deps.manifest.version,
               distribution, $set: personProps, $process_person_profile: true, $geoip_disable: false } }),
         });

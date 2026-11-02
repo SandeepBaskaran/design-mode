@@ -833,6 +833,18 @@ function beginInspectorOperation(): InspectorOperation {
 function trackFeature(event: AnalyticsEvent) {
   void browser.runtime.sendMessage({ type: 'DM_ANALYTICS_EVENT', event }).catch(() => {});
 }
+// dm_panel_state: the panel shows a blocked screen instead of the editor.
+// Reported once when it enters a blocked state, again only after it left it.
+let lastPanelBlock = '';
+function trackPanelState() {
+  const scheme = pageSchemeFromUrl(boundPageUrl);
+  const reason = fileAccessBlocked ? 'file_access'
+    : pageUnavailable ? (scheme === 'chrome_internal' || scheme === 'webstore' ? 'restricted_url' : 'page_unavailable')
+    : '';
+  if (reason === lastPanelBlock) return;
+  lastPanelBlock = reason;
+  if (reason) trackFeature({ feature: 'panel_state', outcome: 'blocked', reason, page_scheme: scheme });
+}
 let lastAnalyticsMcpState = '';
 function trackMcpState() {
   const current = mcpMode + ':' + mcpState;
@@ -855,6 +867,8 @@ async function send(msg: any, operation = beginInspectorOperation()): Promise<an
     msg?.type === 'SP_SET_ROOT_VAR' ? { scope: resolveTokenScopeKind(msg.scopeSelector) } :
     msg?.type === 'SP_APPLY_STYLE' ? styleAnalytics(msg.property) :
     msg?.type === 'SP_APPLY_STYLES' ? (styleBatch[0] || {}) :
+    msg?.type === 'SP_UPDATE_COMMENT' ? { action: 'edit' } :
+    msg?.type === 'SP_SET_COMMENT_RESOLVED' ? { action: msg.resolved === false ? 'reopen' : 'resolve' } :
     msg?.type === 'SP_SET_TEXT' ? { action: 'text', category: 'text' } :
     msg?.type === 'SP_SET_HTML' ? { action: 'html', category: 'text' } :
     msg?.type === 'SP_DOM_ACTION' ? { action: msg.action, category: 'dom' } :
@@ -936,6 +950,7 @@ port.onMessage.addListener((msg) => {
     resetPageContext();
     boundPageUrl = msg.pinnedUrl || '';
     pageNavigating = true; pageUnavailable = false;
+    trackPanelState();
     enabled = false; mcpState = 'offline';
     render(); return;
   }
@@ -960,6 +975,7 @@ port.onMessage.addListener((msg) => {
     mcpState = !msg.connected ? 'offline' : msg.agentConnected ? 'connected' : 'running';
     if (msg.pinnedUrl) { pinnedDomain = domainLabel(msg.pinnedUrl); }
     fileAccessBlocked = !!msg.fileAccessBlocked;
+    trackPanelState();
     if (fileAccessBlocked || pageUnavailable || (IS_SAFARI && (myTabId == null || inspectorError))) { render(); return; }
     render(); runInspectorAction(refreshMcpStatus()); runInspectorAction(refreshDomTree()); runInspectorAction(refreshChanges()); runInspectorAction(refreshDesignTokens()); runInspectorAction(refreshPageFonts());
   }
@@ -2135,11 +2151,16 @@ async function submitComment(operation = beginInspectorOperation()) {
       showCaptureToast('error', response.error || 'Comment was not saved. Please retry.');
       return;
     }
+    if (!editingCommentId) trackFeature({ feature: 'annotate', kind: regionCommentPending ? 'region' : 'element', outcome: 'completed' });
     editingCommentId = null; regionCommentPending = false;
     commentMode = false; commentText = ''; await operation.wait(refreshChanges(operation));
   } finally { if (operation.isCurrent()) commentSubmitting = false; }
 }
 function cancelComment() {
+  // A new annotation that was started and abandoned (editing an existing comment is not one).
+  if ((commentMode && !editingCommentId) || awaitingRegionDraw) {
+    trackFeature({ feature: 'annotate', kind: regionCommentPending || awaitingRegionDraw ? 'region' : 'element', outcome: 'cancelled' });
+  }
   // If we're composing for a freshly-drawn region, drop it on the content side.
   if (regionCommentPending) { void runInspectorAction(send({ type: 'SP_CANCEL_REGION_COMMENT' })); }
   commentMode = false; commentText = ''; editingCommentId = null; viewingCommentId = null;
@@ -2149,7 +2170,7 @@ function startComment() { if (!info) return; trackFeature({ feature: 'annotate',
 // Region comment: ask the content script to enter draw mode. The composer
 // opens later, when the REGION_DRAWN message arrives.
 function startRegionComment() {
-  if (awaitingRegionDraw) { awaitingRegionDraw = false; void runInspectorAction(send({ type: 'SP_CANCEL_REGION_COMMENT' })); render(); return; }
+  if (awaitingRegionDraw) { awaitingRegionDraw = false; trackFeature({ feature: 'annotate', kind: 'region', outcome: 'cancelled' }); void runInspectorAction(send({ type: 'SP_CANCEL_REGION_COMMENT' })); render(); return; }
   trackFeature({ feature: 'annotate', kind: 'region', outcome: 'attempt' });
   commentMode = false; regionCommentPending = false; awaitingRegionDraw = true;
   void runInspectorAction(send({ type: 'SP_START_REGION_COMMENT' }));
@@ -2520,6 +2541,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   if (msg.type === 'STATE_UPDATE') {
     // Only a live content script sends this, so the page is reachable.
     fileAccessBlocked = false;
+    trackPanelState();
     enabled = msg.enabled ?? enabled;
     if (!enabled) computedLayoutOverlayOn = false;
     inspecting = msg.inspecting ?? inspecting;

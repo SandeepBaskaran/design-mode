@@ -297,3 +297,29 @@ test('classifyErrorCode names the failure texts the extension and Chrome actuall
   assert.equal(classifyErrorCode({ ok: false, error: 'The author field is empty' }), 'unknown');
   assert.equal(classifyErrorCode({ ok: false, error: 'Invalid token' }), 'auth_token_invalid');
 });
+
+test('dropped_count rides on the next event that is sent, then resets', async () => {
+  const received: any[] = [];
+  const release: Array<() => void> = [];
+  const analytics = createAnalytics({ host: 'https://analytics.invalid', key: 'phc_local_test_only' }, {
+    firefox: false, manifest: { version: '3.0.0' }, readConsent: async () => undefined,
+    permissions: async () => ({}), environment: () => ({}),
+    // The first four requests stay in flight; later ones are dropped by the cap.
+    fetch: async (_: unknown, init?: RequestInit) => {
+      received.push(JSON.parse(init!.body as string));
+      if (received.length <= 4) await new Promise<void>(resolve => release.push(resolve));
+      return new Response();
+    },
+  });
+  const sends = Array.from({ length: 7 }, () => analytics.capture({ feature: 'inspect', outcome: 'attempt' }));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(received.length, 4);
+  release.forEach(fn => fn());
+  await Promise.all(sends);
+  await analytics.capture({ feature: 'inspect', outcome: 'attempt' });
+  assert.equal(received.length, 5);
+  assert.equal(received[4].properties.dropped_count, 3);
+  assert.equal(received.slice(0, 4).some(r => 'dropped_count' in r.properties), false);
+  await analytics.capture({ feature: 'inspect', outcome: 'attempt' });
+  assert.equal('dropped_count' in received[5].properties, false);
+});
