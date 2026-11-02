@@ -6,6 +6,7 @@ import ts from 'typescript';
 import { createInspectorBrowser } from '../inspector/bridge-client.ts';
 import { eventChannel } from '../inspector/bridge-protocol.ts';
 import { createInspectorOperation, InspectorOperationCancelled } from './inspector-operation.ts';
+import { changeCountBucket, commandOutcome, pageSchemeFromUrl, styleAnalytics, styleAnalyticsList } from '../platform/analytics.ts';
 
 const source = readFileSync(new URL('./sidepanel.ts', import.meta.url), 'utf8');
 const parsed = ts.createSourceFile('sidepanel.ts', source, ts.ScriptTarget.Latest, true);
@@ -45,7 +46,7 @@ function fixture(prop = '__fill_color__0', kind: 'sv' | 'hue' = 'sv') {
   const operation = () => createInspectorOperation(() => epoch, true);
   const state: any = {
     Error, InspectorOperationCancelled, browser, IS_SAFARI: true, myTabId: 1, inspectorError: '', messageFeatures: {},
-    trackFeature() {}, commandOutcome: () => ({}), beginInspectorOperation: operation,
+    trackFeature() {}, commandOutcome, styleAnalytics, styleAnalyticsList, pageSchemeFromUrl, changeCountBucket, boundPageUrl: '', siteChangeCount: () => 0, beginInspectorOperation: operation,
     runInspectorAction: (p: Promise<any>) => { const result = p.catch(e => { errors.push(e.message); }); pending.push(result); return result; },
     showCaptureToast: (_kind: string, error: string) => errors.push(error),
     info: { id: 'hero', computedStyles: {} }, colorFormat: 'hex',
