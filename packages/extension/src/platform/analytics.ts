@@ -1,5 +1,17 @@
 export const ANALYTICS_CONSENT_KEY = 'dm-analytics-consent-v1';
 export const ANALYTICS_DISTINCT_ID_KEY = 'dm-analytics-distinct-id';
+/**
+ * Version of the event contract sent to PostHog. Dashboards filter on it
+ * (currently `schema_version >= 3`), so bump it only when old and new events
+ * can no longer be counted together:
+ * - how users are identified changes (distinct ID source or storage key);
+ * - an event or property is renamed, removed or changes meaning;
+ * - a property's values change meaning or type.
+ * Adding a new event or an optional property is not a bump.
+ * When you bump it, update the PostHog dashboard filters in the same change.
+ * History: 2 = random ID per event, 3 = persistent install ID, 4 = edit detail.
+ */
+export const ANALYTICS_SCHEMA_VERSION = 4;
 export type AnalyticsConfig = { host: string; key: string; distribution?: string };
 export type Consent = { enabled: true; host: string; key: string; version: 2 };
 export type DataPermissions = { data_collection?: string[] };
@@ -468,7 +480,7 @@ export function createAnalytics(config: AnalyticsConfig | null, deps: Dependenci
           method: 'POST', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error',
           headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
           body: JSON.stringify({ api_key: config.key, distinct_id: distinctId, event: eventNames[event.feature],
-            properties: { ...event, schema_version: 4, surface: 'extension',
+            properties: { ...event, schema_version: ANALYTICS_SCHEMA_VERSION, surface: 'extension',
               ...envProps, version: deps.manifest.version,
               distribution, $set: personProps, $process_person_profile: true, $geoip_disable: false } }),
         });

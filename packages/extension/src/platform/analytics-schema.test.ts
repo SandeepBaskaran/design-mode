@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createAnalytics, environmentProperties, messageFeatures } from './analytics.ts';
+import { ANALYTICS_DISTINCT_ID_KEY, ANALYTICS_SCHEMA_VERSION, createAnalytics, environmentProperties, messageFeatures } from './analytics.ts';
 
 const config = { host: 'https://analytics.invalid', key: 'phc_local_test_only' };
 const names: Record<string, string> = {
@@ -46,7 +46,7 @@ for (const firefox of [false, true]) {
     assert.equal(p.$raw_user_agent, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)');
     assert.equal(p.$process_person_profile, true);
     assert.equal(p.$geoip_disable, false);
-    assert.equal(p.schema_version, 4);
+    assert.equal(p.schema_version, ANALYTICS_SCHEMA_VERSION);
     assert.deepEqual(Object.keys(p).sort(), ['$geoip_disable', '$process_person_profile', '$raw_user_agent', '$set', 'browser', 'browser_vendor', 'distribution', 'feature', 'language', 'outcome', 'schema_version', 'surface', 'timezone', 'version'].sort());
     assert.equal(JSON.stringify(received).includes('private'), false);
     const count = received.length;
@@ -72,6 +72,17 @@ test('browser signals are coarse, optional metadata is validated and bounded', (
   for (const timeZone of ['https://private.invalid', 'Asia/private', '+05:30', 'x'.repeat(100), 123]) {
     assert.equal(environmentProperties(false, { timeZone }).timezone, undefined);
   }
+});
+
+test('schema version guard: the identity key is pinned to the schema version', () => {
+  // If this fails, you changed the analytics contract. Read the rule on
+  // ANALYTICS_SCHEMA_VERSION in analytics.ts, decide whether to bump it, then
+  // update this pin (and the PostHog dashboard filters if you bumped).
+  // Event names and payload keys are pinned by the test above.
+  assert.deepEqual(
+    { version: ANALYTICS_SCHEMA_VERSION, identityKey: ANALYTICS_DISTINCT_ID_KEY },
+    { version: 4, identityKey: 'dm-analytics-distinct-id' },
+  );
 });
 
 test('failure events may carry error_code and a sanitised error_message without a schema version bump', async () => {
