@@ -28,7 +28,7 @@
     "esbuild": "0.28.2",
     "tsx": "^4.23.13",
     "ws": "^8.22.0",
-    "@modelcontextprotocol/sdk": "^1.31.0"
+    "@modelcontextprotocol/sdk": "^1.32.2"
   },
   "publishConfig": {
     "access": "public"

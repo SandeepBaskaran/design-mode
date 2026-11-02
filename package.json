@@ -39,11 +39,11 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "sass": "^1.105.1",
+    "sass": "^1.106.1",
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "web-ext": "^10.7.0"
+    "web-ext": "^10.8.0"
   },
   "overrides": {
     "zod": "$zod",
