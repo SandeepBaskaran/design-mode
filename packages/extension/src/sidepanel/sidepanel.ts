@@ -28,6 +28,7 @@ import { icon, icons } from '../content/icons';
 import { escapeAttr, rgbToHex } from '../content/helpers';
 import { sizeFieldView, type AuthoredDimension } from '../content/authored-sizing';
 import { AGENT_COMMAND_MARKDOWN, AGENT_TOOLS } from './agent-workflow';
+import { localMcpCommand, localMcpConfig, renderSendSetupDialog, sendSetupStep, type SendSetupModel } from './send-setup';
 import { changeGroupKey, styleChangeGroupKey, collectGroupRevertIds } from './change-group';
 import { createInspectorOperation, InspectorOperationCancelled, runInspectorAction, type InspectorOperation } from './inspector-operation';
 import { componentGroup, groupByComponent, type ComponentContext } from '../component-group';
@@ -180,7 +181,14 @@ let tab: Tab = 'design';
 let settingsOpen = false;
 let helpOpen = false;
 let mcpOpen = false;
-let sendAgentHelpOpen = false;
+// Send to Agent "finish setup" dialog (see send-setup.ts). Opened instead of
+// sending whenever no coding agent is reachable; re-probes while open.
+let sendSetupOpen = false;
+let sendSetupChecking = false;
+let sendSetupTrigger: HTMLElement | null = null;
+let sendSetupTimer: ReturnType<typeof setInterval> | null = null;
+let sendSetupBusy = false;
+let sendSetupPolls = 0;
 
 // "Select matching layers" checkbox — checked hands all matching
 // elements to multi-select so edits fan out; unchecked returns to
@@ -2253,8 +2261,20 @@ async function sendToAgent(operation = beginInspectorOperation()) {
   try {
   await operation.wait(refreshMcpStatus(undefined, operation));
   const block = sendToAgentBlock(mcpState, mcpMode, !!mcpCloudToken, mcpStatusIssue);
-  if (block) { trackFeature({ feature: 'send_to_agent', outcome: 'failure', ...block, ...(mcpStatusError ? { error_message: mcpStatusError } : {}), mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) }); sendAgentHelpOpen = true; render(); return; }
-  if (feedbackSession?.state === 'implementing') { trackFeature({ feature: 'send_to_agent', outcome: 'failure', reason: 'busy', error_code: 'agent_busy', mode: mcpMode, page_scheme: pageSchemeFromUrl(boundPageUrl) }); return; }
+  // A known setup blocker is not a send: nothing is attempted, so it must not
+  // count as dm_send_to_agent (a handoff event in DAU/WAU/MAU and the funnel).
+  // It is reported as dm_send_to_agent_blocked and the dialog tells the user
+  // exactly what to fix.
+  if (block) {
+    trackFeature({ feature: 'send_to_agent_blocked', outcome: 'failure', ...block, ...(mcpStatusError ? { error_message: mcpStatusError } : {}), mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) });
+    openSendSetup();
+    return;
+  }
+  if (feedbackSession?.state === 'implementing') {
+    trackFeature({ feature: 'send_to_agent_blocked', outcome: 'failure', reason: 'busy', error_code: 'agent_busy', mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) });
+    showCaptureToast('error', 'Your agent is still implementing the last round.');
+    return;
+  }
   const res = await operation.wait(send({ type: 'SP_SEND_TO_AGENT', scope: 'site' }, operation));
   if (res?.ok) {
     feedbackSession = res.supported ? parseFeedbackSession(res.session) : null;
@@ -6911,16 +6931,16 @@ function renderStickyBottom(): string {
   const hasChanges = siteChangeCount() > 0;
   const copyDis = previewingOriginal || !hasChanges;
   // Send-to-Agent stays clickable whenever there's something to send —
-  // when no agent is connected yet, the click opens setup instructions
-  // instead of sending. The tooltip previews which of the two it will be.
+  // when no agent is connected yet, the click opens the setup dialog
+  // instead of sending (and is not counted as a send). The tooltip previews which of the two it will be.
   const implementing = mcpMode === 'local' && feedbackSession?.state === 'implementing';
   const sendDis = previewingOriginal || !hasChanges || sendingFeedback || implementing;
   let sendTitle = 'Send changes from every route on this site to your coding agent';
   if (implementing) sendTitle = 'The agent is implementing this round. Wait before sending the next one.';
   if (previewingOriginal) sendTitle = 'Disable “Preview original” first.';
   else if (!hasChanges) sendTitle = 'No changes to send.';
-  else if (mcpState === 'offline') sendTitle = 'MCP is not connected — click for setup instructions.';
-  else if (mcpState === 'running') sendTitle = 'No coding agent connected yet — click for instructions.';
+  else if (mcpState === 'offline') sendTitle = 'Not connected to an agent yet — click to finish setup here. Nothing is sent until it is.';
+  else if (mcpState === 'running') sendTitle = 'No coding agent is connected yet — click to finish setup here. Nothing is sent until one is.';
   const copyTitle = previewingOriginal ? 'Disable “Preview original” first.' : !hasChanges ? 'No changes to copy.' : 'Copy changes from every route on this site, including collapsed groups';
   const copyS = 'flex:1;padding:8px 12px;border-radius:8px;font-size:11px;font-weight:500;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:5px;' +
     (copyDis ? 'background:var(--dm-btn-bg-disabled);border:1px solid var(--dm-btn-border-disabled);color:var(--dm-text-dim);cursor:default;opacity:0.5;pointer-events:none;' : 'background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text-secondary);cursor:pointer;');
@@ -6937,55 +6957,87 @@ function renderStickyBottom(): string {
 // while no agent is connected. The copy is state-specific — `offline` walks
 // through wiring MCP up, `running` means the transport is live but no agent
 // has attached yet.
-function renderSendAgentHelpOverlay(): string {
-  if (!sendAgentHelpOpen) return '';
-  const isCloud = mcpMode === 'cloud' || mcpMode === 'self-hosted';
-  const code = (t: string) => '<code style="font-family:SF Mono,Monaco,monospace;font-size:9px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:3px;padding:1px 4px;word-break:break-all;">' + t + '</code>';
-  let intro: string;
-  let steps: string[];
-  if (mcpState === 'running') {
-    intro = 'The MCP server is reachable, but no coding agent has connected yet.';
-    steps = [
-      'Open the <b>MCP page</b> (click the MCP chip up top) and click <b>Copy MCP config</b>.',
-      'Paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …) and restart the agent.',
-      'Run ' + code('/design-mode') + ' in the agent — the MCP chip up top turns solid green.',
-    ];
-  } else if (isCloud && mcpCloudToken) {
-    intro = 'The cloud relay is unreachable right now.';
-    steps = [
-      'Open the <b>MCP page</b> (click the MCP chip up top) and check the server URL and token.',
-      'Click <b>Refresh status</b> on the MCP page to retry the connection.',
-    ];
-  } else if (isCloud) {
-    intro = 'One-time setup — takes about a minute.';
-    steps = [
-      'Open the <b>MCP page</b> (click the MCP chip up top) and click <b>Connect to Cloud</b>.',
-      'Click <b>Copy MCP config</b> and paste it into your agent’s MCP settings (Claude Code, Cursor, Windsurf, …).',
-      'Restart the agent, then run ' + code('/design-mode') + ' in it.',
-    ];
-  } else {
-    intro = 'The local companion server isn’t running. One-time setup:';
-    steps = [
-      'Register the server with your agent: ' + code('claude mcp add design-mode -- npm start --prefix &lt;repo&gt;/packages/mcp-local'),
-      'Start your agent — it launches the server automatically.',
-      'Run ' + code('/design-mode') + ' in the agent.',
-    ];
+// Builds the "finish setup" dialog from live panel state. Content lives in
+// send-setup.ts so it can be tested without a DOM.
+function sendSetupModel(): SendSetupModel {
+  const base = (mcpCloudUrl || '').replace(/\/$/, '');
+  const cloudConfig = (token: string) => JSON.stringify({ mcpServers: { 'design-mode': { type: 'http', url: base + '/mcp', headers: { Authorization: 'Bearer ' + token } } } }, null, 2);
+  const isLocal = mcpMode === 'local';
+  return {
+    mode: mcpMode,
+    state: mcpState,
+    statusIssue: mcpStatusIssue,
+    hasToken: !!mcpCloudToken,
+    cloudUrl: mcpCloudUrl,
+    localPort: mcpPort,
+    registering: mcpCloudRegistering,
+    checking: sendSetupChecking,
+    mcpConfig: isLocal ? localMcpConfig() : (mcpCloudToken ? cloudConfig(mcpCloudToken) : ''),
+    mcpConfigDisplay: isLocal ? localMcpConfig() : (mcpCloudToken ? cloudConfig(mcpCloudToken.slice(0, 6) + '…') : ''),
+    localCommand: localMcpCommand(),
+    tools: AGENT_TOOLS.map(t => ({ key: t.key, label: t.label, path: t.path })),
+    changeCount: siteChangeCount(),
+  };
+}
+function renderSendSetupOverlay(): string {
+  if (!sendSetupOpen) return '';
+  return renderSendSetupDialog(sendSetupModel(), { esc: escapeAttr, icon });
+}
+function focusSendSetup() {
+  requestAnimationFrame(() => {
+    const dialog = root.querySelector<HTMLElement>('[data-dm-send-setup]');
+    if (!dialog) return;
+    (dialog.querySelector<HTMLElement>('[data-dm-setup-autofocus]:not([disabled])') || dialog).focus();
+  });
+}
+function keepSendSetupFocus() {
+  const dialog = root.querySelector<HTMLElement>('[data-dm-send-setup]');
+  if (!dialog || dialog.contains(document.activeElement)) return;
+  (dialog.querySelector<HTMLElement>('[data-dm-setup-autofocus]:not([disabled])') || dialog).focus();
+}
+async function probeSendSetup(manual = false) {
+  if (!sendSetupOpen || sendSetupBusy) return;
+  sendSetupBusy = true;
+  if (manual) { sendSetupChecking = true; render(); }
+  try {
+    // The local bridge gives up reconnecting after a few tries, so a server
+    // the user just started is only noticed if we ask the tab to reconnect.
+    if (mcpMode === 'local' && mcpState === 'offline' && (manual || ++sendSetupPolls % 2 === 0)) {
+      await send({ type: 'SP_RECONFIGURE_TRANSPORT' });
+    }
+    await refreshMcpStatus(true);
+  } catch { /* keep the last known state; the next probe retries */ }
+  finally {
+    sendSetupBusy = false;
+    sendSetupChecking = false;
+    if (sendSetupOpen) render();
   }
-  const stepRows = steps.map((s, i) =>
-    '<div style="display:flex;gap:8px;align-items:flex-start;">' +
-    '<span style="flex-shrink:0;width:16px;height:16px;border-radius:50%;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);color:var(--dm-accent);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;">' + (i + 1) + '</span>' +
-    '<span style="font-size:10px;color:var(--dm-text-secondary);line-height:1.6;min-width:0;">' + s + '</span></div>'
-  ).join('');
-  return '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:60;display:flex;align-items:center;justify-content:center;">' +
-    '<div style="background:var(--dm-bg);border:1px solid var(--dm-separator-strong);border-radius:10px;padding:16px;width:312px;max-width:calc(100vw - 32px);box-shadow:0 8px 24px rgba(0,0,0,0.3);">' +
-    '<div style="font-size:12px;font-weight:600;color:var(--dm-text);margin-bottom:6px;display:flex;align-items:center;gap:6px;">' + icon('send', 12) + ' Connect a coding agent</div>' +
-    '<div style="font-size:10px;color:var(--dm-text-muted);margin-bottom:10px;line-height:1.5;">' + intro + '</div>' +
-    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">' + stepRows + '</div>' +
-    '<div style="font-size:9px;color:var(--dm-text-dimmer);margin-bottom:14px;line-height:1.5;">Once connected, this button stages your changes for the agent — it implements them and marks each one done in the Changes tab.</div>' +
-    '<div style="display:flex;gap:6px;">' +
-    '<button data-dm-action="send-agent-help-close" style="flex:1;padding:6px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Close</button>' +
-    '<button data-dm-action="send-agent-help-mcp" style="flex:1;padding:6px;background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);border-radius:6px;color:var(--dm-accent);cursor:pointer;font-size:10px;font-family:inherit;font-weight:500;">Open MCP settings</button>' +
-    '</div></div></div>';
+}
+function stopSendSetupPoll() {
+  if (sendSetupTimer) clearInterval(sendSetupTimer);
+  sendSetupTimer = null;
+}
+function openSendSetup() {
+  if (!sendSetupOpen) {
+    const active = document.activeElement;
+    sendSetupTrigger = active instanceof HTMLElement && active !== document.body ? active : null;
+  }
+  sendSetupOpen = true;
+  sendSetupPolls = 0;
+  render();
+  focusSendSetup();
+  stopSendSetupPoll();
+  sendSetupTimer = setInterval(() => { if (!sendSetupOpen) stopSendSetupPoll(); else void probeSendSetup(); }, 3000);
+}
+function closeSendSetup() {
+  if (!sendSetupOpen) return;
+  sendSetupOpen = false;
+  sendSetupChecking = false;
+  stopSendSetupPoll();
+  render();
+  const back = sendSetupTrigger && sendSetupTrigger.isConnected ? sendSetupTrigger : root.querySelector<HTMLElement>('#dm-send-agent-btn');
+  sendSetupTrigger = null;
+  back?.focus();
 }
 
 /* ── Phase 2: Layers Tab ── */
@@ -10116,7 +10168,7 @@ function render() {
       // max-content wide there — see renderLayersTab); other tabs keep
       // horizontal overflow clipped.
       '<div id="dm-tab-body" style="flex:1;' + (tab === 'layers' ? 'overflow:auto;' : 'overflow-y:auto;overflow-x:hidden;') + '">' + tabContent + '</div>' +
-      renderStickyBottom() + renderSendAgentHelpOverlay() + renderComputedCssOverlay() + renderCaptureToast() + '</div>';
+      renderStickyBottom() + renderSendSetupOverlay() + renderComputedCssOverlay() + renderCaptureToast() + '</div>';
   }
 
   // Shortcuts popover floats above whichever view is active.
@@ -10184,6 +10236,9 @@ function render() {
   // Position any open token popover after layout settles (offsetHeight needs
   // the freshly-morphed DOM). Fixed-positioned so it never clips.
   requestAnimationFrame(positionTokenPopovers);
+  // The setup dialog changes step as the connection changes, which can remove
+  // the button that had focus. Keep focus inside the modal.
+  if (sendSetupOpen) keepSendSetupFocus();
 }
 
 /* ── Phase 1: Event Delegation (bound once, never re-bound) ── */
@@ -10404,8 +10459,26 @@ function setupDelegation() {
         case 'copy-prompt': runInspectorAction(copyPrompt(operation)); break;
         case 'send-to-agent': runInspectorAction(sendToAgent(operation)); break;
         case 'stop-live-feedback': void runInspectorAction(stopLiveFeedback(operation)); break;
-        case 'send-agent-help-close': sendAgentHelpOpen = false; render(); break;
-        case 'send-agent-help-mcp': sendAgentHelpOpen = false; helpOpen = false; contributeOpen = false; settingsOpen = false; mcpOpen = true; render(); break;
+        case 'send-setup-close': closeSendSetup(); break;
+        case 'send-setup-recheck': void probeSendSetup(true); break;
+        case 'send-setup-reconnect': runInspectorAction(send({ type: 'SP_RECONFIGURE_TRANSPORT' }, operation).then(() => probeSendSetup(true))); break;
+        case 'send-setup-copy': {
+          const text = actionBtn.getAttribute('data-dm-payload') || '';
+          if (!text) break;
+          navigator.clipboard.writeText(text).then(
+            () => showCaptureToast('success', 'Copied — paste it where the steps say'),
+            () => showCaptureToast('error', 'Copy failed — select the text and copy it'),
+          );
+          break;
+        }
+        case 'send-setup-send': {
+          // The dialog's own button performs the real send, which re-checks
+          // the connection first. Only close the dialog if it will not reopen.
+          if (sendSetupStep(sendSetupModel()) !== 'ready') break;
+          closeSendSetup();
+          runInspectorAction(sendToAgent(operation));
+          break;
+        }
         case 'toggle-theme': toggleTheme(); break;
         case 'submit-comment': runInspectorAction(submitComment(operation)); break;
         case 'cancel-comment': cancelComment(); break;
@@ -14029,6 +14102,23 @@ function setupDelegation() {
   // Keydown handler
   root.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
+
+    // Send to Agent setup dialog: Esc closes, Tab stays inside.
+    if (sendSetupOpen) {
+      if (e.key === 'Escape') { e.preventDefault(); closeSendSetup(); return; }
+      if (e.key === 'Tab') {
+        const dialog = root.querySelector<HTMLElement>('[data-dm-send-setup]');
+        const items = dialog ? Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), summary, pre[tabindex="0"], [href]')) : [];
+        if (dialog && items.length) {
+          const first = items[0], last = items[items.length - 1];
+          const active = document.activeElement;
+          if (!dialog.contains(active) || (active === dialog && e.shiftKey)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+          else if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+        }
+        return;
+      }
+    }
 
     // Escape closes the keyboard-shortcuts popover first.
     if (shortcutsOpen && e.key === 'Escape') {

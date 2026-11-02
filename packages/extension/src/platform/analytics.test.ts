@@ -205,7 +205,8 @@ test('Send to Agent pre-flight failures say which setup step is missing', () => 
   assert.deepEqual(sendToAgentBlock('offline', 'cloud', true, 'not-a-code'), { reason: 'offline', error_code: 'transport_inactive' });
   for (const state of ['offline', 'running'] as const) {
     const block = sendToAgentBlock(state, 'cloud', false)!;
-    assert.deepEqual(boundedEvent({ feature: 'send_to_agent', outcome: 'failure', ...block, mode: 'cloud' }), { feature: 'send_to_agent', outcome: 'failure', ...block, mode: 'cloud' });
+    // A blocked click is its own event, never dm_send_to_agent (a handoff event in DAU/WAU/MAU and the funnel).
+    assert.deepEqual(boundedEvent({ feature: 'send_to_agent_blocked', outcome: 'failure', ...block, mode: 'cloud', change_count_bucket: '2-5' }), { feature: 'send_to_agent_blocked', outcome: 'failure', ...block, mode: 'cloud', change_count_bucket: '2-5' });
   }
 });
 

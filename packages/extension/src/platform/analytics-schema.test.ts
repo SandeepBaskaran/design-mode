@@ -6,7 +6,7 @@ const config = { host: 'https://analytics.invalid', key: 'phc_local_test_only' }
 const names: Record<string, string> = {
   inspect: 'dm_inspect', style: 'dm_style_edit', text: 'dm_text_edit', dom: 'dm_dom_edit',
   comment: 'dm_comment_update', import: 'dm_changes_import', export: 'dm_changes_export',
-  screenshot: 'dm_screenshot', undo: 'dm_undo', redo: 'dm_redo', send_to_agent: 'dm_send_to_agent',
+  screenshot: 'dm_screenshot', undo: 'dm_undo', redo: 'dm_redo', send_to_agent: 'dm_send_to_agent', send_to_agent_blocked: 'dm_send_to_agent_blocked',
   feedback_stop: 'dm_feedback_stop', mcp_state: 'dm_mcp_state',
   copy_prompt: 'dm_copy_prompt', annotate: 'dm_annotate', token_edit: 'dm_token_edit',
   computed_css: 'dm_computed_css', theme: 'dm_theme', help: 'dm_help',
