@@ -34,6 +34,11 @@ export type AnalyticsEvent = {
   error_code?: string;
   error_message?: string;
   change_count_bucket?: string;
+  step?: string;
+  resolved_via?: string;
+  /** Whole milliseconds, clamped and rounded to the second by boundedEvent. */
+  time_to_resolve_ms?: number;
+  time_open_ms?: number;
 };
 
 const eventNames: Readonly<Record<string, string>> = Object.freeze({
@@ -43,10 +48,10 @@ const eventNames: Readonly<Record<string, string>> = Object.freeze({
   send_to_agent: 'dm_send_to_agent', send_to_agent_blocked: 'dm_send_to_agent_blocked', feedback_stop: 'dm_feedback_stop', mcp_state: 'dm_mcp_state',
   copy_prompt: 'dm_copy_prompt', annotate: 'dm_annotate', token_edit: 'dm_token_edit',
   computed_css: 'dm_computed_css', theme: 'dm_theme', help: 'dm_help',
-  matching_layers: 'dm_matching_layers', media: 'dm_media',
+  matching_layers: 'dm_matching_layers', media: 'dm_media', setup_popup: 'dm_setup_popup',
 });
 const features = Object.keys(eventNames);
-const outcomes = ['attempt', 'command_acknowledged', 'clipboard_completed', 'clipboard_failed', 'download_initiated', 'download_failed', 'failure', 'state'];
+const outcomes = ['attempt', 'command_acknowledged', 'clipboard_completed', 'clipboard_failed', 'download_initiated', 'download_failed', 'failure', 'state', 'shown', 'step_action', 'resolved', 'dismissed'];
 const reasons = ['unavailable', 'rejected', 'offline', 'waiting_for_agent', 'busy'];
 const modes = ['local', 'cloud', 'self-hosted'];
 const states = ['offline', 'running', 'connected', 'dark', 'light', 'system', 'on', 'off'];
@@ -113,6 +118,20 @@ const props = [
   'aspect-ratio', 'height', 'max-height', 'max-width',
   'min-height', 'min-width', 'object-fit', 'width',
 ];
+// Actions inside the Send to Agent setup popup, as `data-dm-setup-step` values
+// in send-setup.ts. A closed list: nothing the user types can reach analytics.
+export const SETUP_POPUP_STEPS = [
+  'connect_cloud', 'copy_terminal_command', 'copy_mcp_config', 'copy_agent_command',
+  'reconnect', 'recheck', 'switch_to_local', 'switch_to_cloud',
+] as const;
+const resolvedVia = ['auto_recheck', 'send_button'];
+export const SETUP_POPUP_MAX_MS = 1_800_000;
+// Whole milliseconds, rounded to the nearest second and clamped to 0..30 min,
+// so a duration cannot be used to tell one session from another.
+export function clampDurationMs(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return Math.round(Math.min(SETUP_POPUP_MAX_MS, Math.max(0, value)) / 1000) * 1000;
+}
 const formats = ['css', 'tailwind', 'scss', 'jsx', 'markdown'];
 const pageSchemes = ['http', 'https', 'localhost', 'file', 'chrome_internal', 'webstore', 'iframe', 'unknown'];
 const errorCodes = [
@@ -330,7 +349,15 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
   const e = value as AnalyticsEvent;
   if (!features.includes(e.feature) || !outcomes.includes(e.outcome)) return null;
   const result: AnalyticsEvent = { feature: e.feature, outcome: e.outcome };
-  if (reasons.includes(e.reason || '')) result.reason = e.reason;
+  // The setup popup names the blocker it is open for with the same codes as
+  // dm_send_to_agent_blocked (cloud_token_missing, local_server_offline, ...).
+  if (reasons.includes(e.reason || '') || (e.feature === 'setup_popup' && errorCodes.includes(e.reason || '') && e.reason !== 'unknown')) result.reason = e.reason;
+  if ((SETUP_POPUP_STEPS as readonly string[]).includes(e.step || '')) result.step = e.step;
+  if (resolvedVia.includes(e.resolved_via || '')) result.resolved_via = e.resolved_via;
+  const toResolve = clampDurationMs(e.time_to_resolve_ms);
+  if (toResolve !== undefined) result.time_to_resolve_ms = toResolve;
+  const timeOpen = clampDurationMs(e.time_open_ms);
+  if (timeOpen !== undefined) result.time_open_ms = timeOpen;
   if (modes.includes(e.mode || '')) result.mode = e.mode;
   if (states.includes(e.state || '')) result.state = e.state;
   if (actions.includes(e.action || '')) result.action = e.action;

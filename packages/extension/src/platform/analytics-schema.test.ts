@@ -10,7 +10,7 @@ const names: Record<string, string> = {
   feedback_stop: 'dm_feedback_stop', mcp_state: 'dm_mcp_state',
   copy_prompt: 'dm_copy_prompt', annotate: 'dm_annotate', token_edit: 'dm_token_edit',
   computed_css: 'dm_computed_css', theme: 'dm_theme', help: 'dm_help',
-  matching_layers: 'dm_matching_layers', media: 'dm_media',
+  matching_layers: 'dm_matching_layers', media: 'dm_media', setup_popup: 'dm_setup_popup',
 };
 for (const firefox of [false, true]) {
   test(`${firefox ? 'Firefox' : 'Chrome'}: semantic names, bounded payload, consent upgrade and revoke`, async () => {
@@ -83,6 +83,22 @@ test('schema version guard: the identity key is pinned to the schema version', (
     { version: ANALYTICS_SCHEMA_VERSION, identityKey: ANALYTICS_DISTINCT_ID_KEY },
     { version: 4, identityKey: 'dm-analytics-distinct-id' },
   );
+});
+
+test('dm_setup_popup carries exactly the bounded popup keys and no free text', async () => {
+  const received: any[] = [];
+  const analytics = createAnalytics(config, {
+    firefox: false, manifest: { version: '3.0.0' }, readConsent: async () => undefined,
+    permissions: async () => ({}), environment: () => ({}),
+    fetch: async (_: unknown, init?: RequestInit) => { received.push(JSON.parse(init!.body as string)); return new Response(); },
+  });
+  await analytics.capture({ feature: 'setup_popup', outcome: 'resolved', reason: 'transport_inactive', mode: 'cloud', step: 'reconnect', resolved_via: 'auto_recheck', time_to_resolve_ms: 4400, token: 'dm_private_token', url: 'https://private.invalid', error_message: undefined });
+  assert.equal(received[0].event, 'dm_setup_popup');
+  const p = received[0].properties;
+  assert.equal(p.schema_version, ANALYTICS_SCHEMA_VERSION);
+  assert.deepEqual(['outcome', 'reason', 'mode', 'step', 'resolved_via', 'time_to_resolve_ms'].map(k => p[k]), ['resolved', 'transport_inactive', 'cloud', 'reconnect', 'auto_recheck', 4000]);
+  assert.equal(JSON.stringify(received).includes('private'), false);
+  assert.deepEqual(Object.keys(p).filter(k => !k.startsWith('$')).sort(), ['browser', 'browser_vendor', 'distribution', 'feature', 'mode', 'outcome', 'reason', 'resolved_via', 'schema_version', 'step', 'surface', 'time_to_resolve_ms', 'version']);
 });
 
 test('failure events may carry error_code and a sanitised error_message without a schema version bump', async () => {

@@ -89,11 +89,11 @@ export function renderSendSetupDialog(m: SendSetupModel, deps: SendSetupDeps): s
 
   const code = (t: string) => '<code style="font-family:SF Mono,Monaco,monospace;font-size:10px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:3px;padding:1px 4px;word-break:break-all;">' + esc(t) + '</code>';
   const p = (html: string) => '<p style="margin:0;font-size:11px;line-height:1.55;color:var(--dm-text-secondary);">' + html + '</p>';
-  const copyBlock = (label: string, shown: string, payload: string) =>
+  const copyBlock = (label: string, shown: string, payload: string, step: string) =>
     '<div style="display:flex;flex-direction:column;gap:4px;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
     '<span style="font-size:11px;font-weight:600;color:var(--dm-text);">' + esc(label) + '</span>' +
-    '<button type="button" data-dm-action="send-setup-copy" data-dm-payload="' + esc(payload) + '" aria-label="Copy ' + esc(label) + '" style="' + BTN_SECONDARY + 'display:inline-flex;align-items:center;gap:4px;">' + icon('copy', 11) + ' Copy</button>' +
+    '<button type="button" data-dm-action="send-setup-copy" data-dm-setup-step="' + step + '" data-dm-payload="' + esc(payload) + '" aria-label="Copy ' + esc(label) + '" style="' + BTN_SECONDARY + 'display:inline-flex;align-items:center;gap:4px;">' + icon('copy', 11) + ' Copy</button>' +
     '</div>' +
     '<pre tabindex="0" aria-label="' + esc(label) + '" style="margin:0;padding:8px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;font-family:SF Mono,Monaco,monospace;font-size:10px;line-height:1.5;color:var(--dm-text);white-space:pre-wrap;word-break:break-all;max-height:150px;overflow:auto;">' + esc(shown) + '</pre>' +
     '</div>';
@@ -101,7 +101,7 @@ export function renderSendSetupDialog(m: SendSetupModel, deps: SendSetupDeps): s
     '<ol style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:11px;line-height:1.55;color:var(--dm-text-secondary);">' +
     items.map(i => '<li>' + i + '</li>').join('') + '</ol>';
   const switchMode = (to: SendSetupMode, label: string) =>
-    '<button type="button" data-dm-mcp-mode="' + to + '" style="background:none;border:none;padding:0;color:var(--dm-accent);font-size:11px;font-family:inherit;cursor:pointer;text-decoration:underline;align-self:flex-start;">' + esc(label) + '</button>';
+    '<button type="button" data-dm-mcp-mode="' + to + '" data-dm-setup-step="switch_to_' + to + '" style="background:none;border:none;padding:0;color:var(--dm-accent);font-size:11px;font-family:inherit;cursor:pointer;text-decoration:underline;align-self:flex-start;">' + esc(label) + '</button>';
 
   let title = '';
   let intro = '';
@@ -120,14 +120,14 @@ export function renderSendSetupDialog(m: SendSetupModel, deps: SendSetupDeps): s
           '<input type="text" id="dm-send-setup-cloud-url" class="dm-input" data-dm-setting="cloudUrl" value="' + esc(m.cloudUrl) + '" placeholder="https://your-server.example" style="padding:6px 8px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:6px;color:var(--dm-text);font-size:11px;font-family:inherit;font-weight:400;"></label>'
         : '') +
       p('Click <b>Connect</b> to create a device token. It stays in this browser. Then you’ll copy a short config into your agent.') +
-      '<button type="button" data-dm-action="mcp-cloud-register" data-dm-setup-autofocus ' + (m.registering ? 'disabled aria-disabled="true" ' : '') + 'style="' + BTN_PRIMARY + 'align-self:flex-start;' + (m.registering ? 'opacity:.6;cursor:default;' : '') + '">' + (m.registering ? 'Connecting…' : (rejected ? 'Create a new token' : 'Connect to ' + (selfHosted ? 'server' : 'Cloud'))) + '</button>' +
+      '<button type="button" data-dm-action="mcp-cloud-register" data-dm-setup-step="connect_cloud" data-dm-setup-autofocus ' + (m.registering ? 'disabled aria-disabled="true" ' : '') + 'style="' + BTN_PRIMARY + 'align-self:flex-start;' + (m.registering ? 'opacity:.6;cursor:default;' : '') + '">' + (m.registering ? 'Connecting…' : (rejected ? 'Create a new token' : 'Connect to ' + (selfHosted ? 'server' : 'Cloud'))) + '</button>' +
       switchMode('local', 'Use a local server on this computer instead');
   } else if (step === 'start-local') {
     title = 'Start the local Design Mode server';
     intro = 'Local mode talks to a small server on your computer (port ' + m.localPort + '), and it isn’t running. Nothing was sent.';
     body =
       p('Run this once in a terminal to register the server with Claude Code. Replace ' + code(LOCAL_REPO_PLACEHOLDER) + ' with the folder where you cloned Design Mode.') +
-      copyBlock('Terminal command', m.localCommand, m.localCommand) +
+      copyBlock('Terminal command', m.localCommand, m.localCommand, 'copy_terminal_command') +
       stepList([
         'Start your agent. It launches the server for you.',
         'Press <b>Re-check</b> below. This window turns green when the server is up.',
@@ -135,14 +135,14 @@ export function renderSendSetupDialog(m: SendSetupModel, deps: SendSetupDeps): s
       '<details style="font-size:11px;color:var(--dm-text-secondary);"><summary style="cursor:pointer;color:var(--dm-text);">Using another agent?</summary>' +
       '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">' +
       p('Add this to your agent’s MCP settings instead.') +
-      copyBlock('MCP config', m.mcpConfigDisplay, m.mcpConfig) + '</div></details>' +
+      copyBlock('MCP config', m.mcpConfigDisplay, m.mcpConfig, 'copy_mcp_config') + '</div></details>' +
       switchMode('cloud', 'Use Cloud instead (nothing to run locally)');
   } else if (step === 'reconnect') {
     title = 'Reconnect this tab';
     intro = 'You’re set up, but this tab isn’t connected to the relay right now. Nothing was sent.';
     body =
       p('Press <b>Reconnect</b>. If it stays red, check your internet connection or the server URL.') +
-      '<button type="button" data-dm-action="send-setup-reconnect" data-dm-setup-autofocus style="' + BTN_PRIMARY + 'align-self:flex-start;">Reconnect</button>';
+      '<button type="button" data-dm-action="send-setup-reconnect" data-dm-setup-step="reconnect" data-dm-setup-autofocus style="' + BTN_PRIMARY + 'align-self:flex-start;">Reconnect</button>';
   } else if (step === 'reload-page') {
     const restricted = m.statusIssue === 'restricted_url';
     title = 'Design Mode can’t reach this page';
@@ -161,14 +161,14 @@ export function renderSendSetupDialog(m: SendSetupModel, deps: SendSetupDeps): s
         'Restart the agent, then run ' + code('/design-mode') + ' in it (save that command first — see below).',
         'This window turns green as soon as the agent connects.',
       ]) +
-      copyBlock('MCP config', m.mcpConfigDisplay, m.mcpConfig) +
+      copyBlock('MCP config', m.mcpConfigDisplay, m.mcpConfig, 'copy_mcp_config') +
       '<details style="font-size:11px;color:var(--dm-text-secondary);"><summary style="cursor:pointer;color:var(--dm-text);">First time? Save the /design-mode command</summary>' +
       '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">' +
       p('Copy it, then save it as a file in your project at the path shown for your agent.') +
       m.tools.map(t =>
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
         '<span style="font-size:11px;color:var(--dm-text);">' + esc(t.label) + ' ' + code(t.path) + '</span>' +
-        '<button type="button" data-dm-action="copy-agent-command" data-dm-tool="' + esc(t.key) + '" aria-label="Copy command for ' + esc(t.label) + '" style="' + BTN_SECONDARY + 'flex-shrink:0;">Copy</button></div>'
+        '<button type="button" data-dm-action="copy-agent-command" data-dm-tool="' + esc(t.key) + '" data-dm-setup-step="copy_agent_command" aria-label="Copy command for ' + esc(t.label) + '" style="' + BTN_SECONDARY + 'flex-shrink:0;">Copy</button></div>'
       ).join('') + '</div></details>';
   } else {
     title = 'Ready to send';
@@ -191,7 +191,7 @@ export function renderSendSetupDialog(m: SendSetupModel, deps: SendSetupDeps): s
     '<div role="status" aria-live="polite" data-dm-send-setup-status="' + (status.ok ? 'ok' : 'pending') + '" style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;font-size:11px;color:var(--dm-text);">' +
     '<span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:' + status.dot + ';"></span><span>' + esc(status.text) + '</span></div>' +
     '<div style="display:flex;gap:6px;">' +
-    '<button type="button" data-dm-action="send-setup-recheck" style="' + BTN_SECONDARY + 'flex:1;">Re-check</button>' +
+    '<button type="button" data-dm-action="send-setup-recheck" data-dm-setup-step="recheck" style="' + BTN_SECONDARY + 'flex:1;">Re-check</button>' +
     '<button type="button" data-dm-action="send-setup-send" ' + (canSend ? '' : 'disabled aria-disabled="true" ') + 'style="' + BTN_PRIMARY + 'flex:1;' + (canSend ? '' : 'opacity:.5;cursor:default;') + '">Send to Agent</button>' +
     '</div></div></div>';
 }

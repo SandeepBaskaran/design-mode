@@ -189,6 +189,12 @@ let sendSetupTrigger: HTMLElement | null = null;
 let sendSetupTimer: ReturnType<typeof setInterval> | null = null;
 let sendSetupBusy = false;
 let sendSetupPolls = 0;
+// Popup analytics state. In memory only: nothing about a popup is persisted.
+// `reason` is the blocker the popup opened for; `resolved` makes sure each
+// open reports at most one resolved or dismissed outcome.
+let sendSetupOpenedAt = 0;
+let sendSetupReason = '';
+let sendSetupResolved = false;
 
 // "Select matching layers" checkbox — checked hands all matching
 // elements to multi-select so edits fan out; unchecked returns to
@@ -7006,6 +7012,7 @@ async function probeSendSetup(manual = false) {
       await send({ type: 'SP_RECONFIGURE_TRANSPORT' });
     }
     await refreshMcpStatus(true);
+    noteSendSetupResolved('auto_recheck');
   } catch { /* keep the last known state; the next probe retries */ }
   finally {
     sendSetupBusy = false;
@@ -7017,10 +7024,25 @@ function stopSendSetupPoll() {
   if (sendSetupTimer) clearInterval(sendSetupTimer);
   sendSetupTimer = null;
 }
+function trackSetupPopup(outcome: 'shown' | 'step_action' | 'resolved' | 'dismissed', extra: Partial<AnalyticsEvent> = {}) {
+  trackFeature({ feature: 'setup_popup', outcome, reason: sendSetupReason, mode: mcpMode, ...extra });
+}
+// The popup's own check passes: the blocker it opened for is fixed. Reported
+// once per open, by whichever of the live re-check or the Send button sees it first.
+function noteSendSetupResolved(via: 'auto_recheck' | 'send_button') {
+  if (!sendSetupOpen || sendSetupResolved || sendSetupStep(sendSetupModel()) !== 'ready') return;
+  sendSetupResolved = true;
+  trackSetupPopup('resolved', { resolved_via: via, time_to_resolve_ms: Date.now() - sendSetupOpenedAt });
+}
 function openSendSetup() {
   if (!sendSetupOpen) {
     const active = document.activeElement;
     sendSetupTrigger = active instanceof HTMLElement && active !== document.body ? active : null;
+    const block = sendToAgentBlock(mcpState, mcpMode, !!mcpCloudToken, mcpStatusIssue);
+    sendSetupReason = block?.error_code || '';
+    sendSetupOpenedAt = Date.now();
+    sendSetupResolved = false;
+    trackSetupPopup('shown', { page_scheme: pageSchemeFromUrl(boundPageUrl) });
   }
   sendSetupOpen = true;
   sendSetupPolls = 0;
@@ -7029,8 +7051,9 @@ function openSendSetup() {
   stopSendSetupPoll();
   sendSetupTimer = setInterval(() => { if (!sendSetupOpen) stopSendSetupPoll(); else void probeSendSetup(); }, 3000);
 }
-function closeSendSetup() {
+function closeSendSetup(dismissed = true) {
   if (!sendSetupOpen) return;
+  if (dismissed && !sendSetupResolved) trackSetupPopup('dismissed', { time_open_ms: Date.now() - sendSetupOpenedAt });
   sendSetupOpen = false;
   sendSetupChecking = false;
   stopSendSetupPoll();
@@ -10400,6 +10423,9 @@ function setupDelegation() {
       return;
     }
 
+    const setupStepBtn = sendSetupOpen ? target.closest<HTMLElement>('[data-dm-send-setup] [data-dm-setup-step]') : null;
+    if (setupStepBtn) trackSetupPopup('step_action', { step: setupStepBtn.dataset.dmSetupStep });
+
     const helpLink = target.closest<HTMLElement>('[data-dm-help-target]');
     if (helpLink) {
       trackFeature({ feature: 'help', outcome: 'attempt', target: helpLink.dataset.dmHelpTarget });
@@ -10475,7 +10501,8 @@ function setupDelegation() {
           // The dialog's own button performs the real send, which re-checks
           // the connection first. Only close the dialog if it will not reopen.
           if (sendSetupStep(sendSetupModel()) !== 'ready') break;
-          closeSendSetup();
+          noteSendSetupResolved('send_button');
+          closeSendSetup(false);
           runInspectorAction(sendToAgent(operation));
           break;
         }
