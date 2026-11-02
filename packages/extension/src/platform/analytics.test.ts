@@ -237,19 +237,63 @@ test('error messages are bounded and stripped of URLs, emails, tokens, paths and
 });
 
 test('failed and rejected events carry error_code and error_message; successes never do', () => {
-  assert.deepEqual(commandOutcome({ ok: false, error: 'No agent connected' }), { outcome: 'failure', reason: 'rejected', error_code: 'no_agent_connected', error_message: 'No agent connected' });
+  assert.deepEqual(commandOutcome({ ok: false, error: 'No agent connected' }), { outcome: 'failure', reason: 'rejected', error_code: 'no_agent_connected' });
+  assert.deepEqual(commandOutcome({ ok: false, error: 'Something nobody has seen before' }), { outcome: 'failure', reason: 'rejected', error_code: 'unknown', error_message: 'Something nobody has seen before' });
   assert.deepEqual(commandOutcome({ ok: false }), { outcome: 'failure', reason: 'rejected', error_code: 'rejected' });
   assert.deepEqual(commandOutcome(undefined), { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' });
   assert.deepEqual(commandOutcome({ ok: true }), { outcome: 'command_acknowledged' });
-  assert.deepEqual(thrownFailure(new Error('Could not establish connection. Receiving end does not exist.')), { outcome: 'failure', reason: 'unavailable', error_code: 'no_content_script', error_message: 'Could not establish connection. Receiving end does not exist.' });
-  assert.deepEqual(thrownFailure(new Error('boom')), { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable', error_message: 'boom' });
+  assert.deepEqual(thrownFailure(new Error('Could not establish connection. Receiving end does not exist.')), { outcome: 'failure', reason: 'unavailable', error_code: 'no_content_script' });
+  assert.deepEqual(thrownFailure(new Error('boom')), { outcome: 'failure', reason: 'unavailable', error_code: 'unknown', error_message: 'boom' });
   assert.deepEqual(thrownFailure(undefined), { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' });
 });
 
-test('boundedEvent re-sanitises error_message and ignores non-string values', () => {
-  const dirty = boundedEvent({ feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'route_not_ready', error_message: 'see https://private.invalid/x?a=1' });
-  assert.deepEqual(dirty, { feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'route_not_ready', error_message: 'see [url]' });
-  assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', error_message: { toString: () => 'x' } })?.error_message, undefined);
-  assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', error_message: '' })?.error_message, undefined);
+test('boundedEvent re-sanitises error_message, keeps it only for unknown, and ignores non-string values', () => {
+  const dirty = boundedEvent({ feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'unknown', error_message: 'see https://private.invalid/x?a=1' });
+  assert.deepEqual(dirty, { feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'unknown', error_message: 'see [url]' });
+  // A classified failure never carries free text, whatever the caller passes.
+  for (const error_code of ['route_not_ready', 'no_content_script', 'clipboard_denied', undefined]) {
+    assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', reason: 'rejected', error_code, error_message: 'private text' })?.error_message, undefined);
+  }
+  assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', error_code: 'unknown', error_message: { toString: () => 'x' } })?.error_message, undefined);
+  assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', error_code: 'unknown', error_message: '' })?.error_message, undefined);
   assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', error_code: 'made_up' })?.error_code, undefined);
+});
+
+// Failure texts that reached the `unknown` bucket or were mis-bucketed. PostHog
+// holds no message text yet (error_message ships with this release), so these
+// are the strings the extension itself returns plus Chrome's documented
+// runtime messages for a command that could not reach the page.
+const classified: Array<[string, string]> = [
+  ['Error: The message port closed before a response was received.', 'page_disconnected'],
+  ['Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received', 'page_disconnected'],
+  ['Error: Extension context invalidated.', 'page_disconnected'],
+  ['Error: The page keeping the extension port is moved into back/forward cache, so the message channel is closed.', 'page_disconnected'],
+  ['Error: Frame with ID 0 is showing error page', 'page_disconnected'],
+  ['Error: Frame with ID 0 was removed.', 'page_disconnected'],
+  ['Error: Tabs cannot be edited right now (user may be dragging a tab).', 'page_disconnected'],
+  ['Error: Could not establish connection. Receiving end does not exist.', 'no_content_script'],
+  ['Error: No tab with id: 482.', 'tab_closed'],
+  ['Error: Cannot access contents of url "https://example.com/". Extension manifest must request permission to access this host.', 'restricted_url'],
+  ['Not connected to the local agent', 'local_server_offline'],
+  ['No cloud URL configured.', 'cloud_token_missing'],
+  ['Missing url or token.', 'cloud_token_missing'],
+  ['Agent did not acknowledge this send', 'agent_timeout'],
+  ['Select an element first', 'empty_selection'],
+  ['No parent available', 'empty_selection'],
+  ['Element not found', 'element_detached'],
+  ['Page route changed', 'route_not_ready'],
+  ['Reload the destination route before editing', 'route_not_ready'],
+  ["Error: DOMException: Failed to execute 'insertBefore' on 'Node': The node before which the new node is to be inserted is not a child of this node.", 'page_script_error'],
+  ["TypeError: Cannot read properties of null (reading 'style')", 'page_script_error'],
+  ['TypeError: x.getBoundingClientRect is not a function', 'page_script_error'],
+  ['Register failed (401)', 'auth_token_invalid'],
+  ['TypeError: Failed to fetch', 'bridge_unreachable'],
+  ['Storage unavailable; retry', 'unknown'],
+  ['Invalid style override request.', 'unknown'],
+];
+test('classifyErrorCode names the failure texts the extension and Chrome actually produce', () => {
+  for (const [error, code] of classified) assert.equal(classifyErrorCode({ ok: false, error }), code, error);
+  // Words that merely contain a trigger must not be misread (author, stoken, socketed).
+  assert.equal(classifyErrorCode({ ok: false, error: 'The author field is empty' }), 'unknown');
+  assert.equal(classifyErrorCode({ ok: false, error: 'Invalid token' }), 'auth_token_invalid');
 });

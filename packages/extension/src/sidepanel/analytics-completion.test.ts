@@ -30,7 +30,7 @@ for (const mode of ['clipboard', 'download', 'both']) {
     ]);
     assert.ok(events.every(e => e.feature === 'screenshot'));
     for (const e of events.filter(e => e.outcome.endsWith('_failed'))) {
-      assert.deepEqual([e.error_code, e.error_message], e.outcome === 'clipboard_failed' ? ['clipboard_denied', 'denied'] : ['download_blocked', 'blocked']);
+      assert.deepEqual([e.reason, e.error_code, e.error_message], e.outcome === 'clipboard_failed' ? ['rejected', 'clipboard_denied', undefined] : ['rejected', 'download_blocked', undefined]);
     }
   });
 }

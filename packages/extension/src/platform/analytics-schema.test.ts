@@ -114,18 +114,21 @@ test('dm_send_to_agent carries only the allowlisted trigger', async () => {
   assert.equal('trigger' in received[1].properties, false);
 });
 
-test('failure events may carry error_code and a sanitised error_message without a schema version bump', async () => {
+test('failure events carry error_code, and a sanitised error_message only when the code is unknown', async () => {
   const received: any[] = [];
   const analytics = createAnalytics(config, {
     firefox: false, manifest: { version: '3.0.0' }, readConsent: async () => undefined,
     permissions: async () => ({}), environment: () => ({}),
     fetch: async (_: unknown, init?: RequestInit) => { received.push(JSON.parse(init!.body as string)); return new Response(); },
   });
-  await analytics.capture({ feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'route_not_ready', error_message: 'Failed at https://private.invalid/a?token=abc for jane@example.com in /Users/jane/app', url: 'https://private.invalid' });
+  const message = 'Failed at https://private.invalid/a?token=abc for jane@example.com in /Users/jane/app';
+  await analytics.capture({ feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'unknown', error_message: message, url: 'https://private.invalid' });
+  await analytics.capture({ feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'route_not_ready', error_message: message });
   const p = received[0].properties;
-  assert.equal(p.schema_version, 4);
-  assert.equal(p.error_code, 'route_not_ready');
+  assert.equal(p.schema_version, ANALYTICS_SCHEMA_VERSION);
+  assert.equal(p.error_code, 'unknown');
   assert.equal(p.error_message, 'Failed at [url] for [email] in [path]');
-  assert.equal(JSON.stringify(received).includes('private'), false);
   assert.deepEqual(Object.keys(p).filter(k => k.startsWith('error')).sort(), ['error_code', 'error_message']);
+  assert.deepEqual(Object.keys(received[1].properties).filter(k => k.startsWith('error')), ['error_code']);
+  assert.equal(JSON.stringify(received).includes('private'), false);
 });

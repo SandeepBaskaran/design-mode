@@ -10,7 +10,7 @@
 import '../platform/polyfill';
 import { browser } from '../platform/panel-api';
 import { IS_CHROME, IS_FIREFOX, IS_SAFARI } from '../platform/target';
-import { changeCountBucket, classifyErrorCode, commandOutcome, messageFeatures, pageSchemeFromUrl, sanitizeErrorMessage, sendToAgentBlock, styleAnalytics, styleAnalyticsList, thrownFailure, type AnalyticsEvent } from '../platform/analytics';
+import { changeCountBucket, classifyErrorCode, commandOutcome, messageFeatures, pageSchemeFromUrl, sendToAgentBlock, styleAnalytics, styleAnalyticsList, thrownFailure, type AnalyticsEvent } from '../platform/analytics';
 import { openPanel, preparePanelTarget } from '../platform/panel';
 import { detectLaunchCapabilities, supportedLaunchSurface, pipFailureMessage } from '../platform/launch-capabilities';
 import {
@@ -246,7 +246,6 @@ let inspectWasOnBeforeComment = false;
 let mcpState: McpState = 'offline';
 // Why the last MCP status probe failed (an error_code), '' when it reached the page.
 let mcpStatusIssue = '';
-let mcpStatusError = '';
 let pinnedDomain = '';
 let changesPageUrl = '';
 let activeRouteKey = '';
@@ -1078,7 +1077,6 @@ async function refreshMcpStatus(reping = false, operation = beginInspectorOperat
   if (request !== mcpStatusRequest || generation !== pageGeneration) return;
   mcpState = !res.connected ? 'offline' : res.agentConnected ? 'connected' : 'running';
   mcpStatusIssue = res?.error ? classifyErrorCode(res) : '';
-  mcpStatusError = res?.error ? sanitizeErrorMessage(res) : '';
   await operation.wait(refreshFeedbackSession(operation));
   render();
 }
@@ -2059,7 +2057,7 @@ async function downloadMedia(operation = beginInspectorOperation()) {
     console.error('[DM] Media download failed:', err);
     const a = document.createElement('a'); a.href = m.src; a.download = m.filename || ''; a.target = '_blank'; a.click();
   }
-  trackFeature({ feature: 'media', action: 'download', media: m.kind, outcome: ok ? 'download_initiated' : 'download_failed' });
+  trackFeature({ feature: 'media', action: 'download', media: m.kind, outcome: ok ? 'download_initiated' : 'download_failed', ...(ok ? {} : { reason: 'rejected', error_code: 'download_blocked' }) });
   if (ok) flashActionButton('download-media', icon('check', 11) + ' Downloaded');
 }
 async function copySvgMarkup(operation = beginInspectorOperation()) {
@@ -2067,7 +2065,7 @@ async function copySvgMarkup(operation = beginInspectorOperation()) {
   if (!mediaInfo?.markup) return;
   let ok = false;
   try { await operation.wait(navigator.clipboard.writeText(mediaInfo.markup)); ok = true; } catch { operation.assertCurrent(); }
-  trackFeature({ feature: 'media', action: 'copy', media: 'svg', outcome: ok ? 'clipboard_completed' : 'clipboard_failed' });
+  trackFeature({ feature: 'media', action: 'copy', media: 'svg', outcome: ok ? 'clipboard_completed' : 'clipboard_failed', ...(ok ? {} : { reason: 'rejected', error_code: 'clipboard_denied' }) });
   if (ok) flashActionButton('copy-svg-markup', icon('check', 9) + ' Copied');
 }
 function showCaptureToast(kind: 'success' | 'error', text: string) {
@@ -2106,7 +2104,7 @@ async function takeScreenshot(operation = beginInspectorOperation()) {
     operation.assertCurrent();
       console.warn('[DM] Clipboard write failed', err);
       clipboardOk = false;
-      trackFeature({ feature: 'screenshot', outcome: 'clipboard_failed', error_code: 'clipboard_denied', error_message: sanitizeErrorMessage(err) });
+      trackFeature({ feature: 'screenshot', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'clipboard_denied' });
     }
   }
   if (wantDownload) {
@@ -2115,7 +2113,7 @@ async function takeScreenshot(operation = beginInspectorOperation()) {
       a.href = res.dataUrl; a.download = filename; a.click();
       downloadOk = true;
       trackFeature({ feature: 'screenshot', outcome: 'download_initiated' });
-    } catch (err) { downloadOk = false; trackFeature({ feature: 'screenshot', outcome: 'download_failed', error_code: 'download_blocked', error_message: sanitizeErrorMessage(err) }); }
+    } catch (err) { downloadOk = false; trackFeature({ feature: 'screenshot', outcome: 'download_failed', reason: 'rejected', error_code: 'download_blocked' }); }
   }
   const btn = root.querySelector('[data-dm-action="screenshot"]');
   if (btn && (clipboardOk || downloadOk)) { btn.innerHTML = icon('check', 14); setTimeout(() => render(), 1200); }
@@ -2242,12 +2240,12 @@ async function copyPrompt(operation = beginInspectorOperation()) {
   const safariCopy = IS_SAFARI ? writeInspectorTextClipboard(output) : null;
   const text = await operation.wait(output);
   if (!text) {
-    trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', error_code: 'no_active_changes' });
+    trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'no_active_changes' });
     return;
   }
   if (safariCopy) {
     if (!await operation.wait(safariCopy)) {
-      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', error_code: 'clipboard_denied' });
+      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'clipboard_denied' });
       showCaptureToast('error', 'Could not copy prompt');
       return;
     }
@@ -2255,7 +2253,7 @@ async function copyPrompt(operation = beginInspectorOperation()) {
     try { await operation.wait(navigator.clipboard.writeText(text)); }
     catch (err) {
       operation.assertCurrent();
-      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', error_code: 'clipboard_denied', error_message: sanitizeErrorMessage(err) });
+      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'clipboard_denied' });
       showCaptureToast('error', 'Could not copy prompt');
       return;
     }
@@ -2276,7 +2274,7 @@ async function sendToAgent(operation = beginInspectorOperation(), trigger: 'tool
   // It is reported as dm_send_to_agent_blocked and the dialog tells the user
   // exactly what to fix.
   if (block) {
-    trackFeature({ feature: 'send_to_agent_blocked', outcome: 'failure', ...block, ...(mcpStatusError ? { error_message: mcpStatusError } : {}), mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl), trigger });
+    trackFeature({ feature: 'send_to_agent_blocked', outcome: 'failure', ...block, mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl), trigger });
     openSendSetup();
     return;
   }
@@ -11040,7 +11038,7 @@ function setupDelegation() {
         case 'copy-computed-css':
           navigator.clipboard.writeText(computedCssText).then(
             () => trackFeature({ feature: 'computed_css', action: 'copy', outcome: 'clipboard_completed' }),
-            () => trackFeature({ feature: 'computed_css', action: 'copy', outcome: 'clipboard_failed' }),
+            () => trackFeature({ feature: 'computed_css', action: 'copy', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'clipboard_denied' }),
           );
           break;
         // v1.2: Before/After

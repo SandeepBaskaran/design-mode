@@ -145,6 +145,8 @@ const errorCodes = [
   'local_server_offline', 'cloud_token_missing', 'transport_inactive', 'no_agent_connected', 'agent_busy',
   'route_not_ready', 'undo_unsafe',
   'no_matching_layers', 'clipboard_denied', 'download_blocked',
+  // The page script was reached but went away or threw before it answered.
+  'page_disconnected', 'page_script_error',
 ];
 const changeCountBuckets = ['0', '1', '2-5', '6-20', '20+'];
 const scopes = ['root', 'theme', 'component'];
@@ -189,11 +191,13 @@ export async function persistAnalyticsDisabled(storage: { remove: (key: string) 
 
 export function commandOutcome(response: any): Pick<AnalyticsEvent, 'outcome' | 'reason' | 'error_code' | 'error_message'> {
   if (response && !response.error && response.ok !== false) return { outcome: 'command_acknowledged' };
-  const error_message = sanitizeErrorMessage(response);
+  const error_code = classifyErrorCode(response);
+  // Free text is sent only when the failure could not be classified.
+  const error_message = error_code === 'unknown' ? sanitizeErrorMessage(response) : '';
   return {
     outcome: 'failure',
     reason: response ? 'rejected' : 'unavailable',
-    error_code: classifyErrorCode(response),
+    error_code,
     ...(error_message ? { error_message } : {}),
   };
 }
@@ -204,22 +208,31 @@ export function classifyErrorCode(response: any): string {
   if (!raw) return response.ok === false ? 'rejected' : 'unknown';
   if (/no agent connected/.test(raw)) return 'no_agent_connected';
   if (/agent is implementing|already in progress/.test(raw)) return 'agent_busy';
-  if (/route rendering is not confirmed/.test(raw)) return 'route_not_ready';
+  if (/route rendering is not confirmed|reload the destination route|navigate to the requested route|page route changed/.test(raw)) return 'route_not_ready';
   if (/cannot safely (undo|redo)/.test(raw)) return 'undo_unsafe';
   if (/no pinned tab/.test(raw)) return 'tab_closed';
   if (/no[_ ]?content[_ ]?script|receiving end does not exist|could not establish connection/.test(raw)) return 'no_content_script';
+  // The page script was reached but went away before it answered: the page
+  // navigated or reloaded, the extension was reloaded, or the tab was frozen.
+  if (/message (port|channel) closed|extension context invalidated|context invalidated|back\/forward cache|frame with id \d+ (was removed|is showing error page)|tabs cannot be edited/.test(raw)) return 'page_disconnected';
   if (/chrome:\/\/|chrome-extension:|edge:\/\/|about:|restricted|cannot access|web store|gallery/.test(raw)) return 'restricted_url';
   if (/tab.*(closed|discarded)|no tab/.test(raw)) return 'tab_closed';
-  if (/detached|not connected|stale element|node.*(removed|gone)/.test(raw)) return 'element_detached';
+  // Setup states of the agent connection, before the generic "not connected".
+  if (/not connected to the local agent/.test(raw)) return 'local_server_offline';
+  if (/no cloud url|missing url or token/.test(raw)) return 'cloud_token_missing';
+  if (/agent did not acknowledge/.test(raw)) return 'agent_timeout';
+  if (/detached|not connected|stale element|element not found|node.*(removed|gone)/.test(raw)) return 'element_detached';
   if (/cross[- ]origin|iframe/.test(raw)) return 'cross_origin_iframe';
-  if (/empty selection|nothing selected|no element/.test(raw)) return 'empty_selection';
+  if (/empty selection|nothing selected|no element|select an element|no (parent|child|region)/.test(raw)) return 'empty_selection';
   if (/bridge.?unreachable|econnrefused|failed to fetch/.test(raw)) return 'bridge_unreachable';
-  if (/websocket|ws[_ ]disconnected|socket/.test(raw)) return 'ws_disconnected';
-  if (/auth|token|unauthorized|401|403/.test(raw)) return 'auth_token_invalid';
+  if (/websocket|ws[_ ]disconnected|\bsocket\b/.test(raw)) return 'ws_disconnected';
+  if (/\bauth(entication|orization|orised|orized)?\b|\btoken\b|unauthori[sz]ed|\b40[13]\b/.test(raw)) return 'auth_token_invalid';
   if (/timeout|timed out|agent.?timeout/.test(raw)) return 'agent_timeout';
   if (/no active changes|nothing to send|empty changes/.test(raw)) return 'no_active_changes';
   if (/\b4\d\d\b|http[_ ]4/.test(raw)) return 'http_4xx';
   if (/\b5\d\d\b|http[_ ]5/.test(raw)) return 'http_5xx';
+  // A DOM or script error thrown inside the page while applying the command.
+  if (/failed to execute|is not a function|cannot read propert|is not defined|(typeerror|rangeerror|syntaxerror|referenceerror|domexception|hierarchyrequesterror|notfounderror|invalidstateerror|securityerror)\b/.test(raw)) return 'page_script_error';
   if (errorCodes.includes(raw)) return raw;
   return 'unknown';
 }
@@ -294,12 +307,16 @@ export function sanitizeErrorMessage(value: unknown): string {
 }
 
 // Failure fields for a command whose transport threw (extension context lost,
-// no receiving end, port closed): the code when we can name it, else 'unavailable'.
+// no receiving end, port closed): the code when we can name it. When we cannot,
+// the code is `unknown` and the sanitised message travels with it, which is the
+// only case where free text is sent.
 export function thrownFailure(error: unknown): Pick<AnalyticsEvent, 'outcome' | 'reason' | 'error_code' | 'error_message'> {
-  const code = classifyErrorCode({ error: error instanceof Error ? error.message : error });
-  const failure = { outcome: 'failure', reason: 'unavailable', error_code: code === 'unknown' ? 'unavailable' : code };
   const message = sanitizeErrorMessage(error);
-  return message ? { ...failure, error_message: message } : failure;
+  const code = classifyErrorCode({ error: error instanceof Error ? error.message : error });
+  // Nothing to read at all: the transport is simply unavailable.
+  if (code === 'unknown' && !message) return { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' };
+  const failure = { outcome: 'failure', reason: 'unavailable', error_code: code };
+  return code === 'unknown' ? { ...failure, error_message: message } : failure;
 }
 
 type McpGateState = 'offline' | 'running' | 'connected';
@@ -375,7 +392,8 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
   if (formats.includes(e.format || '')) result.format = e.format;
   if (pageSchemes.includes(e.page_scheme || '')) result.page_scheme = e.page_scheme;
   if (errorCodes.includes(e.error_code || '')) result.error_code = e.error_code;
-  if (typeof e.error_message === 'string') {
+  // Free text only for failures nothing could classify. Known codes carry no message.
+  if (result.error_code === 'unknown' && typeof e.error_message === 'string') {
     const message = sanitizeErrorMessage(e.error_message);
     if (message) result.error_message = message;
   }

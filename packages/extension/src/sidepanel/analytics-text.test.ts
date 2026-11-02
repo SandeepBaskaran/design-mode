@@ -27,7 +27,7 @@ for (const response of [{ info: {} }, { ok: false }, null, 'throw']) {
     });
     await vm.runInContext(compiled + '\napplyHtml("synthetic-element", "<b>Private page text</b>")', context);
     assert.deepEqual(JSON.parse(JSON.stringify(commands)), [{type: 'SP_SET_HTML', elementId: 'synthetic-element', html: '<b>Private page text</b>', targetTabId: 42}]);
-    const outcome = response === 'throw' ? { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable', error_message: 'unavailable' } : commandOutcome(response);
+    const outcome = response === 'throw' ? { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' } : commandOutcome(response);
     assert.deepEqual(JSON.parse(JSON.stringify(events)), [{feature:'text', outcome:'attempt', action:'html', category:'text', page_scheme:'unknown'}, {feature:'text', page_scheme:'unknown', action:'html', category:'text', ...outcome}]);
     assert.equal(JSON.stringify(events).includes('Private'), false);
     assert.equal(JSON.stringify(events).includes('synthetic-element'), false);
