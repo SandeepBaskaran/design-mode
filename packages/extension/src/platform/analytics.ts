@@ -106,6 +106,9 @@ const errorCodes = [
   'no_content_script', 'restricted_url', 'tab_closed', 'element_detached', 'cross_origin_iframe',
   'empty_selection', 'bridge_unreachable', 'ws_disconnected', 'auth_token_invalid', 'agent_timeout',
   'no_active_changes', 'http_4xx', 'http_5xx', 'unavailable', 'rejected', 'unknown',
+  // Pre-flight and handoff gates (a refinement of bridge_unreachable / agent_timeout).
+  'local_server_offline', 'cloud_token_missing', 'transport_inactive', 'no_agent_connected', 'agent_busy',
+  'route_not_ready', 'undo_unsafe',
 ];
 const changeCountBuckets = ['0', '1', '2-5', '6-20', '20+'];
 const scopes = ['root', 'theme', 'component'];
@@ -161,6 +164,11 @@ export function classifyErrorCode(response: any): string {
   if (!response) return 'unavailable';
   const raw = String(response.error || response.code || response.reason || '').toLowerCase();
   if (!raw) return response.ok === false ? 'rejected' : 'unknown';
+  if (/no agent connected/.test(raw)) return 'no_agent_connected';
+  if (/agent is implementing|already in progress/.test(raw)) return 'agent_busy';
+  if (/route rendering is not confirmed/.test(raw)) return 'route_not_ready';
+  if (/cannot safely (undo|redo)/.test(raw)) return 'undo_unsafe';
+  if (/no pinned tab/.test(raw)) return 'tab_closed';
   if (/no[_ ]?content[_ ]?script|receiving end does not exist|could not establish connection/.test(raw)) return 'no_content_script';
   if (/chrome:\/\/|chrome-extension:|edge:\/\/|about:|restricted|cannot access|web store|gallery/.test(raw)) return 'restricted_url';
   if (/tab.*(closed|discarded)|no tab/.test(raw)) return 'tab_closed';
@@ -211,6 +219,21 @@ function propCategory(prop: string): string {
   if (['display', 'box-sizing', 'order'].includes(prop) || prop.startsWith('flex-') || prop.startsWith('grid-') || prop.startsWith('align-') || prop.startsWith('justify-') || prop.startsWith('place-')) return 'layout';
   if (['top', 'right', 'bottom', 'left', 'z-index', 'overflow'].includes(prop) || prop.startsWith('overflow-') || prop.startsWith('position') || prop.startsWith('anchor-') || prop === 'contain' || prop === 'content-visibility') return 'position';
   return 'effects';
+}
+
+type McpGateState = 'offline' | 'running' | 'connected';
+
+// Why Send to Agent was refused before anything was sent. `offline` and
+// `waiting_for_agent` are setup states, not server errors: the panel never
+// asked the relay to do anything. The code says which setup step is missing.
+export function sendToAgentBlock(
+  state: McpGateState, mode: string, hasCloudToken: boolean, statusIssue = '',
+): Pick<AnalyticsEvent, 'reason' | 'error_code'> | null {
+  if (state === 'connected') return null;
+  if (state === 'running') return { reason: 'waiting_for_agent', error_code: 'no_agent_connected' };
+  if (statusIssue && statusIssue !== 'unknown' && errorCodes.includes(statusIssue)) return { reason: 'offline', error_code: statusIssue };
+  if (mode === 'local') return { reason: 'offline', error_code: 'local_server_offline' };
+  return { reason: 'offline', error_code: hasCloudToken ? 'transport_inactive' : 'cloud_token_missing' };
 }
 
 export function styleAnalytics(property: unknown): Pick<AnalyticsEvent, 'prop' | 'category'> {

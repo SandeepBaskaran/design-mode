@@ -10,7 +10,7 @@
 import '../platform/polyfill';
 import { browser } from '../platform/panel-api';
 import { IS_CHROME, IS_FIREFOX, IS_SAFARI } from '../platform/target';
-import { changeCountBucket, commandOutcome, messageFeatures, pageSchemeFromUrl, styleAnalytics, styleAnalyticsList, type AnalyticsEvent } from '../platform/analytics';
+import { changeCountBucket, classifyErrorCode, commandOutcome, messageFeatures, pageSchemeFromUrl, sendToAgentBlock, styleAnalytics, styleAnalyticsList, type AnalyticsEvent } from '../platform/analytics';
 import { openPanel, preparePanelTarget } from '../platform/panel';
 import { detectLaunchCapabilities, supportedLaunchSurface, pipFailureMessage } from '../platform/launch-capabilities';
 import {
@@ -229,6 +229,8 @@ function applyHoverAvailable(next: boolean) {
 let inspectSuspendedForComment = false;
 let inspectWasOnBeforeComment = false;
 let mcpState: McpState = 'offline';
+// Why the last MCP status probe failed (an error_code), '' when it reached the page.
+let mcpStatusIssue = '';
 let pinnedDomain = '';
 let changesPageUrl = '';
 let activeRouteKey = '';
@@ -843,6 +845,7 @@ async function send(msg: any, operation = beginInspectorOperation()): Promise<an
     msg?.type === 'SP_DOM_ACTION' ? { action: msg.action, category: 'dom' } :
     msg?.type === 'SP_REORDER_LAYER' ? { action: 'reorder', category: 'dom' } :
     msg?.type === 'SP_EXPORT' ? { format: msg.format, change_count_bucket: changeCountBucket(siteChangeCount()) } :
+    msg?.type === 'SP_SEND_TO_AGENT' ? { mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()) } :
     {};
   const page_scheme = pageSchemeFromUrl(boundPageUrl);
   const track = (fields: Partial<AnalyticsEvent> & Pick<AnalyticsEvent, 'outcome'>) => {
@@ -1054,6 +1057,7 @@ async function refreshMcpStatus(reping = false, operation = beginInspectorOperat
   const res = await operation.wait(send({ type: 'SP_GET_MCP_STATUS', reping }, operation));
   if (request !== mcpStatusRequest || generation !== pageGeneration) return;
   mcpState = !res.connected ? 'offline' : res.agentConnected ? 'connected' : 'running';
+  mcpStatusIssue = res?.error ? classifyErrorCode(res) : '';
   await operation.wait(refreshFeedbackSession(operation));
   render();
 }
@@ -2232,8 +2236,9 @@ async function sendToAgent(operation = beginInspectorOperation()) {
   sendingFeedback = true;
   try {
   await operation.wait(refreshMcpStatus(undefined, operation));
-  if (mcpState !== 'connected') { trackFeature({ feature: 'send_to_agent', outcome: 'failure', reason: mcpState === 'offline' ? 'offline' : 'waiting_for_agent', error_code: mcpState === 'offline' ? 'bridge_unreachable' : 'agent_timeout', mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) }); sendAgentHelpOpen = true; render(); return; }
-  if (feedbackSession?.state === 'implementing') return;
+  const block = sendToAgentBlock(mcpState, mcpMode, !!mcpCloudToken, mcpStatusIssue);
+  if (block) { trackFeature({ feature: 'send_to_agent', outcome: 'failure', ...block, mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) }); sendAgentHelpOpen = true; render(); return; }
+  if (feedbackSession?.state === 'implementing') { trackFeature({ feature: 'send_to_agent', outcome: 'failure', reason: 'busy', error_code: 'agent_busy', mode: mcpMode, page_scheme: pageSchemeFromUrl(boundPageUrl) }); return; }
   const res = await operation.wait(send({ type: 'SP_SEND_TO_AGENT', scope: 'site' }, operation));
   if (res?.ok) {
     feedbackSession = res.supported ? parseFeedbackSession(res.session) : null;

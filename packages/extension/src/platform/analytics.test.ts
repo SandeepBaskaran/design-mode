@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
-import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDisabled, boundedEvent, consentMatches, distributionHint, nativeConsentAllowed, parseAnalyticsConfig, styleAnalytics, styleAnalyticsList, pageSchemeFromUrl, changeCountBucket, classifyErrorCode } from './analytics.ts';
+import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDisabled, boundedEvent, consentMatches, distributionHint, nativeConsentAllowed, parseAnalyticsConfig, styleAnalytics, styleAnalyticsList, pageSchemeFromUrl, changeCountBucket, classifyErrorCode, sendToAgentBlock } from './analytics.ts';
 
 const config = parseAnalyticsConfig({ host: 'https://analytics.invalid', key: 'phc_local_test_only' })!;
 const consent = { ...config, version: 2, enabled: true };
@@ -191,4 +191,29 @@ test('abort in-flight request, no retries, bounded volume, worker restart reread
   assert.equal(sends, 60);
   const restarted = createAnalytics(config, { ...base, fetch: async () => { sends++; return new Response(); } });
   await restarted.capture(event); assert.equal(sends, 61);
+});
+
+test('Send to Agent pre-flight failures say which setup step is missing', () => {
+  assert.equal(sendToAgentBlock('connected', 'cloud', true), null);
+  assert.deepEqual(sendToAgentBlock('running', 'cloud', true), { reason: 'waiting_for_agent', error_code: 'no_agent_connected' });
+  assert.deepEqual(sendToAgentBlock('offline', 'local', false), { reason: 'offline', error_code: 'local_server_offline' });
+  assert.deepEqual(sendToAgentBlock('offline', 'cloud', false), { reason: 'offline', error_code: 'cloud_token_missing' });
+  assert.deepEqual(sendToAgentBlock('offline', 'self-hosted', false), { reason: 'offline', error_code: 'cloud_token_missing' });
+  assert.deepEqual(sendToAgentBlock('offline', 'cloud', true), { reason: 'offline', error_code: 'transport_inactive' });
+  // A failed status probe (no content script, restricted page) beats the mode guess.
+  assert.deepEqual(sendToAgentBlock('offline', 'cloud', true, 'no_content_script'), { reason: 'offline', error_code: 'no_content_script' });
+  assert.deepEqual(sendToAgentBlock('offline', 'cloud', true, 'not-a-code'), { reason: 'offline', error_code: 'transport_inactive' });
+  for (const state of ['offline', 'running'] as const) {
+    const block = sendToAgentBlock(state, 'cloud', false)!;
+    assert.deepEqual(boundedEvent({ feature: 'send_to_agent', outcome: 'failure', ...block, mode: 'cloud' }), { feature: 'send_to_agent', outcome: 'failure', ...block, mode: 'cloud' });
+  }
+});
+
+test('responses that used to classify as unknown now get a stable code', () => {
+  assert.equal(classifyErrorCode({ ok: false, error: 'No agent connected' }), 'no_agent_connected');
+  assert.equal(classifyErrorCode({ ok: false, error: 'Agent is implementing the current round' }), 'agent_busy');
+  assert.equal(classifyErrorCode({ ok: false, error: 'Route rendering is not confirmed. Wait for the page or reload it before editing.' }), 'route_not_ready');
+  assert.equal(classifyErrorCode({ ok: false, error: 'Page or tracked changes changed; cannot safely undo DOM edit' }), 'undo_unsafe');
+  assert.equal(classifyErrorCode({ error: 'No pinned tab' }), 'tab_closed');
+  assert.equal(commandOutcome({ ok: false, error: 'No agent connected' }).error_code, 'no_agent_connected');
 });
