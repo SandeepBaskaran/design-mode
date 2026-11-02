@@ -36,7 +36,7 @@ import { configureShortcutStorage, enableShortcuts, loadShortcuts, registerShort
 import { diffWords } from './word-diff';
 import { writeScreenshotClipboard } from './screenshot-clipboard';
 import { writeInspectorTextClipboard } from '../inspector/clipboard';
-import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, sanitizeRichTextHref, normalizeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
+import { getRichTextLabel, getRichTextLinks, isSafeRichTextHref, sanitizeRichTextHref, normalizeRichTextHref, RICH_TEXT_LINK_NODE_ATTR, sanitizeRichTextHtml, sanitizeRichTextEditorHtml, shouldCommitRichTextKey } from '../rich-text-preservation';
 import {
   CATEGORY_LABEL, RATING_META, evaluate, parseRgba, parseOklab, parseOklch,
   isTransparent, resolveCategory, thresholdFor,
@@ -12765,8 +12765,14 @@ function setupDelegation() {
       const link = editor.querySelector<HTMLAnchorElement>(`a[${RICH_TEXT_LINK_NODE_ATTR}="${index}"]`);
       if (!link) return;
       linkUrlInput.setCustomValidity('');
-      if (value) link.setAttribute('href', value); else link.removeAttribute('href');
-      void runInspectorAction(applyHtml(editor.dataset.dmElementId || '', editor.innerHTML));
+      const safeHref = value ? sanitizeRichTextHref(value) : '';
+      if (safeHref === null) {
+        linkUrlInput.setCustomValidity('Use an http(s), relative, or fragment URL.');
+        linkUrlInput.reportValidity();
+        return;
+      }
+      if (safeHref) link.setAttribute('href', safeHref); else link.removeAttribute('href');
+      void runInspectorAction(applyHtml(editor.dataset.dmElementId || '', sanitizeRichTextEditorHtml(editor.innerHTML)));
       return;
     }
     const groupingSelect = target.closest<HTMLSelectElement>('[data-dm-changes-grouping]');
@@ -13552,7 +13558,7 @@ function setupDelegation() {
       document.execCommand(cmd, false);
     }
     // Save immediately so the change shows in the Changes tab + page.
-    runInspectorAction(applyHtml(editor.dataset.dmElementId || '', editor.innerHTML));
+    runInspectorAction(applyHtml(editor.dataset.dmElementId || '', sanitizeRichTextEditorHtml(editor.innerHTML)));
   }, true);
 
   const richTextEnterCommits = new WeakSet<HTMLElement>();
@@ -13562,7 +13568,7 @@ function setupDelegation() {
     e.preventDefault();
     e.stopPropagation();
     richTextEnterCommits.add(editor);
-    void runInspectorAction(applyHtml(editor.dataset.dmElementId || '', editor.innerHTML));
+    void runInspectorAction(applyHtml(editor.dataset.dmElementId || '', sanitizeRichTextEditorHtml(editor.innerHTML)));
     editor.blur();
   }, true);
 
@@ -13578,7 +13584,7 @@ function setupDelegation() {
       if (richTextEnterCommits.delete(editor)) return;
       const stillFocused = document.activeElement && (document.activeElement as HTMLElement).closest('[data-dm-richtext]');
       if (stillFocused) return;
-      runInspectorAction(applyHtml(editor.dataset.dmElementId || '', editor.innerHTML, operation));
+      runInspectorAction(applyHtml(editor.dataset.dmElementId || '', sanitizeRichTextEditorHtml(editor.innerHTML), operation));
     }, 0);
   }, true);
 

@@ -35,7 +35,13 @@ assert.equal(
   JSON.parse(index).skills[0].url,
   "https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md",
 );
-assert(guide.includes("https://mcp.designmode.app/mcp"));
+const configuredUrls = [...guide.matchAll(/\burl:\s*"([^"]+)"/g)].map((m) => m[1]);
+assert(configuredUrls.length > 0);
+assert.deepEqual(
+  configuredUrls.filter((url) => url !== "https://mcp.designmode.app/mcp"),
+  [],
+);
+assert.match(guide, /Prefer Cloud at https:\/\/mcp\.designmode\.app\/mcp;/);
 assert(
   guide.includes("${DESIGN_MODE_TOKEN}") &&
     guide.includes("${env:DESIGN_MODE_TOKEN}") &&

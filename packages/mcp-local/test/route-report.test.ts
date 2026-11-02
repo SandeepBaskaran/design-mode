@@ -46,8 +46,11 @@ for (const format of ['css', 'scss', 'tailwind', 'jsx']) {
     const result = await executeLocalTool('export_changes', { format });
     assert.equal(result.isError, undefined);
     const text = result.content.filter(c => c.type === 'text').map(c => c.text).join('\n');
-    assert.ok(text.includes(A));
-    assert.ok(text.includes(B));
+    const routes = text.split('\n').flatMap(line => {
+      const match = /^\/\* Route: (.+) \*\/$/.exec(line);
+      return match ? [match[1]] : [];
+    });
+    assert.deepEqual(routes, [A, B]);
     assert.ok(text.includes('red'));
     assert.ok(text.includes('blue'));
   });

@@ -85,7 +85,7 @@ describe('site-wide changes panel', () => {
     const { context: c } = harness();
     c.routeGroups = [group(b + '\"><img>', [{ selector: '<img onerror=x>', property: 'color', oldValue: 'red', newValue: '<script>x</script>' }], [{ selector: 'h2', oldText: 'old', newText: '<iframe>' }], [{ selector: 'h3', text: '<img src=x>' }])];
     const html = c.renderRouteGroups('active');
-    assert.doesNotMatch(html, /<script>|<iframe>|<img/);
+    assert.doesNotMatch(html, /<\s*(script|iframe|img)\b/i);
     assert.match(html, /&quot;&gt;&lt;img&gt;/);
   });
 

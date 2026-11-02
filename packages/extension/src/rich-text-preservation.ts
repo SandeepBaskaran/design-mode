@@ -122,6 +122,53 @@ export function sanitizeRichTextHtml(raw: string): string {
   return root.innerHTML;
 }
 
+// Re-serialises the panel editor's own DOM. Unlike sanitizeRichTextHtml it keeps
+// the structure/link/placeholder indexes already assigned, so restoreRichTextHtml
+// can still map them back to the page's original nodes.
+const EDITOR_DROPPED_TAGS = new Set([...MEDIA_TAGS, 'SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'LINK', 'META', 'BASE', 'TITLE']);
+
+export function sanitizeRichTextEditorHtml(raw: string): string {
+  if (!raw) return '';
+  const doc = new DOMParser().parseFromString('<body><div id="r">' + raw + '</div></body>', 'text/html');
+  const root = doc.getElementById('r');
+  if (!root) return '';
+  const isIndex = (value: string | null) => value !== null && /^\d+$/.test(value);
+  const clean = (child: Element) => {
+    const placeholder = child.getAttribute(RICH_TEXT_PRESERVED_NODE_ATTR);
+    if (isIndex(placeholder)) {
+      const kept = doc.createElement('span');
+      kept.setAttribute(RICH_TEXT_PRESERVED_NODE_ATTR, placeholder!);
+      child.replaceWith(kept);
+      return;
+    }
+    if (EDITOR_DROPPED_TAGS.has(child.tagName)) {
+      child.remove();
+      return;
+    }
+    if (!EDITABLE_TAGS.has(child.tagName)) {
+      const children = Array.from(child.childNodes);
+      child.replaceWith(...children);
+      for (const node of children) if (node.nodeType === 1) clean(node as Element);
+      return;
+    }
+    const allowed = editableRichTextAttributes(child.tagName);
+    for (const attr of Array.from(child.attributes)) {
+      const name = attr.name.toLowerCase();
+      if (name === RICH_TEXT_STRUCTURE_NODE_ATTR || name === RICH_TEXT_LINK_NODE_ATTR) {
+        if (!isIndex(attr.value)) child.removeAttribute(attr.name);
+      } else if (!allowed.has(name)) {
+        child.removeAttribute(attr.name);
+      } else if (name === 'href') {
+        const href = normalizeRichTextHref(attr.value);
+        if (href) child.setAttribute(attr.name, href); else child.removeAttribute(attr.name);
+      }
+    }
+    for (const nested of Array.from(child.children)) clean(nested);
+  };
+  for (const child of Array.from(root.children)) clean(child);
+  return root.innerHTML;
+}
+
 export function restoreRichTextHtml(root: Element, html: string): string {
   const preservedNodes = collectPreservedRichTextNodes(root);
   const editableNodes = collectEditableRichTextNodes(root);
