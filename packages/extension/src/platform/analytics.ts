@@ -20,6 +20,7 @@ export type AnalyticsEvent = {
   format?: string;
   page_scheme?: string;
   error_code?: string;
+  error_message?: string;
   change_count_bucket?: string;
 };
 
@@ -109,6 +110,7 @@ const errorCodes = [
   // Pre-flight and handoff gates (a refinement of bridge_unreachable / agent_timeout).
   'local_server_offline', 'cloud_token_missing', 'transport_inactive', 'no_agent_connected', 'agent_busy',
   'route_not_ready', 'undo_unsafe',
+  'no_matching_layers', 'clipboard_denied', 'download_blocked',
 ];
 const changeCountBuckets = ['0', '1', '2-5', '6-20', '20+'];
 const scopes = ['root', 'theme', 'component'];
@@ -151,12 +153,14 @@ export async function persistAnalyticsDisabled(storage: { remove: (key: string) 
   catch { await storage.set({ [ANALYTICS_CONSENT_KEY]: { enabled: false, version: 2 } }); }
 }
 
-export function commandOutcome(response: any): Pick<AnalyticsEvent, 'outcome' | 'reason' | 'error_code'> {
+export function commandOutcome(response: any): Pick<AnalyticsEvent, 'outcome' | 'reason' | 'error_code' | 'error_message'> {
   if (response && !response.error && response.ok !== false) return { outcome: 'command_acknowledged' };
+  const error_message = sanitizeErrorMessage(response);
   return {
     outcome: 'failure',
     reason: response ? 'rejected' : 'unavailable',
     error_code: classifyErrorCode(response),
+    ...(error_message ? { error_message } : {}),
   };
 }
 
@@ -219,6 +223,49 @@ function propCategory(prop: string): string {
   if (['display', 'box-sizing', 'order'].includes(prop) || prop.startsWith('flex-') || prop.startsWith('grid-') || prop.startsWith('align-') || prop.startsWith('justify-') || prop.startsWith('place-')) return 'layout';
   if (['top', 'right', 'bottom', 'left', 'z-index', 'overflow'].includes(prop) || prop.startsWith('overflow-') || prop.startsWith('position') || prop.startsWith('anchor-') || prop === 'contain' || prop === 'content-visibility') return 'position';
   return 'effects';
+}
+
+const ERROR_MESSAGE_MAX = 200;
+
+// Short, human-readable reason for a failure, safe to send: first line only,
+// URLs / emails / tokens / ids / file paths / quoted text removed, ASCII only,
+// capped at 200 characters. Idempotent, so it is applied again when the event
+// is bounded. Accepts a string, an Error, or a command response.
+export function sanitizeErrorMessage(value: unknown): string {
+  let text = '';
+  if (typeof value === 'string') text = value;
+  else if (value instanceof Error) text = value.message;
+  else if (value && typeof value === 'object') {
+    const r = value as { error?: unknown; message?: unknown; reason?: unknown };
+    for (const candidate of [r.error, r.message, r.reason]) {
+      if (typeof candidate === 'string' && candidate) { text = candidate; break; }
+    }
+  }
+  if (!text) return '';
+  return (text.slice(0, 1000).split(/\r?\n/)[0] || '')
+    .replace(/\b[a-z][a-z0-9+.-]{1,30}:\/\/[^\s"'<>)\]]*/gi, '[url]')
+    .replace(/\b(?:data|blob|javascript|mailto):[^\s"'<>)\]]*/gi, '[url]')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
+    .replace(/\bBearer\s+\S+/gi, 'Bearer [token]')
+    .replace(/\b(?:phc|dm|sk|pk|ghp|gho|xox[a-z])[-_][A-Za-z0-9_-]{6,}/g, '[token]')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '[id]')
+    .replace(/\b[A-Za-z0-9_-]{24,}\b/g, '[token]')
+    .replace(/[A-Za-z]:\\[^\s"'<>]*/g, '[path]')
+    .replace(/(^|[\s("'=])~?\/(?:[\w.@%+-]+\/)+[\w.@%+-]*/g, '$1[path]')
+    .replace(/"[^"]*"|`[^`]*`|(^|[^A-Za-z0-9])'[^']*'/g, (_m, lead) => (lead || '') + '[text]')
+    .replace(/[^\x20-\x7E]/g, '?')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, ERROR_MESSAGE_MAX);
+}
+
+// Failure fields for a command whose transport threw (extension context lost,
+// no receiving end, port closed): the code when we can name it, else 'unavailable'.
+export function thrownFailure(error: unknown): Pick<AnalyticsEvent, 'outcome' | 'reason' | 'error_code' | 'error_message'> {
+  const code = classifyErrorCode({ error: error instanceof Error ? error.message : error });
+  const failure = { outcome: 'failure', reason: 'unavailable', error_code: code === 'unknown' ? 'unavailable' : code };
+  const message = sanitizeErrorMessage(error);
+  return message ? { ...failure, error_message: message } : failure;
 }
 
 type McpGateState = 'offline' | 'running' | 'connected';
@@ -285,6 +332,10 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
   if (formats.includes(e.format || '')) result.format = e.format;
   if (pageSchemes.includes(e.page_scheme || '')) result.page_scheme = e.page_scheme;
   if (errorCodes.includes(e.error_code || '')) result.error_code = e.error_code;
+  if (typeof e.error_message === 'string') {
+    const message = sanitizeErrorMessage(e.error_message);
+    if (message) result.error_message = message;
+  }
   if (changeCountBuckets.includes(e.change_count_bucket || '')) result.change_count_bucket = e.change_count_bucket;
   return result;
 }

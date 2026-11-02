@@ -10,7 +10,7 @@
 import '../platform/polyfill';
 import { browser } from '../platform/panel-api';
 import { IS_CHROME, IS_FIREFOX, IS_SAFARI } from '../platform/target';
-import { changeCountBucket, classifyErrorCode, commandOutcome, messageFeatures, pageSchemeFromUrl, sendToAgentBlock, styleAnalytics, styleAnalyticsList, type AnalyticsEvent } from '../platform/analytics';
+import { changeCountBucket, classifyErrorCode, commandOutcome, messageFeatures, pageSchemeFromUrl, sanitizeErrorMessage, sendToAgentBlock, styleAnalytics, styleAnalyticsList, thrownFailure, type AnalyticsEvent } from '../platform/analytics';
 import { openPanel, preparePanelTarget } from '../platform/panel';
 import { detectLaunchCapabilities, supportedLaunchSurface, pipFailureMessage } from '../platform/launch-capabilities';
 import {
@@ -231,6 +231,7 @@ let inspectWasOnBeforeComment = false;
 let mcpState: McpState = 'offline';
 // Why the last MCP status probe failed (an error_code), '' when it reached the page.
 let mcpStatusIssue = '';
+let mcpStatusError = '';
 let pinnedDomain = '';
 let changesPageUrl = '';
 let activeRouteKey = '';
@@ -864,7 +865,7 @@ async function send(msg: any, operation = beginInspectorOperation()): Promise<an
     return r || {};
   } catch (error) {
     operation.assertCurrent();
-    if (feature) track({ outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' });
+    if (feature) track(thrownFailure(error));
     if (IS_SAFARI) {
       // Backpressure rejects this operation, not the live target binding.
       if (error instanceof Error && error.message === 'Too many Inspector requests') {
@@ -1058,6 +1059,7 @@ async function refreshMcpStatus(reping = false, operation = beginInspectorOperat
   if (request !== mcpStatusRequest || generation !== pageGeneration) return;
   mcpState = !res.connected ? 'offline' : res.agentConnected ? 'connected' : 'running';
   mcpStatusIssue = res?.error ? classifyErrorCode(res) : '';
+  mcpStatusError = res?.error ? sanitizeErrorMessage(res) : '';
   await operation.wait(refreshFeedbackSession(operation));
   render();
 }
@@ -2072,7 +2074,7 @@ async function takeScreenshot(operation = beginInspectorOperation()) {
     operation.assertCurrent();
       console.warn('[DM] Clipboard write failed', err);
       clipboardOk = false;
-      trackFeature({ feature: 'screenshot', outcome: 'clipboard_failed' });
+      trackFeature({ feature: 'screenshot', outcome: 'clipboard_failed', error_code: 'clipboard_denied', error_message: sanitizeErrorMessage(err) });
     }
   }
   if (wantDownload) {
@@ -2081,7 +2083,7 @@ async function takeScreenshot(operation = beginInspectorOperation()) {
       a.href = res.dataUrl; a.download = filename; a.click();
       downloadOk = true;
       trackFeature({ feature: 'screenshot', outcome: 'download_initiated' });
-    } catch { downloadOk = false; trackFeature({ feature: 'screenshot', outcome: 'download_failed' }); }
+    } catch (err) { downloadOk = false; trackFeature({ feature: 'screenshot', outcome: 'download_failed', error_code: 'download_blocked', error_message: sanitizeErrorMessage(err) }); }
   }
   const btn = root.querySelector('[data-dm-action="screenshot"]');
   if (btn && (clipboardOk || downloadOk)) { btn.innerHTML = icon('check', 14); setTimeout(() => render(), 1200); }
@@ -2208,20 +2210,20 @@ async function copyPrompt(operation = beginInspectorOperation()) {
   const safariCopy = IS_SAFARI ? writeInspectorTextClipboard(output) : null;
   const text = await operation.wait(output);
   if (!text) {
-    trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed' });
+    trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', error_code: 'no_active_changes' });
     return;
   }
   if (safariCopy) {
     if (!await operation.wait(safariCopy)) {
-      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed' });
+      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', error_code: 'clipboard_denied' });
       showCaptureToast('error', 'Could not copy prompt');
       return;
     }
   } else {
     try { await operation.wait(navigator.clipboard.writeText(text)); }
-    catch {
+    catch (err) {
       operation.assertCurrent();
-      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed' });
+      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', error_code: 'clipboard_denied', error_message: sanitizeErrorMessage(err) });
       showCaptureToast('error', 'Could not copy prompt');
       return;
     }
@@ -2237,7 +2239,7 @@ async function sendToAgent(operation = beginInspectorOperation()) {
   try {
   await operation.wait(refreshMcpStatus(undefined, operation));
   const block = sendToAgentBlock(mcpState, mcpMode, !!mcpCloudToken, mcpStatusIssue);
-  if (block) { trackFeature({ feature: 'send_to_agent', outcome: 'failure', ...block, mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) }); sendAgentHelpOpen = true; render(); return; }
+  if (block) { trackFeature({ feature: 'send_to_agent', outcome: 'failure', ...block, ...(mcpStatusError ? { error_message: mcpStatusError } : {}), mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) }); sendAgentHelpOpen = true; render(); return; }
   if (feedbackSession?.state === 'implementing') { trackFeature({ feature: 'send_to_agent', outcome: 'failure', reason: 'busy', error_code: 'agent_busy', mode: mcpMode, page_scheme: pageSchemeFromUrl(boundPageUrl) }); return; }
   const res = await operation.wait(send({ type: 'SP_SEND_TO_AGENT', scope: 'site' }, operation));
   if (res?.ok) {
@@ -2266,7 +2268,7 @@ async function toggleMatchingLayers(next: boolean, operation = beginInspectorOpe
   operation.assertCurrent();
   matchingLayersChecked = next;
   if (!next) { trackFeature({ feature: 'matching_layers', outcome: 'state', state: 'off' }); await operation.wait(pushMultiSelectIds([], operation)); render(); return; }
-  if (!info) { matchingLayersChecked = false; trackFeature({ feature: 'matching_layers', outcome: 'failure', reason: 'rejected' }); return; }
+  if (!info) { matchingLayersChecked = false; trackFeature({ feature: 'matching_layers', outcome: 'failure', reason: 'rejected', error_code: 'empty_selection' }); return; }
   const res = await operation.wait(send({ type: 'SP_FIND_MATCHING', elementId: info.id }, operation));
   const ids: string[] = Array.isArray(res?.ids) ? res.ids : [];
   if (ids.length >= 2) {
@@ -2275,7 +2277,7 @@ async function toggleMatchingLayers(next: boolean, operation = beginInspectorOpe
     showCaptureToast('success', 'Editing ' + ids.length + ' matching layers — changes apply to all.');
   } else {
     matchingLayersChecked = false;
-    trackFeature({ feature: 'matching_layers', outcome: 'failure', reason: 'rejected' });
+    trackFeature({ feature: 'matching_layers', outcome: 'failure', reason: 'rejected', error_code: 'no_matching_layers' });
     showCaptureToast('error', 'No other matching layers on this page.');
   }
   render();

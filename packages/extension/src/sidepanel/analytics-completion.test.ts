@@ -1,5 +1,6 @@
 import { writeScreenshotClipboard } from './screenshot-clipboard';
 import { createInspectorOperation, runInspectorAction } from './inspector-operation';
+import { sanitizeErrorMessage } from '../platform/analytics.ts';
 const beginInspectorOperation = () => createInspectorOperation(() => 0, false);
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -13,7 +14,7 @@ for (const mode of ['clipboard', 'download', 'both']) {
   for (const fail of [false, true]) test(`screenshot ${mode}: actual completion boundary, failure=${fail}`, async () => {
     const events: any[] = [];
     const context: any = { beginInspectorOperation, runInspectorAction,
-      IS_SAFARI: false, writeScreenshotClipboard, info: null, captureMode: mode, trackFeature: (event: unknown) => events.push(event),
+      IS_SAFARI: false, writeScreenshotClipboard, sanitizeErrorMessage, info: null, captureMode: mode, trackFeature: (event: unknown) => events.push(event),
       send: async () => ({ dataUrl: 'data:image/png;base64,eA==' }),
       fetch: async () => ({ blob: async () => new Blob(['x']) }),
       navigator: { clipboard: { write: async () => { if (fail) throw Error('denied'); } } },
@@ -28,5 +29,8 @@ for (const mode of ['clipboard', 'download', 'both']) {
       ...(mode !== 'clipboard' ? [fail ? 'download_failed' : 'download_initiated'] : []),
     ]);
     assert.ok(events.every(e => e.feature === 'screenshot'));
+    for (const e of events.filter(e => e.outcome.endsWith('_failed'))) {
+      assert.deepEqual([e.error_code, e.error_message], e.outcome === 'clipboard_failed' ? ['clipboard_denied', 'denied'] : ['download_blocked', 'blocked']);
+    }
   });
 }

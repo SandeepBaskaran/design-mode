@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
-import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDisabled, boundedEvent, consentMatches, distributionHint, nativeConsentAllowed, parseAnalyticsConfig, styleAnalytics, styleAnalyticsList, pageSchemeFromUrl, changeCountBucket, classifyErrorCode, sendToAgentBlock } from './analytics.ts';
+import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDisabled, boundedEvent, consentMatches, distributionHint, nativeConsentAllowed, parseAnalyticsConfig, styleAnalytics, styleAnalyticsList, pageSchemeFromUrl, changeCountBucket, classifyErrorCode, sendToAgentBlock, sanitizeErrorMessage, thrownFailure } from './analytics.ts';
 
 const config = parseAnalyticsConfig({ host: 'https://analytics.invalid', key: 'phc_local_test_only' })!;
 const consent = { ...config, version: 2, enabled: true };
@@ -216,4 +216,39 @@ test('responses that used to classify as unknown now get a stable code', () => {
   assert.equal(classifyErrorCode({ ok: false, error: 'Page or tracked changes changed; cannot safely undo DOM edit' }), 'undo_unsafe');
   assert.equal(classifyErrorCode({ error: 'No pinned tab' }), 'tab_closed');
   assert.equal(commandOutcome({ ok: false, error: 'No agent connected' }).error_code, 'no_agent_connected');
+});
+
+test('error messages are bounded and stripped of URLs, emails, tokens, paths and quoted page content', () => {
+  const raw = 'Failed at https://private.example/app?token=abc#frag for jane@example.com with Bearer abcdef.ghi using phc_secretsecret1234 id 123e4567-e89b-12d3-a456-426614174000 in /Users/jane/Projects/app/file.ts and C:\\Users\\jane\\x.ts on "Buy now" and \'#secret-selector\'';
+  const clean = sanitizeErrorMessage(raw);
+  assert.equal(clean, 'Failed at [url] for [email] with Bearer [token] using [token] id [id] in [path] and [path] on [text] and [text]');
+  assert.equal(sanitizeErrorMessage(clean), clean);
+  for (const leaked of ['private', 'jane', 'abc', 'secret', 'Buy now', 'Users']) assert.equal(clean.includes(leaked), false, leaked);
+  assert.equal(sanitizeErrorMessage('word '.repeat(100)).length, 200);
+  assert.equal(sanitizeErrorMessage('x'.repeat(500)), '[token]');
+  assert.equal(sanitizeErrorMessage('first line\nsecond line with detail'), 'first line');
+  assert.equal(sanitizeErrorMessage('caf\u00e9 \u2603 page text'), 'caf? ? page text');
+  assert.equal(sanitizeErrorMessage(new Error('Could not establish connection. Receiving end does not exist.')), 'Could not establish connection. Receiving end does not exist.');
+  assert.equal(sanitizeErrorMessage({ ok: false, error: 'No agent connected' }), 'No agent connected');
+  assert.equal(sanitizeErrorMessage({ ok: false }), '');
+  assert.equal(sanitizeErrorMessage(undefined), '');
+  assert.equal(sanitizeErrorMessage("can't open"), "can't open");
+});
+
+test('failed and rejected events carry error_code and error_message; successes never do', () => {
+  assert.deepEqual(commandOutcome({ ok: false, error: 'No agent connected' }), { outcome: 'failure', reason: 'rejected', error_code: 'no_agent_connected', error_message: 'No agent connected' });
+  assert.deepEqual(commandOutcome({ ok: false }), { outcome: 'failure', reason: 'rejected', error_code: 'rejected' });
+  assert.deepEqual(commandOutcome(undefined), { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' });
+  assert.deepEqual(commandOutcome({ ok: true }), { outcome: 'command_acknowledged' });
+  assert.deepEqual(thrownFailure(new Error('Could not establish connection. Receiving end does not exist.')), { outcome: 'failure', reason: 'unavailable', error_code: 'no_content_script', error_message: 'Could not establish connection. Receiving end does not exist.' });
+  assert.deepEqual(thrownFailure(new Error('boom')), { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable', error_message: 'boom' });
+  assert.deepEqual(thrownFailure(undefined), { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' });
+});
+
+test('boundedEvent re-sanitises error_message and ignores non-string values', () => {
+  const dirty = boundedEvent({ feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'route_not_ready', error_message: 'see https://private.invalid/x?a=1' });
+  assert.deepEqual(dirty, { feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'route_not_ready', error_message: 'see [url]' });
+  assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', error_message: { toString: () => 'x' } })?.error_message, undefined);
+  assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', error_message: '' })?.error_message, undefined);
+  assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', error_code: 'made_up' })?.error_code, undefined);
 });
