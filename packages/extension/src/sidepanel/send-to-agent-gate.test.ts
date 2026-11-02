@@ -10,7 +10,7 @@ const fn = source.slice(source.indexOf('async function sendToAgent('), source.in
 
 interface Setup { mcpState: string; mcpMode: string; mcpCloudToken: string; mcpStatusIssue?: string; mcpStatusError?: string; implementing?: boolean }
 
-async function click(setup: Setup) {
+async function click(setup: Setup, trigger?: 'setup_popup') {
   const events: any[] = [];
   const sent: any[] = [];
   let dialogOpened = 0;
@@ -29,7 +29,7 @@ async function click(setup: Setup) {
     parseFeedbackSession: () => null, showCaptureToast() {}, render() {}, setTimeout() {}, Date,
   };
   runInNewContext(transformSync(fn + '\nglobalThis.run = sendToAgent;', { loader: 'ts' }).code, context);
-  await context.run();
+  await context.run(undefined, trigger);
   return { events, sent, dialogOpened };
 }
 
@@ -60,6 +60,15 @@ describe('Send to Agent setup gate', () => {
     assert.deepEqual(sent.map(m => m.type), ['SP_SEND_TO_AGENT']);
     assert.equal(dialogOpened, 0);
     assert.ok(!events.some(e => e.feature === 'send_to_agent_blocked'));
+  });
+
+  it('labels where the click came from: toolbar by default, setup_popup from the popup button', async () => {
+    const toolbar = await click({ mcpState: 'connected', mcpMode: 'cloud', mcpCloudToken: 'dm_x' });
+    assert.equal(toolbar.sent[0].analyticsTrigger, 'toolbar');
+    const popup = await click({ mcpState: 'connected', mcpMode: 'cloud', mcpCloudToken: 'dm_x' }, 'setup_popup');
+    assert.equal(popup.sent[0].analyticsTrigger, 'setup_popup');
+    const blocked = await click({ mcpState: 'offline', mcpMode: 'local', mcpCloudToken: '' });
+    assert.equal(blocked.events[0].trigger, 'toolbar');
   });
 
   it('an agent that is still implementing is reported as blocked, not as a send', async () => {

@@ -101,6 +101,19 @@ test('dm_setup_popup carries exactly the bounded popup keys and no free text', a
   assert.deepEqual(Object.keys(p).filter(k => !k.startsWith('$')).sort(), ['browser', 'browser_vendor', 'distribution', 'feature', 'mode', 'outcome', 'reason', 'resolved_via', 'schema_version', 'step', 'surface', 'time_to_resolve_ms', 'version']);
 });
 
+test('dm_send_to_agent carries only the allowlisted trigger', async () => {
+  const received: any[] = [];
+  const analytics = createAnalytics(config, {
+    firefox: false, manifest: { version: '3.0.0' }, readConsent: async () => undefined,
+    permissions: async () => ({}), environment: () => ({}),
+    fetch: async (_: unknown, init?: RequestInit) => { received.push(JSON.parse(init!.body as string)); return new Response(); },
+  });
+  await analytics.capture({ feature: 'send_to_agent', outcome: 'command_acknowledged', mode: 'cloud', change_count_bucket: '2-5', page_scheme: 'https', trigger: 'setup_popup' });
+  await analytics.capture({ feature: 'send_to_agent', outcome: 'command_acknowledged', trigger: 'https://private.invalid' });
+  assert.equal(received[0].properties.trigger, 'setup_popup');
+  assert.equal('trigger' in received[1].properties, false);
+});
+
 test('failure events may carry error_code and a sanitised error_message without a schema version bump', async () => {
   const received: any[] = [];
   const analytics = createAnalytics(config, {

@@ -35,6 +35,7 @@ export type AnalyticsEvent = {
   error_message?: string;
   change_count_bucket?: string;
   step?: string;
+  trigger?: string;
   resolved_via?: string;
   /** Whole milliseconds, clamped and rounded to the second by boundedEvent. */
   time_to_resolve_ms?: number;
@@ -125,6 +126,8 @@ export const SETUP_POPUP_STEPS = [
   'reconnect', 'recheck', 'switch_to_local', 'switch_to_cloud',
 ] as const;
 const resolvedVia = ['auto_recheck', 'send_button'];
+// Where a Send to Agent click came from: the toolbar button or the setup popup's own Send button.
+const triggers = ['toolbar', 'setup_popup'];
 export const SETUP_POPUP_MAX_MS = 1_800_000;
 // Whole milliseconds, rounded to the nearest second and clamped to 0..30 min,
 // so a duration cannot be used to tell one session from another.
@@ -354,6 +357,7 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
   if (reasons.includes(e.reason || '') || (e.feature === 'setup_popup' && errorCodes.includes(e.reason || '') && e.reason !== 'unknown')) result.reason = e.reason;
   if ((SETUP_POPUP_STEPS as readonly string[]).includes(e.step || '')) result.step = e.step;
   if (resolvedVia.includes(e.resolved_via || '')) result.resolved_via = e.resolved_via;
+  if (triggers.includes(e.trigger || '')) result.trigger = e.trigger;
   const toResolve = clampDurationMs(e.time_to_resolve_ms);
   if (toResolve !== undefined) result.time_to_resolve_ms = toResolve;
   const timeOpen = clampDurationMs(e.time_open_ms);

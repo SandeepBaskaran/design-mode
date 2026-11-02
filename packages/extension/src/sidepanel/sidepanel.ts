@@ -861,7 +861,7 @@ async function send(msg: any, operation = beginInspectorOperation()): Promise<an
     msg?.type === 'SP_DOM_ACTION' ? { action: msg.action, category: 'dom' } :
     msg?.type === 'SP_REORDER_LAYER' ? { action: 'reorder', category: 'dom' } :
     msg?.type === 'SP_EXPORT' ? { format: msg.format, change_count_bucket: changeCountBucket(siteChangeCount()) } :
-    msg?.type === 'SP_SEND_TO_AGENT' ? { mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()) } :
+    msg?.type === 'SP_SEND_TO_AGENT' ? { mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), trigger: msg.analyticsTrigger } :
     {};
   const page_scheme = pageSchemeFromUrl(boundPageUrl);
   const track = (fields: Partial<AnalyticsEvent> & Pick<AnalyticsEvent, 'outcome'>) => {
@@ -870,9 +870,13 @@ async function send(msg: any, operation = beginInspectorOperation()): Promise<an
     else for (const item of styleBatch) trackFeature({ feature, page_scheme, ...extra, ...item, ...fields });
   };
   track({ outcome: 'attempt' });
-  const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
-    ? { ...msg, targetTabId: myTabId }
+  // analyticsTrigger only labels the event above; it is not part of the command.
+  const wire = msg && typeof msg === 'object' && 'analyticsTrigger' in msg
+    ? (({ analyticsTrigger: _trigger, ...command }) => command)(msg)
     : msg;
+  const stamped = (myTabId != null && msg && typeof msg.type === 'string' && msg.type.startsWith('SP_'))
+    ? { ...wire, targetTabId: myTabId }
+    : wire;
   try {
     const r = await operation.wait(browser.runtime.sendMessage(stamped));
     if (IS_SAFARI && r?.error) throw new Error(String(r.error));
@@ -2260,7 +2264,7 @@ async function copyPrompt(operation = beginInspectorOperation()) {
   const btn = root.querySelector('#dm-copy-prompt-btn');
   if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); }
 }
-async function sendToAgent(operation = beginInspectorOperation()) {
+async function sendToAgent(operation = beginInspectorOperation(), trigger: 'toolbar' | 'setup_popup' = 'toolbar') {
   operation.assertCurrent();
   if (sendingFeedback || previewingOriginal) return;
   sendingFeedback = true;
@@ -2272,16 +2276,16 @@ async function sendToAgent(operation = beginInspectorOperation()) {
   // It is reported as dm_send_to_agent_blocked and the dialog tells the user
   // exactly what to fix.
   if (block) {
-    trackFeature({ feature: 'send_to_agent_blocked', outcome: 'failure', ...block, ...(mcpStatusError ? { error_message: mcpStatusError } : {}), mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) });
+    trackFeature({ feature: 'send_to_agent_blocked', outcome: 'failure', ...block, ...(mcpStatusError ? { error_message: mcpStatusError } : {}), mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl), trigger });
     openSendSetup();
     return;
   }
   if (feedbackSession?.state === 'implementing') {
-    trackFeature({ feature: 'send_to_agent_blocked', outcome: 'failure', reason: 'busy', error_code: 'agent_busy', mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) });
+    trackFeature({ feature: 'send_to_agent_blocked', outcome: 'failure', reason: 'busy', error_code: 'agent_busy', mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl), trigger });
     showCaptureToast('error', 'Your agent is still implementing the last round.');
     return;
   }
-  const res = await operation.wait(send({ type: 'SP_SEND_TO_AGENT', scope: 'site' }, operation));
+  const res = await operation.wait(send({ type: 'SP_SEND_TO_AGENT', scope: 'site', analyticsTrigger: trigger }, operation));
   if (res?.ok) {
     feedbackSession = res.supported ? parseFeedbackSession(res.session) : null;
     feedbackSentUntil = Date.now() + 1500;
@@ -10503,7 +10507,7 @@ function setupDelegation() {
           if (sendSetupStep(sendSetupModel()) !== 'ready') break;
           noteSendSetupResolved('send_button');
           closeSendSetup(false);
-          runInspectorAction(sendToAgent(operation));
+          runInspectorAction(sendToAgent(operation, 'setup_popup'));
           break;
         }
         case 'toggle-theme': toggleTheme(); break;
