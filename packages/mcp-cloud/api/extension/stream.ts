@@ -5,6 +5,11 @@
 // through inbound:{tenantId} and we forward each as an SSE event.
 // Heartbeats every 25s keep proxies happy. Reconnect-friendly
 // (extension just opens a new stream on close).
+//
+// Vercel stops the function at maxDuration (300s, see vercel.json) and
+// logs that as a timeout error. To avoid being killed mid-frame we end
+// the stream ourselves at ~290s: stop reading the inbox, tell the client
+// with `event: reconnect`, then close. The extension reconnects at once.
 // ============================================================
 
 import { authenticate, isTokenActive } from '../../lib/auth.js';
@@ -14,6 +19,16 @@ import { getPresence } from '../../lib/presence.js';
 import { corsHeaders, preflight, withCors } from '../../lib/cors.js';
 
 export const config = { runtime: 'nodejs' };
+
+// Must stay below `maxDuration` for this route in vercel.json (300s).
+export const STREAM_MAX_MS = 290_000;
+
+// Test hook: a shorter window can be set with DM_STREAM_MAX_MS, but never a
+// longer one than the function limit allows.
+function streamMaxMs(): number {
+  const override = Number(process.env.DM_STREAM_MAX_MS);
+  return Number.isFinite(override) && override >= 50 ? Math.min(override, STREAM_MAX_MS) : STREAM_MAX_MS;
+}
 
 export async function GET(req: Request): Promise<Response> {
   let row;
@@ -37,6 +52,19 @@ export async function GET(req: Request): Promise<Response> {
     ctrl.abort();
     return false;
   };
+
+  // Separate from `ctrl`: when the time budget runs out we stop *reading*
+  // the inbox (no new LPOP) but keep the stream authorized so a batch that
+  // was already popped is still delivered before we say goodbye.
+  // (Not AbortSignal.any: package engines still allow Node 18.)
+  const deadline = new AbortController();
+  const readCtrl = new AbortController();
+  const stopReading = () => readCtrl.abort();
+  ctrl.signal.addEventListener('abort', stopReading, { once: true });
+  deadline.signal.addEventListener('abort', stopReading, { once: true });
+  const readSignal = readCtrl.signal;
+  const deadlineTimer = setTimeout(() => deadline.abort(), streamMaxMs());
+  deadlineTimer.unref?.();
 
   const encoder = new TextEncoder();
   const heartbeatMs = 25_000;
@@ -93,16 +121,23 @@ export async function GET(req: Request): Promise<Response> {
       presenceTimer.unref?.();
 
       try {
-        for await (const msg of readInbound({ tenantId, signal: ctrl.signal, isAuthorized })) {
+        for await (const msg of readInbound({ tenantId, signal: readSignal, isAuthorized })) {
           if (!(await send('relay', JSON.stringify(msg)))) break;
           logEvent('stream.forward', {
             tenantId, type: msg.type,
             byteCount: typeof msg.payload === 'string' ? Buffer.byteLength(msg.payload, 'utf8') : 0,
           });
         }
+        // Time budget used up (not a disconnect, revocation or error): tell the
+        // client to reconnect immediately instead of letting Vercel kill us.
+        if (deadline.signal.aborted && !ctrl.signal.aborted) {
+          await send('reconnect', JSON.stringify({ reason: 'max_duration' }));
+          logEvent('stream.reconnect', { tenantId, latencyMs: Date.now() - started });
+        }
       } catch (err: any) {
         logEvent('stream.error', { tenantId, error: err?.code || 'unknown' });
       } finally {
+        clearTimeout(deadlineTimer);
         ctrl.abort();
         req.signal.removeEventListener('abort', onAbort);
         clearInterval(heartbeat);

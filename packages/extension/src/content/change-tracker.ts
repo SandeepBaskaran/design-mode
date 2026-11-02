@@ -15,6 +15,7 @@ import { getTokenEdits } from './root-var-store';
 import { isSafeRichTextHref, normalizeRichTextHref, replaceRichTextHtml, restoreRichTextHtml } from '../rich-text-preservation';
 import { IMPORT_STATES, validateImportPayload } from './import-validation';
 import { restoreSavedDomLocations } from './saved-session';
+import { parseSseFrame, planReconnect } from './cloud-stream';
 import { userOverrideScope, setUserOverridesEnabled, syncUserStyles } from './user-styles';
 
 // Lifecycle a coding agent drives over MCP: untouched → working → done.
@@ -1854,6 +1855,8 @@ async function runCloudStream() {
       controller.abort();
       return;
     }
+    let reconnectRequested = false;
+    let openedAt = Date.now();
     try {
       const resp = await fetch(`${baseUrl}/api/extension/stream`, {
         method: 'GET',
@@ -1866,6 +1869,7 @@ async function runCloudStream() {
       }
       console.debug('[Design Mode] cloud stream open');
       backoff = 1000;
+      openedAt = Date.now();
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
@@ -1875,8 +1879,11 @@ async function runCloudStream() {
         buf += decoder.decode(value, { stream: true });
         let idx;
         while ((idx = buf.indexOf('\n\n')) >= 0) {
-          parseSseFrame(buf.slice(0, idx));
+          const frame = parseSseFrame(buf.slice(0, idx));
           buf = buf.slice(idx + 2);
+          // Routine end-of-window signal from the relay: reconnect at once, no error.
+          if (frame.event === 'reconnect') reconnectRequested = true;
+          else handleSseFrame(frame);
         }
       }
     } catch (err) {
@@ -1886,21 +1893,15 @@ async function runCloudStream() {
       console.debug('[Design Mode] cloud stream lost, retrying:', err);
     }
     if (controller.signal.aborted) return;
-    await new Promise(r => setTimeout(r, backoff));
-    backoff = Math.min(backoff * 2, 15000);
+    const plan = planReconnect({ reconnectRequested, streamOpenMs: Date.now() - openedAt, backoffMs: backoff });
+    backoff = plan.backoffMs;
+    if (plan.delayMs > 0) await new Promise(r => setTimeout(r, plan.delayMs));
   }
 }
 
-function parseSseFrame(frame: string) {
-  let event = 'message';
-  let data = '';
-  for (const line of frame.split('\n')) {
-    if (line.startsWith(':')) continue; // comment / heartbeat
-    if (line.startsWith('event:')) event = line.slice(6).trim();
-    else if (line.startsWith('data:')) data += line.slice(5).trim();
-  }
-  if (event === 'relay' && data) {
-    try { dispatchIncoming(JSON.parse(data)); } catch {}
+function handleSseFrame(frame: { event: string; data: string }) {
+  if (frame.event === 'relay' && frame.data) {
+    try { dispatchIncoming(JSON.parse(frame.data)); } catch {}
   }
 }
 
