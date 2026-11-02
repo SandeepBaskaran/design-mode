@@ -7,7 +7,7 @@ import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDis
 
 const config = parseAnalyticsConfig({ host: 'https://analytics.invalid', key: 'phc_local_test_only' })!;
 const consent = { ...config, version: 2, enabled: true };
-const event = { feature: 'import', outcome: 'attempt' };
+const event = { feature: 'inspect', outcome: 'attempt' };
 const base = { readConsent: async () => consent, permissions: async () => ({}), firefox: false, manifest: { version: '3.0.0' } };
 
 test('exact panel identity permits docked, Firefox sidebar and tab-backed popout; rejects web/content senders', () => {
@@ -66,7 +66,9 @@ test('allowlist strips page content, URLs, selectors, tokens and raw errors', ()
   assert.deepEqual(boundedEvent({ feature: 'computed_css', outcome: 'clipboard_completed', action: 'copy' }), { feature: 'computed_css', outcome: 'clipboard_completed', action: 'copy' });
   assert.deepEqual(boundedEvent({ feature: 'annotate', outcome: 'attempt', kind: 'region' }), { feature: 'annotate', outcome: 'attempt', kind: 'region' });
   assert.deepEqual(boundedEvent({ feature: 'token_edit', outcome: 'command_acknowledged', scope: 'theme' }), { feature: 'token_edit', outcome: 'command_acknowledged', scope: 'theme' });
-  assert.deepEqual(boundedEvent({ feature: 'theme', outcome: 'state', state: 'system', resolved: 'dark' }), { feature: 'theme', outcome: 'state', state: 'system', resolved: 'dark' });
+  // Schema 5 removed these events; the allowlist no longer accepts them.
+  for (const feature of ['theme', 'import', 'feedback_stop']) assert.equal(boundedEvent({ feature, outcome: 'state', state: 'dark' }), null, feature);
+  assert.equal(boundedEvent({ feature: 'mcp_state', outcome: 'state', state: 'dark' })?.state, undefined);
   assert.deepEqual(boundedEvent({ feature: 'help', outcome: 'attempt', target: 'shortcuts' }), { feature: 'help', outcome: 'attempt', target: 'shortcuts' });
   assert.deepEqual(boundedEvent({ feature: 'matching_layers', outcome: 'state', state: 'on' }), { feature: 'matching_layers', outcome: 'state', state: 'on' });
   assert.deepEqual(boundedEvent({ feature: 'media', outcome: 'download_initiated', action: 'download', media: 'svg' }), { feature: 'media', outcome: 'download_initiated', action: 'download', media: 'svg' });

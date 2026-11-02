@@ -5,11 +5,11 @@ import { ANALYTICS_DISTINCT_ID_KEY, ANALYTICS_SCHEMA_VERSION, createAnalytics, e
 const config = { host: 'https://analytics.invalid', key: 'phc_local_test_only' };
 const names: Record<string, string> = {
   inspect: 'dm_inspect', style: 'dm_style_edit', text: 'dm_text_edit', dom: 'dm_dom_edit',
-  comment: 'dm_comment_update', import: 'dm_changes_import', export: 'dm_changes_export',
+  comment: 'dm_comment_update', export: 'dm_changes_export',
   screenshot: 'dm_screenshot', undo: 'dm_undo', redo: 'dm_redo', send_to_agent: 'dm_send_to_agent', send_to_agent_blocked: 'dm_send_to_agent_blocked',
-  feedback_stop: 'dm_feedback_stop', mcp_state: 'dm_mcp_state',
+  mcp_state: 'dm_mcp_state',
   copy_prompt: 'dm_copy_prompt', annotate: 'dm_annotate', token_edit: 'dm_token_edit',
-  computed_css: 'dm_computed_css', theme: 'dm_theme', help: 'dm_help',
+  computed_css: 'dm_computed_css', help: 'dm_help',
   matching_layers: 'dm_matching_layers', media: 'dm_media', setup_popup: 'dm_setup_popup', panel_state: 'dm_panel_state',
 };
 for (const firefox of [false, true]) {
@@ -81,7 +81,7 @@ test('schema version guard: the identity key is pinned to the schema version', (
   // Event names and payload keys are pinned by the test above.
   assert.deepEqual(
     { version: ANALYTICS_SCHEMA_VERSION, identityKey: ANALYTICS_DISTINCT_ID_KEY },
-    { version: 4, identityKey: 'dm-analytics-distinct-id' },
+    { version: 5, identityKey: 'dm-analytics-distinct-id' },
   );
 });
 

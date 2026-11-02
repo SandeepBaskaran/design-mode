@@ -24,7 +24,7 @@ describe('Send to Agent analytics wiring', () => {
     assert.match(source, /msg\?\.type === 'SP_SEND_TO_AGENT' \? \{ mode: mcpMode/);
   });
 
-  it('send() puts mode, change count, page scheme and trigger on both attempt and acknowledgement, and keeps the label off the wire', async () => {
+  it('send() puts mode, change count, page scheme and trigger on the acknowledgement (no attempt event), and keeps the label off the wire', async () => {
     const sendSource = source.slice(source.indexOf('async function send('), source.indexOf('// file:// URLs have an empty hostname'));
     const events: any[] = [];
     const wire: any[] = [];
@@ -37,7 +37,7 @@ describe('Send to Agent analytics wiring', () => {
     };
     runInNewContext(transformSync(sendSource + '\nglobalThis.send = send;', { loader: 'ts' }).code, context);
     await context.send({ type: 'SP_SEND_TO_AGENT', scope: 'site', analyticsTrigger: 'setup_popup' });
-    assert.deepEqual(events.map(e => [e.feature, e.outcome]), [['send_to_agent', 'attempt'], ['send_to_agent', 'command_acknowledged']]);
+    assert.deepEqual(events.map(e => [e.feature, e.outcome]), [['send_to_agent', 'command_acknowledged']]);
     for (const e of events) assert.deepEqual([e.mode, e.change_count_bucket, e.page_scheme, e.trigger], ['cloud', '2-5', 'https', 'setup_popup']);
     assert.equal(JSON.stringify(wire), JSON.stringify([{ type: 'SP_SEND_TO_AGENT', scope: 'site', targetTabId: 7 }]));
   });

@@ -9,9 +9,12 @@ export const ANALYTICS_DISTINCT_ID_KEY = 'dm-analytics-distinct-id';
  * - a property's values change meaning or type.
  * Adding a new event or an optional property is not a bump.
  * When you bump it, update the PostHog dashboard filters in the same change.
- * History: 2 = random ID per event, 3 = persistent install ID, 4 = edit detail.
+ * History: 2 = random ID per event, 3 = persistent install ID, 4 = edit detail,
+ * 5 = fewer events: no attempt outcomes, dm_theme, dm_changes_import or
+ * dm_feedback_stop; dm_mcp_state debounced; dm_style_edit coalesced per gesture;
+ * dm_changes_export now reports the clipboard result.
  */
-export const ANALYTICS_SCHEMA_VERSION = 4;
+export const ANALYTICS_SCHEMA_VERSION = 5;
 export type AnalyticsConfig = { host: string; key: string; distribution?: string };
 export type Consent = { enabled: true; host: string; key: string; version: 2 };
 export type DataPermissions = { data_collection?: string[] };
@@ -26,7 +29,6 @@ export type AnalyticsEvent = {
   scope?: string;
   target?: string;
   media?: string;
-  resolved?: string;
   category?: string;
   prop?: string;
   format?: string;
@@ -44,11 +46,11 @@ export type AnalyticsEvent = {
 
 const eventNames: Readonly<Record<string, string>> = Object.freeze({
   inspect: 'dm_inspect', style: 'dm_style_edit', text: 'dm_text_edit', dom: 'dm_dom_edit',
-  comment: 'dm_comment_update', import: 'dm_changes_import', export: 'dm_changes_export',
+  comment: 'dm_comment_update', export: 'dm_changes_export',
   screenshot: 'dm_screenshot', undo: 'dm_undo', redo: 'dm_redo',
-  send_to_agent: 'dm_send_to_agent', send_to_agent_blocked: 'dm_send_to_agent_blocked', feedback_stop: 'dm_feedback_stop', mcp_state: 'dm_mcp_state',
+  send_to_agent: 'dm_send_to_agent', send_to_agent_blocked: 'dm_send_to_agent_blocked', mcp_state: 'dm_mcp_state',
   copy_prompt: 'dm_copy_prompt', annotate: 'dm_annotate', token_edit: 'dm_token_edit',
-  computed_css: 'dm_computed_css', theme: 'dm_theme', help: 'dm_help',
+  computed_css: 'dm_computed_css', help: 'dm_help',
   matching_layers: 'dm_matching_layers', media: 'dm_media', setup_popup: 'dm_setup_popup',
   panel_state: 'dm_panel_state',
 });
@@ -58,7 +60,7 @@ const reasons = ['unavailable', 'rejected', 'offline', 'waiting_for_agent', 'bus
 // Why the panel shows a blocked screen instead of the editor (dm_panel_state).
 const panelReasons = ['file_access', 'page_unavailable', 'restricted_url'];
 const modes = ['local', 'cloud', 'self-hosted'];
-const states = ['offline', 'running', 'connected', 'dark', 'light', 'system', 'on', 'off'];
+const states = ['offline', 'running', 'connected', 'on', 'off'];
 const actions = ['open', 'copy', 'download', 'delete', 'duplicate', 'move-up', 'move-down', 'reorder', 'wrap', 'unwrap', 'insert', 'text', 'html', 'edit', 'resolve', 'reopen'];
 const kinds = ['element', 'region'];
 const categories = ['typography', 'spacing', 'layout', 'color', 'border', 'effects', 'position', 'sizing', 'preset', 'text', 'dom'];
@@ -156,7 +158,6 @@ const changeCountBuckets = ['0', '1', '2-5', '6-20', '20+'];
 const scopes = ['root', 'theme', 'component'];
 const targets = ['shortcuts', 'copy_diagnostics', 'file_access_settings', 'readme', 'privacy', 'issues', 'email', 'back'];
 const medias = ['svg', 'image', 'video', 'audio', 'background'];
-const resolvedThemes = ['dark', 'light'];
 
 export function parseAnalyticsConfig(value: unknown): AnalyticsConfig | null {
   if (!value || typeof value !== 'object') return null;
@@ -390,7 +391,6 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
   if (scopes.includes(e.scope || '')) result.scope = e.scope;
   if (targets.includes(e.target || '')) result.target = e.target;
   if (medias.includes(e.media || '')) result.media = e.media;
-  if (resolvedThemes.includes(e.resolved || '')) result.resolved = e.resolved;
   if (categories.includes(e.category || '')) result.category = e.category;
   if (props.includes(e.prop || '')) result.prop = e.prop;
   if (formats.includes(e.format || '')) result.format = e.format;
@@ -407,9 +407,9 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
 
 export const messageFeatures: Readonly<Record<string, string>> = Object.freeze({
   SP_SET_INSPECT: 'inspect', SP_APPLY_STYLE: 'style', SP_APPLY_STYLES: 'style', SP_SET_TEXT: 'text', SP_SET_HTML: 'text',
-  SP_DOM_ACTION: 'dom', SP_UPDATE_COMMENT: 'comment', SP_SET_COMMENT_RESOLVED: 'comment', SP_IMPORT_CHANGES: 'import',
+  SP_DOM_ACTION: 'dom', SP_UPDATE_COMMENT: 'comment', SP_SET_COMMENT_RESOLVED: 'comment',
   SP_EXPORT: 'export', SP_SCREENSHOT: 'screenshot', SP_UNDO: 'undo',
-  SP_REDO: 'redo', SP_SEND_TO_AGENT: 'send_to_agent', SP_STOP_FEEDBACK_SESSION: 'feedback_stop',
+  SP_REDO: 'redo', SP_SEND_TO_AGENT: 'send_to_agent',
   SP_SET_ROOT_VAR: 'token_edit', SP_GET_COMPUTED_CSS: 'computed_css', SP_REORDER_LAYER: 'dom',
 });
 

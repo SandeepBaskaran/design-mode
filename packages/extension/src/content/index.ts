@@ -1058,7 +1058,8 @@ function registerAllShortcuts() {
     deleteSelectedElements(isMultiSelectActive() ? getMultiSelectIds() : [getSelectedElementId() || '']);
   });
   registerShortcut('export-css', () => {
-    void ensureActiveRoute().then(() => renderSiteExportText('css')).then(css => copyToClipboard(css));
+    void ensureActiveRoute().then(() => renderSiteExportText('css')).then(css => copyToClipboard(css))
+      .then(ok => notifyPanel('CSS_EXPORT_RESULT', { ok }), () => notifyPanel('CSS_EXPORT_RESULT', { ok: false }));
   });
   // Alt+A — fast path to add a comment on the focused element. Reuses the
   // existing comment infrastructure (pin + side-panel add field); no-op if

@@ -845,12 +845,26 @@ function trackPanelState() {
   lastPanelBlock = reason;
   if (reason) trackFeature({ feature: 'panel_state', outcome: 'blocked', reason, page_scheme: scheme });
 }
+// dm_mcp_state reports a state only once it has held for 5 seconds. A relay
+// that flaps (offline, running, offline...) would otherwise send hundreds of
+// events per install; a state that comes back to the last reported one before
+// the timer fires sends nothing.
+const MCP_STATE_STABLE_MS = 5000;
 let lastAnalyticsMcpState = '';
+let pendingAnalyticsMcpState = '';
+let analyticsMcpTimer: ReturnType<typeof setTimeout> | null = null;
 function trackMcpState() {
   const current = mcpMode + ':' + mcpState;
-  if (lastAnalyticsMcpState === current) return;
-  lastAnalyticsMcpState = current;
-  trackFeature({ feature: 'mcp_state', outcome: 'state', mode: mcpMode, state: mcpState });
+  if (current === pendingAnalyticsMcpState) return;
+  if (analyticsMcpTimer) { clearTimeout(analyticsMcpTimer); analyticsMcpTimer = null; }
+  pendingAnalyticsMcpState = current;
+  if (current === lastAnalyticsMcpState) return;
+  const [mode, state] = [mcpMode, mcpState];
+  analyticsMcpTimer = setTimeout(() => {
+    analyticsMcpTimer = null;
+    lastAnalyticsMcpState = current;
+    trackFeature({ feature: 'mcp_state', outcome: 'state', mode, state });
+  }, MCP_STATE_STABLE_MS);
 }
 function resolveTokenScopeKind(scopeSelector?: string): 'root' | 'theme' | 'component' {
   if (!scopeSelector || scopeSelector === ':root') return 'root';
@@ -877,12 +891,16 @@ async function send(msg: any, operation = beginInspectorOperation()): Promise<an
     msg?.type === 'SP_SEND_TO_AGENT' ? { mode: mcpMode, change_count_bucket: changeCountBucket(siteChangeCount()), trigger: msg.analyticsTrigger } :
     {};
   const page_scheme = pageSchemeFromUrl(boundPageUrl);
+  // One event per command, with its outcome. There is no separate "attempt"
+  // event: it doubled the volume and only the outcome says what happened.
   const track = (fields: Partial<AnalyticsEvent> & Pick<AnalyticsEvent, 'outcome'>) => {
     if (!feature) return;
-    if (styleBatch.length <= 1) trackFeature({ feature, page_scheme, ...extra, ...fields });
-    else for (const item of styleBatch) trackFeature({ feature, page_scheme, ...extra, ...item, ...fields });
+    // The screenshot's own result (clipboard or download) is reported by takeScreenshot.
+    if (msg?.type === 'SP_SCREENSHOT' && fields.outcome === 'command_acknowledged') return;
+    const emit = (event: AnalyticsEvent) => { if (feature !== 'style' || styleEventDue(event)) trackFeature(event); };
+    if (styleBatch.length <= 1) emit({ feature, page_scheme, ...extra, ...fields });
+    else for (const item of styleBatch) emit({ feature, page_scheme, ...extra, ...item, ...fields });
   };
-  track({ outcome: 'attempt' });
   // analyticsTrigger only labels the event above; it is not part of the command.
   const wire = msg && typeof msg === 'object' && 'analyticsTrigger' in msg
     ? (({ analyticsTrigger: _trigger, ...command }) => command)(msg)
@@ -911,6 +929,19 @@ async function send(msg: any, operation = beginInspectorOperation()): Promise<an
     // Preserve the existing Chrome/Firefox disconnected-content fallback.
     return {};
   }
+}
+
+// A slider, colour or number drag sends one style command per frame. Report a
+// property's outcome once per gesture: a repeat of the same property and outcome
+// within this window of the previous one belongs to the same gesture and is not sent.
+const STYLE_GESTURE_MS = 2000;
+const styleEventLast = new Map<string, number>();
+function styleEventDue(event: AnalyticsEvent): boolean {
+  const key = [event.prop || '', event.outcome, event.error_code || ''].join('|');
+  const now = Date.now();
+  const last = styleEventLast.get(key);
+  styleEventLast.set(key, now);
+  return last === undefined || now - last >= STYLE_GESTURE_MS;
 }
 
 // file:// URLs have an empty hostname — show the file name instead.
@@ -2051,7 +2082,6 @@ async function downloadMedia(operation = beginInspectorOperation()) {
   operation.assertCurrent();
   if (!mediaInfo) return;
   const m = mediaInfo;
-  trackFeature({ feature: 'media', action: 'download', media: m.kind, outcome: 'attempt' });
   let ok = false;
   try {
     if (m.kind === 'svg' && m.markup) {
@@ -2255,18 +2285,18 @@ async function revertGroup(groupKey: string, operation = beginInspectorOperation
 
 async function copyPrompt(operation = beginInspectorOperation()) {
   operation.assertCurrent();
-  trackFeature({ feature: 'copy_prompt', outcome: 'attempt', change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) });
+  const copyContext = { change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl) };
   const output = operation.wait(send({ type: 'SP_EXPORT', format: 'markdown', scope: 'site', silentAnalytics: true }, operation))
     .then(res => res.output || res.markdown || '');
   const safariCopy = IS_SAFARI ? writeInspectorTextClipboard(output) : null;
   const text = await operation.wait(output);
   if (!text) {
-    trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'no_active_changes' });
+    trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'no_active_changes', ...copyContext });
     return;
   }
   if (safariCopy) {
     if (!await operation.wait(safariCopy)) {
-      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'clipboard_denied' });
+      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'clipboard_denied', ...copyContext });
       showCaptureToast('error', 'Could not copy prompt');
       return;
     }
@@ -2274,12 +2304,12 @@ async function copyPrompt(operation = beginInspectorOperation()) {
     try { await operation.wait(navigator.clipboard.writeText(text)); }
     catch (err) {
       operation.assertCurrent();
-      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'clipboard_denied' });
+      trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_failed', reason: 'rejected', error_code: 'clipboard_denied', ...copyContext });
       showCaptureToast('error', 'Could not copy prompt');
       return;
     }
   }
-  trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_completed' });
+  trackFeature({ feature: 'copy_prompt', outcome: 'clipboard_completed', ...copyContext });
   const btn = root.querySelector('#dm-copy-prompt-btn');
   if (btn) { btn.textContent = 'Copied!'; setTimeout(() => render(), 1500); }
 }
@@ -2324,7 +2354,7 @@ async function stopLiveFeedback(operation = beginInspectorOperation()) {
   } else showCaptureToast('error', 'Could not stop the loop. Stop your agent directly if it is still running.');
   render();
 }
-function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); trackFeature({ feature: 'theme', outcome: 'state', state: theme, resolved: resolvedTheme }); browser.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
+function toggleTheme() { if (theme === 'system') theme = resolvedTheme === 'dark' ? 'light' : 'dark'; else if (theme === 'dark') theme = 'light'; else theme = 'dark'; resolveTheme(); browser.storage?.local?.set?.({ 'dm-theme': theme }); render(); }
 
 /* ── Select matching layers ── */
 async function toggleMatchingLayers(next: boolean, operation = beginInspectorOperation()) {
@@ -2512,6 +2542,12 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   if (msg.type === 'REQUEST_SCREENSHOT') {
     if (pipPinned && !isPip) return;
     void runInspectorAction(takeScreenshot());
+  }
+  // The page-side CSS export shortcut reports its clipboard result here, because
+  // the page cannot send analytics itself.
+  if (msg.type === 'CSS_EXPORT_RESULT') {
+    if (pipPinned && !isPip) return;
+    trackCssExport(!!msg.ok);
   }
   if (msg.type === 'OPEN_COMMENT_FOR_SELECTED') {
     if (!info) return;
@@ -11443,7 +11479,6 @@ function setupDelegation() {
     if (themeBtn) {
       theme = themeBtn.dataset.dmTheme as Theme;
       resolveTheme();
-      trackFeature({ feature: 'theme', outcome: 'state', state: theme, resolved: resolvedTheme });
       browser.storage?.local?.set?.({ 'dm-theme': theme });
       render();
       return;
@@ -14867,20 +14902,32 @@ for (const action of ['toggle-inspect', 'add-annotation', 'region-comment', 'fre
     void runInspectorAction(send({ type: 'SP_TRIGGER_SHORTCUT', action }));
   });
 }
+// dm_changes_export: the CSS export shortcut. Reported once, with the clipboard
+// result (the copy is the handoff), whether it was pressed in the panel or on the page.
+function trackCssExport(ok: boolean, error_code: 'clipboard_denied' | 'unavailable' = 'clipboard_denied') {
+  trackFeature({
+    feature: 'export', format: 'css', outcome: ok ? 'clipboard_completed' : 'clipboard_failed',
+    change_count_bucket: changeCountBucket(siteChangeCount()), page_scheme: pageSchemeFromUrl(boundPageUrl),
+    ...(ok ? {} : { reason: 'rejected', error_code }),
+  });
+}
 registerShortcut('export-css', async () => {
   const operation = beginInspectorOperation();
+  let stage: 'export' | 'copy' = 'export';
   try {
-    const output = operation.wait(send({ type: 'SP_EXPORT', format: 'css' }, operation)).then(res => {
+    const output = operation.wait(send({ type: 'SP_EXPORT', format: 'css', silentAnalytics: true }, operation)).then(res => {
       if (typeof res.output !== 'string') throw new Error('Could not export CSS');
       return res.output;
     });
     const safariCopy = IS_SAFARI ? writeInspectorTextClipboard(output) : null;
     const text = await operation.wait(output);
+    stage = 'copy';
     if (safariCopy) {
       if (!await operation.wait(safariCopy)) throw new Error('Could not copy CSS');
     } else await operation.wait(navigator.clipboard.writeText(text));
+    trackCssExport(true);
   } catch {
-    if (operation.isCurrent()) showCaptureToast('error', 'Could not copy CSS');
+    if (operation.isCurrent()) { trackCssExport(false, stage === 'export' ? 'unavailable' : 'clipboard_denied'); showCaptureToast('error', 'Could not copy CSS'); }
   }
 });
 void loadShortcuts().then(enableShortcuts);

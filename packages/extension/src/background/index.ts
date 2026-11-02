@@ -395,7 +395,7 @@ function dispatchPanelMessage(msg: any, sender: chrome.runtime.MessageSender, se
       msg.type === 'ANIMATION_STATE' ||
       msg.type === 'PROMPT_ANNOTATION' || msg.type === 'ELEMENT_HOVERED_INFO' ||
       msg.type === 'COMMENT_BUBBLE_CLICKED' || msg.type === 'OPEN_COMMENT_FOR_SELECTED' || msg.type === 'COMMENT_ERROR' ||
-      msg.type === 'AGENT_PRESENCE_UPDATE') {
+      msg.type === 'AGENT_PRESENCE_UPDATE' || msg.type === 'CSS_EXPORT_RESULT') {
     return false;
   }
 

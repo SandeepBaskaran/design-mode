@@ -190,8 +190,7 @@ describe('site-wide changes panel', () => {
       await pending;
       assert.deepEqual(JSON.parse(JSON.stringify(messages)), [{ type: 'SP_EXPORT', format: 'markdown', scope: 'site', silentAnalytics: true }]);
       assert.deepEqual(JSON.parse(JSON.stringify(tracked)), [
-        { feature: 'copy_prompt', outcome: 'attempt', change_count_bucket: '2-5', page_scheme: 'unknown' },
-        { feature: 'copy_prompt', outcome: 'clipboard_completed' },
+        { feature: 'copy_prompt', outcome: 'clipboard_completed', change_count_bucket: '2-5', page_scheme: 'unknown' },
       ]);
       assert.equal(c.copied, expected);
       assert.ok(c.copied.includes(b));
