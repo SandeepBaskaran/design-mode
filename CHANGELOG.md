@@ -8,6 +8,41 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Analytics: `dm_setup_popup` records how the Send to Agent setup window is
+  used (shown, step clicked, resolved, dismissed) with the reason it opened and
+  how long it took. Send to Agent events carry `trigger` (toolbar or setup
+  popup), so a send that worked after the popup can be counted.
+- Analytics: `dm_panel_state` for blocked panel screens, `completed` and
+  `cancelled` outcomes on annotations, an `action` on comment updates and a
+  `dropped_count` on the next event after events were dropped.
+- Analytics: copy, screenshot and media failures now say why.
+
+### Changed
+
+- Analytics schema v5. A command now sends one event with its outcome instead
+  of an `attempt` event and an outcome; a screenshot's result is its clipboard
+  or download event; style edits are sent once per property per gesture;
+  `dm_mcp_state` is sent once a state has held for five seconds.
+  `dm_theme`, `dm_changes_import` and `dm_feedback_stop` are no longer sent.
+  Dashboards that compare across releases must filter on `schema_version`.
+- Analytics: the error classifier recognises more failures, including a closed
+  message port, an invalidated extension context and errors thrown in the page
+  (new codes `page_disconnected` and `page_script_error`).
+- Analytics: a sanitised error message is sent only when the error code is
+  `unknown`. `PRIVACY.md` and the website privacy page now say so.
+- `ANALYTICS.md` now matches `PRIVACY.md`: analytics is on by default in
+  release builds with no separate opt-in.
+
+### Fixed
+
+- `dm_changes_export` had gone quiet after 16 October, when Copy as Prompt
+  stopped reporting it, and the CSS export shortcut that remained reported
+  before the copy happened, without its format. It now reports whether the copy
+  reached the clipboard, with `format` and a change count, including when the
+  shortcut is pressed on the page.
+
 ## [3.1.0] — 2026-10-16
 
 ### Added

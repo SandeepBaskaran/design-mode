@@ -117,10 +117,10 @@ A release build sends usage events to PostHog without a separate opt-in. It is n
 Release builds include the PostHog project and send these events without a settings opt-in. An ordinary source build with no project configuration still sends nothing. Project 629592 is the extension-only destination. The public project token is embedded in the release packages, not printed in documentation. See [ANALYTICS.md](packages/extension/ANALYTICS.md). This source does not verify the receiver's billing or retention settings.
 
 The extension sends a bounded event schema: feature names,
-attempt/command_acknowledged/failure or state outcomes, bounded friction
-reasons, MCP mode and state when applicable, the browser package (`chrome`, `firefox` or `safari`; Edge, Brave and Arc use the Chrome package), validated
+command_acknowledged/failure, clipboard and download or state outcomes, bounded
+friction reasons, MCP mode and state when applicable, the browser package (`chrome`, `firefox` or `safari`; Edge, Brave and Arc use the Chrome package), validated
 browser language, Intl timezone, and `navigator.userAgent` (`$raw_user_agent`, bounded to 512 printable ASCII characters) when available,
-extension version, schema version 4, `extension` surface, and a best-effort distribution label.
+extension version, schema version 5, `extension` surface, and a best-effort distribution label.
 Event names describe the action (for example `dm_style_edit`, `dm_send_to_agent`)
 rather than the generic `dm_feature`; outcomes remain separate. Style edits may
 include an allow-listed CSS property name and a category such as typography,
@@ -129,7 +129,23 @@ the CSS value. Text edits may say whether the edit was plain text or HTML. DOM
 edits may name the action, such as delete, duplicate or reorder. Export events
 may name the format and a bucketed change count (`0`, `1`, `2-5`, `6-20`,
 `20+`). Failures may include an allow-listed error code and a page scheme such
-as `https`, `localhost`, `file` or `chrome_internal`, never the page URL. Language is
+as `https`, `localhost`, `file` or `chrome_internal`, never the page URL.
+**When Design Mode cannot classify a failure (error code `unknown`), the event
+also carries a short sanitised message**: the first line only, at most 200
+characters, with URLs, e-mail addresses, tokens, identifiers, file paths and
+quoted text replaced and non-ASCII characters removed. A failure that has a
+known error code carries no message. The message is there so the error codes can
+be improved; it is not a log of your activity.
+When Send to Agent cannot run because setup is incomplete, the panel records the
+reason as an allow-listed code (for example `cloud_token_missing` or
+`local_server_offline`) and how the setup window was used: that it was shown,
+which of a fixed list of steps was clicked, whether it was resolved or dismissed,
+and how long that took, rounded to the second. These events never include the
+token, whether you have one, a URL, a port, a command or a file path. Screens
+where the panel cannot run, such as a page it cannot access or file access not
+being enabled, are recorded as a reason code and the page scheme. Annotations
+record only whether one was started, saved or cancelled and its kind. If events
+were dropped by the rate limit, the next event carries a count of how many. Language is
 bounded to 35 characters with no private-use subtags; timezone to 64 and validated
 by Intl. Invalid/unavailable metadata is omitted.
 `command_acknowledged` means only a command returned without a reported error,
@@ -142,8 +158,9 @@ installation**. No extra browser permission is requested to classify installs.
 
 There is **no autocapture, session replay, pageview tracking, remote SDK code,
 feature-flag fetching, or exception reporting**. Events cannot include page URLs,
-selectors, comments, text, edits, design/authentication tokens, screenshots, raw
-errors, MCP payloads, account IDs or extension IDs. To measure active users (DAU/WAU/MAU),
+selectors, comments, text, edits, design/authentication tokens, screenshots,
+unfiltered error text (see the sanitised message for unclassified failures above),
+MCP payloads, account IDs or extension IDs. To measure active users (DAU/WAU/MAU),
 retention cohorts and feature funnels, the extension generates a random UUID on first use
 and persists it in `chrome.storage.local` under `dm-analytics-distinct-id` as the PostHog
 `distinct_id`. PostHog person profile processing (`$process_person_profile: true`) and

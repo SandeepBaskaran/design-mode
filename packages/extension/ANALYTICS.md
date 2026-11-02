@@ -1,16 +1,19 @@
-# Optional extension analytics
+# Extension analytics
 
-## Optional local configuration
+## Local configuration
 
-The authorized destination is PostHog project **629592**, for the extension only,
+The authorised destination is PostHog project **629592**, for the extension only,
 not the website. The numeric project ID is not an ingestion token. No token is
-committed. An unconfigured build has a disabled Settings switch and makes **zero
-analytics network requests**; a configured build still requires explicit runtime
-consent. No personal API key, SDK or new dependency is required.
+committed. An unconfigured build makes **zero analytics network requests**. A
+configured release build is **on by default**: it sends the events below with no
+separate opt-in and no Settings switch, as `PRIVACY.md` states. On Firefox the
+browser's own data-collection permission still decides whether anything is sent
+(see "Disclosure and native Firefox permission"). No personal API key, SDK or new
+dependency is required.
 
 For a reproducible configured build, create the ignored file
 `packages/extension/.env.analytics.local` with these assignments (replace the
-example origin and fake token with your authorized public ingestion values):
+example origin and fake token with your authorised public ingestion values):
 
 ```dotenv
 DM_POSTHOG_HOST=https://analytics.example.invalid
@@ -24,7 +27,7 @@ Only this explicit flag reads that exact file. Ordinary `npm run build:extension
 `npm run build`, verification and packaging do not load it; existing explicit
 `DM_*` environment configuration still works as before. All builds write the same
 `packages/extension/dist/`, so a subsequent normal build replaces the artifact.
-The command never opts users in, changes remote settings, or sends events.
+The command does not change remote settings or send events.
 
 The local file accepts only the three names below, one `NAME=value` assignment per
 line, optionally single/double quoted, plus blank lines and full-line `#` comments.
@@ -46,17 +49,20 @@ Configuration fields:
   labels, not attestation. Otherwise the Chrome store update URL is a weak
   `published_hint`; Firefox and other unclassifiable installs stay `unknown`.
 
-Both valid config **and** explicit local user consent are required. A changed
-host/project invalidates saved consent. Scope version is now `2`; version `1`
-consent is rejected and requires a new informed opt-in. The storage key remains
-`dm-analytics-consent-v1` so existing revocation/reset listeners still apply. Consent does not enable MCP or vice versa.
+A valid configuration is the only switch: with one, events are sent; without
+one, nothing is. There is no consent prompt, saved consent record or Settings
+off-switch in the product (the background passes a consent reader that always
+returns nothing, and `capture` does not call it). The `dm-analytics-consent-v1`
+key and its helpers (`consentMatches`, `persistAnalyticsDisabled`) are leftovers
+from the earlier opt-in design and are not part of the send path. Analytics does
+not enable MCP, and MCP does not enable analytics.
 The same merged manifest serves Chrome and Firefox; minimum Firefox stays 121.
 No new permission is used to inspect installation source. There is no reliable
 universal official/fork/store detection; IDs and packaging can be copied.
 
 ### Before any enabled distribution
 
-1. Obtain separate authorization to create/configure a project. Verify the
+1. Obtain separate authorisation to create/configure a project. Verify the
    provider's current **free-only, no-card** plan and enforce account-side spend
    limits. Never enable paid products or pay-as-you-go implicitly. The official
    pricing page currently advertises 1 million Product Analytics events/month on
@@ -73,7 +79,7 @@ universal official/fork/store detection; IDs and packaging can be copied.
 ## Implementation and data contract
 
 `src/platform/analytics.ts` owns configuration validation, the bounded event
-schema, consent gate and direct PostHog Capture API transport. The official
+schema, the Firefox data-collection gate and direct PostHog Capture API transport. The official
 browser-extension SDK guide recommends static/no-external bundles and background
 sending. We use the documented Capture API instead: the SDK's automatic metadata,
 remote feature loading and persistence are unnecessary risk for this small schema.
@@ -81,7 +87,9 @@ No remote scripts, autocapture, replay, surveys, feature flags or error SDK exis
 CSP is not relaxed; existing host permissions already cover the configured HTTPS
 receiver and the existing CSP does not restrict `connect-src`.
 
-Events use schema version `3`, surface `extension`. Stable semantic names at the panel hooks map `feature` to `event`:
+Events use schema version `5` (`ANALYTICS_SCHEMA_VERSION` in `analytics.ts`, where the
+rule for when to bump it is written and a guard test pins it), surface `extension`.
+Stable semantic names at the panel hooks map `feature` to `event`:
 
 | Feature | Event |
 | --- | --- |
@@ -90,41 +98,66 @@ Events use schema version `3`, surface `extension`. Stable semantic names at the
 | text | `dm_text_edit` |
 | dom | `dm_dom_edit` |
 | comment | `dm_comment_update` |
-| import | `dm_changes_import` |
 | export | `dm_changes_export` |
 | screenshot | `dm_screenshot` |
 | undo / redo | `dm_undo` / `dm_redo` |
 | send_to_agent | `dm_send_to_agent` |
-| feedback_stop | `dm_feedback_stop` |
+| send_to_agent_blocked | `dm_send_to_agent_blocked` |
+| setup_popup | `dm_setup_popup` |
+| panel_state | `dm_panel_state` |
 | mcp_state | `dm_mcp_state` |
 | copy_prompt | `dm_copy_prompt` |
 | annotate | `dm_annotate` |
 | token_edit | `dm_token_edit` |
 | computed_css | `dm_computed_css` |
-| theme | `dm_theme` |
 | help | `dm_help` |
 | matching_layers | `dm_matching_layers` |
 | media | `dm_media` |
 
 Outcome remains a separate property; names do not imply success.
 
-- `feature`: inspect, style, text, dom, comment, import, export, screenshot, undo,
-  redo, send_to_agent, feedback_stop, mcp_state, copy_prompt, annotate, token_edit,
-  computed_css, theme, help, matching_layers, media.
-- `outcome`: attempt, command_acknowledged, failure, state, clipboard_completed,
-  clipboard_failed, download_initiated, download_failed.
-- Optional `reason`: unavailable, rejected, offline, waiting_for_agent, busy.
+- `feature`: inspect, style, text, dom, comment, export, screenshot, undo, redo,
+  send_to_agent, send_to_agent_blocked, setup_popup, panel_state, mcp_state,
+  copy_prompt, annotate, token_edit, computed_css, help, matching_layers, media.
+- `outcome`: command_acknowledged, failure, state, clipboard_completed,
+  clipboard_failed, download_initiated, download_failed. `attempt` is used only
+  by `dm_annotate` (a start) and `dm_help` (a click). `dm_setup_popup` uses
+  shown, step_action, resolved and dismissed; `dm_annotate` also uses completed
+  and cancelled; `dm_panel_state` uses blocked.
+- Optional `reason`: unavailable, rejected, offline, waiting_for_agent, busy. On
+  `dm_setup_popup` it is the blocker the popup opened for, using the same codes
+  as `dm_send_to_agent_blocked` (`cloud_token_missing`, `transport_inactive`,
+  `no_agent_connected`, `local_server_offline`, `no_content_script`,
+  `restricted_url`, and the other setup codes). On `dm_panel_state` it is
+  `file_access`, `page_unavailable` or `restricted_url`.
 - Optional `mode`: local, cloud, self-hosted.
-- Optional `state`: offline, running, connected (for `mcp_state`); dark, light,
-  system (for `theme`); on, off (for `matching_layers`).
+- Optional `state`: offline, running, connected (for `mcp_state`); on, off (for
+  `matching_layers`).
 - Optional `action`: open, copy, download (distinguishes `dm_computed_css` open vs
-  copy, and `dm_media` download vs copy).
+  copy, and `dm_media` download vs copy); edit, resolve, reopen (for
+  `dm_comment_update`).
+- Optional `trigger`: toolbar or setup_popup (for `dm_send_to_agent` and
+  `dm_send_to_agent_blocked`), so a send that worked after the popup is a plain
+  filter on one event.
+- Optional `step` (for `dm_setup_popup` step_action): connect_cloud,
+  copy_terminal_command, copy_mcp_config, copy_agent_command, reconnect, recheck,
+  switch_to_local, switch_to_cloud. These are the popup's own action ids.
+- Optional `resolved_via` (for `dm_setup_popup` resolved): auto_recheck or
+  send_button.
+- Optional `time_to_resolve_ms` (resolved) and `time_open_ms` (dismissed): whole
+  milliseconds, clamped to 0 to 1,800,000 and rounded to the nearest second.
+- Optional `error_code`: an allow-listed code such as `no_content_script`,
+  `restricted_url`, `page_disconnected`, `page_script_error`, `agent_timeout` or
+  `unknown`. Optional `error_message`: see "Failure text" below.
+- Optional `change_count_bucket`, `page_scheme`, `format` as in `PRIVACY.md`.
+- Optional `dropped_count`: how many events this install dropped (in-flight cap or
+  60 per minute) since the last event that was sent, capped at 1,000. It is held
+  in memory only.
 - Optional `kind`: element, region (for `dm_annotate`).
 - Optional `scope`: root, theme, component (for `dm_token_edit`).
 - Optional `target`: shortcuts, copy_diagnostics, file_access_settings, readme,
   privacy, issues, email, back (for `dm_help`).
 - Optional `media`: svg, image, video, audio, background (for `dm_media`).
-- Optional `resolved`: dark, light (for `dm_theme`).
 - `browser`: `safari`, `firefox`, or `chrome` (from build-time target flags).
   `browser_vendor`: `Apple`, `Mozilla`, or `Google`.
 - Optional `language`: validated `navigator.language` (maximum 35 characters,
@@ -139,52 +172,84 @@ Outcome remains a separate property; names do not imply success.
   environment/version properties; persistent random installation `distinct_id`
   stored in `storage.local` under `dm-analytics-distinct-id` (not linked to MCP credentials).
 
-Extra keys and unrecognized optional values are dropped; unknown features or
+Extra keys and unrecognised optional values are dropped; unknown features or
 outcomes are rejected. No page URL, referrer, selector, DOM/HTML/text, comment,
-content/token/auth value, screenshot, raw error or MCP message is copied. IP and
+content/token/auth value, screenshot, unfiltered error or MCP message is copied.
+The setup popup events carry only the enums above and rounded durations: never the
+token, whether a token exists, a URL, port, host name, command or file path. IP and
 normal request metadata remain visible to the receiver; GeoIP enrichment and
 person profiles are enabled to support DAU/WAU/MAU, retention cohorts, and funnels.
 
-Panel hooks cover allowlisted command attempts and responses. A no-error response
-is only `command_acknowledged`, including empty/no-op responses: it is **not**
-feature completion or agent completion. Screenshot clipboard completion/failure is
+Panel hooks cover allowlisted commands and their responses. Since schema 5 a
+command reports one event with its outcome, not a separate `attempt` first. A
+no-error response is only `command_acknowledged`, including empty/no-op responses:
+it is **not** feature completion or agent completion. A screenshot command sends
+only a failure; its clipboard or download event is its result. Screenshot clipboard completion/failure is
 recorded only after the actual clipboard promise resolves/rejects. Screenshot
 download initiation/failure refers only to the anchor click; there is no observed
 save-to-disk completion, cancellation, or post-click failure. Other clipboard and
 file-save paths are not comprehensively instrumented. Hooks also cover MCP state
-transitions and blocked
-send-to-agent friction. They do not observe arbitrary clicks or content-script
-keyboard-only actions. Comment creation and client-side validation rejections
+transitions (sent once a state has held for five seconds), blocked
+send-to-agent friction, the setup popup and blocked panel screens. They do not observe arbitrary clicks or content-script
+keyboard-only actions. Annotation start, save and cancel are recorded on `dm_annotate`; comment edits and
+resolves on `dm_comment_update`. Client-side validation rejections
 outside these command paths are not comprehensively instrumented. Event coverage
 is intentionally narrow; do not infer absence of friction from absence of events.
 
 Only the background sends. Messages must originate from this extension's panel
 URL (exact extension ID, scheme, host and panel path; origin checked when supplied),
 never a web/content-script sender. A tab-backed popout is valid; `sender.tab` alone
-is not a reason to reject an extension-owned document. Each capture rereads consent and Firefox
+is not a reason to reject an extension-owned document. Each capture rereads the Firefox
 permissions, then checks an invalidation generation before sending. Four requests
-maximum in flight, 60 events/minute per live background context; no queue/retry,
+maximum in flight, 60 events/minute per live background context (dropped events are
+counted in `dropped_count`); no queue/retry,
 5-second abort timeout, omitted cookies/referrer, redirects rejected. Context
-restart loses in-memory counts and events but must reread persisted consent.
+restart loses in-memory counts and events.
 
-Opt-out sends a stop message and removes the consent record. If removal fails,
-it attempts to persist `{ enabled: false, version: 2 }` under the same key. This
-disabled record survives worker restart without any tracking identifier. If both
-writes fail, the UI warns that the old consent can resume sending after restart;
-a permanent stop cannot be promised while browser storage is unavailable. The sender aborts
-requests and invalidates pending async checks; no saved identifier or queue exists
-to flush. Already delivered events cannot be recalled. Reset settings opts out.
-Native permission revocation conservatively clears local consent (even unrelated
-permission removal disables the live sender). Once the disabled state is persisted,
-regranting alone never enables it. If both storage writes fail, the same unresolved
-persistence limitation applies after native permission is regranted and the worker
-restarts.
+There is no in-product opt-out. On Firefox, revoking the data-collection
+permission stops the live sender (any permission removal does), aborts in-flight
+requests and invalidates pending async checks; no queue exists to flush, and a
+reported permission list without `locationInfo` sends nothing. Already delivered
+events cannot be recalled. Removing the extension removes the installation ID.
+
+## Failure text
+
+`error_code` names the failure. `error_message` is sent **only when `error_code` is
+`unknown`**, that is, when nothing in `classifyErrorCode` recognised the failure.
+It is the first line of the message with URLs, e-mail addresses, tokens, identifiers,
+file paths and quoted text replaced, ASCII only and at most 200 characters. It is
+applied where the event is built and again in `boundedEvent`, so a classified
+failure cannot carry text. Use the messages to teach the classifier new codes, then
+the volume of `unknown` should fall.
+
+## Setup popup funnel
+
+When Send to Agent is blocked by a known setup state, the panel sends
+`dm_send_to_agent_blocked`, opens the setup popup and sends `dm_setup_popup` shown.
+`step_action` follows each click on a fix step. `resolved` is sent once when the
+popup's own check passes, found either by the three-second re-check or by the
+popup's Send button (`resolved_via`). `dismissed` is sent once if the popup closes
+without that. A send from the popup then carries `trigger = setup_popup`. Join them
+on the install (person) and time; there is no popup or session identifier.
+
+## Schema history
+
+- 2: random ID per event. 3: persistent installation ID. 4: edit detail.
+- 5: one outcome per command (no `attempt` events, no `command_acknowledged` for
+  screenshots), `dm_style_edit` once per property and outcome per two-second gesture,
+  `dm_mcp_state` debounced by five seconds, and `dm_theme`, `dm_changes_import` and
+  `dm_feedback_stop` removed (with the `dark`/`light`/`system` states and the
+  `resolved` property). `dm_changes_export` now reports the clipboard result of the
+  CSS export shortcut (pressed in the panel or on the page), with `format` and a
+  change count. Dashboards that compare across versions must filter by
+  `schema_version`.
 
 ## Disclosure and native Firefox permission
 
 Usage analytics disclosure lives in `PRIVACY.md` (linked from the extension Help view)
-and in browser store listings. There is no separate Usage analytics section in the
-extension Settings view. In Firefox, `permissions.getAll().data_collection` presence
+and in browser store listings, which must also say that a sanitised message is sent
+for failures the extension cannot classify. There is no separate Usage analytics
+section in the extension Settings view. In Firefox, `permissions.getAll().data_collection` presence
 feature-detects native support, per Mozilla's guidance (no UA version guess).
 The manifest declares `data_collection_permissions.required: ["locationInfo"]` and
 `optional: ["technicalAndInteraction"]`; `nativeConsentAllowed()` requires `locationInfo`
@@ -192,7 +257,7 @@ when `data_collection` is present. `strict_min_version` remains 121.
 
 ## Verification
 
-A separate maintainer-authorized configured-extension run verified **12 received
+A separate maintainer-authorised configured-extension run verified **12 received
 PostHog events** in project 629592. Its durable local report is
 `design-mode-recovery/ten-batch-consolidation/analytics-real/REPORT.md` (outside
 this repository). That receipt evidence applies to that tested build and observed
@@ -230,9 +295,9 @@ review before activation.
 ## Future CLI/MCP scope
 
 No CLI or server telemetry is activated here. Reuse the bounded feature/outcome
-vocabulary in a future separately approved integration, with its **own** disclosed,
-explicit opt-in and a `cli`/`mcp` surface. Do not read extension consent on servers,
-reuse MCP bearer tokens as identity, correlate clients, or instrument tool payloads.
+vocabulary in a future separately approved integration, with its own disclosure
+and a `cli`/`mcp` surface. Do not reuse MCP bearer tokens as identity, correlate
+clients, or instrument tool payloads.
 
 ## Official sources checked
 
