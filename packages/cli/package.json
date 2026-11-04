@@ -27,7 +27,7 @@
     "@types/ws": "^8.18.2",
     "esbuild": "0.28.2",
     "tsx": "^4.23.13",
-    "ws": "^8.22.0",
+    "ws": "^8.22.1",
     "@modelcontextprotocol/sdk": "^1.32.2"
   },
   "publishConfig": {
