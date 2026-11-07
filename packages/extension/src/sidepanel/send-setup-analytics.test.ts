@@ -95,6 +95,25 @@ describe('setup popup event contract', () => {
     assert.deepEqual(bad, { feature: 'setup_popup', outcome: 'step_action', time_to_resolve_ms: 0 });
   });
 
+  it('a fix seen through a live status update is noted when the dialog shows ready, not at the next probe or click', () => {
+    const h = harness({ mcpState: 'offline', mcpMode: 'local', mcpCloudToken: '' });
+    const overlay = source.slice(source.indexOf('function renderSendSetupOverlay()'), source.indexOf('function focusSendSetup('));
+    Object.assign(h.ctx, { renderSendSetupDialog: () => '<dialog>', escapeAttr: (v: string) => v, icon: () => '' });
+    runInNewContext(transformSync(overlay + '\nglobalThis.renderOverlay = renderSendSetupOverlay;', { loader: 'ts' }).code, h.ctx);
+    assert.equal(h.ctx.renderOverlay(), '');
+    h.ctx.api.open();
+    h.ctx.renderOverlay();
+    assert.deepEqual(h.events.map(e => e.outcome), ['shown']);
+    h.advance(1400);
+    h.ctx.mcpState = 'connected'; // a real status push updates state before the next probe
+    assert.equal(h.ctx.renderOverlay(), '<dialog>');
+    h.ctx.renderOverlay();
+    h.ctx.api.close();
+    assert.deepEqual(h.events.map(e => e.outcome), ['shown', 'resolved']);
+    assert.equal(h.events[1].resolved_via, 'auto_recheck');
+    assert.equal(h.events[1].time_to_resolve_ms, 1400);
+  });
+
   it('popup reason codes do not widen the reason of other events', () => {
     const e = boundedEvent({ feature: 'dm_style', outcome: 'failure' });
     assert.equal(e, null);

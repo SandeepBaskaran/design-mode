@@ -7047,6 +7047,10 @@ function sendSetupModel(): SendSetupModel {
 }
 function renderSendSetupOverlay(): string {
   if (!sendSetupOpen) return '';
+  // The panel also learns of a fix from live status pushes, not only from the
+  // 3-second probe; note it as soon as the dialog shows "ready" so the time to
+  // resolve is not stretched to the next probe or the Send click.
+  noteSendSetupResolved('auto_recheck');
   return renderSendSetupDialog(sendSetupModel(), { esc: escapeAttr, icon });
 }
 function focusSendSetup() {

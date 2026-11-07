@@ -142,8 +142,9 @@ Outcome remains a separate property; names do not imply success.
 - Optional `step` (for `dm_setup_popup` step_action): connect_cloud,
   copy_terminal_command, copy_mcp_config, copy_agent_command, reconnect, recheck,
   switch_to_local, switch_to_cloud. These are the popup's own action ids.
-- Optional `resolved_via` (for `dm_setup_popup` resolved): auto_recheck or
-  send_button.
+- Optional `resolved_via` (for `dm_setup_popup` resolved): auto_recheck (the panel
+  saw the fix itself, through its re-check or a live status update) or send_button
+  (the Send button was pressed before it had).
 - Optional `time_to_resolve_ms` (resolved) and `time_open_ms` (dismissed): whole
   milliseconds, clamped to 0 to 1,800,000 and rounded to the nearest second.
 - Optional `error_code`: an allow-listed code such as `no_content_script`,
@@ -227,8 +228,9 @@ the volume of `unknown` should fall.
 When Send to Agent is blocked by a known setup state, the panel sends
 `dm_send_to_agent_blocked`, opens the setup popup and sends `dm_setup_popup` shown.
 `step_action` follows each click on a fix step. `resolved` is sent once when the
-popup's own check passes, found either by the three-second re-check or by the
-popup's Send button (`resolved_via`). `dismissed` is sent once if the popup closes
+popup's own check passes, found by the panel (the three-second re-check or a live
+status update) or by the popup's Send button (`resolved_via`). `dismissed` is sent
+once if the popup closes
 without that. A send from the popup then carries `trigger = setup_popup`. Join them
 on the install (person) and time; there is no popup or session identifier.
 
