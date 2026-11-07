@@ -25,9 +25,9 @@ function sender(response: unknown = { ok: true }) {
   return { events, context, advance: (ms: number) => { now += ms; } };
 }
 
-describe('schema 5: fewer events', () => {
-  it('is schema 5 and the removed events are gone from the allowlist and the sources', () => {
-    assert.equal(ANALYTICS_SCHEMA_VERSION, 5);
+describe('schema 6 retains schema-5 event counting', () => {
+  it('is schema 6 and the removed events are gone from the allowlist and the sources', () => {
+    assert.equal(ANALYTICS_SCHEMA_VERSION, 6);
     for (const feature of ['theme', 'import', 'feedback_stop']) assert.equal(boundedEvent({ feature, outcome: 'state' }), null, feature);
     for (const type of ['SP_IMPORT_CHANGES', 'SP_STOP_FEEDBACK_SESSION']) assert.equal(Object.hasOwn(messageFeatures, type), false, type);
     assert.doesNotMatch(source, /feature: 'theme'/);

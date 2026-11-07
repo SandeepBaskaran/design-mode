@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
-import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDisabled, boundedEvent, consentMatches, distributionHint, nativeConsentAllowed, parseAnalyticsConfig, styleAnalytics, styleAnalyticsList, pageSchemeFromUrl, changeCountBucket, classifyErrorCode, sendToAgentBlock, sanitizeErrorMessage, thrownFailure } from './analytics.ts';
+import { createAnalytics, isAnalyticsSender, commandOutcome, persistAnalyticsDisabled, boundedEvent, consentMatches, distributionHint, nativeConsentAllowed, parseAnalyticsConfig, styleAnalytics, styleAnalyticsList, pageSchemeFromUrl, changeCountBucket, classifyErrorCode, sendToAgentBlock, unknownErrorDescription, thrownFailure } from './analytics.ts';
 
 const config = parseAnalyticsConfig({ host: 'https://analytics.invalid', key: 'phc_local_test_only' })!;
 const consent = { ...config, version: 2, enabled: true };
@@ -225,38 +225,30 @@ test('responses that used to classify as unknown now get a stable code', () => {
   assert.equal(commandOutcome({ ok: false, error: 'No agent connected' }).error_code, 'no_agent_connected');
 });
 
-test('error messages are bounded and stripped of URLs, emails, tokens, paths and quoted page content', () => {
-  const raw = 'Failed at https://private.example/app?token=abc#frag for jane@example.com with Bearer abcdef.ghi using phc_secretsecret1234 id 123e4567-e89b-12d3-a456-426614174000 in /Users/jane/Projects/app/file.ts and C:\\Users\\jane\\x.ts on "Buy now" and \'#secret-selector\'';
-  const clean = sanitizeErrorMessage(raw);
-  assert.equal(clean, 'Failed at [url] for [email] with Bearer [token] using [token] id [id] in [path] and [path] on [text] and [text]');
-  assert.equal(sanitizeErrorMessage(clean), clean);
-  for (const leaked of ['private', 'jane', 'abc', 'secret', 'Buy now', 'Users']) assert.equal(clean.includes(leaked), false, leaked);
-  assert.equal(sanitizeErrorMessage('word '.repeat(100)).length, 200);
-  assert.equal(sanitizeErrorMessage('x'.repeat(500)), '[token]');
-  assert.equal(sanitizeErrorMessage('first line\nsecond line with detail'), 'first line');
-  assert.equal(sanitizeErrorMessage('caf\u00e9 \u2603 page text'), 'caf? ? page text');
-  assert.equal(sanitizeErrorMessage(new Error('Could not establish connection. Receiving end does not exist.')), 'Could not establish connection. Receiving end does not exist.');
-  assert.equal(sanitizeErrorMessage({ ok: false, error: 'No agent connected' }), 'No agent connected');
-  assert.equal(sanitizeErrorMessage({ ok: false }), '');
-  assert.equal(sanitizeErrorMessage(undefined), '');
-  assert.equal(sanitizeErrorMessage("can't open"), "can't open");
+test('unknown diagnostic descriptions are fixed, idempotent and omit empty inputs', () => {
+  const expected = 'Unexpected operation failure';
+  for (const value of ['plain private text', 'word '.repeat(100), 'x'.repeat(500), 'first line\nprivate second line', 'café private text', new Error('private runtime details'), { error: 'private details' }]) {
+    assert.equal(unknownErrorDescription(value), expected);
+  }
+  assert.equal(unknownErrorDescription(expected), expected);
+  for (const value of [undefined, '', '   ', { ok: false }]) assert.equal(unknownErrorDescription(value), '');
 });
 
 test('failed and rejected events carry error_code and error_message; successes never do', () => {
   assert.deepEqual(commandOutcome({ ok: false, error: 'No agent connected' }), { outcome: 'failure', reason: 'rejected', error_code: 'no_agent_connected' });
-  assert.deepEqual(commandOutcome({ ok: false, error: 'Something nobody has seen before' }), { outcome: 'failure', reason: 'rejected', error_code: 'unknown', error_message: 'Something nobody has seen before' });
+  assert.deepEqual(commandOutcome({ ok: false, error: 'Something nobody has seen before' }), { outcome: 'failure', reason: 'rejected', error_code: 'unknown', error_message: 'Unexpected operation failure' });
   assert.deepEqual(commandOutcome({ ok: false }), { outcome: 'failure', reason: 'rejected', error_code: 'rejected' });
   assert.deepEqual(commandOutcome(undefined), { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' });
   assert.deepEqual(commandOutcome({ ok: true }), { outcome: 'command_acknowledged' });
   assert.deepEqual(thrownFailure(new Error('Could not establish connection. Receiving end does not exist.')), { outcome: 'failure', reason: 'unavailable', error_code: 'no_content_script' });
-  assert.deepEqual(thrownFailure(new Error('boom')), { outcome: 'failure', reason: 'unavailable', error_code: 'unknown', error_message: 'boom' });
+  assert.deepEqual(thrownFailure(new Error('boom')), { outcome: 'failure', reason: 'unavailable', error_code: 'unknown', error_message: 'Unexpected operation failure' });
   assert.deepEqual(thrownFailure(undefined), { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' });
 });
 
-test('boundedEvent re-sanitises error_message, keeps it only for unknown, and ignores non-string values', () => {
+test('boundedEvent replaces error text with a fixed diagnostic only for unknown failures', () => {
   const dirty = boundedEvent({ feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'unknown', error_message: 'see https://private.invalid/x?a=1' });
-  assert.deepEqual(dirty, { feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'unknown', error_message: 'see [url]' });
-  // A classified failure never carries free text, whatever the caller passes.
+  assert.deepEqual(dirty, { feature: 'undo', outcome: 'failure', reason: 'rejected', error_code: 'unknown', error_message: 'Unexpected operation failure' });
+  // A classified failure never carries a message, whatever the caller passes.
   for (const error_code of ['route_not_ready', 'no_content_script', 'clipboard_denied', undefined]) {
     assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', reason: 'rejected', error_code, error_message: 'private text' })?.error_message, undefined);
   }
@@ -265,10 +257,6 @@ test('boundedEvent re-sanitises error_message, keeps it only for unknown, and ig
   assert.equal(boundedEvent({ feature: 'undo', outcome: 'failure', error_code: 'made_up' })?.error_code, undefined);
 });
 
-// Failure texts that reached the `unknown` bucket or were mis-bucketed. PostHog
-// holds no message text yet (error_message ships with this release), so these
-// are the strings the extension itself returns plus Chrome's documented
-// runtime messages for a command that could not reach the page.
 const classified: Array<[string, string]> = [
   ['Error: The message port closed before a response was received.', 'page_disconnected'],
   ['Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received', 'page_disconnected'],
@@ -376,14 +364,56 @@ test('Firefox grant and revoke events refresh or stop the background sender', ()
 });
 
 
-test('sanitisation bounds recognised multiline and path patterns without claiming arbitrary-text redaction', () => {
-  for (const separator of ['\r', '\n', '\u2028', '\u2029']) assert.equal(sanitizeErrorMessage('first' + separator + 'synthetic-private-marker'), 'first');
+test('fixed diagnostics do not depend on multiline, path or Unicode redaction', () => {
+  for (const separator of ['\r', '\n', '\u2028', '\u2029']) assert.equal(unknownErrorDescription('first' + separator + 'synthetic-private-marker'), 'Unexpected operation failure');
   for (const path of ['C:/Users/synthetic/private.txt', 'C:\\Users\\synthetic\\private.txt', '\\\\synthetic-server\\share\\private.txt', '/synthetic-private']) {
-    assert.equal(sanitizeErrorMessage('Failed at ' + path).includes('synthetic'), false, path);
+    assert.equal(unknownErrorDescription('Failed at ' + path).includes('synthetic'), false, path);
   }
-  const normalised = sanitizeErrorMessage('Failed https：／／synthetic.invalid/private');
+  const normalised = unknownErrorDescription('Failed https：／／synthetic.invalid/private');
   assert.equal(normalised.includes('synthetic'), false);
   for (const outcome of ['command_acknowledged', 'state', 'completed', 'shown']) {
     assert.equal(boundedEvent({ feature: 'inspect', outcome, error_code: 'unknown', error_message: 'synthetic-private-marker' })?.error_message, undefined);
+  }
+});
+
+
+test('fixed diagnostic descriptions never reproduce arbitrary runtime text', () => {
+  const expected = 'Unexpected operation failure';
+  const privateInputs = [
+    'Payroll for Ada Example is confidential',
+    'Synthetic unquoted page heading and selector #private-card > .balance',
+    'https://synthetic.invalid/private?credential=synthetic-secret',
+    'C:/Users/Synthetic/private.txt',
+    '/Users/Synthetic/private.txt',
+    'Bearer synthetic-private-secret and jane@synthetic.invalid',
+    'first line\n    at syntheticPrivateStack (/synthetic/private.ts:14:2)',
+    'Fullwidth https：／／synthetic.invalid and café synthetic private prose',
+    'Unexpected operation failure followed by synthetic-private-context',
+    'x'.repeat(10_000),
+  ];
+  for (const raw of privateInputs) {
+    for (const value of [raw, new Error(raw), { error: raw }, { message: raw }, { reason: raw }]) {
+      assert.equal(unknownErrorDescription(value), expected);
+    }
+    const event = boundedEvent({ feature: 'undo', outcome: 'failure', error_code: 'unknown', error_message: raw });
+    assert.equal(event?.error_message, expected);
+  }
+});
+
+test('fixed diagnostic payload leaves the original error local and suppresses known-code messages', async () => {
+  const raw = 'Payroll for Ada Example is confidential';
+  const original = new Error(raw);
+  const received: any[] = [];
+  const analytics = createAnalytics(config, {
+    ...base, fetch: async (_: unknown, init?: RequestInit) => { received.push(JSON.parse(init!.body as string)); return new Response(); },
+  });
+  await analytics.capture({ feature: 'undo', ...thrownFailure(original) });
+  assert.equal(original.message, raw);
+  assert.equal(received.length, 1);
+  assert.equal(received[0].properties.error_message, 'Unexpected operation failure');
+  assert.equal(JSON.stringify(received).includes(raw), false);
+  for (const error of ['No agent connected', 'TypeError: Failed to fetch', 'Could not establish connection. Receiving end does not exist.']) {
+    assert.equal(commandOutcome({ ok: false, error }).error_message, undefined);
+    assert.equal(thrownFailure(new Error(error)).error_message, undefined);
   }
 });

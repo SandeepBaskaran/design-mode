@@ -185,10 +185,12 @@ the extension generates a persistent random UUID stored in `storage.local`
 (`chrome`, `firefox` or `safari`), extension version, distribution hint,
 validated language, timezone and `navigator.userAgent` (`$raw_user_agent`), while
 omitting page URLs, selectors, edits, comments, text, tokens and screenshots.
-When a failure cannot be classified into a known error code, the event also
-carries a short sanitised message (first line, at most 200 characters, with URLs,
-e-mail addresses, tokens, identifiers, file paths and quoted text replaced);
-classified failures carry none. This source does not verify the receiver's retention, deletion or billing
+When a failure cannot be classified into a known error code, the event may carry
+only the fixed diagnostic description `Unexpected operation failure`; known-code
+failures carry no message. Runtime error text, including arbitrary prose, paths,
+selectors, endpoints and stacks, is never copied into the diagnostic. Original
+error details remain local; analytics adds no error log or error-text storage.
+These events use schema version 6. This source does not verify the receiver's retention, deletion or billing
 settings. The marketing site is a separate project and is not included in these
 extension events.
 

@@ -137,7 +137,7 @@ Chrome-only `side_panel` key + `sidePanel` permission. Steps:
    and store disclosures against [PRIVACY.md](PRIVACY.md) for the exact artifact.
    Required `locationInfo` covers the disclosed IP-derived location; optional
    `technicalAndInteraction` covers technical/interaction analytics and unknown-only
-   sanitised errors. The sender requires the optional grant, fails closed when
+   fixed diagnostic descriptions. The sender requires the optional grant, fails closed when
    native permissions are absent/unavailable, and stops on revocation. Core editing
    and clipboard export still work when optional analytics is denied. Firefox's
    native install/update consent and the real optional-denial/re-grant flow must be

@@ -122,7 +122,7 @@ The extension sends a bounded event schema: feature names,
 command_acknowledged/failure, clipboard and download or state outcomes, bounded
 friction reasons, MCP mode and state when applicable, the browser package (`chrome`, `firefox` or `safari`; Edge, Brave and Arc use the Chrome package), validated
 browser language, Intl timezone, and `navigator.userAgent` (`$raw_user_agent`, bounded to 512 printable ASCII characters) when available,
-extension version, schema version 5, `extension` surface, and a best-effort distribution label.
+extension version, schema version 6, `extension` surface, and a best-effort distribution label.
 Event names describe the action (for example `dm_style_edit`, `dm_send_to_agent`)
 rather than the generic `dm_feature`; outcomes remain separate. Style edits may
 include an allow-listed CSS property name and a category such as typography,
@@ -133,12 +133,11 @@ may name the format and a bucketed change count (`0`, `1`, `2-5`, `6-20`,
 `20+`). Failures may include an allow-listed error code and a page scheme such
 as `https`, `localhost`, `file` or `chrome_internal`, never the page URL.
 **When Design Mode cannot classify a failure (error code `unknown`), the event
-also carries a short sanitised message**: the first line only, at most 200
-characters, with URLs, e-mail addresses, tokens, identifiers, file paths and
-recognised quoted text replaced, Unicode normalised and remaining non-ASCII
-characters replaced. A failure that has a
-known error code carries no message. The message is there so the error codes can
-be improved; it is not a log of your activity.
+may carry only the fixed diagnostic description `Unexpected operation failure`.**
+A failure with a known error code carries no message. Runtime error text is never
+copied into this field: not even a redacted fragment, first line or quoted text.
+The existing bounded feature, outcome and error code provide diagnostic context.
+Original error details remain local; analytics adds no error log or error-text storage.
 When Send to Agent cannot run because setup is incomplete, the panel records the
 reason as an allow-listed code (for example `cloud_token_missing` or
 `local_server_offline`) and how the setup window was used: that it was shown,
@@ -162,7 +161,7 @@ installation**. No extra browser permission is requested to classify installs.
 There is **no autocapture, session replay, pageview tracking, remote SDK code,
 feature-flag fetching, or exception reporting**. Events cannot include page URLs,
 selectors, comments, text, edits, design/authentication tokens, screenshots,
-unfiltered error text (see the sanitised message for unclassified failures above),
+runtime error text, stack traces, file paths,
 MCP payloads, account IDs or extension IDs. To measure active users (DAU/WAU/MAU),
 retention cohorts and feature funnels, the extension generates a random UUID on first use
 and persists it in `chrome.storage.local` under `dm-analytics-distinct-id` as the PostHog

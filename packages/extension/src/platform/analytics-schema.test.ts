@@ -81,7 +81,7 @@ test('schema version guard: the identity key is pinned to the schema version', (
   // Event names and payload keys are pinned by the test above.
   assert.deepEqual(
     { version: ANALYTICS_SCHEMA_VERSION, identityKey: ANALYTICS_DISTINCT_ID_KEY },
-    { version: 5, identityKey: 'dm-analytics-distinct-id' },
+    { version: 6, identityKey: 'dm-analytics-distinct-id' },
   );
 });
 
@@ -114,7 +114,7 @@ test('dm_send_to_agent carries only the allowlisted trigger', async () => {
   assert.equal('trigger' in received[1].properties, false);
 });
 
-test('failure events carry error_code, and a sanitised error_message only when the code is unknown', async () => {
+test('failure events carry error_code, and a fixed diagnostic description only when the code is unknown', async () => {
   const received: any[] = [];
   const analytics = createAnalytics(config, {
     firefox: false, manifest: { version: '3.0.0' }, readConsent: async () => undefined,
@@ -127,7 +127,7 @@ test('failure events carry error_code, and a sanitised error_message only when t
   const p = received[0].properties;
   assert.equal(p.schema_version, ANALYTICS_SCHEMA_VERSION);
   assert.equal(p.error_code, 'unknown');
-  assert.equal(p.error_message, 'Failed at [url] for [email] in [path]');
+  assert.equal(p.error_message, 'Unexpected operation failure');
   assert.deepEqual(Object.keys(p).filter(k => k.startsWith('error')).sort(), ['error_code', 'error_message']);
   assert.deepEqual(Object.keys(received[1].properties).filter(k => k.startsWith('error')), ['error_code']);
   assert.equal(JSON.stringify(received).includes('private'), false);

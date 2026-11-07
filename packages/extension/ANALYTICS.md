@@ -87,7 +87,7 @@ No remote scripts, autocapture, replay, surveys, feature flags or error SDK exis
 CSP is not relaxed; existing host permissions already cover the configured HTTPS
 receiver and the existing CSP does not restrict `connect-src`.
 
-Events use schema version `5` (`ANALYTICS_SCHEMA_VERSION` in `analytics.ts`, where the
+Events use schema version `6` (`ANALYTICS_SCHEMA_VERSION` in `analytics.ts`, where the
 rule for when to bump it is written and a guard test pins it), surface `extension`.
 Stable semantic names at the panel hooks map `feature` to `event`:
 
@@ -213,27 +213,22 @@ requests and invalidates pending async checks; no queue exists to flush, and a
 missing permission list or one without optional `technicalAndInteraction` sends nothing. Already delivered
 events cannot be recalled. Removing the extension removes the installation ID.
 
-## Failure text
+## Fixed failure diagnostics
 
-`error_code` names the failure. `error_message` is sent **only when `error_code` is
-`unknown`**, that is, when nothing in `classifyErrorCode` recognised the failure.
-It is the first line of the message with URLs, e-mail addresses, tokens, identifiers,
-file paths and quoted text replaced, ASCII only and at most 200 characters. It is
-applied where the event is built and again in `boundedEvent`, so a classified
-failure cannot carry text. Use the messages to teach the classifier new codes, then
-the volume of `unknown` should fall.
+`error_code` names a failure using the existing allow-listed classifier. An
+`error_message` is permitted only for `outcome = failure` and `error_code = unknown`.
+Its only allowed non-empty value in schema 6 is `Unexpected operation failure`.
+The event builders and the final `boundedEvent` boundary both select that constant;
+they never forward runtime substrings, prose, page text, selectors, URLs, endpoints,
+paths, stacks, tokens or quoted context. Empty or non-string message fields are omitted.
+Known-code failures and non-failure outcomes never carry `error_message`.
 
-### Release-blocking redaction limitation
-
-Pattern replacement is not a guarantee that arbitrary unquoted private text is
-removed. The unknown-message inputs originate in panel command responses and
-thrown transport/browser errors; a page-derived or unexpected exception can include
-unrecognised text. The bounded payload has no separate raw-page fields, but this
-free-text exception needs an explicit privacy handling decision and matching store
-disclosures before a configured artefact is published. Synthetic adversarial tests
-and a native network review are required; a passing known-pattern test is not
-universal redaction evidence. Do not remove the chosen unknown-only messages or
-quietly broaden the privacy promise to resolve this gate.
+The existing bounded feature, outcome and error code supply diagnostic context.
+Original error details remain in their existing local execution/error path; this
+change does not add logging or persistence. This is fixed-description selection,
+not a claim that a regular expression can universally redact private text.
+Synthetic adversarial tests cover the constructors and the serialised sender body;
+native consent and exact-artefact network checks remain separate release gates.
 
 ## Setup popup funnel
 
@@ -257,12 +252,15 @@ on the install (person) and time; there is no popup or session identifier.
   CSS export shortcut (pressed in the panel or on the page), with `format` and a
   change count. Dashboards that compare across versions must filter by
   `schema_version`.
+- 6: unknown-only `error_message` is a fixed description, never redacted runtime text.
+  Identity and schema-5 outcome/counting semantics are unchanged. Segment earlier
+  schema-5 evidence from this diagnostic contract; no production adoption is implied.
 
 ## Disclosure and native Firefox permission
 
 Usage analytics disclosure lives in `PRIVACY.md` (linked from the extension Help view)
-and in browser store listings, which must also say that a sanitised message is sent
-for failures the extension cannot classify. There is no separate Usage analytics
+and in browser store listings, which must describe the fixed unknown-only diagnostic
+and must not claim that runtime error prose is sent. There is no separate Usage analytics
 section in the extension Settings view. In Firefox, `permissions.getAll().data_collection` presence
 feature-detects native support, per Mozilla's guidance (no UA version guess).
 The manifest declares `data_collection_permissions.required: ["locationInfo"]` and

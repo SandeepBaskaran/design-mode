@@ -36,8 +36,10 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - Analytics: the error classifier recognises more failures, including a closed
   message port, an invalidated extension context and errors thrown in the page
   (new codes `page_disconnected` and `page_script_error`).
-- Analytics: a sanitised error message is sent only when the error code is
-  `unknown`. `PRIVACY.md` and the website privacy page now say so.
+- Analytics schema v6: unknown-only diagnostics now select the fixed description
+  `Unexpected operation failure`. Runtime text, including arbitrary private prose,
+  is never copied into analytics; known-code failures carry no message. Schema-5
+  outcome/counting semantics are retained. Privacy disclosures match this boundary.
 - `ANALYTICS.md` now matches `PRIVACY.md`: analytics is on by default in
   release builds with no separate opt-in.
 
@@ -54,10 +56,9 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
   elements, and makes text-owning divs editable. Layers reveals the canvas selection.
 - Resize previews show the same CSS size that is committed, including content-box
   padding and borders. Updated the homepage walkthrough and poster.
-- Unknown-only failure messages reject more recognised multiline and file-path
-  patterns, and non-failure outcomes cannot carry message text. Pattern redaction
-  still cannot recognise arbitrary private prose; privacy sign-off remains a
-  release gate, not a universal-redaction claim.
+- Unknown failure diagnostics use a constant instead of attempted pattern redaction;
+  adversarial tests cover prose, selectors, paths, endpoints, stacks and tokens.
+  Existing local errors are preserved without adding error logging or storage.
 - CLI MCP client metadata now advertises the current source version instead of 0.1.0.
 - `dm_changes_export` had gone quiet after 16 October, when Copy as Prompt
   stopped reporting it, and the CSS export shortcut that remained reported

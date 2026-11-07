@@ -13,8 +13,9 @@ export const ANALYTICS_DISTINCT_ID_KEY = 'dm-analytics-distinct-id';
  * 5 = fewer events: no attempt outcomes, dm_theme, dm_changes_import or
  * dm_feedback_stop; dm_mcp_state debounced; dm_style_edit coalesced per gesture;
  * dm_changes_export now reports the clipboard result.
+ * v6: unknown-only failure descriptions are fixed constants, never runtime text.
  */
-export const ANALYTICS_SCHEMA_VERSION = 5;
+export const ANALYTICS_SCHEMA_VERSION = 6;
 export type AnalyticsConfig = { host: string; key: string; distribution?: string };
 export type Consent = { enabled: true; host: string; key: string; version: 2 };
 export type DataPermissions = { data_collection?: string[] };
@@ -197,8 +198,7 @@ export async function persistAnalyticsDisabled(storage: { remove: (key: string) 
 export function commandOutcome(response: any): Pick<AnalyticsEvent, 'outcome' | 'reason' | 'error_code' | 'error_message'> {
   if (response && !response.error && response.ok !== false) return { outcome: 'command_acknowledged' };
   const error_code = classifyErrorCode(response);
-  // Free text is sent only when the failure could not be classified.
-  const error_message = error_code === 'unknown' ? sanitizeErrorMessage(response) : '';
+  const error_message = error_code === 'unknown' ? unknownErrorDescription(response) : '';
   return {
     outcome: 'failure',
     reason: response ? 'rejected' : 'unavailable',
@@ -277,10 +277,9 @@ function propCategory(prop: string): string {
   return 'effects';
 }
 
-const ERROR_MESSAGE_MAX = 200;
+const UNKNOWN_ERROR_DESCRIPTION = 'Unexpected operation failure';
 
-// Pattern redaction cannot recognise arbitrary unquoted private text; see ANALYTICS.md.
-export function sanitizeErrorMessage(value: unknown): string {
+export function unknownErrorDescription(value: unknown): string {
   let text = '';
   if (typeof value === 'string') text = value;
   else if (value instanceof Error) text = value.message;
@@ -290,31 +289,11 @@ export function sanitizeErrorMessage(value: unknown): string {
       if (typeof candidate === 'string' && candidate) { text = candidate; break; }
     }
   }
-  if (!text) return '';
-  return (text.slice(0, 1000).split(/[\r\n\u2028\u2029]/)[0] || '').normalize('NFKC')
-    .replace(/\b[a-z][a-z0-9+.-]{1,30}:\/\/[^\s"'<>)\]]*/gi, '[url]')
-    .replace(/\b(?:data|blob|javascript|mailto):[^\s"'<>)\]]*/gi, '[url]')
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
-    .replace(/\bBearer\s+\S+/gi, 'Bearer [token]')
-    .replace(/\b(?:phc|dm|sk|pk|ghp|gho|xox[a-z])[-_][A-Za-z0-9_-]{6,}/g, '[token]')
-    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '[id]')
-    .replace(/\b[A-Za-z0-9_-]{24,}\b/g, '[token]')
-    .replace(/[A-Za-z]:[\\/][^\s"'<>]*/g, '[path]')
-    .replace(/\\\\[^\s"'<>]+/g, '[path]')
-    .replace(/(^|[\s("'=])~?\/[^\s"'<>]*/g, '$1[path]')
-    .replace(/"[^"]*"|`[^`]*`|(^|[^A-Za-z0-9])'[^']*'/g, (_m, lead) => (lead || '') + '[text]')
-    .replace(/[^\x20-\x7E]/g, '?')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, ERROR_MESSAGE_MAX);
+  return text.trim() ? UNKNOWN_ERROR_DESCRIPTION : '';
 }
 
-// Failure fields for a command whose transport threw (extension context lost,
-// no receiving end, port closed): the code when we can name it. When we cannot,
-// the code is `unknown` and the sanitised message travels with it, which is the
-// only case where free text is sent.
 export function thrownFailure(error: unknown): Pick<AnalyticsEvent, 'outcome' | 'reason' | 'error_code' | 'error_message'> {
-  const message = sanitizeErrorMessage(error);
+  const message = unknownErrorDescription(error);
   const code = classifyErrorCode({ error: error instanceof Error ? error.message : error });
   // Nothing to read at all: the transport is simply unavailable.
   if (code === 'unknown' && !message) return { outcome: 'failure', reason: 'unavailable', error_code: 'unavailable' };
@@ -394,9 +373,8 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
   if (formats.includes(e.format || '')) result.format = e.format;
   if (pageSchemes.includes(e.page_scheme || '')) result.page_scheme = e.page_scheme;
   if (errorCodes.includes(e.error_code || '')) result.error_code = e.error_code;
-  // Free text only for failures nothing could classify. Known codes carry no message.
   if (result.outcome === 'failure' && result.error_code === 'unknown' && typeof e.error_message === 'string') {
-    const message = sanitizeErrorMessage(e.error_message);
+    const message = unknownErrorDescription(e.error_message);
     if (message) result.error_message = message;
   }
   if (changeCountBuckets.includes(e.change_count_bucket || '')) result.change_count_bucket = e.change_count_bucket;

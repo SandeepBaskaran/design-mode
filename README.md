@@ -32,7 +32,7 @@ Design Mode is a visual editor that lives in your browser. Instead of describing
 - Show your AI agent *exactly* what you want — visually — instead of describing it.
 - Drop sticky-note comments on elements and ship them with the prompt.
 - Export your changes as ready-to-paste CSS, Tailwind, SCSS, or JSX.
-- Configured release-build analytics uses a persistent random installation ID; Firefox requires optional technical consent. See [Privacy](PRIVACY.md) for metadata and unknown-only sanitised errors.
+- Configured release-build analytics uses a persistent random installation ID; Firefox requires optional technical consent. See [Privacy](PRIVACY.md) for metadata and unknown-only fixed diagnostics.
 - Tighten a layout in seconds, then commit the patch. The vibe-coding loop, minus the back-and-forth.
 
 ## Three ways to connect your AI agent
@@ -374,7 +374,7 @@ reminder. The manual checklist covers:
 
 ## Privacy & security
 
-- Configured releases send bounded usage analytics, including unknown-only sanitised error messages; source builds without configuration do not. Firefox requires native optional technical consent. See [Privacy](PRIVACY.md). Edits live in `chrome.storage` on your
+- Configured releases send bounded usage analytics, including unknown-only fixed diagnostic descriptions; source builds without configuration do not. Firefox requires native optional technical consent. See [Privacy](PRIVACY.md). Edits live in `chrome.storage` on your
   machine and travel only through the MCP mode you configure. Cloud is selected
   on fresh installs; Local keeps MCP traffic on `127.0.0.1`. Full details:
   [PRIVACY.md](./PRIVACY.md).
