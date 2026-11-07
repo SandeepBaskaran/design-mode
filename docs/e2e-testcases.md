@@ -646,7 +646,7 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 ## Phase F — Firefox parity (runtime `IS_FIREFOX` divergences)
 
 Same `dist/` as Chrome — build once (`npm run build:extension`), then load it in
-Firefox 121+ via `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on**
+Firefox 140+ via `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on**
 → pick `packages/extension/dist/manifest.json` (or `npm run dev:firefox`, which
 launches Firefox with the add-on via `web-ext run`). Open a non-trivial site and
 re-walk the core phases; this phase only lists the **Firefox-specific** deltas —
