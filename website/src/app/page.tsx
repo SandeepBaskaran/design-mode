@@ -10,7 +10,6 @@ import {
   faqSchema,
   softwareApplicationSchema,
 } from "@/components/site/json-ld";
-// import { Testimonials } from "@/components/blocks/testimonials"; // hidden until real quotes
 
 const homeTitle = "Design Mode — Browser visual editor for AI coding agents";
 const homeDescription =
@@ -59,7 +58,6 @@ export default function Home() {
       </Background>
       <AgentWorkflow />
       <PanelAnatomy />
-      {/* <Testimonials /> — hidden until we have real quotes */}
       <FAQ />
       <BrowserHandoff />
       <Background variant="bottom">
