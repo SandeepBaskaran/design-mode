@@ -10,6 +10,9 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Guided Send to Agent setup explains the missing configuration, local server,
+  relay or agent step without discarding edits. Acknowledgement means the handoff
+  was staged, not that source changes were implemented.
 - Analytics: `dm_setup_popup` records how the Send to Agent setup window is
   used (shown, step clicked, resolved, dismissed) with the reason it opened and
   how long it took. Send to Agent events carry `trigger` (toolbar or setup
@@ -21,6 +24,9 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Firefox now requires desktop version 140 or later for native data-collection
+  consent. Firefox 139 and earlier cannot install or run this release. Optional
+  technical analytics can be denied without disabling editing or clipboard export.
 - Analytics schema v5. A command now sends one event with its outcome instead
   of an `attempt` event and an outcome; a screenshot's result is its clipboard
   or download event; style edits are sent once per property per gesture;
@@ -37,6 +43,22 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Cloud/Self-hosted readiness now requires the relay's existing SSE hello, rather
+  than a saved token and a running worker. Failed/refused/auth-rejected streams
+  remain disconnected; idle streams expire, and normal reconnects have only a
+  bounded handshake grace. No mutation is automatically replayed.
+- Firefox optional technical analytics is checked independently of the required
+  location category. Missing or failed native permission reads fail closed;
+  revoke/grant changes invalidate pending events and never replay them.
+- Rich-text editing sanitises page-derived HTML, preserves page-owned embedded
+  elements, and makes text-owning divs editable. Layers reveals the canvas selection.
+- Resize previews show the same CSS size that is committed, including content-box
+  padding and borders. Updated the homepage walkthrough and poster.
+- Unknown-only failure messages reject more recognised multiline and file-path
+  patterns, and non-failure outcomes cannot carry message text. Pattern redaction
+  still cannot recognise arbitrary private prose; privacy sign-off remains a
+  release gate, not a universal-redaction claim.
+- CLI MCP client metadata now advertises the current source version instead of 0.1.0.
 - `dm_changes_export` had gone quiet after 16 October, when Copy as Prompt
   stopped reporting it, and the CSS export shortcut that remained reported
   before the copy happened, without its format. It now reports whether the copy
