@@ -279,10 +279,7 @@ function propCategory(prop: string): string {
 
 const ERROR_MESSAGE_MAX = 200;
 
-// Short, human-readable reason for a failure, safe to send: first line only,
-// URLs / emails / tokens / ids / file paths / quoted text removed, ASCII only,
-// capped at 200 characters. Idempotent, so it is applied again when the event
-// is bounded. Accepts a string, an Error, or a command response.
+// Pattern redaction cannot recognise arbitrary unquoted private text; see ANALYTICS.md.
 export function sanitizeErrorMessage(value: unknown): string {
   let text = '';
   if (typeof value === 'string') text = value;
@@ -294,7 +291,7 @@ export function sanitizeErrorMessage(value: unknown): string {
     }
   }
   if (!text) return '';
-  return (text.slice(0, 1000).split(/\r?\n/)[0] || '')
+  return (text.slice(0, 1000).split(/[\r\n\u2028\u2029]/)[0] || '').normalize('NFKC')
     .replace(/\b[a-z][a-z0-9+.-]{1,30}:\/\/[^\s"'<>)\]]*/gi, '[url]')
     .replace(/\b(?:data|blob|javascript|mailto):[^\s"'<>)\]]*/gi, '[url]')
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
@@ -302,8 +299,9 @@ export function sanitizeErrorMessage(value: unknown): string {
     .replace(/\b(?:phc|dm|sk|pk|ghp|gho|xox[a-z])[-_][A-Za-z0-9_-]{6,}/g, '[token]')
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '[id]')
     .replace(/\b[A-Za-z0-9_-]{24,}\b/g, '[token]')
-    .replace(/[A-Za-z]:\\[^\s"'<>]*/g, '[path]')
-    .replace(/(^|[\s("'=])~?\/(?:[\w.@%+-]+\/)+[\w.@%+-]*/g, '$1[path]')
+    .replace(/[A-Za-z]:[\\/][^\s"'<>]*/g, '[path]')
+    .replace(/\\\\[^\s"'<>]+/g, '[path]')
+    .replace(/(^|[\s("'=])~?\/[^\s"'<>]*/g, '$1[path]')
     .replace(/"[^"]*"|`[^`]*`|(^|[^A-Za-z0-9])'[^']*'/g, (_m, lead) => (lead || '') + '[text]')
     .replace(/[^\x20-\x7E]/g, '?')
     .replace(/\s+/g, ' ')
@@ -361,7 +359,7 @@ export function styleAnalyticsList(changes: unknown): Array<Pick<AnalyticsEvent,
 }
 
 export function nativeConsentAllowed(firefox: boolean, permissions: DataPermissions): boolean {
-  return !firefox || permissions.data_collection === undefined || permissions.data_collection.includes('locationInfo');
+  return !firefox || (Array.isArray(permissions?.data_collection) && permissions.data_collection.includes('technicalAndInteraction'));
 }
 
 export function distributionHint(config: AnalyticsConfig, manifest: { update_url?: string }): string {
@@ -397,7 +395,7 @@ export function boundedEvent(value: unknown): AnalyticsEvent | null {
   if (pageSchemes.includes(e.page_scheme || '')) result.page_scheme = e.page_scheme;
   if (errorCodes.includes(e.error_code || '')) result.error_code = e.error_code;
   // Free text only for failures nothing could classify. Known codes carry no message.
-  if (result.error_code === 'unknown' && typeof e.error_message === 'string') {
+  if (result.outcome === 'failure' && result.error_code === 'unknown' && typeof e.error_message === 'string') {
     const message = sanitizeErrorMessage(e.error_message);
     if (message) result.error_message = message;
   }

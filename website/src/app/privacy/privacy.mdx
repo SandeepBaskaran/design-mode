@@ -1,8 +1,11 @@
 ## The short version
 
 Design Mode edits the page rendered in your browser and records a local change
-session. Release builds send usage analytics to PostHog without an opt-in and
-without a Settings off-switch. An unconfigured source build sends nothing.
+session. Configured release builds send usage analytics to PostHog without an
+in-extension Settings off-switch. Chrome and Safari have no separate in-extension opt-in. Firefox 140+ requires its optional technical-and-interaction permission;
+denial or revocation does not disable editing or clipboard export. A missing or
+unavailable native permission list sends nothing. Firefox 139 and earlier cannot
+install or run this release. An unconfigured source build sends nothing.
 Events do not include page content or edits. A fresh install selects Cloud mode,
 but it does **not** contact the hosted relay until you choose **Connect to
 Cloud** and create an anonymous device credential.
@@ -166,8 +169,11 @@ that access.
 
 Design Mode is free and MIT-licensed, with no paid version of the extension. It
 is a self-sustained project focused on features people regularly use. Release
-builds send usage analytics to PostHog without an opt-in and without a Settings
-off-switch. An unconfigured source build sends nothing. Analytics does not
+builds send usage analytics to PostHog without an in-extension Settings
+off-switch. Chrome and Safari have no separate in-extension opt-in. Firefox 140+ requires its optional technical-and-interaction permission;
+denial or revocation does not disable editing or clipboard export. A missing or
+unavailable native permission list sends nothing. Firefox 139 and earlier cannot
+install or run this release. An unconfigured source build sends nothing. Analytics does not
 change what the editor can do. Coding-agent subscriptions, API usage and
 self-hosting costs are separate.
 

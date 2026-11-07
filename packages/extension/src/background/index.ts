@@ -32,6 +32,9 @@ const analytics = createAnalytics(analyticsConfig, {
 browser.permissions.onRemoved.addListener(() => {
   if (IS_FIREFOX) analytics.stop();
 });
+browser.permissions.onAdded.addListener(() => {
+  if (IS_FIREFOX) analytics.refresh();
+});
 const commentStore = createCommentStore(browser.storage.local, browser.storage.session || browser.storage.local);
 const sessionStore = createSessionStore(browser.storage.session || browser.storage.local);
 const tabStates = new Map<number, { enabled: boolean; connected: boolean }>();

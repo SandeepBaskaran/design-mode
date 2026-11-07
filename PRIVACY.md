@@ -3,7 +3,9 @@
 Design Mode's editor runs in your browser. Configured Cloud or Self-hosted MCP
 connections can transmit page data, edits and tool results through the selected
 relay; Local MCP uses your machine. Release builds send usage analytics to
-PostHog without an opt-in. Those events do not include page content or edits.
+PostHog as described below. Firefox requires native optional technical consent;
+Chrome and Safari have no separate in-extension opt-in. The unknown-error
+message exception and its handling are described below.
 An unconfigured source build sends nothing. The flows and exceptions are
 described below.
 
@@ -112,7 +114,7 @@ data, and it only travels over the connection you've already opted into.
 
 ### Extension usage analytics (on when the build is configured)
 
-A release build sends usage events to PostHog without a separate opt-in. It is not a paid feature and it does not change what the editor can do. The event names the browser package as `chrome`, `firefox` or `safari`.
+A configured release build sends usage events to PostHog. Firefox requires its optional technical-and-interaction permission; Chrome and Safari have no separate in-extension opt-in. It is not a paid feature and it does not change what the editor can do. The event names the browser package as `chrome`, `firefox` or `safari`.
 
 Release builds include the PostHog project and send these events without a settings opt-in. An ordinary source build with no project configuration still sends nothing. Project 629592 is the extension-only destination. The public project token is embedded in the release packages, not printed in documentation. See [ANALYTICS.md](packages/extension/ANALYTICS.md). This source does not verify the receiver's billing or retention settings.
 
@@ -133,7 +135,8 @@ as `https`, `localhost`, `file` or `chrome_internal`, never the page URL.
 **When Design Mode cannot classify a failure (error code `unknown`), the event
 also carries a short sanitised message**: the first line only, at most 200
 characters, with URLs, e-mail addresses, tokens, identifiers, file paths and
-quoted text replaced and non-ASCII characters removed. A failure that has a
+recognised quoted text replaced, Unicode normalised and remaining non-ASCII
+characters replaced. A failure that has a
 known error code carries no message. The message is there so the error codes can
 be improved; it is not a log of your activity.
 When Send to Agent cannot run because setup is incomplete, the panel records the
@@ -172,15 +175,18 @@ The sole sender is the background context. Events are best-effort, capped at 60
 per minute per live background context and four in flight; there is no disk event queue,
 retry, or beacon. Closing or restarting that context
 can lose in-flight events and resets its in-memory rate limit. The release build has no
-Settings off-switch. On Firefox, sending continues only when the browser does
-not report a data-collection permission list, or that list includes
-`locationInfo`. A reported list without `locationInfo` sends nothing. Already
-received requests cannot be recalled.
+Settings off-switch. On Firefox 140 or later, sending requires the granted optional
+`technicalAndInteraction` data-collection permission. An absent permission list,
+denial or permission API failure sends nothing. Revocation stops the sender and
+invalidates pending work; granting permission allows only new events, not replay.
+Editing and clipboard export do not require analytics consent. Already received
+requests cannot be recalled.
 
 Firefox declares `locationInfo` as required data collection and
 `technicalAndInteraction` as optional. That declaration covers analytics
 metadata, not a new authorization to transmit page or MCP content. The minimum
-supported Firefox version remains 121.
+supported Firefox desktop version is 140. Versions 139 and earlier cannot install
+or run this release; existing settings are not reset.
 
 No account, project, retention settings or billing plan is provisioned by this
 code. This source does not verify the receiver's retention, deletion, region or

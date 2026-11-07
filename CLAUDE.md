@@ -43,8 +43,8 @@ tool), these rules are read automatically at session start.
   browsers' keys: Chrome uses `side_panel` + `sidePanel` permission +
   `background.service_worker`; Firefox uses `sidebar_action` +
   `background.scripts` + `browser_specific_settings` (Gecko id
-  `sandeepbaskaran98@gmail.com`, `strict_min_version` 121.0, and
-  `data_collection_permissions: { required: ["none"] }` — AMO rejects new
+  `sandeepbaskaran98@gmail.com`, `strict_min_version` 140.0, and
+  `data_collection_permissions: { required: ["locationInfo"], optional: ["technicalAndInteraction"] }` — AMO rejects new
   submissions without it). The
   `background` block carries **both** `service_worker` and `scripts`
   (each browser picks its own). Don't split this into per-target
@@ -80,9 +80,8 @@ tool), these rules are read automatically at session start.
   bundle integrity → manifest sanity (asserts BOTH Chrome + Firefox
   keys) → `web-ext lint` (0 errors required; the ~30 warnings —
   `innerHTML`, Chrome-only `UNSUPPORTED_API`, the ignored `sidePanel`
-  permission, `BACKGROUND_SERVICE_WORKER_IGNORED`, and the advisory
-  `KEY_FIREFOX_UNSUPPORTED_BY_MIN_VER` for `data_collection_permissions`
-  — are expected) →
+  permission and `BACKGROUND_SERVICE_WORKER_IGNORED` are expected; review
+  other warnings rather than pre-accepting consent/minimum-version warnings) →
   MCP local checks → build local MCP → bundle integrity → build
   website → export integrity. CI uses the same command.
 - **Two store zips, identical content, distinct names** (both under

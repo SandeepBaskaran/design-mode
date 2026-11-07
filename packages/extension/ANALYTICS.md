@@ -56,7 +56,7 @@ returns nothing, and `capture` does not call it). The `dm-analytics-consent-v1`
 key and its helpers (`consentMatches`, `persistAnalyticsDisabled`) are leftovers
 from the earlier opt-in design and are not part of the send path. Analytics does
 not enable MCP, and MCP does not enable analytics.
-The same merged manifest serves Chrome and Firefox; minimum Firefox stays 121.
+The same merged manifest serves Chrome and Firefox; minimum Firefox desktop is 140.
 No new permission is used to inspect installation source. There is no reliable
 universal official/fork/store detection; IDs and packaging can be copied.
 
@@ -210,7 +210,7 @@ restart loses in-memory counts and events.
 There is no in-product opt-out. On Firefox, revoking the data-collection
 permission stops the live sender (any permission removal does), aborts in-flight
 requests and invalidates pending async checks; no queue exists to flush, and a
-reported permission list without `locationInfo` sends nothing. Already delivered
+missing permission list or one without optional `technicalAndInteraction` sends nothing. Already delivered
 events cannot be recalled. Removing the extension removes the installation ID.
 
 ## Failure text
@@ -222,6 +222,18 @@ file paths and quoted text replaced, ASCII only and at most 200 characters. It i
 applied where the event is built and again in `boundedEvent`, so a classified
 failure cannot carry text. Use the messages to teach the classifier new codes, then
 the volume of `unknown` should fall.
+
+### Release-blocking redaction limitation
+
+Pattern replacement is not a guarantee that arbitrary unquoted private text is
+removed. The unknown-message inputs originate in panel command responses and
+thrown transport/browser errors; a page-derived or unexpected exception can include
+unrecognised text. The bounded payload has no separate raw-page fields, but this
+free-text exception needs an explicit privacy handling decision and matching store
+disclosures before a configured artefact is published. Synthetic adversarial tests
+and a native network review are required; a passing known-pattern test is not
+universal redaction evidence. Do not remove the chosen unknown-only messages or
+quietly broaden the privacy promise to resolve this gate.
 
 ## Setup popup funnel
 
@@ -254,8 +266,13 @@ for failures the extension cannot classify. There is no separate Usage analytics
 section in the extension Settings view. In Firefox, `permissions.getAll().data_collection` presence
 feature-detects native support, per Mozilla's guidance (no UA version guess).
 The manifest declares `data_collection_permissions.required: ["locationInfo"]` and
-`optional: ["technicalAndInteraction"]`; `nativeConsentAllowed()` requires `locationInfo`
-when `data_collection` is present. `strict_min_version` remains 121.
+`optional: ["technicalAndInteraction"]`; `nativeConsentAllowed()` requires granted optional `technicalAndInteraction`.
+`permissions.getAll()` reports granted optional data categories: required
+`locationInfo` is not a substitute and need not appear in that list. Missing lists
+and permission API failures fail closed. `strict_min_version` is 140; Firefox 139
+and earlier cannot install or run this release. Permission additions refresh the
+sender, removals stop it, and every new capture rechecks the optional permission.
+Editor and clipboard actions remain available without analytics consent.
 
 ## Verification
 
@@ -279,7 +296,7 @@ HEADFUL=1 CHROME_BIN='/path/to/Chrome for Testing' node packages/extension/tests
 
 Analytics tests run as part of the standard extension test globs. Tests cover
 invalid/default config, payload scrubbing, zero fetch calls without gates, changed
-project, Chrome/native Firefox/121 fallback, denied native consent,
+project, Chrome/native Firefox 140, independent optional denial, missing/rejected API,
 pending-check invalidation, in-flight abort, no retry, rate cap, restart,
 and merged-manifest retention. A configured transport test uses a real loopback
 HTTP receiver via an injected fetch adapter: its only destination is 127.0.0.1;

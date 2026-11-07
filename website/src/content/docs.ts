@@ -31,11 +31,11 @@ export const docs: DocPage[] = [
       "browser feature parity",
     ],
     intro:
-      "Design Mode runs on Chromium browsers (Chrome, Edge, Brave, Arc), Firefox 121+ and Safari on Mac. Everything core is available across browsers; a few extras depend on browser APIs, and Safari needs a short manual setup.",
+      "Design Mode runs on Chromium browsers (Chrome, Edge, Brave, Arc), Firefox 140+ and Safari on Mac. Everything core is available across browsers; a few extras depend on browser APIs, and Safari needs a short manual setup.",
     sections: [
       {
         heading: "Supported browsers",
-        body: "Chromium browsers with Manifest V3 side panels — Chrome, Edge, Brave, Arc — install from the Chrome Web Store and render the editor in the right-side panel. Firefox (121+) installs from Firefox Add-ons (AMO) and renders in the native sidebar. Safari on Mac installs manually from designmode-for-safari.zip on the latest GitHub release (https://github.com/SandeepBaskaran/design-mode/releases/latest); the setup takes under 30 seconds. It's a desktop-primary experience.",
+        body: "Chromium browsers with Manifest V3 side panels — Chrome, Edge, Brave, Arc — install from the Chrome Web Store and render the editor in the right-side panel. Firefox (140+) installs from Firefox Add-ons (AMO) and renders in the native sidebar. Safari on Mac installs manually from designmode-for-safari.zip on the latest GitHub release (https://github.com/SandeepBaskaran/design-mode/releases/latest); the setup takes under 30 seconds. It's a desktop-primary experience.",
       },
       {
         heading: "Identical on every browser",

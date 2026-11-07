@@ -59,7 +59,7 @@ export const softwareApplicationSchema = {
   applicationCategory: "DesignApplication",
   applicationSubCategory: "BrowserExtension",
   softwareRequirements:
-    "Desktop Chromium browser with Manifest V3 side-panel support, Firefox 121+, or Safari on macOS with Web Inspector",
+    "Desktop Chromium browser with Manifest V3 side-panel support, Firefox 140+, or Safari on macOS with Web Inspector",
   url: SITE_URL,
   downloadUrl: [CHROME_URL, FIREFOX_URL, SAFARI_URL],
   installUrl: [CHROME_URL, FIREFOX_URL, SAFARI_URL],

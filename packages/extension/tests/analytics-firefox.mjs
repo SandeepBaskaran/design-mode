@@ -28,7 +28,7 @@ try {
     manifest_version: 3, name: 'Local analytics consent probe', version: '1.0',
     permissions: ['storage'], host_permissions: ['http://127.0.0.1/*'],
     background: { scripts: ['probe.js'] },
-    browser_specific_settings: { gecko: { id: 'dm-analytics-probe@example.test', strict_min_version: '121.0', data_collection_permissions: { required: ['none'], optional: ['technicalAndInteraction', 'locationInfo'] } } },
+    browser_specific_settings: { gecko: { id: 'dm-analytics-probe@example.test', strict_min_version: '140.0', data_collection_permissions: { required: ['locationInfo'], optional: ['technicalAndInteraction'] } } },
   }));
   buildSync({ stdin: { resolveDir: pkg, loader: 'ts', contents: `
     import { createAnalytics, ANALYTICS_CONSENT_KEY, parseAnalyticsConfig } from './src/platform/analytics';
@@ -36,10 +36,11 @@ try {
       const config=parseAnalyticsConfig({host:'https://analytics.invalid',key:'phc_local_test_only'});
       const initial=await browser.permissions.getAll();
       const analytics=createAnalytics(config,{readConsent:async()=>(await browser.storage.local.get(ANALYTICS_CONSENT_KEY))[ANALYTICS_CONSENT_KEY],permissions:()=>browser.permissions.getAll(),firefox:true,manifest:{version:'1.0'},fetch:async()=>{calls++;return new Response('{}')}});
+      await browser.permissions.remove({data_collection:['technicalAndInteraction']});
       await analytics.capture({feature:'inspect',outcome:'attempt'});
       if(calls)throw Error('default egress');
-      if(!Array.isArray(initial.data_collection))throw Error('installed Firefox lacks native data consent; fallback covered separately');
-      await browser.permissions.remove({data_collection:['technicalAndInteraction', 'locationInfo']});
+      if(!Array.isArray(initial.data_collection))throw Error('Firefox 140 native data consent required; missing permissions fail closed');
+      await browser.permissions.remove({data_collection:['technicalAndInteraction']});
       await browser.storage.local.set({[ANALYTICS_CONSENT_KEY]:{...config,version:2,enabled:true}});
       await analytics.capture({feature:'inspect',outcome:'attempt'});
       if(calls)throw Error('native denial bypass');

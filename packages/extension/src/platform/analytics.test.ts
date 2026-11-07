@@ -107,10 +107,13 @@ test('allowlist strips page content, URLs, selectors, tokens and raw errors', ()
   assert.equal(classifyErrorCode(undefined), 'unavailable');
 });
 
-test('Chrome, native Firefox denial/grant, Firefox 121 fallback', () => {
+test('Firefox 140 optional technical consent is required independently of required location permission', () => {
   assert.equal(nativeConsentAllowed(false, {}), true);
-  assert.equal(nativeConsentAllowed(true, {}), true);
-  assert.equal(nativeConsentAllowed(true, { data_collection: [] }), false);
+  for (const permissions of [{}, { data_collection: [] }, { data_collection: ['locationInfo'] }]) {
+    assert.equal(nativeConsentAllowed(true, permissions), false);
+  }
+  // getAll reports granted optional categories, not necessarily required ones.
+  assert.equal(nativeConsentAllowed(true, { data_collection: ['technicalAndInteraction'] }), true);
   assert.equal(nativeConsentAllowed(true, { data_collection: ['technicalAndInteraction', 'locationInfo'] }), true);
 });
 
@@ -119,7 +122,7 @@ test('distribution is explicitly only a hint; no ID or management permission', (
   assert.equal(distributionHint(config, { update_url: 'https://clients2.google.com/service/update2/crx' }), 'published_hint');
   assert.equal(distributionHint({ ...config, distribution: 'fork' }, {}), 'fork');
   const manifest = JSON.parse(readFileSync(new URL('../../public/manifest.json', import.meta.url), 'utf8'));
-  assert.equal(manifest.browser_specific_settings.gecko.strict_min_version, '121.0');
+  assert.equal(manifest.browser_specific_settings.gecko.strict_min_version, '140.0');
   assert.equal(manifest.browser_specific_settings.gecko.data_collection_permissions.required[0], 'locationInfo');
   assert.ok(manifest.background.scripts && manifest.background.service_worker && manifest.sidebar_action && manifest.side_panel);
   assert.equal(manifest.permissions.includes('management'), false);
@@ -130,7 +133,8 @@ test('no-egress: absent config and Firefox data-permission denial', async () => 
   const fetch = async () => { sends++; throw new Error('Network forbidden'); };
   for (const analytics of [
     createAnalytics(null, { ...base, fetch }),
-    createAnalytics(config, { ...base, fetch, firefox: true, permissions: async () => ({ data_collection: [] }) }),
+    ...[{}, { data_collection: [] }, { data_collection: ['locationInfo'] }].map(permissions => createAnalytics(config, { ...base, fetch, firefox: true, permissions: async () => permissions })),
+    createAnalytics(config, { ...base, fetch, firefox: true, permissions: async () => { throw Error('permission API unavailable'); } }),
   ]) await analytics.capture(event);
   assert.equal(sends, 0);
 });
@@ -324,4 +328,62 @@ test('dropped_count rides on the next event that is sent, then resets', async ()
   assert.equal(received.slice(0, 4).some(r => 'dropped_count' in r.properties), false);
   await analytics.capture({ feature: 'inspect', outcome: 'attempt' });
   assert.equal('dropped_count' in received[5].properties, false);
+});
+
+
+test('Firefox consent revocation during identity resolution suppresses fetch; explicit grant refreshes without a queue', async () => {
+  let grants = ['technicalAndInteraction'];
+  let release!: () => void;
+  let sends = 0;
+  const identity = new Promise<void>(resolve => { release = resolve; });
+  const analytics = createAnalytics(config, {
+    ...base, firefox: true, permissions: async () => ({ data_collection: grants }),
+    storage: { get: async () => { await identity; return {}; }, set: async () => {} },
+    fetch: async () => { sends++; return new Response(); },
+  });
+  const pending = analytics.capture(event);
+  await new Promise(resolve => setImmediate(resolve));
+  grants = ['locationInfo'];
+  analytics.stop(); release(); await pending;
+  assert.equal(sends, 0);
+  analytics.refresh(); await analytics.capture(event);
+  assert.equal(sends, 0);
+  grants = ['technicalAndInteraction'];
+  analytics.refresh(); await analytics.capture(event);
+  assert.equal(sends, 1);
+});
+
+test('Firefox grant after denial sends only the new action; permission rejection creates no identity', async () => {
+  let grants: string[] = ['locationInfo'];
+  let sends = 0, identities = 0;
+  const analytics = createAnalytics(config, {
+    ...base, firefox: true, permissions: async () => ({ data_collection: grants }),
+    storage: { get: async () => { identities++; return {}; }, set: async () => {} },
+    fetch: async () => { sends++; return new Response(); },
+  });
+  await analytics.capture(event);
+  assert.equal(sends, 0); assert.equal(identities, 0);
+  grants = ['technicalAndInteraction'];
+  analytics.refresh(); await analytics.capture(event);
+  assert.equal(sends, 1); assert.equal(identities, 1);
+});
+
+
+test('Firefox grant and revoke events refresh or stop the background sender', () => {
+  const source = readFileSync(new URL('../background/index.ts', import.meta.url), 'utf8');
+  assert.match(source, /permissions\.onRemoved\.addListener\([\s\S]*?IS_FIREFOX\) analytics\.stop\(\)/);
+  assert.match(source, /permissions\.onAdded\.addListener\([\s\S]*?IS_FIREFOX\) analytics\.refresh\(\)/);
+});
+
+
+test('sanitisation bounds recognised multiline and path patterns without claiming arbitrary-text redaction', () => {
+  for (const separator of ['\r', '\n', '\u2028', '\u2029']) assert.equal(sanitizeErrorMessage('first' + separator + 'synthetic-private-marker'), 'first');
+  for (const path of ['C:/Users/synthetic/private.txt', 'C:\\Users\\synthetic\\private.txt', '\\\\synthetic-server\\share\\private.txt', '/synthetic-private']) {
+    assert.equal(sanitizeErrorMessage('Failed at ' + path).includes('synthetic'), false, path);
+  }
+  const normalised = sanitizeErrorMessage('Failed https：／／synthetic.invalid/private');
+  assert.equal(normalised.includes('synthetic'), false);
+  for (const outcome of ['command_acknowledged', 'state', 'completed', 'shown']) {
+    assert.equal(boundedEvent({ feature: 'inspect', outcome, error_code: 'unknown', error_message: 'synthetic-private-marker' })?.error_message, undefined);
+  }
 });

@@ -51,7 +51,7 @@ for (const firefox of [false, true]) {
     assert.equal(JSON.stringify(received).includes('private'), false);
     const count = received.length;
     if (firefox) {
-      permissions = ['technicalAndInteraction'];
+      permissions = ['locationInfo'];
       await analytics.capture(input); assert.equal(received.length, count);
     }
     analytics.stop();

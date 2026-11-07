@@ -27,7 +27,7 @@ function harness() {
     remove: async (keys: string | string[]) => { for (const key of [keys].flat()) delete records[key]; },
   };
   const browser = {
-    permissions: { onRemoved: event },
+    permissions: { onRemoved: event, onAdded: event },
     runtime: { getManifest: () => ({}), id: 'test-extension', getURL: (path: string) => `chrome-extension://test-extension/${path}`,
       onInstalled: event, onConnect: event,
       onMessage: { addListener: (fn: typeof listener) => { listener = fn; } } },

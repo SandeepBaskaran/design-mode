@@ -121,9 +121,8 @@ Chrome-only `side_panel` key + `sidePanel` permission. Steps:
    Chrome-only `UNSUPPORTED_API` refs (runtime-gated, dormant on
    Firefox), the ignored `sidePanel` permission
    (`MANIFEST_PERMISSIONS`), `BACKGROUND_SERVICE_WORKER_IGNORED`
-   (Firefox confirming it uses `background.scripts`), and
-   `KEY_FIREFOX_UNSUPPORTED_BY_MIN_VER` for `data_collection_permissions`
-   (advisory — the key is required by AMO and ignored by older Firefox).
+   (Firefox confirming it uses `background.scripts`), and any other warnings only after reviewing them against Firefox 140 support.
+   Do not pre-accept a consent-key/minimum-version warning.
 2. Upload `packages/extension/design-mode-addon.zip` at
    <https://addons.mozilla.org/developers/> → "Submit a New Version".
    (Identical content to the Chrome zip; the `-addon` name is just for
@@ -131,19 +130,23 @@ Chrome-only `side_panel` key + `sidePanel` permission. Steps:
    "Load Temporary Add-on".)
 3. The Gecko id is `sandeepbaskaran98@gmail.com`
    (`browser_specific_settings.gecko.id`) with `strict_min_version`
-   `121.0` (MV3 background event page + sidebar). Keep the id stable
+   `140.0` (native data-collection consent + MV3 sidebar). Firefox 139 and
+   earlier cannot install or run 3.2.0. Keep the id stable
    across versions — it is the add-on's identity.
 4. Review the manifest's `browser_specific_settings.gecko.data_collection_permissions`
    and store disclosures against [PRIVACY.md](PRIVACY.md) for the exact artifact.
-   Required `none` is paired with optional `technicalAndInteraction` and
-   `locationInfo` for consent-gated analytics; it does **not** mean the extension
-   is localhost-only or never transmits data. Configured Cloud/Self-hosted MCP
-   carries user-directed page/tool data and needs a separate disclosure review.
-   Older Firefox ignores the native consent key; the minimum stays `121.0` and
-   those versions use the in-extension analytics opt-in. See
-   [ANALYTICS.md](packages/extension/ANALYTICS.md) before distributing a configured
-   build. The normal packaging commands do not load `.env.analytics.local`;
-   do not mistake a local configured test build for the packaged release.
+   Required `locationInfo` covers the disclosed IP-derived location; optional
+   `technicalAndInteraction` covers technical/interaction analytics and unknown-only
+   sanitised errors. The sender requires the optional grant, fails closed when
+   native permissions are absent/unavailable, and stops on revocation. Core editing
+   and clipboard export still work when optional analytics is denied. Firefox's
+   native install/update consent and the real optional-denial/re-grant flow must be
+   verified on the exact artefact; required location alone must never enable analytics.
+   Configured MCP page/tool transfer is a separate disclosure review, not authorised
+   by an analytics category. Confirm its native/store disclosure before publication.
+   The source no longer supports Firefox 139 or earlier and has no fallback opt-in UI.
+   See [ANALYTICS.md](packages/extension/ANALYTICS.md). Normal packaging commands do not
+   load `.env.analytics.local`; configured release packaging is a distinct gate.
 5. Expect **manual review**: `<all_urls>` host access + `scripting`
    are broad permissions and trigger human review. AMO may request the
    build steps (`npm ci && npm run build:extension`).
