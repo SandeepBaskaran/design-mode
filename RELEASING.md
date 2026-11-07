@@ -36,11 +36,13 @@ A version bump touches multiple files — list them explicitly when
 recommending the bump:
 
 - `package.json` (root + every workspace that ships an artifact:
-  `packages/extension`, `packages/mcp-local`, `packages/mcp-cloud`,
+  `packages/extension`, `packages/cli`, `packages/mcp-local`, `packages/mcp-cloud`,
   `packages/shared`, `website` if relevant).
 - `packages/extension/public/manifest.json` → `version` field (the
   single merged manifest that serves both Chrome and Firefox).
 - `packages/shared/src/constants.ts` → `APP_VERSION`.
+- `packages/cli/src/remote.ts` and `packages/mcp-local/src/agent-cli.ts` → MCP client metadata.
+- Root `package-lock.json` → root and every workspace version; keep dependency resolutions unchanged.
 - `packages/mcp-local/src/bin/cli.ts`, `mcp-server.ts`, `owner-bridge.ts`,
   `websocket-server.ts` → any embedded version constants.
 - `packages/mcp-cloud/api/mcp.ts`, `api/extension/stream.ts`, and

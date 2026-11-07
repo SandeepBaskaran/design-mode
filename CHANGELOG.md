@@ -8,8 +8,12 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.2.0] — 2026-11-07
+
 ### Added
 
+- Standalone `@designmode-app/cli` 3.2.0 candidate bundles the Local engine and
+  supports Cloud, Local and Self-hosted MCP without workspace imports at runtime.
 - Guided Send to Agent setup explains the missing configuration, local server,
   relay or agent step without discarding edits. Acknowledgement means the handoff
   was staged, not that source changes were implemented.
@@ -27,7 +31,7 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - Firefox now requires desktop version 140 or later for native data-collection
   consent. Firefox 139 and earlier cannot install or run this release. Optional
   technical analytics can be denied without disabling editing or clipboard export.
-- Analytics schema v5. A command now sends one event with its outcome instead
+- Analytics retains schema-5 counting rules: a command sends one event with its outcome instead
   of an `attempt` event and an outcome; a screenshot's result is its clipboard
   or download event; style edits are sent once per property per gesture;
   `dm_mcp_state` is sent once a state has held for five seconds.
@@ -45,6 +49,8 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Removed unused feature cards, disabled template testimonials and their seven
+  images without changing active homepage sections.
 - Cloud/Self-hosted readiness now requires the relay's existing SSE hello, rather
   than a saved token and a running worker. Failed/refused/auth-rejected streams
   remain disconnected; idle streams expire, and normal reconnects have only a

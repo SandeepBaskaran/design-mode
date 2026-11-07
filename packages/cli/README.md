@@ -2,8 +2,8 @@
 
 Package: **`@designmode-app/cli`**. Executable: **`designmode-app`**.
 Cloud is the default; Local and Self-hosted use the same existing MCP contracts.
-The published npm version is **3.0.0** (`designmode-app` organisation). This
-source tree is 3.1.0; 3.1.0 has not been published to npm yet — see
+The last verified published npm version (7 November 2026) is **3.0.0** (`designmode-app` organisation). This
+source tree is 3.2.0; 3.2.0 has not been published to npm yet — see
 [Published package](#published-package).
 
 ## Build and try locally
@@ -17,7 +17,7 @@ node packages/cli/dist/cli.cjs --mode local tools
 npm pack --workspace @designmode-app/cli
 ```
 
-Install the resulting tarball with `npm install /path/to/designmode-app-cli-3.1.0.tgz`
+Install the resulting tarball with `npm install /path/to/designmode-app-cli-3.2.0.tgz`
 and use `designmode-app`. The executable bundles its dependencies and existing
 Local MCP engine; it does not import a workspace at runtime. Build from the
 monorepo, not from an unpacked tarball. Node 18 or newer is required.
@@ -145,7 +145,7 @@ These tests are not production-relay, real-Redis or real-browser certification.
 
 ## Published package
 
-`@designmode-app/cli@3.0.0` is the latest version on npm. `3.1.0` is the
+The last verified npm release (7 November 2026) is `@designmode-app/cli@3.0.0`. `3.2.0` is the
 version in this tree and is **not yet published**; publishing it (and any later
 version) requires an explicit `npm publish` from this directory after the
 version, README and tarball are checked, then update this section.

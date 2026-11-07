@@ -19,6 +19,18 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "3.2.0",
+    date: "2026-11-07",
+    headline: "Clearer agent setup, safer diagnostics and faithful editing.",
+    highlights: [
+      "Send to Agent explains missing setup steps without discarding your edits. A staged handoff is not a claim that the agent has implemented it.",
+      "Rich-text editing preserves embedded page elements, Layers reveals your selection, and resize previews match committed CSS sizes.",
+      "Cloud status waits for a fresh relay handshake instead of treating a saved token as a live connection.",
+      "Firefox now requires version 140 or later. Optional technical analytics can be denied or revoked while editing and Copy continue to work.",
+      "Unknown analytics failures use a fixed diagnostic description, never runtime prose. The CLI ships as a standalone package for Cloud, Local and Self-hosted connections.",
+    ],
+  },
+  {
     version: "3.1.0",
     date: "2026-10-16",
     headline: "Clearer usage analytics and a homepage demo.",

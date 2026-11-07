@@ -7,7 +7,7 @@ export async function runRemote(
   command: string, name: string | undefined, args: Record<string, unknown>,
   emit: (value: unknown) => void,
 ): Promise<number> {
-  const client = new Client({ name: 'designmode-app', version: '3.1.0' });
+  const client = new Client({ name: 'designmode-app', version: '3.2.0' });
   const abort = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const transport = new StreamableHTTPClientTransport(config.url, {
