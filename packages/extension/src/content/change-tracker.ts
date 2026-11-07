@@ -1562,6 +1562,8 @@ let transportMode: TransportMode = 'local';
 let cloudToken: string | null = null;
 let cloudBaseUrl: string | null = null;
 let sseAbort: AbortController | null = null;
+let cloudStreamConnected = false;
+let cloudLastActivityAt = 0;
 let unhandledMessageHandler: ((msg: any) => void) | null = null;
 let agentConnected = false;
 
@@ -1840,62 +1842,102 @@ async function connectLocal(port: number) {
   }
 }
 
+function setCloudStreamConnected(next: boolean) {
+  cloudLastActivityAt = next ? Date.now() : 0;
+  if (cloudStreamConnected === next) return;
+  cloudStreamConnected = next;
+  setAgentConnected(next && agentConnected);
+}
+
 async function runCloudStream() {
   let backoff = 1000;
   const controller = new AbortController();
   sseAbort = controller;
   const token = cloudToken;
   const baseUrl = cloudBaseUrl;
-  while (!controller.signal.aborted && token && baseUrl) {
-    // The extension may have been reloaded / disabled while the SSE was
-    // open. The `browser.runtime.id` check is the cheapest way to notice
-    // an orphan content script — we'd otherwise loop forever calling
-    // fetch and logging warnings.
+  const current = () => sseAbort === controller && !controller.signal.aborted;
+  while (current() && token && baseUrl) {
     if (typeof chrome !== 'undefined' && !browser.runtime?.id) {
       controller.abort();
+      setCloudStreamConnected(false);
       return;
     }
     let reconnectRequested = false;
     let openedAt = Date.now();
+    let helloReceived = false;
+    const attempt = new AbortController();
+    const abort = () => attempt.abort();
+    controller.signal.addEventListener('abort', abort, { once: true });
+    let idleTimer: ReturnType<typeof setTimeout>;
+    const armIdleTimer = (ms = 60_000) => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        if (current()) setCloudStreamConnected(false);
+        attempt.abort();
+      }, ms);
+    };
+    // A routine rollover may retain readiness only during its short handshake grace.
+    armIdleTimer(cloudStreamConnected ? 5_000 : 60_000);
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
       const resp = await fetch(`${baseUrl}/api/extension/stream`, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'text/event-stream' },
-        signal: controller.signal,
+        signal: attempt.signal,
       });
-      if (!resp.ok || !resp.body) {
+      if (!current()) { void resp.body?.cancel().catch(() => {}); return; }
+      if (!resp.ok || !resp.body || resp.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'text/event-stream') {
         if (resp.status === 401) { console.warn('[Design Mode] cloud stream auth failed'); return; }
         throw new Error(`stream status ${resp.status}`);
       }
-      console.debug('[Design Mode] cloud stream open');
-      backoff = 1000;
       openedAt = Date.now();
-      const reader = resp.body.getReader();
+      reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
-      while (true) {
+      while (current() && !attempt.signal.aborted) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (!current() || attempt.signal.aborted || done) break;
+        if (helloReceived) {
+          cloudLastActivityAt = Date.now();
+          armIdleTimer();
+        }
         buf += decoder.decode(value, { stream: true });
         let idx;
         while ((idx = buf.indexOf('\n\n')) >= 0) {
           const frame = parseSseFrame(buf.slice(0, idx));
           buf = buf.slice(idx + 2);
-          // Routine end-of-window signal from the relay: reconnect at once, no error.
-          if (frame.event === 'reconnect') reconnectRequested = true;
-          else handleSseFrame(frame);
+          if (frame.event === 'hello') {
+            let hello;
+            try { hello = JSON.parse(frame.data); } catch { continue; }
+            if (typeof hello?.version !== 'string' || !hello.version || hello.version.length > 64) continue;
+            helloReceived = true;
+            backoff = 1000;
+            setCloudStreamConnected(true);
+            armIdleTimer();
+          } else if (helloReceived) {
+            if (frame.event === 'reconnect') reconnectRequested = true;
+            else handleSseFrame(frame);
+          }
         }
       }
     } catch (err) {
-      if (controller.signal.aborted) return;
-      // Quieted from warn → debug. Reconnect storms during a redeploy or
-      // a brief network blip aren't worth crowding the console for.
+      if (!current()) return;
       console.debug('[Design Mode] cloud stream lost, retrying:', err);
+    } finally {
+      clearTimeout(idleTimer!);
+      controller.signal.removeEventListener('abort', abort);
+      attempt.abort();
+      void reader?.cancel().catch(() => {});
+      if (current() && (!reconnectRequested || Date.now() - openedAt < 5_000)) setCloudStreamConnected(false);
     }
-    if (controller.signal.aborted) return;
+    if (!current()) return;
     const plan = planReconnect({ reconnectRequested, streamOpenMs: Date.now() - openedAt, backoffMs: backoff });
     backoff = plan.backoffMs;
-    if (plan.delayMs > 0) await new Promise(r => setTimeout(r, plan.delayMs));
+    if (plan.delayMs > 0) await new Promise<void>(resolve => {
+      const finish = () => { clearTimeout(timer); controller.signal.removeEventListener('abort', finish); resolve(); };
+      const timer = setTimeout(finish, plan.delayMs);
+      controller.signal.addEventListener('abort', finish, { once: true });
+    });
   }
 }
 
@@ -1937,10 +1979,7 @@ export function sendRelayResponse(responseTo: string, payload: any) {
 
 export function isConnected() {
   if (transportMode === 'local') return ws?.readyState === WebSocket.OPEN;
-  // Cloud: best-effort signal. We consider ourselves connected if we have
-  // a token + a non-aborted stream worker. Real liveness requires a ping
-  // round-trip — out of scope for v1.
-  return !!cloudToken && !!sseAbort && !sseAbort.signal.aborted;
+  return cloudStreamConnected && !!sseAbort && !sseAbort.signal.aborted && Date.now() - cloudLastActivityAt < 60_000;
 }
 
 // Handle a screenshot request from the MCP server. Resolves to a base64 PNG
@@ -2058,5 +2097,6 @@ export function disconnectFromServer(opts?: { preserveSession?: boolean }) {
   if (!opts?.preserveSession) requestStopFeedback();
   dropLocalSocket();
   if (sseAbort) { try { sseAbort.abort(); } catch {} sseAbort = null; }
+  setCloudStreamConnected(false);
   setAgentConnected(false);
 }
