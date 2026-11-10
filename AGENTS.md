@@ -18,12 +18,24 @@ After `npm run verify` is green on the commit you intend to ship:
    attaches `design-mode-extension.zip` (Chrome),
    `design-mode-addon.zip` (Firefox) and `designmode-for-safari.zip`.
    It does not publish npm and it does not submit to any browser store.
-3. **npm (maintainer):** `npm whoami`, then
-   `npm publish /path/to/designmode-app-cli-<version>.tgz --access public`
-   (npm prompts for a 2FA OTP), or `cd packages/cli && npm publish --access public`.
-   Confirm with `npm view @designmode-app/cli version`. Prefer the
-   tarball you already installed and tested. See
-   [packages/cli/PUBLISHING.md](packages/cli/PUBLISHING.md).
+3. **npm (maintainer, browser approval, no OTP):**
+   - If `npm whoami` returns 401, the agent may run
+     `npm login --auth-type=web` in the background and hand the
+     maintainer the printed `https://www.npmjs.com/login?next=/login/cli/...`
+     link to approve in the browser.
+   - Give the maintainer this exact command to run in **his own
+     interactive Terminal** (no `--otp` flag):
+     `cd <dir of verified tarball> && npm publish designmode-app-cli-<version>.tgz --access public`.
+     npm opens or prints a browser link; he approves with his passkey
+     (Apple Passwords). Do not ask for an authenticator code, and never
+     put any code in chat.
+   - Agents cannot complete this step themselves: run without a TTY,
+     `npm publish` fails with `EOTP` even with `--auth-type=web`.
+   - The registry can take 1 to 2 minutes to list the new version. Then
+     confirm `dist-tags.latest` and that `dist.shasum` matches the
+     tested tarball (`npm view @designmode-app/cli@<version> dist.shasum`).
+   - Publish the tarball you already installed and tested. See
+     [packages/cli/PUBLISHING.md](packages/cli/PUBLISHING.md).
 4. **Firefox AMO:** upload `packages/extension/design-mode-addon.zip`
    and the reviewer source zip. Create the source zip with
    `npm run package:firefox-source`, which writes

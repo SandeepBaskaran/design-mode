@@ -19,8 +19,8 @@ Required release metadata:
 
 1. Run the repository verification and CLI tests; test the exact npm pack tarball and inspect its contents for secrets and unnecessary files.
 2. Confirm scope access, version, README, licence, supported Node versions and extension/relay compatibility.
-3. Authenticate in the maintainer's terminal with `npm login`; credentials and verification codes must not enter chat, source or logs.
-4. With explicit publication approval, run `npm publish --access public` from this package directory.
+3. Authenticate in the maintainer's terminal with `npm login --auth-type=web` (browser approval); credentials and verification codes must not enter chat, source or logs.
+4. With explicit publication approval, the maintainer runs `npm publish <verified tarball> --access public` (or `npm publish --access public` from this package directory) in his own interactive terminal, without `--otp`, and approves in the browser with his passkey.
 5. Read the published registry metadata back and smoke-test that exact released version.
 
 Future deployment scripts and release pipelines must preserve this scope and public access. Automated publishing requires a separately approved authentication/workflow setup; it does not replace the documented manual login procedure without agreement.

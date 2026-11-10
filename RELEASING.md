@@ -181,7 +181,7 @@ GitHub Release exists, publish the verified tarball yourself:
 ```sh
 npm whoami
 # Must be an account that can publish under the designmode-app scope.
-# npm will prompt for a 2FA OTP; do not paste the OTP into chat or commit it.
+# If it returns 401, sign in with browser approval: npm login --auth-type=web
 
 npm publish /path/to/designmode-app-cli-<version>.tgz --access public
 # Example for 3.2.0, after a local pack or the verified release tarball:
@@ -191,10 +191,18 @@ npm publish /path/to/designmode-app-cli-<version>.tgz --access public
 #   cd packages/cli && npm publish --access public
 ```
 
-Then confirm the registry:
+Run `npm publish` in the maintainer's own interactive Terminal without
+`--otp`. npm hands off to the browser and the maintainer approves with
+his passkey (Apple Passwords); no authenticator code is used. A
+non-interactive agent shell cannot finish this step (npm returns
+`EOTP`). The registry can take 1 to 2 minutes to list the version.
+
+Then confirm the registry, including that the published shasum matches
+the tested tarball:
 
 ```sh
 npm view @designmode-app/cli version
+npm view @designmode-app/cli@<version> dist.shasum
 ```
 
 See [packages/cli/PUBLISHING.md](packages/cli/PUBLISHING.md) for the
@@ -219,7 +227,7 @@ version and the pre-tag checklist above is complete.
    version.
 3. **(b)** Publish the CLI to npm yourself, as documented above:
    `npm whoami`, then `npm publish <verified-tarball> --access public`
-   (2FA OTP), then `npm view @designmode-app/cli version`.
+   (browser passkey approval, no OTP), then `npm view @designmode-app/cli version`.
 4. **(c)** Firefox AMO: upload `design-mode-addon.zip` plus the source
    archive from `npm run package:firefox-source`
    (`~/Downloads/design-mode-firefox-source-<version>.zip`).
