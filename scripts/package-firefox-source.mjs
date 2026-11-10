@@ -11,7 +11,10 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const archiveName = `design-mode-firefox-source-${version}`;
-const outputPath = join(homedir(), 'Downloads', `${archiveName}.zip`);
+// CI sets this so the reviewer archive is not written under ~/Downloads.
+const outputPath = process.env.DM_FIREFOX_SOURCE_ZIP
+  ? resolve(process.env.DM_FIREFOX_SOURCE_ZIP)
+  : join(homedir(), 'Downloads', `${archiveName}.zip`);
 
 const WORKSPACE_MANIFESTS = new Set([
   'packages/cli/package.json',

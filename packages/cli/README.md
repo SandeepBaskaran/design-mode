@@ -146,8 +146,8 @@ These tests are not production-relay, real-Redis or real-browser certification.
 ## Published package
 
 The last verified npm release (7 November 2026) is `@designmode-app/cli@3.0.0`. `3.2.0` is the
-version in this tree and is **not yet published**; publishing it (and any later
-version) requires an explicit `npm publish` from this directory after the
-version, README and tarball are checked, then update this section.
-Authenticate in the maintainer's terminal, then run `npm publish --access public`.
-Do not put tokens or one-time codes in the repository or chat.
+version in this tree and is **not yet published**. Pushing the `v*.*.*` tag runs
+`.github/workflows/release.yml`, which publishes this package with npm trusted
+publishing (GitHub Actions OIDC, no npm token) after the GitHub Release succeeds.
+See [PUBLISHING.md](PUBLISHING.md). Do not put tokens or one-time codes in the
+repository or chat.

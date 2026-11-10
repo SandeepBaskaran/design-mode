@@ -4,6 +4,11 @@
   "private": false,
   "description": "Cloud-first agent CLI for Design Mode MCP: Cloud, Local and Self-hosted",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SandeepBaskaran/design-mode.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "designmode-app": "dist/cli.cjs"
   },

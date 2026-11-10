@@ -3,7 +3,9 @@
 This archive is the minimum source needed to reproduce the Firefox
 add-on (`design-mode-addon.zip`) for [AMO](https://addons.mozilla.org/)
 review. It is produced from a clean git tree with
-`npm run package:firefox-source`.
+`npm run package:firefox-source`. Set `DM_FIREFOX_SOURCE_ZIP` to write
+the archive somewhere other than `~/Downloads`; the release workflow
+does that.
 
 ## Requirements
 

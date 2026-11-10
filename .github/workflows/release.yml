@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   release:
@@ -38,6 +39,15 @@ jobs:
           DM_POSTHOG_KEY: ${{ secrets.DM_POSTHOG_KEY }}
           DM_DISTRIBUTION: published_hint
         run: npm run package:extension:release
+      - name: Upload store packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: store-packages
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            packages/extension/design-mode-extension.zip
+            packages/extension/design-mode-addon.zip
       - name: Extract CHANGELOG section for this tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
@@ -57,3 +67,171 @@ jobs:
             packages/extension/design-mode-addon.zip
             packages/extension/designmode-for-safari.zip
           body_path: release-notes.md
+
+  # Store and npm publishes are independent of each other. A failure in one
+  # does not cancel the others. Each job that needs a secret logs a skip and
+  # exits 0 until that secret exists. The GitHub environment is where a
+  # required reviewer can be added later without changing this file.
+  publish-chrome:
+    name: Chrome Web Store
+    needs: release
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Require Chrome Web Store secrets
+        id: secrets
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+        run: |
+          missing=()
+          [ -n "$CWS_CLIENT_ID" ] || missing+=(CWS_CLIENT_ID)
+          [ -n "$CWS_CLIENT_SECRET" ] || missing+=(CWS_CLIENT_SECRET)
+          [ -n "$CWS_REFRESH_TOKEN" ] || missing+=(CWS_REFRESH_TOKEN)
+          [ -n "$CWS_PUBLISHER_ID" ] || missing+=(CWS_PUBLISHER_ID)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Chrome Web Store publish skipped: these secrets are not set on the release environment or the repository: ${missing[*]}."
+            echo "The GitHub Release is already published. Add the secrets, then re-run this job. Setup steps are in RELEASING.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Chrome Web Store credentials are configured."
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.secrets.outputs.ready == 'true'
+      - uses: actions/setup-node@v7
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v8
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          name: store-packages
+          path: store
+      - name: Upload and submit to the Chrome Web Store
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+        run: node scripts/publish-chrome-web-store.mjs store/design-mode-extension.zip
+
+  publish-firefox:
+    name: Firefox Add-ons
+    needs: release
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Require AMO secrets
+        id: secrets
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          missing=()
+          [ -n "$AMO_JWT_ISSUER" ] || missing+=(AMO_JWT_ISSUER)
+          [ -n "$AMO_JWT_SECRET" ] || missing+=(AMO_JWT_SECRET)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Firefox AMO publish skipped: these secrets are not set on the release environment or the repository: ${missing[*]}."
+            echo "The GitHub Release is already published. Add the secrets, then re-run this job. Setup steps are in RELEASING.md."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "AMO JWT credentials are configured."
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.secrets.outputs.ready == 'true'
+      - uses: actions/setup-node@v7
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install dependencies
+        if: steps.secrets.outputs.ready == 'true'
+        run: npm ci
+      - uses: actions/download-artifact@v8
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          name: store-packages
+          path: store
+      - name: Build the reviewer source archive
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          DM_FIREFOX_SOURCE_ZIP: ${{ github.workspace }}/design-mode-firefox-source.zip
+        run: npm run package:firefox-source
+      - name: Submit the add-on and source to AMO
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          DM_FIREFOX_SOURCE_ZIP: ${{ github.workspace }}/design-mode-firefox-source.zip
+        run: |
+          unzip -q store/design-mode-addon.zip -d amo-source
+          cat > amo-metadata.json <<'EOF'
+          {
+            "version": {
+              "approval_notes": "Human-readable source is attached. From the archive root: npm ci && npm run package:extension:firefox. Steps are in SOURCE-BUILD-README.md."
+            }
+          }
+          EOF
+          # Listed review of <all_urls> is manual and can take days. approval-timeout 0
+          # returns once AMO has accepted the upload and validation, without waiting
+          # for a reviewer to sign the xpi.
+          npx web-ext sign \
+            --source-dir amo-source \
+            --artifacts-dir amo-artifacts \
+            --channel listed \
+            --upload-source-code "$DM_FIREFOX_SOURCE_ZIP" \
+            --amo-metadata amo-metadata.json \
+            --approval-timeout 0 \
+            --timeout 900000 \
+            --no-input \
+            --no-config-discovery
+
+  publish-npm:
+    name: npm
+    needs: release
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          package-manager-cache: false
+      - name: Install an npm CLI that supports trusted publishing
+        run: |
+          npm install -g npm@11.21.2
+          node --input-type=module -e '
+            const [major, minor] = process.versions.node.split(".").map(Number);
+            if (major < 22 || (major === 22 && minor < 14)) {
+              console.error(`Node ${process.versions.node} is below the 22.14.0 trusted-publishing minimum`);
+              process.exit(1);
+            }
+          '
+          npm --version
+          node --input-type=module -e '
+            import { execFileSync } from "node:child_process";
+            const version = execFileSync("npm", ["--version"], { encoding: "utf8" }).trim();
+            const [major, minor, patch] = version.split(".").map(Number);
+            const ok = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
+            if (!ok) {
+              console.error(`npm ${version} is below the 11.5.1 trusted-publishing minimum`);
+              process.exit(1);
+            }
+            console.log(`npm ${version} supports trusted publishing`);
+          '
+      - name: Install dependencies
+        run: npm ci
+      - name: Publish @designmode-app/cli
+        run: |
+          echo "Publishing @designmode-app/cli with npm trusted publishing (GitHub Actions OIDC)."
+          echo "No NPM_TOKEN is used. Provenance is requested explicitly and is also generated automatically for a public package from a public repository."
+          npm publish --workspace @designmode-app/cli --access public --provenance
