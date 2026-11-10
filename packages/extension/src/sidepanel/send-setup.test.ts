@@ -109,6 +109,7 @@ describe('Send to Agent setup dialog', () => {
 
   it('escapes interpolated values', () => {
     const out = html({ mode: 'self-hosted', cloudUrl: '"><script>alert(1)</script>' });
-    assert.doesNotMatch(out, /<script>/);
+    assert.doesNotMatch(out, /<script/i);
+    assert.match(out, /&lt;script&gt;/);
   });
 });
