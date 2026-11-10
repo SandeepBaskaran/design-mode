@@ -43,6 +43,8 @@ recommending the bump:
 - `packages/shared/src/constants.ts` → `APP_VERSION`.
 - `packages/cli/src/remote.ts` and `packages/mcp-local/src/agent-cli.ts` → MCP client metadata.
 - Root `package-lock.json` → root and every workspace version; keep dependency resolutions unchanged.
+- `website/public/llms.txt` and `website/public/llms-full.txt` → current
+  repository version (and the review date if you update it).
 - `packages/mcp-local/src/bin/cli.ts`, `mcp-server.ts`, `owner-bridge.ts`,
   `websocket-server.ts` → any embedded version constants.
 - `packages/mcp-cloud/api/mcp.ts`, `api/extension/stream.ts`, and
@@ -54,7 +56,11 @@ recommending the bump:
 
 ## Pre-tag checklist (before `git tag v*.*.*`)
 
-1. `npm run verify` exits 0 from repo root.
+1. `npm run release:preflight` then `npm run verify`, both from repo
+   root and both exiting 0. Preflight is the fast identity, version,
+   leftover-string, tag, npm and dirty-tree check. Leftover previous-version
+   hits in CHANGELOG history, lockfiles, the website changelog, and listed
+   fixtures are ignored; see `scripts/release-preflight.mjs`.
 2. `docs/e2e-testcases.md` manual walk done (new features have new
    rows; new shortcuts have new Phase 0.10 rows).
 3. `CHANGELOG.md` updated with the new version section.
@@ -205,11 +211,18 @@ npm view @designmode-app/cli version
 npm view @designmode-app/cli@<version> dist.shasum
 ```
 
+Or run the bundled check, which also confirms the origin tag and the
+GitHub release:
+
+```sh
+npm run release:postcheck -- --tarball /path/to/designmode-app-cli-<version>.tgz
+```
+
 See [packages/cli/PUBLISHING.md](packages/cli/PUBLISHING.md) for the
 package contract. Prefer `npm publish <tarball>` of the tarball you
 already installed and tested, rather than publishing a fresh rebuild.
 
-## Publication checklist (after `npm run verify` is green)
+## Publication checklist (after preflight and `npm run verify` are green)
 
 Do not push a `v*.*.*` tag until the maintainer has confirmed the
 version and the pre-tag checklist above is complete.
@@ -227,7 +240,7 @@ version and the pre-tag checklist above is complete.
    version.
 3. **(b)** Publish the CLI to npm yourself, as documented above:
    `npm whoami`, then `npm publish <verified-tarball> --access public`
-   (browser passkey approval, no OTP), then `npm view @designmode-app/cli version`.
+   (browser passkey approval, no OTP), then `npm run release:postcheck -- --tarball <verified-tarball>`.
 4. **(c)** Firefox AMO: upload `design-mode-addon.zip` plus the source
    archive from `npm run package:firefox-source`
    (`~/Downloads/design-mode-firefox-source-<version>.zip`).

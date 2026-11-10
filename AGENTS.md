@@ -9,7 +9,15 @@ Releases are never automatic. Cut one only with explicit maintainer
 consent. Versioning, the file list for a bump, and the pre-tag
 checklist are in RELEASING.md.
 
-After `npm run verify` is green on the commit you intend to ship:
+When creating a worktree, set `git config user.name "Sandeep Baskaran"`
+and `git config user.email 29013187+SandeepBaskaran@users.noreply.github.com`
+in it.
+
+Run `npm run release:preflight` before `npm run verify`. After npm
+publish, run `npm run release:postcheck` (add `-- --tarball <path>` to
+confirm the registry shasum matches the tested tarball).
+
+After preflight and `npm run verify` are green on the commit you intend to ship:
 
 1. Merge into `main` and push `origin/main` with a normal (non-force)
    push.
