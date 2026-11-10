@@ -8,6 +8,35 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.2.1] — 2026-11-10
+
+### Added
+
+- `npm run release:preflight` and `npm run release:postcheck` check identity,
+  version consistency, leftover previous-version strings, tag availability,
+  and, after publish, the origin tag, GitHub Release and npm registry shasum.
+
+### Changed
+
+- Pushing a `v*.*.*` tag still creates the GitHub Release, and now also
+  submits the Chrome Web Store and Firefox AMO packages and publishes
+  `@designmode-app/cli` with npm trusted publishing. Store jobs skip when
+  their secrets are unset; the npm job needs a trusted publisher on
+  npmjs.com. Manual store uploads and a passkey `npm login --auth-type=web`
+  / `npm publish` without `--otp` remain documented fallbacks. Safari and
+  Apple distribution stay manual.
+
+### Fixed
+
+- The side-panel HTML escape test now treats script-tag checks as
+  case-insensitive, closing code scanning alert #9.
+
+### Internal
+
+- Dependabot patch-and-minor group bump (#80): sass, ws, `@types/chrome`,
+  `@next/mdx`, lucide-react, next, `@tailwindcss/postcss`,
+  eslint-config-next, postcss and tailwindcss.
+
 ## [3.2.0] — 2026-11-07
 
 ### Added

@@ -159,7 +159,7 @@ Do not pre-accept a consent-key/minimum-version warning.
 1. The Gecko id is `sandeepbaskaran98@gmail.com`
    (`browser_specific_settings.gecko.id`) with `strict_min_version`
    `140.0` (native data-collection consent + MV3 sidebar). Firefox 139 and
-   earlier cannot install or run 3.2.0. Keep the id stable
+   earlier cannot install or run this release. Keep the id stable
    across versions — it is the add-on's identity.
 2. Review the manifest's `browser_specific_settings.gecko.data_collection_permissions`
    and store disclosures against [PRIVACY.md](PRIVACY.md) for the exact artifact.

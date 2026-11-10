@@ -19,6 +19,14 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "3.2.1",
+    date: "2026-11-10",
+    headline: "Tagged releases now ship to the browser stores and npm.",
+    highlights: [
+      "Pushing a version tag now publishes the GitHub Release and submits the same Chrome and Firefox packages to the stores, and publishes the CLI to npm. Safari is still a separate download from the GitHub Release.",
+    ],
+  },
+  {
     version: "3.2.0",
     date: "2026-11-07",
     headline: "Clearer agent setup, safer diagnostics and faithful editing.",

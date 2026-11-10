@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 // Fast release preflight (before `npm run verify`) and post-release check
-// (after npm publish). No extra dependencies.
+// (after the release workflow's npm job, or a manual fallback publish).
+// Postcheck confirms the origin tag, the GitHub Release, and the npm
+// registry (and an optional local tarball shasum). It does not query
+// the Chrome Web Store or AMO; those reviews stay in their dashboards.
+// No extra dependencies.
 //
 //   npm run release:preflight
 //   npm run release:postcheck -- --tarball /path/to/designmode-app-cli-<version>.tgz
@@ -479,7 +483,7 @@ function checkNpmPreflight(results, previous) {
     results.push({
       status: 'WARN',
       check: 'npm login',
-      detail: `npm whoami failed (${detail || 'not signed in'}). Sign in with: npm login --auth-type=web`,
+      detail: `npm whoami failed (${detail || 'not signed in'}). Local login is only needed for the manual npm publish fallback: npm login --auth-type=web`,
     });
   }
 

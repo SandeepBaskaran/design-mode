@@ -94,7 +94,7 @@ export async function runAgentCli(
       if (dispatchError) throw dispatchError;
       return proxyToolCall(port, tool, args, extra);
     });
-    client = new Client({ name: 'designmode-app', version: '3.2.0' });
+    client = new Client({ name: 'designmode-app', version: '3.2.1' });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     await client.connect(clientTransport);
