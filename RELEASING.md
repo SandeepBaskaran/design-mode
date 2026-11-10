@@ -130,12 +130,19 @@ Chrome-only `side_panel` key + `sidePanel` permission. Steps:
    (Identical content to the Chrome zip; the `-addon` name is just for
    clarity. The same file loads locally via `about:debugging` →
    "Load Temporary Add-on".)
-3. The Gecko id is `sandeepbaskaran98@gmail.com`
+3. AMO also asks for the source used to produce that zip. From a clean
+   checkout of the tagged commit run `npm run package:firefox-source`.
+   That writes `~/Downloads/design-mode-firefox-source-<version>.zip`
+   (version taken from root `package.json`). Upload that file as the
+   reviewer source alongside `design-mode-addon.zip`. Build steps for
+   reviewers are in `SOURCE-BUILD-README.md` inside the archive
+   (`npm ci && npm run package:extension:firefox`).
+4. The Gecko id is `sandeepbaskaran98@gmail.com`
    (`browser_specific_settings.gecko.id`) with `strict_min_version`
    `140.0` (native data-collection consent + MV3 sidebar). Firefox 139 and
    earlier cannot install or run 3.2.0. Keep the id stable
    across versions — it is the add-on's identity.
-4. Review the manifest's `browser_specific_settings.gecko.data_collection_permissions`
+5. Review the manifest's `browser_specific_settings.gecko.data_collection_permissions`
    and store disclosures against [PRIVACY.md](PRIVACY.md) for the exact artifact.
    Required `locationInfo` covers the disclosed IP-derived location; optional
    `technicalAndInteraction` covers technical/interaction analytics and unknown-only
@@ -149,10 +156,73 @@ Chrome-only `side_panel` key + `sidePanel` permission. Steps:
    The source no longer supports Firefox 139 or earlier and has no fallback opt-in UI.
    See [ANALYTICS.md](packages/extension/ANALYTICS.md). Normal packaging commands do not
    load `.env.analytics.local`; configured release packaging is a distinct gate.
-5. Expect **manual review**: `<all_urls>` host access + `scripting`
+6. Expect **manual review**: `<all_urls>` host access + `scripting`
    are broad permissions and trigger human review. AMO may request the
    build steps (`npm ci && npm run build:extension`).
-6. Firefox has no `sidePanel` API — the extension uses `sidebar_action`
+7. Firefox has no `sidePanel` API — the extension uses `sidebar_action`
    (toolbar button + View menu toggle the sidebar; `Alt+D` opens it via
    `sidebarAction.open()` in the command handler). Pop-out window and
    Picture-in-Picture are Chrome-only and absent on Firefox by design.
+
+
+### Safari (manual, GitHub Releases plus Apple)
+
+Upload `packages/extension/designmode-for-safari.zip` from the same
+tagged build. Safari loads a temporary extension from
+`packages/extension/dist-safari` (Settings → Developer → Add Temporary
+Extension). App Store / Developer ID distribution remains a separate
+maintainer step; the GitHub Release is the canonical zip.
+
+### npm CLI (manual; the tag does not publish)
+
+The release workflow does not publish `@designmode-app/cli`. After the
+GitHub Release exists, publish the verified tarball yourself:
+
+```sh
+npm whoami
+# Must be an account that can publish under the designmode-app scope.
+# npm will prompt for a 2FA OTP; do not paste the OTP into chat or commit it.
+
+npm publish /path/to/designmode-app-cli-<version>.tgz --access public
+# Example for 3.2.0, after a local pack or the verified release tarball:
+#   npm publish ./designmode-app-cli-3.2.0.tgz --access public
+
+# Alternative, from a clean checkout of the tagged commit (runs prepack/build):
+#   cd packages/cli && npm publish --access public
+```
+
+Then confirm the registry:
+
+```sh
+npm view @designmode-app/cli version
+```
+
+See [packages/cli/PUBLISHING.md](packages/cli/PUBLISHING.md) for the
+package contract. Prefer `npm publish <tarball>` of the tarball you
+already installed and tested, rather than publishing a fresh rebuild.
+
+## Publication checklist (after `npm run verify` is green)
+
+Do not push a `v*.*.*` tag until the maintainer has confirmed the
+version and the pre-tag checklist above is complete.
+
+1. Merge the release branch into `main` with a normal (non-force) push
+   of `main` to `origin`.
+2. Create an annotated tag `vMAJOR.MINOR.PATCH` on that `main` commit
+   and push the tag. **(a)** The tag push is what triggers
+   `.github/workflows/release.yml`. That workflow runs `npm run verify`,
+   checks that the tag matches root `package.json` and
+   `packages/extension/public/manifest.json`, builds the three browser
+   zips, and opens a GitHub Release named for the tag with
+   `design-mode-extension.zip`, `design-mode-addon.zip`,
+   `designmode-for-safari.zip`, and the CHANGELOG section for that
+   version.
+3. **(b)** Publish the CLI to npm yourself, as documented above:
+   `npm whoami`, then `npm publish <verified-tarball> --access public`
+   (2FA OTP), then `npm view @designmode-app/cli version`.
+4. **(c)** Firefox AMO: upload `design-mode-addon.zip` plus the source
+   archive from `npm run package:firefox-source`
+   (`~/Downloads/design-mode-firefox-source-<version>.zip`).
+5. **(d)** Chrome Web Store: upload `design-mode-extension.zip`. Safari:
+   use `designmode-for-safari.zip` (GitHub Release) and complete any
+   Apple distribution steps separately.
