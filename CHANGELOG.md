@@ -8,6 +8,11 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Internal
+
+- `npm run release:postcheck` reads `dist-tags.latest` from the npm packument with a cache-busting request and retries for up to three minutes (`--npm-timeout-ms` or `DM_RELEASE_POSTCHECK_NPM_TIMEOUT_MS`), reporting the attempt count. It also confirms the tagged `release.yml` run submitted that version to the Chrome Web Store and Firefox AMO, using each job's result lines rather than a search of the log. A missing or unauthenticated `gh` warns. Public store listings are a separate warning when they still lag review.
+- Pull requests build the Chrome and Firefox extension zips plus the unpacked `dist/` and attach them as a workflow artefact (`extension-pr-<number>`), with one PR comment linking to the run. See RELEASING.md.
+
 ## [3.2.1] — 2026-11-10
 
 ### Added

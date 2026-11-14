@@ -1,0 +1,82 @@
+name: PR extension build
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  extension-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # package:extension builds dist/ and writes design-mode-extension.zip.
+      # The Firefox zip is the same dist with a store-recognisable filename
+      # (see RELEASING.md). Build once, then create the second zip.
+      - name: Package Chrome and Firefox zips
+        run: |
+          npm run package:extension
+          cd packages/extension/dist
+          rm -f ../design-mode-addon.zip
+          zip -rq ../design-mode-addon.zip . -x '*.DS_Store' -x '*.map'
+
+      - name: Upload extension artefacts
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: extension-pr-${{ github.event.pull_request.number }}
+          path: |
+            packages/extension/design-mode-extension.zip
+            packages/extension/design-mode-addon.zip
+            packages/extension/dist
+          if-no-files-found: error
+
+      - name: Comment artefact link on the PR
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ARTIFACT_NAME: extension-pr-${{ github.event.pull_request.number }}
+        run: |
+          marker='<!-- design-mode-pr-extension-artifacts -->'
+          body=$(cat <<MD
+          ${marker}
+          ## Extension build for this pull request
+
+          A CI build of the Chrome and Firefox extension is attached to [this workflow run](${RUN_URL}) as artefact \`${ARTIFACT_NAME}\`.
+
+          It contains:
+
+          - \`design-mode-extension.zip\` (Chrome)
+          - \`design-mode-addon.zip\` (Firefox)
+          - the unpacked \`dist/\` folder
+
+          ### How to test
+
+          1. Download the artefact from the workflow-run page.
+          2. Chrome: \`chrome://extensions\` → Developer mode → Load unpacked → the \`dist\` folder (or unzip the Chrome zip).
+          3. Firefox: \`about:debugging#/runtime/this-firefox\` → Load Temporary Add-on → \`manifest.json\` inside \`dist\`.
+
+          Or, in a short-lived clone: \`gh pr checkout ${PR_NUMBER} && npm ci && npm run package:extension\`, then load \`packages/extension/dist\`.
+          MD
+          )
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --jq ".[] | select(.body | contains(\"${marker}\")) | .id" | head -n 1)
+          if [ -n "${existing}" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
+              --input - <<< "$(jq -n --arg body "$body" '{body:$body}')"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --input - <<< "$(jq -n --arg body "$body" '{body:$body}')"
+          fi

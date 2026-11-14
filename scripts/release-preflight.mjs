@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 // Fast release preflight (before `npm run verify`) and post-release check
-// (after the release workflow's npm job, or a manual fallback publish).
-// Postcheck confirms the origin tag, the GitHub Release, and the npm
-// registry (and an optional local tarball shasum). It does not query
-// the Chrome Web Store or AMO; those reviews stay in their dashboards.
+// (after the release workflow's npm and store jobs, or a manual fallback publish).
+// Postcheck confirms the origin tag, the GitHub Release, the npm registry,
+// and that the Chrome and Firefox jobs for this tag submitted the version.
+// The registry read is a cache-bypassed packument fetch, retried for a few
+// minutes, because `npm view` can keep a stale latest tag. Store judgment
+// uses each job's printed result lines; the workflow source echoed into
+// the log also contains the word "skipped" and is not a result.
 // No extra dependencies.
 //
 //   npm run release:preflight
 //   npm run release:postcheck -- --tarball /path/to/designmode-app-cli-<version>.tgz
+//   DM_RELEASE_POSTCHECK_NPM_TIMEOUT_MS=0 npm run release:postcheck
 //
 // Leftover previous-version hits are ignored in CHANGELOG.md, package-lock.json,
 // website/src/content/changelog.ts (historical entries),
@@ -25,6 +29,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 export const EXPECTED_NAME = 'Sandeep Baskaran';
 export const EXPECTED_EMAIL = '29013187+SandeepBaskaran@users.noreply.github.com';
 export const CLI_PACKAGE = '@designmode-app/cli';
+export const DEFAULT_NPM_TIMEOUT_MS = 180_000;
+export const NPM_TIMEOUT_ENV = 'DM_RELEASE_POSTCHECK_NPM_TIMEOUT_MS';
+export const NPM_BACKOFF_BASE_MS = 5_000;
+export const NPM_BACKOFF_CAP_MS = 60_000;
+export const CHROME_EXTENSION_ID = 'ighgobegfcmjagombgnfhgioflinojih';
+export const AMO_ADDON_SLUG = 'design-mode-add-on';
+export const CHROME_STORE_JOB = 'Chrome Web Store';
+export const FIREFOX_STORE_JOB = 'Firefox Add-ons';
 
 export const VERSION_JSON_FILES = [
   'package.json',
@@ -83,8 +95,15 @@ const BOLD = '\x1b[1m';
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
+function parseNonNegativeInteger(value, flag) {
+  if (value == null || value === '' || String(value).startsWith('--') || !/^\d+$/.test(String(value))) {
+    throw new Error(`\`${flag}\` requires a non-negative integer number of milliseconds`);
+  }
+  return Number(value);
+}
+
 export function parseArgs(argv) {
-  const args = { post: false, tarball: null, help: false };
+  const args = { post: false, tarball: null, help: false, npmTimeoutMs: null };
   const rest = argv.slice(2);
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
@@ -99,6 +118,10 @@ export function parseArgs(argv) {
     } else if (arg.startsWith('--tarball=')) {
       args.tarball = arg.slice('--tarball='.length);
       if (!args.tarball) throw new Error('`--tarball` requires a path');
+    } else if (arg === '--npm-timeout-ms') {
+      args.npmTimeoutMs = parseNonNegativeInteger(rest[++i], '--npm-timeout-ms');
+    } else if (arg.startsWith('--npm-timeout-ms=')) {
+      args.npmTimeoutMs = parseNonNegativeInteger(arg.slice('--npm-timeout-ms='.length), '--npm-timeout-ms');
     } else if (arg === '--help' || arg === '-h') {
       args.help = true;
     } else {
@@ -108,7 +131,17 @@ export function parseArgs(argv) {
   if (args.tarball && !args.post) {
     throw new Error('`--tarball` is only valid with `--post`');
   }
+  if (args.npmTimeoutMs != null && !args.post) {
+    throw new Error('`--npm-timeout-ms` is only valid with `--post`');
+  }
   return args;
+}
+
+export function resolveNpmTimeoutMs(args, env = process.env) {
+  if (args.npmTimeoutMs != null) return args.npmTimeoutMs;
+  const raw = env[NPM_TIMEOUT_ENV];
+  if (raw == null || raw === '') return DEFAULT_NPM_TIMEOUT_MS;
+  return parseNonNegativeInteger(raw, NPM_TIMEOUT_ENV);
 }
 
 export function parseSemver(value) {
@@ -588,28 +621,244 @@ function checkGithubRelease(results, version) {
   }
 }
 
-function checkNpmPost(results, version, tarball) {
-  try {
-    const latest = npm(['view', CLI_PACKAGE, 'dist-tags.latest']);
-    if (latest === version) {
-      results.push({
-        status: 'PASS',
-        check: 'npm dist-tags.latest',
-        detail: `${CLI_PACKAGE}@${latest}`,
-      });
-    } else {
-      results.push({
-        status: 'FAIL',
-        check: 'npm dist-tags.latest',
-        detail: `registry latest is ${latest}, expected ${version}`,
-      });
+export function npmPackumentUrl(cacheBust) {
+  const name = CLI_PACKAGE.replace('/', '%2f');
+  return `https://registry.npmjs.org/${name}?cachebust=${cacheBust}`;
+}
+
+export function npmRetryDelayMs(failedAttempts, remainingMs) {
+  if (remainingMs <= 0 || failedAttempts < 1) return 0;
+  const exp = Math.min(NPM_BACKOFF_BASE_MS * 2 ** (failedAttempts - 1), NPM_BACKOFF_CAP_MS);
+  return Math.min(exp, remainingMs);
+}
+
+export async function fetchNpmPackument(fetchImpl, cacheBust) {
+  const response = await fetchImpl(npmPackumentUrl(cacheBust), {
+    headers: {
+      accept: 'application/json',
+      'cache-control': 'no-cache',
+      pragma: 'no-cache',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`registry HTTP ${response.status} for ${CLI_PACKAGE}`);
+  }
+  const body = await response.json();
+  const latest = body?.['dist-tags']?.latest;
+  if (typeof latest !== 'string' || !latest) {
+    throw new Error(`registry packument for ${CLI_PACKAGE} has no dist-tags.latest`);
+  }
+  return body;
+}
+
+export function packumentShasum(packument, version) {
+  const sha = packument?.versions?.[version]?.dist?.shasum;
+  return typeof sha === 'string' && sha ? sha.toLowerCase() : null;
+}
+
+function formatWait(ms) {
+  if (ms < 1000) return `${ms}ms`;
+  return `${Math.round(ms / 1000)}s`;
+}
+
+export async function pollNpmPackument({ version, timeoutMs, fetchImpl, sleep, now = Date.now }) {
+  const start = now();
+  const deadline = start + timeoutMs;
+  let attempts = 0;
+  let latest = null;
+  let packument = null;
+  let lastError = null;
+  while (true) {
+    attempts += 1;
+    try {
+      packument = await fetchNpmPackument(fetchImpl, now());
+      latest = packument['dist-tags'].latest;
+      lastError = null;
+      if (latest === version) {
+        return { ok: true, attempts, latest, packument, lastError: null, waitedMs: now() - start };
+      }
+    } catch (err) {
+      packument = null;
+      lastError = err;
     }
-  } catch (err) {
-    const detail = (err.stderr || err.stdout || err.message).toString().trim();
+    const delay = npmRetryDelayMs(attempts, deadline - now());
+    if (delay <= 0) {
+      return { ok: false, attempts, latest, packument, lastError, waitedMs: now() - start };
+    }
+    await sleep(delay);
+  }
+}
+
+const ANSI_RE = /\u001b\[[0-9;]*m/g;
+const LOG_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s?/;
+const CHROME_SUBMITTED_RE = /^Submitted (\S+) crxVersion=(\S+) to the Chrome Web Store for review \(HTTP (\d+)\)\.$/;
+const CHROME_SKIPPED_RE = /^Chrome Web Store publish skipped:/;
+const FIREFOX_ACCEPTED_RE = /^(?:Waiting for approval and download of signed XPI skipped\.|Signed xpi downloaded:)/;
+const FIREFOX_SKIPPED_RE = /^Firefox AMO publish skipped:/;
+
+export function workflowStepOutputs(logText) {
+  const steps = new Map();
+  for (const raw of String(logText).split(/\r?\n/)) {
+    const line = raw.replace(/^\uFEFF/, '');
+    if (!line) continue;
+    const tab1 = line.indexOf('\t');
+    const tab2 = tab1 === -1 ? -1 : line.indexOf('\t', tab1 + 1);
+    if (tab2 === -1) continue;
+    const job = line.slice(0, tab1);
+    const step = line.slice(tab1 + 1, tab2);
+    const message = line.slice(tab2 + 1).replace(/^\uFEFF/, '').replace(LOG_TS_RE, '').replace(ANSI_RE, '').trim();
+    if (!message) continue;
+    let entry = steps.get(`${job}\0${step}`);
+    if (!entry) {
+      entry = { job, step, inScript: false, resultLines: [] };
+      steps.set(`${job}\0${step}`, entry);
+    }
+    if (message.startsWith('##[group]Run')) {
+      entry.inScript = true;
+      continue;
+    }
+    if (message.startsWith('##[endgroup]')) {
+      entry.inScript = false;
+      continue;
+    }
+    if (entry.inScript) continue;
+    entry.resultLines.push(message);
+  }
+  return [...steps.values()];
+}
+
+export function resultLinesForJob(steps, jobName) {
+  return steps.filter((step) => step.job === jobName).flatMap((step) => step.resultLines);
+}
+
+export function judgeStoreJob({ jobName, status, conclusion, resultLines, version }) {
+  if (!status) {
+    return { status: 'FAIL', detail: `${jobName} job was not in the release run` };
+  }
+  if (status !== 'completed') {
+    return { status: 'FAIL', detail: `${jobName} job status is ${status}` };
+  }
+  if (conclusion !== 'success') {
+    return { status: 'FAIL', detail: `${jobName} job conclusion is ${conclusion || 'unset'}` };
+  }
+  if (jobName === CHROME_STORE_JOB) {
+    const submitted = resultLines.map((line) => line.match(CHROME_SUBMITTED_RE)).find(Boolean);
+    if (submitted) {
+      const [, id, crxVersion, http] = submitted;
+      if (crxVersion !== version) {
+        return {
+          status: 'FAIL',
+          detail: `submitted crxVersion=${crxVersion}, expected ${version} (${id}, HTTP ${http})`,
+        };
+      }
+      return { status: 'PASS', detail: `Submitted ${id} crxVersion=${crxVersion} (HTTP ${http})` };
+    }
+    const skipped = resultLines.find((line) => CHROME_SKIPPED_RE.test(line));
+    if (skipped) return { status: 'FAIL', detail: `job succeeded without submitting: ${skipped}` };
+    return {
+      status: 'FAIL',
+      detail: 'job succeeded but its result lines did not include the Chrome Web Store submit line',
+    };
+  }
+  const accepted = resultLines.find((line) => FIREFOX_ACCEPTED_RE.test(line));
+  if (accepted) return { status: 'PASS', detail: accepted };
+  const skipped = resultLines.find((line) => FIREFOX_SKIPPED_RE.test(line));
+  if (skipped) return { status: 'FAIL', detail: `job succeeded without submitting: ${skipped}` };
+  return {
+    status: 'FAIL',
+    detail: 'job succeeded but its result lines did not include the AMO upload acceptance line',
+  };
+}
+
+export function storeCheckName(jobName) {
+  return jobName === CHROME_STORE_JOB ? 'Chrome Web Store submission' : 'Firefox AMO submission';
+}
+
+export function storeRowsFromRun({ jobs, log, version, runUrl }) {
+  const steps = workflowStepOutputs(log);
+  return [CHROME_STORE_JOB, FIREFOX_STORE_JOB].map((jobName) => {
+    const job = (jobs ?? []).find((item) => item.name === jobName);
+    const judged = judgeStoreJob({
+      jobName,
+      status: job?.status ?? null,
+      conclusion: job?.conclusion ?? null,
+      resultLines: resultLinesForJob(steps, jobName),
+      version,
+    });
+    return {
+      status: judged.status,
+      check: storeCheckName(jobName),
+      detail: `${judged.detail} (${runUrl})`,
+    };
+  });
+}
+
+export function githubRepoFromRemote(url) {
+  const cleaned = String(url).replace(/\.git\s*$/, '').trim();
+  const match = cleaned.match(/github\.com[:/]([^/\s]+)\/([^/\s]+)$/);
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+
+export function selectReleaseRun(runs, version) {
+  const tag = `v${version}`;
+  return (runs ?? [])
+    .filter((run) => run.headBranch === tag && run.event === 'push')
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
+}
+
+export function chromeUpdateUrl() {
+  const x = `id=${CHROME_EXTENSION_ID}&uc`;
+  return `https://update.googleapis.com/service/update2/crx?response=updatecheck&acceptformat=crx3&prodversion=131.0&x=${encodeURIComponent(x)}`;
+}
+
+export function amoVersionsUrl() {
+  return `https://addons.mozilla.org/api/v5/addons/addon/${AMO_ADDON_SLUG}/versions/?page_size=50`;
+}
+
+export function chromeVersionFromUpdateXml(xml) {
+  const match = String(xml).match(/\bversion="(\d+\.\d+\.\d+)"/);
+  return match ? match[1] : null;
+}
+
+export function amoVersionStatus(payload, version) {
+  const results = Array.isArray(payload?.results) ? payload.results : [];
+  const hit = results.find((row) => row.version === version);
+  if (!hit) return payload?.next ? undefined : null;
+  return hit.file?.status ?? 'listed';
+}
+
+function attemptNote(polled) {
+  const base = `attempt ${polled.attempts}`;
+  return polled.attempts === 1 ? base : `${base} over ${formatWait(polled.waitedMs)}`;
+}
+
+async function checkNpmPost(results, version, tarball, io) {
+  const polled = await pollNpmPackument({
+    version,
+    timeoutMs: io.timeoutMs,
+    fetchImpl: io.fetch,
+    sleep: io.sleep,
+    now: io.now,
+  });
+  const note = attemptNote(polled);
+  if (polled.ok) {
+    results.push({
+      status: 'PASS',
+      check: 'npm dist-tags.latest',
+      detail: `${CLI_PACKAGE}@${polled.latest} (${note})`,
+    });
+  } else if (polled.latest) {
+    const extra = polled.lastError ? `; last registry error: ${polled.lastError.message}` : '';
     results.push({
       status: 'FAIL',
       check: 'npm dist-tags.latest',
-      detail: detail || `could not read ${CLI_PACKAGE} dist-tags.latest`,
+      detail: `registry latest is ${polled.latest}, expected ${version} after ${note}${extra}`,
+    });
+  } else {
+    results.push({
+      status: 'FAIL',
+      check: 'npm dist-tags.latest',
+      detail: `could not read ${CLI_PACKAGE} dist-tags.latest after ${note}: ${polled.lastError?.message || 'unknown error'}`,
     });
   }
 
@@ -625,15 +874,12 @@ function checkNpmPost(results, version, tarball) {
     return;
   }
 
-  let registrySha;
-  try {
-    registrySha = npm(['view', `${CLI_PACKAGE}@${version}`, 'dist.shasum']).toLowerCase();
-  } catch (err) {
-    const detail = (err.stderr || err.stdout || err.message).toString().trim();
+  const registrySha = polled.packument ? packumentShasum(polled.packument, version) : null;
+  if (!registrySha) {
     results.push({
       status: 'FAIL',
       check: 'npm tarball shasum',
-      detail: detail || `could not read ${CLI_PACKAGE}@${version} dist.shasum`,
+      detail: `${CLI_PACKAGE}@${version} dist.shasum was not in the packument after ${note}`,
     });
     return;
   }
@@ -654,13 +900,188 @@ function checkNpmPost(results, version, tarball) {
   }
 }
 
+function warnStoreQueries(results, detail) {
+  for (const jobName of [CHROME_STORE_JOB, FIREFOX_STORE_JOB]) {
+    results.push({ status: 'WARN', check: storeCheckName(jobName), detail });
+  }
+}
+
+function failStoreQueries(results, detail) {
+  for (const jobName of [CHROME_STORE_JOB, FIREFOX_STORE_JOB]) {
+    results.push({ status: 'FAIL', check: storeCheckName(jobName), detail });
+  }
+}
+
+function ghInvocationError(err) {
+  return `${err.stderr || ''}\n${err.stdout || ''}\n${err.message || ''}`;
+}
+
+function isGhAuthError(err) {
+  return /not logged|authentication|gh auth login|HTTP 40[13]|unauthorized/i.test(ghInvocationError(err));
+}
+
+function ghErrorLine(err) {
+  return ghInvocationError(err).trim().split('\n').find(Boolean) || 'gh failed';
+}
+
+function runGh(execFile, args) {
+  return execFile('gh', args, {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 60_000,
+    maxBuffer: 32 * 1024 * 1024,
+  });
+}
+
+async function checkPublicListings(results, version, fetchImpl) {
+  try {
+    const response = await fetchImpl(chromeUpdateUrl(), {
+      headers: { 'cache-control': 'no-cache' },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const live = chromeVersionFromUpdateXml(await response.text());
+    if (!live) throw new Error('response had no version attribute');
+    if (live === version) {
+      results.push({ status: 'PASS', check: 'Chrome public listing', detail: `updatecheck version ${live}` });
+    } else {
+      results.push({
+        status: 'WARN',
+        check: 'Chrome public listing',
+        detail: `updatecheck still serves ${live}; ${version} can be in review. This does not decide the submission check.`,
+      });
+    }
+  } catch (err) {
+    results.push({
+      status: 'WARN',
+      check: 'Chrome public listing',
+      detail: `could not read the public update check: ${err.message}`,
+    });
+  }
+
+  try {
+    const response = await fetchImpl(amoVersionsUrl(), {
+      headers: { accept: 'application/json', 'cache-control': 'no-cache' },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const listing = amoVersionStatus(await response.json(), version);
+    if (listing === undefined) {
+      results.push({
+        status: 'WARN',
+        check: 'Firefox public listing',
+        detail: `AMO public versions API did not include ${version} on the first page.`,
+      });
+    } else if (listing == null) {
+      results.push({
+        status: 'WARN',
+        check: 'Firefox public listing',
+        detail: `AMO public versions API does not list ${version} yet. Review can still be pending.`,
+      });
+    } else if (listing === 'public') {
+      results.push({
+        status: 'PASS',
+        check: 'Firefox public listing',
+        detail: `${version} is public on addons.mozilla.org`,
+      });
+    } else {
+      results.push({
+        status: 'WARN',
+        check: 'Firefox public listing',
+        detail: `${version} is ${listing} on the public versions API, not public yet.`,
+      });
+    }
+  } catch (err) {
+    results.push({
+      status: 'WARN',
+      check: 'Firefox public listing',
+      detail: `could not read the AMO public versions API: ${err.message}`,
+    });
+  }
+}
+
+async function checkStoreSubmissions(results, version, io) {
+  const exists = io.commandExists;
+  const execFile = io.execFile;
+  if (!exists('gh')) {
+    warnStoreQueries(results, 'gh is not installed; store submission logs were not read');
+    await checkPublicListings(results, version, io.fetch);
+    return;
+  }
+
+  try {
+    execFile('gh', ['auth', 'status'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: NETWORK_TIMEOUT_MS,
+    });
+  } catch (err) {
+    warnStoreQueries(
+      results,
+      `gh is not authenticated (${ghErrorLine(err)}); store submission logs were not read`,
+    );
+    await checkPublicListings(results, version, io.fetch);
+    return;
+  }
+
+  const repo = io.repo ?? githubRepoFromRemote(git(['remote', 'get-url', 'origin']));
+  if (!repo) {
+    failStoreQueries(results, 'origin is not a github.com owner/repo remote');
+    await checkPublicListings(results, version, io.fetch);
+    return;
+  }
+
+  try {
+    const listed = JSON.parse(runGh(execFile, [
+      'run', 'list',
+      '--repo', repo,
+      '--workflow', 'release.yml',
+      '--limit', '30',
+      '--json', 'databaseId,headBranch,event,conclusion,status,url,createdAt',
+    ]));
+    const run = selectReleaseRun(listed, version);
+    if (!run) {
+      failStoreQueries(results, `no release.yml push run for v${version} on ${repo}`);
+    } else {
+      const viewed = JSON.parse(runGh(execFile, [
+        'run', 'view', String(run.databaseId),
+        '--repo', repo,
+        '--json', 'jobs,url',
+      ]));
+      const log = runGh(execFile, [
+        'run', 'view', String(run.databaseId),
+        '--repo', repo,
+        '--log',
+      ]);
+      const runUrl = viewed.url || run.url;
+      results.push(...storeRowsFromRun({
+        jobs: viewed.jobs,
+        log,
+        version,
+        runUrl,
+      }));
+    }
+  } catch (err) {
+    if (isGhAuthError(err)) {
+      warnStoreQueries(results, `gh is not authenticated (${ghErrorLine(err)})`);
+    } else {
+      failStoreQueries(results, ghErrorLine(err));
+    }
+  }
+
+  await checkPublicListings(results, version, io.fetch);
+}
+
 function printHelp() {
   process.stdout.write(`Usage:
   node scripts/release-preflight.mjs
-  node scripts/release-preflight.mjs --post [--tarball <path>]
+  node scripts/release-preflight.mjs --post [--tarball <path>] [--npm-timeout-ms <ms>]
 
   npm run release:preflight
   npm run release:postcheck -- --tarball <path>
+
+  ${NPM_TIMEOUT_ENV} sets the npm retry budget in milliseconds when
+  --npm-timeout-ms is omitted (default ${DEFAULT_NPM_TIMEOUT_MS}).
 `);
 }
 
@@ -694,7 +1115,7 @@ function printReport(title, results, color) {
   return 0;
 }
 
-export function run(argv = process.argv) {
+export async function run(argv = process.argv, io = {}) {
   const args = parseArgs(argv);
   if (args.help) {
     printHelp();
@@ -711,9 +1132,23 @@ export function run(argv = process.argv) {
   const results = [];
 
   if (args.post) {
+    const fetchImpl = io.fetch ?? ((...fetchArgs) => globalThis.fetch(...fetchArgs));
+    const sleep = io.sleep ?? ((ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms)));
+    const now = io.now ?? Date.now;
     checkOriginTagPresent(results, version);
     checkGithubRelease(results, version);
-    checkNpmPost(results, version, args.tarball);
+    await checkNpmPost(results, version, args.tarball, {
+      fetch: fetchImpl,
+      sleep,
+      now,
+      timeoutMs: resolveNpmTimeoutMs(args, io.env ?? process.env),
+    });
+    await checkStoreSubmissions(results, version, {
+      fetch: fetchImpl,
+      execFile: io.execFile ?? execFileSync,
+      commandExists: io.commandExists ?? commandExists,
+      repo: io.repo,
+    });
     return printReport(`Design Mode release postcheck — ${version}`, results, color);
   }
 
@@ -733,7 +1168,7 @@ export function run(argv = process.argv) {
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (isMain) {
   try {
-    process.exitCode = run(process.argv);
+    process.exitCode = await run(process.argv);
   } catch (err) {
     process.stderr.write(`${err.message || err}\n`);
     process.exitCode = 1;

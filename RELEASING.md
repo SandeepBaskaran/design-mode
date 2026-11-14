@@ -54,6 +54,25 @@ recommending the bump:
 - `README.md` — only if install instructions or feature list
   changed; not for routine bumps.
 
+## Testing a pull-request build
+
+When a pull request is opened, the `PR extension build` workflow
+packages the extension the same way as `npm run package:extension`,
+uploads `design-mode-extension.zip` (Chrome), `design-mode-addon.zip`
+(Firefox) and the unpacked `dist/` as a workflow artefact named
+`extension-pr-<number>`, and posts (or updates) one PR comment with a
+link to that run.
+
+To sideload the build: download the artefact from the comment's
+workflow-run link, then load the unpacked `dist` folder in
+`chrome://extensions` (Developer mode → Load unpacked) or, in Firefox,
+`about:debugging#/runtime/this-firefox` → Load Temporary Add-on →
+`manifest.json` inside `dist`.
+
+You do not need a standing local clone. For a one-off checkout:
+`gh pr checkout <number> && npm ci && npm run package:extension`, then
+load `packages/extension/dist`. Delete the clone when you are done.
+
 ## Pre-tag checklist (before `git tag v*.*.*`)
 
 1. `npm run release:preflight` then `npm run verify`, both from repo
@@ -213,19 +232,36 @@ not skip when store secrets are absent. Until the trusted publisher
 below is saved on npmjs.com, this job fails with `ENEEDAUTH` and the
 Chrome and Firefox jobs are unaffected.
 
-Confirm after a successful run:
-
-```sh
-npm view @designmode-app/cli version
-npm view @designmode-app/cli@<version> dist.shasum
-```
-
-Or run the bundled check, which also confirms the origin tag and the
-GitHub release:
+Confirm after the npm and store jobs finish. `npm view` can keep a
+stale `latest` tag; the bundled check reads the registry packument
+directly:
 
 ```sh
 npm run release:postcheck -- --tarball /path/to/designmode-app-cli-<version>.tgz
 ```
+
+Postcheck confirms the origin tag and the GitHub Release, then reads
+`dist-tags.latest` with `Cache-Control: no-cache` and a cache-busting
+query. If the registry still shows the previous latest, it retries
+with backoff for three minutes and reports how many attempts it took.
+Override that budget with `--npm-timeout-ms` or
+`DM_RELEASE_POSTCHECK_NPM_TIMEOUT_MS` (milliseconds; `0` tries once).
+With `--tarball`, the shasum comes from that same packument.
+
+It also reads the `release.yml` run for the tag with `gh`. The Chrome
+Web Store and Firefox AMO jobs must have concluded successfully, and
+the lines those steps printed must show this version was submitted.
+Chrome's line is `Submitted <id> crxVersion=<version> to the Chrome Web
+Store for review`. Firefox's line is web-ext's `Waiting for approval
+and download of signed XPI skipped` acceptance (or a signed xpi
+download when approval is awaited). Script text echoed before a step
+runs is ignored, so the word "skipped" inside the workflow source is
+not a result. A job that exits 0 because store secrets are unset fails
+this check: the version was not submitted. If `gh` is missing or not
+authenticated, those two checks warn and the command still exits 0.
+Public Chrome updatecheck and AMO version listings are extra warnings
+when they do not show the version yet. They need no store credentials
+and they do not decide the submission checks. Safari stays manual.
 
 See [packages/cli/PUBLISHING.md](packages/cli/PUBLISHING.md).
 
@@ -253,8 +289,9 @@ Run `npm publish` in the maintainer's own interactive Terminal without
 `--otp`. npm hands off to the browser and the maintainer approves with
 his passkey (Apple Passwords); no authenticator code is used. A
 non-interactive agent shell cannot finish this step (npm returns
-`EOTP`). The registry can take 1 to 2 minutes to list the version.
-Then run the same `npm view` and `release:postcheck` commands above.
+`EOTP`). The registry can take a couple of minutes to list the
+version. Then run `npm run release:postcheck`; it keeps reading the
+packument for up to three minutes before it fails a stale `latest`.
 
 ## Publication checklist (after preflight and `npm run verify` are green)
 
@@ -275,13 +312,18 @@ version and the pre-tag checklist above is complete.
 3. The same workflow then runs three jobs that depend only on the
    release job. Chrome Web Store and Firefox AMO submit the zips from
    that job. npm publishes `@designmode-app/cli` with trusted
-   publishing. Confirm `npm view @designmode-app/cli version` after
-   the npm job is green, then run
-   `npm run release:postcheck -- --tarball <verified-tarball>`. A
-   store job whose secrets are not configured logs a skip and
-   succeeds. If a store or npm job fails, use the manual fallback
-   documented above (store zips from the GitHub Release; npm via
+   publishing. When the npm and store jobs have finished, run
+   `npm run release:postcheck -- --tarball <verified-tarball>`. It
+   retries a stale npm `latest` tag and checks that the Chrome and
+   Firefox jobs' result lines show this version was submitted. A
+   store job whose secrets are not configured logs a skip, exits 0,
+   and fails postcheck until that version is actually submitted. If a
+   store or npm job fails, use the manual fallback documented above
+   (store zips from the GitHub Release; npm via
    `npm login --auth-type=web` and `npm publish` without `--otp`).
+   Re-run the skipped store job after secrets exist so postcheck can
+   see the submit line; a manual dashboard upload is not visible to
+   `gh`.
 4. Safari: use `designmode-for-safari.zip` from the GitHub Release and
    complete any Apple distribution steps separately.
 

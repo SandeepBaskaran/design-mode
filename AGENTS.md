@@ -9,14 +9,19 @@ Releases are never automatic. Cut one only with explicit maintainer
 consent. Versioning, the file list for a bump, and the pre-tag
 checklist are in RELEASING.md.
 
+Pull-request extension zips are built by `.github/workflows/pr-extension.yml`.
+How to sideload a PR build is in RELEASING.md.
+
 When creating a worktree, set `git config user.name "Sandeep Baskaran"`
 and `git config user.email 29013187+SandeepBaskaran@users.noreply.github.com`
 in it.
 
 Run `npm run release:preflight` before `npm run verify`. After the
-tagged release's npm job (or a manual fallback publish) succeeds, run
-`npm run release:postcheck` (add `-- --tarball <path>` to confirm the
-registry shasum matches the tested tarball).
+tagged release's npm and store jobs (or a manual fallback publish)
+finish, run `npm run release:postcheck` (add `-- --tarball <path>` to
+confirm the registry shasum). It retries a stale npm `latest` tag and
+confirms the Chrome and Firefox jobs submitted this version. Detail
+is in RELEASING.md.
 
 After preflight and `npm run verify` are green on the commit you intend to ship:
 
