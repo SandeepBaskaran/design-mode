@@ -325,7 +325,9 @@ packument for up to three minutes before it fails a stale `latest`.
    those jobs have finished, run
    `npm run release:postcheck -- --tarball <verified-tarball>`. It
    retries a stale npm `latest` tag and checks that the Chrome and
-   Firefox jobs' result lines show this version was submitted. A
+   Firefox jobs' result lines show this version was submitted. It finds
+   that run from the `design-mode-release v<version>` line, so a
+   manual run and a version-bump push to `main` both count. A
    store job whose secrets are not configured logs a skip, exits 0,
    and fails postcheck until that version is actually submitted. If a
    store or npm job fails, use the manual fallback documented above
@@ -342,7 +344,9 @@ branch set to `main`, publishes the version named in root
 `package.json` when `v<version>` does not exist yet and that version
 is newer than the latest tag. The same button finishes a tag that
 already exists and has no GitHub Release: it checks out that tag,
-does not retag, and publishes the tag's commit. A push to `main` in
+does not retag, and publishes the tag's commit. The GitHub Release
+`target_commitish` is that commit's SHA. The Releases API rejects an
+annotated tag name in that field. A push to `main` in
 that situation only writes `v<version> exists without a release; run
 Release manually to finish it`. A tag that already has a GitHub
 Release is left alone. `v3.2.2` points at `6b27e56` and has no GitHub

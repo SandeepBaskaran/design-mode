@@ -156,6 +156,7 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-node@v7
         if: steps.gate.outputs.publish == 'true'
         with:
@@ -211,17 +212,43 @@ jobs:
             }
             in_section { print }
           ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md has no notes for $VERSION" >&2
+            exit 1
+          fi
+      - name: Resolve the tagged commit
+        id: target
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          git fetch origin tag "$RELEASE_TAG"
+          sha=$(git rev-parse "${RELEASE_TAG}^{commit}")
+          if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "Could not resolve $RELEASE_TAG to a commit: $sha" >&2
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - name: Create release
         if: steps.gate.outputs.publish == 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
-          target_commitish: ${{ needs.prepare.outputs.tag }}
+          # An annotated tag name is rejected as target_commitish. The SHA
+          # is the commit the tag already points at, so the tag is not moved.
+          target_commitish: ${{ steps.target.outputs.sha }}
+          fail_on_unmatched_files: true
           files: |
             packages/extension/design-mode-extension.zip
             packages/extension/design-mode-addon.zip
             packages/extension/designmode-for-safari.zip
           body_path: release-notes.md
+      - name: Record the published tag
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+        run: echo "design-mode-release ${RELEASE_TAG} ${TARGET_SHA}"
 
   # Store and npm publishes are independent of each other. A failure in one
   # does not cancel the others. Each job that needs a secret logs a skip and
@@ -275,7 +302,14 @@ jobs:
           CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
           CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
-        run: node scripts/publish-chrome-web-store.mjs store/design-mode-extension.zip
+        run: |
+          zip=$(find store -name design-mode-extension.zip -print -quit)
+          if [ -z "$zip" ]; then
+            echo "design-mode-extension.zip is missing from the store-packages artifact." >&2
+            find store -print >&2
+            exit 1
+          fi
+          node scripts/publish-chrome-web-store.mjs "$zip"
 
   publish-firefox:
     name: Firefox Add-ons
@@ -330,7 +364,13 @@ jobs:
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
           DM_FIREFOX_SOURCE_ZIP: ${{ github.workspace }}/design-mode-firefox-source.zip
         run: |
-          unzip -q store/design-mode-addon.zip -d amo-source
+          zip=$(find store -name design-mode-addon.zip -print -quit)
+          if [ -z "$zip" ]; then
+            echo "design-mode-addon.zip is missing from the store-packages artifact." >&2
+            find store -print >&2
+            exit 1
+          fi
+          unzip -q "$zip" -d amo-source
           cat > amo-metadata.json <<'EOF'
           {
             "version": {

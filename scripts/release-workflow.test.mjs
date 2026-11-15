@@ -130,9 +130,29 @@ test('the release workflow tags from main and publishes in the same run', () => 
   assert.equal((release.match(/ref: \$\{\{ needs\.prepare\.outputs\.tag \}\}/g) || []).length, 1);
   assert.equal((release.match(/ref: \$\{\{ needs\.release\.outputs\.tag \}\}/g) || []).length, 3);
   assert.equal(release.includes('tag_name: ${{ needs.prepare.outputs.tag }}'), true);
-  assert.equal(release.includes('target_commitish: ${{ needs.prepare.outputs.tag }}'), true);
+  assert.equal(release.includes('target_commitish: ${{ steps.target.outputs.sha }}'), true);
+  assert.equal(release.includes('target_commitish: ${{ needs.prepare.outputs.tag }}'), false);
+  assert.equal(release.includes('git rev-parse "${RELEASE_TAG}^{commit}"'), true);
+  assert.equal(release.includes('fail_on_unmatched_files: true'), true);
   assert.equal(ci.includes('name: extension-pr-${{ github.event.pull_request.number }}'), true);
   assert.equal(ci.includes("if: github.event_name == 'pull_request'"), true);
+});
+
+test('the publish jobs stay wired for an existing tag and a new bump', () => {
+  assert.equal((release.match(/environment: release/g) || []).length, 3);
+  assert.equal((release.match(/needs: release$/gm) || []).length, 3);
+  assert.equal((release.match(/needs\.release\.outputs\.publish == 'true'/g) || []).length, 3);
+  assert.equal((release.match(/name: store-packages/g) || []).length, 3);
+  assert.equal((release.match(/ref: \$\{\{ needs\.release\.outputs\.tag \}\}/g) || []).length, 3);
+  assert.equal(release.includes('ref: ${{ needs.prepare.outputs.tag }}'), true);
+  assert.equal(release.includes('ref: ${{ github.ref }}'), true);
+  assert.equal(release.includes('id-token: write'), true);
+  assert.equal(release.includes('contents: read'), true);
+  assert.equal(release.includes('npm publish --workspace @designmode-app/cli --access public --provenance'), true);
+  assert.equal(release.includes('design-mode-release ${RELEASE_TAG} ${TARGET_SHA}'), true);
+  assert.equal(release.includes('CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}'), true);
+  assert.equal(release.includes('AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}'), true);
+  assert.equal(release.includes('fetch-tags: true'), true);
 });
 
 test('every run step that calls gh sets GH_TOKEN', () => {
