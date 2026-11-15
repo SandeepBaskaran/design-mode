@@ -4,6 +4,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
 import net from 'node:net';
 import WebSocket from 'ws';
+import { readFileSync } from 'node:fs';
 import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +36,18 @@ async function cli(args: string[], port: number | string, input = '', executable
   const [code] = await once(child, 'exit');
   return { code, stdout, stderr, json: () => JSON.parse(stdout) };
 }
+
+test('version prints the package version and does not touch the network', async () => {
+  const port = await freePort();
+  const expected = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')).version + '\n';
+  for (const args of [['version'], ['--version'], ['-v']]) {
+    const result = await cli(args, port);
+    assert.equal(result.code, 0);
+    assert.equal(result.stdout, expected);
+    assert.equal(result.stderr, '');
+  }
+  assert.equal(await probeOwnerHealth(port), null);
+});
 
 test('offline help, discovery and canonical schema', async () => {
   const port = await freePort();

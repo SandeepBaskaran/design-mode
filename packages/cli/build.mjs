@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
+const version = JSON.parse(await readFile(new URL('./package.json', import.meta.url), 'utf8')).version;
 const result = await build({
   metafile: true,
   absWorkingDir: root,
@@ -13,6 +14,7 @@ const result = await build({
   platform: 'node',
   target: 'node18',
   format: 'cjs',
+  define: { __DM_VERSION__: JSON.stringify(version) },
   external: ['bufferutil', 'utf-8-validate'],
   banner: { js: '#!/usr/bin/env node' },
   legalComments: 'inline',

@@ -8,6 +8,32 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.2.2] — 2026-11-15
+
+### Added
+
+- Copy as Prompt includes the size and position of a drawn region note.
+- Changes Export downloads a zip of the JSON plus one PNG per drawn region. An export with no drawn region stays a JSON file.
+- The empty Layers list has a Reload button.
+- `designmode-app version` prints the installed CLI version without a network call or a token.
+
+### Changed
+
+- The amber note that region annotations only reach an agent through MCP is gone.
+- Send setup recommends restarting the connection, the agent, or the session when the agent is not connected yet.
+
+### Fixed
+
+- Screenshot is Alt+Shift+S. Option+S on a Mac is left for accented letters (ś, ß, š) and no longer starts a capture when the key is held.
+- A newly drawn region note is no longer marked stale in Changes while its anchor element or the current page is still present. The stale badge remains when that element is gone or the note belongs to another route.
+- Version scans escape every regular-expression metacharacter, including backslash, before matching leftover versions or a changelog heading.
+
+### Internal
+
+- `npm run release:postcheck` reads `dist-tags.latest` from the npm packument with a cache-busting request and retries for up to three minutes (`--npm-timeout-ms` or `DM_RELEASE_POSTCHECK_NPM_TIMEOUT_MS`), reporting the attempt count. It also confirms the tagged `release.yml` run submitted that version to the Chrome Web Store and Firefox AMO, using each job's result lines rather than a search of the log. A missing or unauthenticated `gh` warns. Public store listings are a separate warning when they still lag review.
+- Pull requests build the Chrome and Firefox extension zips plus the unpacked `dist/` and attach them as a workflow artefact (`extension-pr-<number>`), with one PR comment linking to the run. See RELEASING.md.
+- Actions → Release tag, run from `main`, creates the annotated tag when root `package.json` is a newer `v*` version and then runs the release jobs in that same run. A version that is not newer, a tag that already exists, or a GitHub Release that already exists for that tag ends the run without publishing. npm trusted publishing for that button needs a second publisher whose workflow filename is `release-tag.yml`.
+
 ## [3.2.1] — 2026-11-10
 
 ### Added

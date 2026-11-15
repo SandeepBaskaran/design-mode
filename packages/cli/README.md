@@ -3,7 +3,7 @@
 Package: **`@designmode-app/cli`**. Executable: **`designmode-app`**.
 Cloud is the default; Local and Self-hosted use the same existing MCP contracts.
 The last verified published npm version (10 November 2026) is listed on the
-`designmode-app` organisation. This source tree is 3.2.1; 3.2.1 has not been
+`designmode-app` organisation. This source tree is 3.2.2; 3.2.2 has not been
 published to npm yet — see
 [Published package](#published-package).
 
@@ -18,7 +18,7 @@ node packages/cli/dist/cli.cjs --mode local tools
 npm pack --workspace @designmode-app/cli
 ```
 
-Install the resulting tarball with `npm install /path/to/designmode-app-cli-3.2.1.tgz`
+Install the resulting tarball with `npm install /path/to/designmode-app-cli-3.2.2.tgz`
 and use `designmode-app`. The executable bundles its dependencies and existing
 Local MCP engine; it does not import a workspace at runtime. Build from the
 monorepo, not from an unpacked tarball. Node 18 or newer is required.
@@ -76,6 +76,7 @@ requests, even with a broken config. No-argument invocation also prints help.
 Once the selected mode is configured:
 
 ```sh
+designmode-app version
 designmode-app tools
 designmode-app schema apply_changes
 designmode-app status
@@ -147,7 +148,7 @@ These tests are not production-relay, real-Redis or real-browser certification.
 ## Published package
 
 The last verified npm release (10 November 2026) is the published latest on
-npm. `3.2.1` is the version in this tree and is **not yet published**. Pushing the `v*.*.*` tag runs
+npm. `3.2.2` is the version in this tree and is **not yet published**. Pushing the `v*.*.*` tag runs
 `.github/workflows/release.yml`, which publishes this package with npm trusted
 publishing (GitHub Actions OIDC, no npm token) after the GitHub Release succeeds.
 See [PUBLISHING.md](PUBLISHING.md). Do not put tokens or one-time codes in the

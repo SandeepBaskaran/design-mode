@@ -277,7 +277,7 @@ Run `npm start` for the full ASCII banner.
 | `Alt+C` | Comment on the selected element |
 | `Alt+R` | Region comment (drag a box anywhere) |
 | `Alt+P` | Pause / resume all motion on the page |
-| `Alt+S` | Screenshot using the same target and destination as the camera button (Settings → Capture mode) |
+| `Alt+Shift+S` | Screenshot using the same target and destination as the camera button (Settings → Capture mode) |
 | `Alt+X` | Copy generated CSS to clipboard |
 | `Delete` | Remove the selected element |
 | `Ctrl+Z` / `Cmd+Z` | Undo last change |
@@ -291,7 +291,7 @@ Run `npm start` for the full ASCII banner.
 | `Enter` on a Layers row | Toggle collapse / expand |
 | `Escape` | Cancel comment → tear down multi-select → exit inspect → deselect |
 
-Chrome treats manifest shortcuts as suggestions: if `Alt+D` or `Alt+S` conflicts
+Chrome treats manifest shortcuts as suggestions: if `Alt+D` or `Alt+Shift+S` conflicts
 or was added after installation, assign it at `chrome://extensions/shortcuts`.
 
 Shortcuts are suppressed while a page-side `<input>` / `<textarea>` /

@@ -68,6 +68,22 @@ export async function captureElementScreenshot(elementId: string): Promise<strin
 // Capture a region comment's rectangle. `region` is in document coordinates
 // (scroll-independent), so translate to viewport space, capture the page with
 // all DM overlays hidden, and crop. Returns null if the region isn't on screen.
+export async function captureRegionScreenshots(regions: { id: string; region: { x: number; y: number; w: number; h: number } }[]): Promise<{ id: string; dataUrl: string | null }[]> {
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  const images: { id: string; dataUrl: string | null }[] = [];
+  try {
+    for (const item of regions) {
+      window.scrollTo({ left: Math.max(0, item.region.x - 16), top: Math.max(0, item.region.y - 16), behavior: 'instant' as ScrollBehavior });
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      images.push({ id: item.id, dataUrl: await captureRegionScreenshot(item.region) });
+    }
+  } finally {
+    window.scrollTo({ left: scrollX, top: scrollY, behavior: 'instant' as ScrollBehavior });
+  }
+  return images;
+}
+
 export async function captureRegionScreenshot(region: { x: number; y: number; w: number; h: number }): Promise<string | null> {
   if (!region || region.w <= 0 || region.h <= 0) return null;
   const viewportDataUrl = await withDmOverlaysHidden(() => captureViewportScreenshot());

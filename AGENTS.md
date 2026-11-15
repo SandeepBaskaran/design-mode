@@ -9,21 +9,31 @@ Releases are never automatic. Cut one only with explicit maintainer
 consent. Versioning, the file list for a bump, and the pre-tag
 checklist are in RELEASING.md.
 
+Pull-request extension zips are built by `.github/workflows/pr-extension.yml`.
+How to sideload a PR build is in RELEASING.md.
+
 When creating a worktree, set `git config user.name "Sandeep Baskaran"`
 and `git config user.email 29013187+SandeepBaskaran@users.noreply.github.com`
 in it.
 
 Run `npm run release:preflight` before `npm run verify`. After the
-tagged release's npm job (or a manual fallback publish) succeeds, run
-`npm run release:postcheck` (add `-- --tarball <path>` to confirm the
-registry shasum matches the tested tarball).
+tagged release's npm and store jobs (or a manual fallback publish)
+finish, run `npm run release:postcheck` (add `-- --tarball <path>` to
+confirm the registry shasum). It retries a stale npm `latest` tag and
+confirms the Chrome and Firefox jobs submitted this version. Detail
+is in RELEASING.md.
 
 After preflight and `npm run verify` are green on the commit you intend to ship:
 
 1. Merge into `main` and push `origin/main` with a normal (non-force)
    push.
-2. Create and push the annotated tag `vMAJOR.MINOR.PATCH`. **That tag
-   push is the release.** The workflow builds and attaches
+2. After that merge is on `main`, the maintainer runs **Actions →
+   Release tag → Run workflow** on `main`. That creates and pushes the
+   annotated tag `vMAJOR.MINOR.PATCH` when the version is newer, and
+   runs the release jobs in the same run. **That run is the release.**
+   A tag he pushes himself still starts `.github/workflows/release.yml`
+   directly. Agents do not run this workflow and do not push tags.
+   The workflow builds and attaches
    `design-mode-extension.zip` (Chrome), `design-mode-addon.zip`
    (Firefox) and `designmode-for-safari.zip`. After that release job
    succeeds, three separate jobs on the `release` environment submit

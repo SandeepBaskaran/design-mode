@@ -3,30 +3,78 @@ name: Release
 on:
   push:
     tags: ['v*.*.*']
+  workflow_call:
+    inputs:
+      tag:
+        description: Annotated release tag, including the v prefix
+        required: true
+        type: string
 
 permissions:
   contents: write
   actions: write
+  id-token: write
+
+# Not the caller's design-mode-release group: the caller holds that
+# group while it waits for this workflow, and GitHub cancels the pair
+# as a deadlock. A button run and a manual tag push of the same tag
+# still share this group.
+concurrency:
+  group: design-mode-publish-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.gate.outputs.publish }}
     steps:
+      # inputs.tag is set when Release tag calls this workflow. On a tag
+      # push it is empty, so github.ref is that tag. The event name stays
+      # the caller's for the whole called run, so it cannot select the ref.
+      - name: Skip when this tag already has a GitHub Release
+        id: gate
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set +e
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>"$RUNNER_TEMP/release-view.txt"
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "$RELEASE_TAG already has a GitHub Release. This run will not package or publish again." >> "$GITHUB_STEP_SUMMARY"
+          elif grep -qi 'not found' "$RUNNER_TEMP/release-view.txt"; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/release-view.txt" >&2
+            exit 1
+          fi
       - uses: actions/checkout@v7
+        if: steps.gate.outputs.publish == 'true'
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
       - uses: actions/setup-node@v7
+        if: steps.gate.outputs.publish == 'true'
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
+      - if: steps.gate.outputs.publish == 'true'
+        run: npm ci
       # Gate: the tagged commit must pass the same checks CI runs on main,
       # and the tag must name the version the tree actually carries. A tag
       # pushed on a red or mis-versioned commit fails here and publishes
       # nothing, instead of shipping artifacts CI never approved.
       - name: Verify tagged commit
+        if: steps.gate.outputs.publish == 'true'
         run: npm run verify
       - name: Check tag matches package version
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${RELEASE_TAG#v}"
           PKG="$(node -p "require('./package.json').version")"
           MANIFEST="$(node -p "require('./packages/extension/public/manifest.json').version")"
           if [ "$TAG" != "$PKG" ] || [ "$TAG" != "$MANIFEST" ]; then
@@ -34,12 +82,14 @@ jobs:
             exit 1
           fi
       - name: Package Chrome, Firefox and Safari releases
+        if: steps.gate.outputs.publish == 'true'
         env:
           DM_POSTHOG_HOST: ${{ secrets.DM_POSTHOG_HOST }}
           DM_POSTHOG_KEY: ${{ secrets.DM_POSTHOG_KEY }}
           DM_DISTRIBUTION: published_hint
         run: npm run package:extension:release
       - name: Upload store packages
+        if: steps.gate.outputs.publish == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: store-packages
@@ -49,8 +99,11 @@ jobs:
             packages/extension/design-mode-extension.zip
             packages/extension/design-mode-addon.zip
       - name: Extract CHANGELOG section for this tag
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           awk -v v="$VERSION" '
             BEGIN { in_section = 0 }
             /^## \[/ {
@@ -60,8 +113,11 @@ jobs:
             in_section { print }
           ' CHANGELOG.md > release-notes.md
       - name: Create release
+        if: steps.gate.outputs.publish == 'true'
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          target_commitish: ${{ inputs.tag || github.sha }}
           files: |
             packages/extension/design-mode-extension.zip
             packages/extension/design-mode-addon.zip
@@ -75,6 +131,7 @@ jobs:
   publish-chrome:
     name: Chrome Web Store
     needs: release
+    if: needs.release.outputs.publish == 'true'
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -101,6 +158,8 @@ jobs:
           fi
       - uses: actions/checkout@v7
         if: steps.secrets.outputs.ready == 'true'
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v7
         if: steps.secrets.outputs.ready == 'true'
         with:
@@ -122,6 +181,7 @@ jobs:
   publish-firefox:
     name: Firefox Add-ons
     needs: release
+    if: needs.release.outputs.publish == 'true'
     runs-on: ubuntu-latest
     environment: release
     steps:
@@ -144,6 +204,8 @@ jobs:
           fi
       - uses: actions/checkout@v7
         if: steps.secrets.outputs.ready == 'true'
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v7
         if: steps.secrets.outputs.ready == 'true'
         with:
@@ -194,6 +256,7 @@ jobs:
   publish-npm:
     name: npm
     needs: release
+    if: needs.release.outputs.publish == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -201,6 +264,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: '22'

@@ -57,6 +57,10 @@ function assertFile(path, label = path) {
 
 console.log(`\n${BOLD}◆ Design Mode — pre-publish check${RESET}\n`);
 
+step('Release workflow tag input', () => {
+  run('node --test scripts/release-workflow.test.mjs', { stdio: 'pipe' });
+});
+
 step('Typecheck extension and shared project references', () => {
   run('npm run typecheck:extension', { stdio: 'pipe' });
 });

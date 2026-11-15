@@ -9,7 +9,7 @@ const code = transformSync(readFileSync(new URL('./enhanced-export.ts', import.m
   loader: 'ts', format: 'cjs',
 }).code;
 
-function prompt(changes: TextChange[]): string {
+function prompt(changes: TextChange[], comments: { selector: string; text: string; region?: { x: number; y: number; w: number; h: number } }[] = []): string {
   const dependencies: Record<string, unknown> = {
     './helpers': { getElementById: () => null },
     './change-tracker': {
@@ -29,7 +29,7 @@ function prompt(changes: TextChange[]): string {
     document: { title: 'Link fixture' },
     window: { location: { href: 'https://example.test/active' } },
   });
-  return module.exports.exportMarkdown();
+  return module.exports.exportMarkdown(comments);
 }
 
 function change(overrides: Partial<TextChange> = {}): TextChange {
@@ -38,6 +38,12 @@ function change(overrides: Partial<TextChange> = {}): TextChange {
     oldText: '/before', newText: '/after', attributeName: 'href', ...overrides,
   };
 }
+
+test('a drawn region is copied with its size and position', () => {
+  const result = prompt([], [{ selector: 'region', text: 'make this tighter', region: { x: 40.2, y: 200.6, w: 120.4, h: 80.2 } }]);
+  assert.ok(result.includes('- region note, 120×80 at x 40, y 201: make this tighter'));
+  assert.ok(!result.includes('only reach the agent'));
+});
 
 test('active-route prompt labels href edits as attributes, retaining exact before and after values', () => {
   for (const [oldText, newText] of [

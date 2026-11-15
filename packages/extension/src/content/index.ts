@@ -38,7 +38,7 @@ import { routeIdentity } from './route-storage';
 import { canEditRoute, setRouteEditGuard } from './route-edit-guard';
 import { exportMarkdown, exportGitHubIssueBody as exportEnhancedGitHubIssue } from './enhanced-export';
 import { replaceRouteComments, clearRouteComments, clearSiteComments } from './comments';
-import { captureElementScreenshot, captureViewportScreenshotClean } from './screenshots';
+import { captureElementScreenshot, captureRegionScreenshots, captureViewportScreenshotClean } from './screenshots';
 import {
   detectScales, annotateDrift, findTokenUsages,
   getCustomPresets, saveCustomPreset, deleteCustomPreset, withPresetUsageCounts,
@@ -862,7 +862,12 @@ function renderStoredRouteMarkdown(group: Awaited<ReturnType<typeof getStoredSit
   }
   if (group.comments.length) {
     lines.push('', '### Comments');
-    for (const c of group.comments) lines.push(`- on ${c.selector || 'Region'}: ${c.text}`);
+    for (const c of group.comments) {
+      const region = c.region;
+      lines.push(region
+        ? `- region note, ${Math.round(region.w)}×${Math.round(region.h)} at x ${Math.round(region.x)}, y ${Math.round(region.y)}: ${c.text.trim()}`
+        : `- note on ${c.selector}: ${c.text.trim()}`);
+    }
   }
   // Retain all persisted context without resolving another route's selectors.
   const stored = JSON.stringify({ styleChanges: group.styleChanges, textChanges: group.textChanges, domChanges: group.domChanges, comments: group.comments }, null, 2);
@@ -1490,8 +1495,10 @@ function handleContentMessage(msg: any, _: any, sendResponse: (payload: any) => 
         const cx = region.x - window.scrollX + region.w / 2;
         const cy = region.y - window.scrollY + region.h / 2;
         const hit = document.elementFromPoint(cx, cy) as HTMLElement | null;
-        const selector = hit && !isOverlayLike(hit) ? generateSelector(hit) : 'region';
-        addRegionComment(region, selector, msg.text).then(comment => {
+        const hitEl = hit && !isOverlayLike(hit) ? hit : null;
+        const selector = hitEl ? generateSelector(hitEl) : 'region';
+        const elementId = hitEl ? getOrAssignId(hitEl) : '';
+        addRegionComment(region, selector, msg.text, elementId).then(comment => {
           pendingRegion = null;
           syncCommentChange(comment);
           clearPendingRegionBox(); // committed box (showCommentPins) replaces the pending one
@@ -2389,6 +2396,12 @@ function handleContentMessage(msg: any, _: any, sendResponse: (payload: any) => 
 
     case 'SCREENSHOT_ELEMENT': { const sid = getSelectedElementId(); if (sid) { captureElementScreenshot(sid).then(dataUrl => sendResponse({ dataUrl })); return true; } sendResponse({ dataUrl: null }); break; }
     case 'SCREENSHOT_VIEWPORT': { captureViewportScreenshotClean().then(dataUrl => sendResponse({ dataUrl })); return true; }
+    case 'CAPTURE_REGION_IMAGES': {
+      const regions = Array.isArray(msg.regions) ? msg.regions.filter((item: { id?: unknown; region?: { w?: number; h?: number } }) =>
+        item && typeof item.id === 'string' && item.region && typeof item.region.w === 'number' && typeof item.region.h === 'number') : [];
+      captureRegionScreenshots(regions).then(images => sendResponse({ images }), () => sendResponse({ images: [] }));
+      return true;
+    }
     case 'UPLOAD_IMAGE': { const sid = getSelectedElementId(); if (sid && msg.dataUrl) { const el = getElementById(sid); if (el?.tagName === 'IMG') (el as HTMLImageElement).src = msg.dataUrl; else if (el) { el.style.backgroundImage = `url(${msg.dataUrl})`; el.style.backgroundSize = 'cover'; } if (el) sendResponse({ info: { ...buildElementInfo(el), element: undefined } }); } sendResponse({ ok: true }); break; }
 
     // ── Source detection ──

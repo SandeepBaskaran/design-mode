@@ -86,7 +86,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Browser-level commands",
-        body: "Alt+D opens Design Mode on both Chrome and Firefox; Alt+S takes a screenshot using the same target and destination as the camera button. They are browser commands rather than page handlers, so both can be rebound at chrome://extensions/shortcuts on Chrome or about:addons › Manage Extension Shortcuts on Firefox. Browsers treat the supplied keys as suggestions and may leave either command unassigned after an update or conflict. The 12 in-page shortcuts above cannot be remapped from Settings — that list is read-only.",
+        body: "Alt+D opens Design Mode on both Chrome and Firefox; Alt+Shift+S takes a screenshot using the same target and destination as the camera button. Option+S is left free so a Mac can type accented letters. They are browser commands rather than page handlers, so both can be rebound at chrome://extensions/shortcuts on Chrome or about:addons › Manage Extension Shortcuts on Firefox. Browsers treat the supplied keys as suggestions and may leave either command unassigned after an update or conflict. The 12 in-page shortcuts above cannot be remapped from Settings — that list is read-only.",
       },
     ],
     related: ["changes-tab", "mcp-setup"],

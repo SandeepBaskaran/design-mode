@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Design Mode",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "description": "Visual DOM editor for browsers — edit styles, add comments, and send changes to coding agents via MCP",
   "permissions": [
     "activeTab",
@@ -77,10 +77,10 @@
       },
       "description": "Toggle Design Mode"
     },
-    "capture-screenshot": {
+    "dm-capture-screenshot": {
       "suggested_key": {
-        "default": "Alt+S",
-        "mac": "Alt+S"
+        "default": "Alt+Shift+S",
+        "mac": "Alt+Shift+S"
       },
       "description": "Capture with Design Mode"
     }

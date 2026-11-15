@@ -92,7 +92,7 @@ outline). The side panel mirrors whatever you have selected.
 ### 1.5 Screenshot (camera button)
 
 - **What it does**: captures a PNG of the page or the selected element.
-- **Use**: click the **camera** icon or press `Alt+S`. Both follow **Capture
+- **Use**: click the **camera** icon or press `Alt+Shift+S`. Both follow **Capture
   Mode** (`clipboard` / `download` / `both`) and the same target (viewport
   when nothing real is selected, otherwise the selected element). A toast confirms.
 
@@ -837,7 +837,7 @@ dedicated **MCP page** instead — see §5.1b.
 | **Page cursor** | Show the Design Mode app icon as the mouse cursor on the inspected page while the panel is open. Turning it off falls back to the plain crosshair. Persisted to `chrome.storage.local`; the content script picks up changes live via `storage.onChanged`. | on |
 | **Launch** (Chrome only) | Where the toolbar icon and `Alt+D` open Design Mode. `Side panel` (default) uses Chrome's native side panel (`openPanelOnActionClick`). `Floating` turns that off and opens the existing pop-out window. `Pin on top` opens that floating window with a focused Pin-on-top button — Document PiP cannot auto-open (needs a click in the opener). Firefox always uses the sidebar and omits this setting. Persisted as `dm-launch-surface`. Reset restores side panel. | `side-panel` |
 | **Theme** | `System` / `Dark` / `Light`. | `System` |
-| **Keyboard shortcuts** (button) | Opens a popover card listing every shortcut grouped by category (driven by `DEFAULT_SHORTCUTS`), keys shown as `<kbd>` chips. Chrome may leave the browser commands `Alt+D` / `Alt+S` unassigned after an update or conflict; assign them at `chrome://extensions/shortcuts`. Backdrop click / ✕ / `Esc` closes it. | — |
+| **Keyboard shortcuts** (button) | Opens a popover card listing every shortcut grouped by category (driven by `DEFAULT_SHORTCUTS`), keys shown as `<kbd>` chips. Chrome may leave the browser commands `Alt+D` / `Alt+Shift+S` unassigned after an update or conflict; assign them at `chrome://extensions/shortcuts`. Backdrop click / ✕ / `Esc` closes it. | — |
 | **Reset settings** (button) | Wipes every setting above back to its default. Toasts on success. | — |
 
 ---
@@ -862,7 +862,7 @@ dedicated **MCP page** instead — see §5.1b.
 | Shortcut | Action |
 |---|---|
 | `Alt+D` | Open Design Mode on the preferred Chrome launch surface (side panel / floating / pin-on-top opener). Firefox always opens the sidebar. |
-| `Alt+S` | Capture the selected element or viewport using Settings → Screenshot capture. This is a browser command and may need assigning in the browser's extension-shortcuts page. |
+| `Alt+Shift+S` | Capture the selected element or viewport using Settings → Screenshot capture. This is a browser command and may need assigning in the browser's extension-shortcuts page. Option+S is left free so a Mac can type ś, ß, or š. |
 | `Ctrl+Z` / `Cmd+Z` | Undo last change (style / text / DOM / visibility / token) |
 | `Ctrl+Shift+Z` / `Cmd+Shift+Z` | Redo |
 | `↑` / `↓` on a numeric input | Increment / decrement by 1 (or by 0.1 / 0.05 for filter components) |

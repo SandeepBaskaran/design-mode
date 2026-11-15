@@ -221,6 +221,15 @@ function tokenize(value: string, lookup: Map<string, string>, used: Set<string>)
   return value;
 }
 
+export function formatCommentLine(comment: { selector?: string; text: string; region?: { x: number; y: number; w: number; h: number } }): string {
+  const text = comment.text.trim();
+  const region = comment.region;
+  if (region && Number.isFinite(region.x) && Number.isFinite(region.y) && Number.isFinite(region.w) && Number.isFinite(region.h)) {
+    return `- region note, ${Math.round(region.w)}×${Math.round(region.h)} at x ${Math.round(region.x)}, y ${Math.round(region.y)}: ${text}`;
+  }
+  return `- note on ${comment.selector}: ${text}`;
+}
+
 // ── Markdown — short, chronological, agent-friendly ──
 export function exportMarkdown(pageComments: CommentData[] = []): string {
   const styleChanges = getStyleChanges();
@@ -394,7 +403,7 @@ export function exportMarkdown(pageComments: CommentData[] = []): string {
     for (const c of pageComments) {
       // Comments don't carry an elementId we can look up here; rely on the
       // selector and skip source pointers for them.
-      lines.push(`- note on ${c.selector}: ${c.text.trim()}`);
+      lines.push(formatCommentLine(c));
     }
   }
 
