@@ -622,7 +622,7 @@ function checkGithubRelease(results, version) {
 }
 
 export function npmPackumentUrl(cacheBust) {
-  const name = CLI_PACKAGE.replace('/', '%2f');
+  const name = CLI_PACKAGE.replaceAll('/', '%2f');
   return `https://registry.npmjs.org/${name}?cachebust=${cacheBust}`;
 }
 
