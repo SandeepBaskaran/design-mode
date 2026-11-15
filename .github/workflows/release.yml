@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.decide.outputs.release }}
+      createTag: ${{ steps.decide.outputs.createTag }}
       tag: ${{ steps.decide.outputs.tag }}
     steps:
       - name: Refuse a manual run from any ref other than main
@@ -46,6 +47,7 @@ jobs:
       - name: Compare package.json with the latest release tag
         id: decide
         env:
+          GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
@@ -55,6 +57,7 @@ jobs:
           import { appendFileSync, readFileSync } from 'node:fs';
           import { execFileSync } from 'node:child_process';
           import { decideRelease } from './scripts/release-decision.mjs';
+          import { parseSemver } from './scripts/release-preflight.mjs';
 
           const eventName = process.env.EVENT_NAME;
           const refType = process.env.REF_TYPE;
@@ -77,31 +80,40 @@ jobs:
           }
           execFileSync('git', ['fetch', 'origin', '--tags'], { stdio: 'inherit' });
           const tags = execFileSync('git', ['tag', '-l', 'v*'], { encoding: 'utf8' }).split('\n');
-          const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-          const tagCommits = {};
-          for (const name of tags) {
-            const tag = name.trim();
-            if (!tag) continue;
-            tagCommits[tag] = execFileSync('git', ['rev-parse', `${tag}^{}`], { encoding: 'utf8' }).trim();
+          let githubReleaseExists = null;
+          const parsedVersion = refType === 'tag' ? null : parseSemver(version);
+          if (parsedVersion && tags.some((name) => name.trim() === `v${parsedVersion.version}`)) {
+            const tagName = `v${parsedVersion.version}`;
+            try {
+              execFileSync('gh', ['release', 'view', tagName, '--repo', process.env.GITHUB_REPOSITORY], { stdio: 'pipe' });
+              githubReleaseExists = true;
+            } catch (error) {
+              const text = `${error.stdout || ''}${error.stderr || ''}`;
+              if (/not found/i.test(text)) githubReleaseExists = false;
+              else {
+                console.error(text || error.message);
+                process.exit(1);
+              }
+            }
           }
           const decision = decideRelease({
-            eventName, refType, refName, version, previousVersion, tags, headSha, tagCommits,
+            eventName, refType, refName, version, previousVersion, tags, githubReleaseExists,
           });
           console.log(decision.summary);
           appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${decision.summary}\n`);
           if (decision.error) process.exit(1);
-          appendFileSync(process.env.GITHUB_OUTPUT, `release=${decision.release}\ntag=${decision.tag}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `release=${decision.release}\ncreateTag=${decision.createTag}\ntag=${decision.tag}\n`);
           EOF
 
       - name: Set the release identity and run preflight
-        if: steps.decide.outputs.release == 'true' && github.ref_type != 'tag'
+        if: steps.decide.outputs.createTag == 'true'
         run: |
           git config user.name "Sandeep Baskaran"
           git config user.email "29013187+SandeepBaskaran@users.noreply.github.com"
           npm run release:preflight
 
       - name: Create and push the annotated tag
-        if: steps.decide.outputs.release == 'true' && github.ref_type != 'tag'
+        if: steps.decide.outputs.createTag == 'true'
         run: |
           tag="${{ steps.decide.outputs.tag }}"
           if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
@@ -123,6 +135,7 @@ jobs:
       - name: Skip when this tag already has a GitHub Release
         id: gate
         env:
+          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set +e

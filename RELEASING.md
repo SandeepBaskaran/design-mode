@@ -338,18 +338,24 @@ packument for up to three minutes before it fails a stale `latest`.
    complete any Apple distribution steps separately.
 
 Two fallbacks remain. **Actions → Release → Run workflow**, with the
-branch set to `main`, publishes the version already on `main` when it
-is newer than the latest tag, including a version an earlier merge
-left untagged. A `v*` tag you push yourself also starts Release.
-Do not use a fallback for a version the merge is already publishing.
-package.json on `main` is 3.2.2 and the latest tag is `v3.2.1`, so the
-manual run publishes 3.2.2. Use it only when that is what you want.
+branch set to `main`, publishes the version named in root
+`package.json` when `v<version>` does not exist yet and that version
+is newer than the latest tag. The same button finishes a tag that
+already exists and has no GitHub Release: it checks out that tag,
+does not retag, and publishes the tag's commit. A push to `main` in
+that situation only writes `v<version> exists without a release; run
+Release manually to finish it`. A tag that already has a GitHub
+Release is left alone. `v3.2.2` points at `6b27e56` and has no GitHub
+Release. After this workflow is on `main`, finish it with that button
+while root `package.json` is still `3.2.2`. A `v*` tag you push
+yourself also starts Release, and only for a tag name that does not
+exist yet. Do not move or delete `v3.2.2`; the ruleset blocks it.
 
 ```sh
 git checkout main
 git pull origin main
-git tag -a v3.2.2 -m "v3.2.2"
-git push origin v3.2.2
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin refs/tags/vX.Y.Z
 ```
 
 ## Maintainer setup (once)

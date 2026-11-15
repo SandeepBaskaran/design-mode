@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { decideRelease } from './release-decision.mjs';
@@ -33,54 +33,55 @@ test('a version bump newer than the latest tag is a release', () => {
     tags,
   });
   assert.equal(decision.release, true);
+  assert.equal(decision.createTag, true);
   assert.equal(decision.tag, 'v3.2.3');
 });
 
-test('an existing tag on this commit is left untouched', () => {
-  const existing = decideRelease({
+test('an existing tag with no GitHub Release is finished only by a manual run', () => {
+  const pushed = decideRelease({
     eventName: 'push',
     refType: 'branch',
     refName: 'main',
-    version: '3.2.1',
-    previousVersion: '3.2.0',
-    tags,
-    headSha: 'abc111',
-    tagCommits: { 'v3.2.1': 'abc111' },
+    version: '3.2.2',
+    previousVersion: '3.2.2',
+    tags: ['v3.2.1', 'v3.2.2'],
+    githubReleaseExists: false,
   });
-  assert.equal(existing.release, false);
-  assert.equal(existing.error, false);
-  assert.match(existing.summary, /already points at abc111/);
+  assert.equal(pushed.release, false);
+  assert.equal(pushed.createTag, false);
+  assert.equal(pushed.error, false);
+  assert.equal(pushed.summary, 'v3.2.2 exists without a release; run Release manually to finish it.');
 
-  const older = decideRelease({
-    eventName: 'workflow_dispatch',
-    refType: 'branch',
-    refName: 'main',
-    version: '3.2.0',
-    previousVersion: null,
-    tags: ['v3.2.1'],
-    headSha: 'abc111',
-    tagCommits: {},
-  });
-  assert.equal(older.release, false);
-  assert.match(older.summary, /not newer/);
-});
-
-test('a tag that points at another commit fails and is not moved', () => {
-  const decision = decideRelease({
+  const manual = decideRelease({
     eventName: 'workflow_dispatch',
     refType: 'branch',
     refName: 'main',
     version: '3.2.2',
     previousVersion: null,
     tags: ['v3.2.1', 'v3.2.2'],
-    headSha: 'abc111',
-    tagCommits: { 'v3.2.2': 'def222' },
+    githubReleaseExists: false,
   });
-  assert.equal(decision.release, false);
-  assert.equal(decision.error, true);
-  assert.match(decision.summary, /def222/);
-  assert.match(decision.summary, /abc111/);
-  assert.match(decision.summary, /does not retag/);
+  assert.equal(manual.release, true);
+  assert.equal(manual.createTag, false);
+  assert.equal(manual.tag, 'v3.2.2');
+  assert.match(manual.summary, /does not retag/);
+});
+
+test('a tag that already has a GitHub Release is a no-op', () => {
+  for (const eventName of ['push', 'workflow_dispatch']) {
+    const decision = decideRelease({
+      eventName,
+      refType: 'branch',
+      refName: 'main',
+      version: '3.2.1',
+      previousVersion: '3.2.0',
+      tags,
+      githubReleaseExists: true,
+    });
+    assert.equal(decision.release, false);
+    assert.equal(decision.createTag, false);
+    assert.match(decision.summary, /already has a GitHub Release/);
+  }
 });
 
 test('a manual run can publish a version that an earlier push left untagged', () => {
@@ -93,6 +94,7 @@ test('a manual run can publish a version that an earlier push left untagged', ()
     tags,
   });
   assert.equal(decision.release, true);
+  assert.equal(decision.createTag, true);
   assert.equal(decision.tag, 'v3.2.2');
 });
 
@@ -106,6 +108,7 @@ test('a hand-pushed tag is published by that same run', () => {
     tags,
   });
   assert.equal(decision.release, true);
+  assert.equal(decision.createTag, false);
   assert.equal(decision.tag, 'v3.2.3');
 });
 
@@ -123,10 +126,37 @@ test('the release workflow tags from main and publishes in the same run', () => 
   assert.equal(release.includes('tag -f'), false);
   assert.equal(release.includes('tag -d'), false);
   assert.equal(release.includes(':refs/tags'), false);
+  assert.equal(release.includes("if: steps.decide.outputs.createTag == 'true'"), true);
   assert.equal((release.match(/ref: \$\{\{ needs\.prepare\.outputs\.tag \}\}/g) || []).length, 1);
   assert.equal((release.match(/ref: \$\{\{ needs\.release\.outputs\.tag \}\}/g) || []).length, 3);
   assert.equal(release.includes('tag_name: ${{ needs.prepare.outputs.tag }}'), true);
   assert.equal(release.includes('target_commitish: ${{ needs.prepare.outputs.tag }}'), true);
   assert.equal(ci.includes('name: extension-pr-${{ github.event.pull_request.number }}'), true);
   assert.equal(ci.includes("if: github.event_name == 'pull_request'"), true);
+});
+
+test('every run step that calls gh sets GH_TOKEN', () => {
+  const directory = new URL('../.github/workflows/', import.meta.url);
+  let calls = 0;
+  for (const name of readdirSync(directory)) {
+    if (!name.endsWith('.yml')) continue;
+    const lines = readFileSync(new URL(name, directory), 'utf8').split('\n');
+    const steps = [];
+    let current = null;
+    for (const line of lines) {
+      if (line.startsWith('      - ')) {
+        if (current) steps.push(current.join('\n'));
+        current = [line];
+      } else if (current) current.push(line);
+    }
+    if (current) steps.push(current.join('\n'));
+    for (const step of steps) {
+      const run = step.includes('\n        run:');
+      const callsGh = /\bgh [\w-]/.test(step) || step.includes("execFileSync('gh'");
+      if (!run || !callsGh) continue;
+      calls += 1;
+      assert.equal(step.includes('GH_TOKEN:'), true, `${name} calls gh without GH_TOKEN`);
+    }
+  }
+  assert.equal(calls >= 3, true);
 });
