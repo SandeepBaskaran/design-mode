@@ -8,6 +8,10 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Internal
+
+- Merging to `main` runs Release. It publishes only when that push changes root `package.json` to a version newer than the latest `v*` tag and `v<version>` does not already exist. A merge that leaves the version unchanged, including Dependabot and documentation merges, ends without tagging or publishing. If the tag already points at a different commit, the run fails and does not move it. Actions → Release → Run workflow on `main`, and a `v*` tag pushed by hand, remain fallbacks. npm trusted publishing stays on `release.yml`; delete a `release-tag.yml` publisher if one was added. Pull-request extension zips are built by CI as `extension-pr-<number>`.
+
 ## [3.2.2] — 2026-11-15
 
 ### Added

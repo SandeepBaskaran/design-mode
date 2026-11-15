@@ -148,7 +148,7 @@ These tests are not production-relay, real-Redis or real-browser certification.
 ## Published package
 
 The last verified npm release (10 November 2026) is the published latest on
-npm. `3.2.2` is the version in this tree and is **not yet published**. Pushing the `v*.*.*` tag runs
+npm. `3.2.2` is the version in this tree and is **not yet published**. Merging a version bump to `main` runs
 `.github/workflows/release.yml`, which publishes this package with npm trusted
 publishing (GitHub Actions OIDC, no npm token) after the GitHub Release succeeds.
 See [PUBLISHING.md](PUBLISHING.md). Do not put tokens or one-time codes in the

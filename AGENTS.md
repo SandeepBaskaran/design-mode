@@ -5,12 +5,14 @@ short; if a rule grows, move the detail there.
 
 ## Release
 
-Releases are never automatic. Cut one only with explicit maintainer
-consent. Versioning, the file list for a bump, and the pre-tag
-checklist are in RELEASING.md.
+Merging to `main` is the release when that push changes root
+`package.json` to a version newer than the latest `v*` tag.
+Versioning and the file list for a bump are in RELEASING.md. Agents
+do not merge, tag, or run the Release workflow unless the maintainer
+asks.
 
-Pull-request extension zips are built by `.github/workflows/pr-extension.yml`.
-How to sideload a PR build is in RELEASING.md.
+Pull-request extension zips are built by the `extension-zip` job in
+`.github/workflows/ci.yml`. How to sideload a PR build is in RELEASING.md.
 
 When creating a worktree, set `git config user.name "Sandeep Baskaran"`
 and `git config user.email 29013187+SandeepBaskaran@users.noreply.github.com`
@@ -26,14 +28,11 @@ is in RELEASING.md.
 After preflight and `npm run verify` are green on the commit you intend to ship:
 
 1. Merge into `main` and push `origin/main` with a normal (non-force)
-   push.
-2. After that merge is on `main`, the maintainer runs **Actions →
-   Release tag → Run workflow** on `main`. That creates and pushes the
-   annotated tag `vMAJOR.MINOR.PATCH` when the version is newer, and
-   runs the release jobs in the same run. **That run is the release.**
-   A tag he pushes himself still starts `.github/workflows/release.yml`
-   directly. Agents do not run this workflow and do not push tags.
-   The workflow builds and attaches
+   push. If this push changes the version and that version is newer
+   than the latest `v*` tag, `.github/workflows/release.yml` creates
+   the annotated tag and publishes in that same run. **That run is
+   the release.** A push that does not change the version publishes
+   nothing. Agents do not push tags. The workflow builds and attaches
    `design-mode-extension.zip` (Chrome), `design-mode-addon.zip`
    (Firefox) and `designmode-for-safari.zip`. After that release job
    succeeds, three separate jobs on the `release` environment submit
@@ -43,9 +42,9 @@ After preflight and `npm run verify` are green on the commit you intend to ship:
    job. One publish job failing does not cancel the others. Credential
    names and the npmjs.com trusted-publisher fields are in RELEASING.md.
    See [packages/cli/PUBLISHING.md](packages/cli/PUBLISHING.md).
-3. **Safari:** use `packages/extension/designmode-for-safari.zip` from
+2. **Safari:** use `packages/extension/designmode-for-safari.zip` from
    the GitHub Release; Apple distribution is a separate maintainer step.
-4. **Manual fallback:** if a store job is skipped or fails, upload the
+2. **Manual fallback:** if a store job is skipped or fails, upload the
    zips from the GitHub Release as documented in RELEASING.md. If the
    npm job fails, the maintainer publishes the verified tarball in his
    own interactive Terminal. If `npm whoami` returns 401, the agent may

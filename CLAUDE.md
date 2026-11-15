@@ -341,20 +341,21 @@ No `priority:*` labels — premature for current volume.
   52); PRs after 14 days (closes at 30, converts to draft on first
   stale-mark). Exempts `pinned`, `security`, `help wanted`,
   `good first issue`, `regression`, `wip`.
-- **Release workflow** fires on `v*.*.*` tag push: builds the
-  extension → zips `design-mode-extension.zip` + `design-mode-addon.zip`
-  (`package:extension:all`, identical content) → creates a GitHub
-  Release with both attached (Chrome Web Store + AMO). The tag push is
-  the maintainer's explicit consent; the workflow only fires after it.
-  Store uploads are manual (see RELEASING.md).
+- **Release workflow** (`.github/workflows/release.yml`) runs on every
+  push to `main`, on **Actions → Release → Run workflow** from `main`,
+  and on a `v*.*.*` tag pushed by hand. A push to `main` publishes only
+  when that push changes root `package.json` to a version newer than
+  the latest `v*` tag. It then creates the annotated tag, the GitHub
+  Release, and the Chrome, Firefox, and npm publishes in the same run.
+  The tag push uses the workflow token, so it does not start a second
+  run. Store and npm jobs use the `release` environment. See RELEASING.md.
 
 ## Release readiness
 
-Releases are gated on the maintainer's explicit consent — never
-auto-trigger a tag or release. The full procedure — version-bump
-recommendation, the files a bump touches, the pre-tag checklist, and
-tagging + release-zip steps — lives in **RELEASING.md**. Read it
-before cutting a release.
+Releases happen when a version bump is merged to `main`. Agents do
+not merge, tag, or dispatch that workflow unless the maintainer asks.
+The procedure — version bump, the files a bump touches, the pre-tag
+checklist, and what the workflow publishes — lives in **RELEASING.md**.
 
 ## GitHub Discussions
 

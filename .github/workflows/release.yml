@@ -2,40 +2,128 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags: ['v*.*.*']
-  workflow_call:
-    inputs:
-      tag:
-        description: Annotated release tag, including the v prefix
-        required: true
-        type: string
+  workflow_dispatch:
 
 permissions:
   contents: write
   actions: write
   id-token: write
 
-# Not the caller's design-mode-release group: the caller holds that
-# group while it waits for this workflow, and GitHub cancels the pair
-# as a deadlock. A button run and a manual tag push of the same tag
-# still share this group.
+# One group, and no called workflow, so a run cannot deadlock itself.
+# A second push waits, then stops when the tag or the GitHub Release
+# already exists. The tag this run pushes uses the workflow token,
+# which does not start another run.
 concurrency:
-  group: design-mode-publish-${{ inputs.tag || github.ref_name }}
+  group: design-mode-release
   cancel-in-progress: false
 
 jobs:
+  prepare:
+    name: Decide whether this ref is a new release
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.decide.outputs.release }}
+      tag: ${{ steps.decide.outputs.tag }}
+    steps:
+      - name: Refuse a manual run from any ref other than main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "Release only runs from main. This run is ${{ github.ref }}." >&2
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Compare package.json with the latest release tag
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          import { decideRelease } from './scripts/release-decision.mjs';
+
+          const eventName = process.env.EVENT_NAME;
+          const refType = process.env.REF_TYPE;
+          const refName = process.env.REF_NAME;
+          const before = process.env.BEFORE || '';
+          let version = '';
+          let previousVersion = null;
+          if (refType !== 'tag') {
+            version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+            if (eventName === 'push' && before && !/^0+$/.test(before)) {
+              try {
+                previousVersion = JSON.parse(
+                  execFileSync('git', ['show', `${before}:package.json`], { encoding: 'utf8' }),
+                ).version;
+              } catch (error) {
+                console.error(`Could not read package.json at ${before}: ${error.message}`);
+                process.exit(1);
+              }
+            }
+          }
+          execFileSync('git', ['fetch', 'origin', '--tags'], { stdio: 'inherit' });
+          const tags = execFileSync('git', ['tag', '-l', 'v*'], { encoding: 'utf8' }).split('\n');
+          const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          const tagCommits = {};
+          for (const name of tags) {
+            const tag = name.trim();
+            if (!tag) continue;
+            tagCommits[tag] = execFileSync('git', ['rev-parse', `${tag}^{}`], { encoding: 'utf8' }).trim();
+          }
+          const decision = decideRelease({
+            eventName, refType, refName, version, previousVersion, tags, headSha, tagCommits,
+          });
+          console.log(decision.summary);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${decision.summary}\n`);
+          if (decision.error) process.exit(1);
+          appendFileSync(process.env.GITHUB_OUTPUT, `release=${decision.release}\ntag=${decision.tag}\n`);
+          EOF
+
+      - name: Set the release identity and run preflight
+        if: steps.decide.outputs.release == 'true' && github.ref_type != 'tag'
+        run: |
+          git config user.name "Sandeep Baskaran"
+          git config user.email "29013187+SandeepBaskaran@users.noreply.github.com"
+          npm run release:preflight
+
+      - name: Create and push the annotated tag
+        if: steps.decide.outputs.release == 'true' && github.ref_type != 'tag'
+        run: |
+          tag="${{ steps.decide.outputs.tag }}"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "$tag already exists. This run does not move, delete, or force-push tags." >&2
+            exit 1
+          fi
+          git tag -a "$tag" -m "$tag"
+          git push origin "refs/tags/${tag}"
+          echo "Created $tag with the workflow token. That push does not start another Release run."
+
   release:
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
     runs-on: ubuntu-latest
     outputs:
       publish: ${{ steps.gate.outputs.publish }}
+      tag: ${{ needs.prepare.outputs.tag }}
     steps:
-      # inputs.tag is set when Release tag calls this workflow. On a tag
-      # push it is empty, so github.ref is that tag. The event name stays
-      # the caller's for the whole called run, so it cannot select the ref.
       - name: Skip when this tag already has a GitHub Release
         id: gate
         env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set +e
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>"$RUNNER_TEMP/release-view.txt"
@@ -53,7 +141,7 @@ jobs:
       - uses: actions/checkout@v7
         if: steps.gate.outputs.publish == 'true'
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
       - uses: actions/setup-node@v7
         if: steps.gate.outputs.publish == 'true'
@@ -62,17 +150,15 @@ jobs:
           cache: 'npm'
       - if: steps.gate.outputs.publish == 'true'
         run: npm ci
-      # Gate: the tagged commit must pass the same checks CI runs on main,
-      # and the tag must name the version the tree actually carries. A tag
-      # pushed on a red or mis-versioned commit fails here and publishes
-      # nothing, instead of shipping artifacts CI never approved.
+      # The tagged commit must pass the same checks CI runs on main,
+      # and the tag must name the version the tree actually carries.
       - name: Verify tagged commit
         if: steps.gate.outputs.publish == 'true'
         run: npm run verify
       - name: Check tag matches package version
         if: steps.gate.outputs.publish == 'true'
         env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           TAG="${RELEASE_TAG#v}"
           PKG="$(node -p "require('./package.json').version")"
@@ -101,7 +187,7 @@ jobs:
       - name: Extract CHANGELOG section for this tag
         if: steps.gate.outputs.publish == 'true'
         env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           VERSION="${RELEASE_TAG#v}"
           awk -v v="$VERSION" '
@@ -116,8 +202,8 @@ jobs:
         if: steps.gate.outputs.publish == 'true'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          target_commitish: ${{ inputs.tag || github.sha }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ needs.prepare.outputs.tag }}
           files: |
             packages/extension/design-mode-extension.zip
             packages/extension/design-mode-addon.zip
@@ -159,7 +245,7 @@ jobs:
       - uses: actions/checkout@v7
         if: steps.secrets.outputs.ready == 'true'
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.release.outputs.tag }}
       - uses: actions/setup-node@v7
         if: steps.secrets.outputs.ready == 'true'
         with:
@@ -205,7 +291,7 @@ jobs:
       - uses: actions/checkout@v7
         if: steps.secrets.outputs.ready == 'true'
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.release.outputs.tag }}
       - uses: actions/setup-node@v7
         if: steps.secrets.outputs.ready == 'true'
         with:
@@ -265,7 +351,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.release.outputs.tag }}
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
