@@ -300,15 +300,18 @@ version and the pre-tag checklist above is complete.
 
 1. Merge the release branch into `main` with a normal (non-force) push
    of `main` to `origin`.
-2. Create an annotated tag `vMAJOR.MINOR.PATCH` on that `main` commit
-   and push the tag. **That tag push is the release.** It triggers
-   `.github/workflows/release.yml`, which runs `npm run verify`,
-   checks that the tag matches root `package.json` and
-   `packages/extension/public/manifest.json`, builds the three browser
-   zips, and opens a GitHub Release named for the tag with
-   `design-mode-extension.zip`, `design-mode-addon.zip`,
-   `designmode-for-safari.zip`, and the CHANGELOG section for that
-   version.
+2. On GitHub, open **Actions → Release tag → Run workflow**, leave the
+   branch set to `main`, and run it. The workflow reads the version
+   from root `package.json` on `main`, runs `npm run release:preflight`,
+   and compares that version with the latest `v*` tag. If the version
+   is not newer, or `v<version>` already exists, the run ends
+   successfully and changes nothing. If it is newer, the run creates
+   the annotated tag on the current `main` commit, pushes it, and
+   calls `.github/workflows/release.yml` in the same run. A tag push
+   made with the workflow token does not start `release.yml` by
+   itself, which is why the call is in the same run. Two runs share
+   the `design-mode-release` concurrency group, so a second run waits
+   and then sees the tag and stops.
 3. The same workflow then runs three jobs that depend only on the
    release job. Chrome Web Store and Firefox AMO submit the zips from
    that job. npm publishes `@designmode-app/cli` with trusted
@@ -326,6 +329,17 @@ version and the pre-tag checklist above is complete.
    `gh`.
 4. Safari: use `designmode-for-safari.zip` from the GitHub Release and
    complete any Apple distribution steps separately.
+
+Pushing the annotated tag yourself still starts `release.yml`, because
+a tag push from a person is not the workflow token. Do not do both
+for the same version. The button is the path after a merge.
+
+```sh
+git checkout main
+git pull origin main
+git tag -a v3.2.2 -m "v3.2.2"
+git push origin v3.2.2
+```
 
 ## Maintainer setup (once)
 
@@ -409,7 +423,25 @@ No npm token is stored in GitHub.
    The filename is only `release.yml`, not a path. The environment
    name must be `release` because the publish job sets
    `environment: release`. Leave it blank and the OIDC token will not
-   match.
+   match. npm's trusted-publishing docs say that a `workflow_call`
+   publish is checked against the **calling** workflow's filename,
+   not the file that contains `npm publish`. The **Release tag**
+   workflow calls `release.yml`, so add a second GitHub Actions
+   publisher on the same package before the first button release:
+
+   | Field | Value |
+   | --- | --- |
+   | Organization or user | `SandeepBaskaran` |
+   | Repository | `design-mode` |
+   | Workflow filename | `release-tag.yml` |
+   | Environment name | `release` |
+
+   Allow **`npm publish`** on that row as well. Keep the `release.yml`
+   row: a tag you push yourself still publishes from that file. A
+   package can have up to 10 trusted publishers. Both caller and
+   called workflows grant `id-token: write`. The store jobs do not
+   use this publisher; their secrets stay on the `release`
+   environment and are available to the called jobs.
 3. Allow **`npm publish`**. A trusted publisher created after
    3 September 2026 allows only `npm stage publish` until you also
    enable direct `npm publish`. This workflow runs `npm publish`, not

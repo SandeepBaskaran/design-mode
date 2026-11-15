@@ -3,16 +3,30 @@ name: Release
 on:
   push:
     tags: ['v*.*.*']
+  workflow_call:
+    inputs:
+      tag:
+        description: Annotated release tag, including the v prefix
+        required: true
+        type: string
 
 permissions:
   contents: write
   actions: write
+  id-token: write
+
+concurrency:
+  group: design-mode-release
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_call' && inputs.tag || github.ref }}
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
@@ -25,8 +39,10 @@ jobs:
       - name: Verify tagged commit
         run: npm run verify
       - name: Check tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_call' && inputs.tag || github.ref_name }}
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${RELEASE_TAG#v}"
           PKG="$(node -p "require('./package.json').version")"
           MANIFEST="$(node -p "require('./packages/extension/public/manifest.json').version")"
           if [ "$TAG" != "$PKG" ] || [ "$TAG" != "$MANIFEST" ]; then
@@ -49,8 +65,10 @@ jobs:
             packages/extension/design-mode-extension.zip
             packages/extension/design-mode-addon.zip
       - name: Extract CHANGELOG section for this tag
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_call' && inputs.tag || github.ref_name }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           awk -v v="$VERSION" '
             BEGIN { in_section = 0 }
             /^## \[/ {
@@ -62,6 +80,8 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ github.event_name == 'workflow_call' && inputs.tag || github.ref_name }}
+          target_commitish: ${{ github.event_name == 'workflow_call' && inputs.tag || github.sha }}
           files: |
             packages/extension/design-mode-extension.zip
             packages/extension/design-mode-addon.zip

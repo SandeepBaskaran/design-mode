@@ -27,8 +27,13 @@ After preflight and `npm run verify` are green on the commit you intend to ship:
 
 1. Merge into `main` and push `origin/main` with a normal (non-force)
    push.
-2. Create and push the annotated tag `vMAJOR.MINOR.PATCH`. **That tag
-   push is the release.** The workflow builds and attaches
+2. After that merge is on `main`, the maintainer runs **Actions →
+   Release tag → Run workflow** on `main`. That creates and pushes the
+   annotated tag `vMAJOR.MINOR.PATCH` when the version is newer, and
+   runs the release jobs in the same run. **That run is the release.**
+   A tag he pushes himself still starts `.github/workflows/release.yml`
+   directly. Agents do not run this workflow and do not push tags.
+   The workflow builds and attaches
    `design-mode-extension.zip` (Chrome), `design-mode-addon.zip`
    (Firefox) and `designmode-for-safari.zip`. After that release job
    succeeds, three separate jobs on the `release` environment submit
