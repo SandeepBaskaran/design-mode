@@ -183,9 +183,9 @@ export async function addComment(elementId: string, selector: string, text: stri
   return comment;
 }
 
-export async function addRegionComment(region: { x: number; y: number; w: number; h: number }, selector: string, text: string): Promise<CommentData> {
+export async function addRegionComment(region: { x: number; y: number; w: number; h: number }, selector: string, text: string, elementId = ''): Promise<CommentData> {
   const comment: CommentData = {
-    id: crypto.randomUUID(), elementId: '', selector, text, region,
+    id: crypto.randomUUID(), elementId, selector, text, region,
     timestamp: Date.now(), updatedAt: Date.now(), pageUrl: routeIdentity(window.location.href).url,
   };
   const all = await requestComments({ action: 'add', href: comment.pageUrl, comment });

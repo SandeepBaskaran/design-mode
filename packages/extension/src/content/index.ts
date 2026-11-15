@@ -1495,8 +1495,10 @@ function handleContentMessage(msg: any, _: any, sendResponse: (payload: any) => 
         const cx = region.x - window.scrollX + region.w / 2;
         const cy = region.y - window.scrollY + region.h / 2;
         const hit = document.elementFromPoint(cx, cy) as HTMLElement | null;
-        const selector = hit && !isOverlayLike(hit) ? generateSelector(hit) : 'region';
-        addRegionComment(region, selector, msg.text).then(comment => {
+        const hitEl = hit && !isOverlayLike(hit) ? hit : null;
+        const selector = hitEl ? generateSelector(hitEl) : 'region';
+        const elementId = hitEl ? getOrAssignId(hitEl) : '';
+        addRegionComment(region, selector, msg.text, elementId).then(comment => {
           pendingRegion = null;
           syncCommentChange(comment);
           clearPendingRegionBox(); // committed box (showCommentPins) replaces the pending one

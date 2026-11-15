@@ -19,6 +19,17 @@ export type Release = {
 
 export const releases: Release[] = [
   {
+    version: "3.2.2",
+    date: "2026-11-15",
+    headline: "Region notes travel with Copy and Export, and Option+S types letters again.",
+    highlights: [
+      "Copy as Prompt includes the size and position of a drawn region, and the warning that regions only reach an agent through a connection is gone.",
+      "Export stays a JSON file unless a region note exists, then it downloads a zip with one image per region.",
+      "An empty Layers list has a Reload button. A new region note is no longer marked stale while its paragraph is still on the page.",
+      "Screenshot is Alt+Shift+S, so Option+S on a Mac can type ś, ß, or š. Send setup suggests restarting the connection or the agent when it already looks done.",
+    ],
+  },
+  {
     version: "3.2.1",
     date: "2026-11-10",
     headline: "Tagged releases now ship to the browser stores and npm.",

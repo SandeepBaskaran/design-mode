@@ -31,6 +31,7 @@ import { AGENT_COMMAND_MARKDOWN, AGENT_TOOLS } from './agent-workflow';
 import { localMcpCommand, localMcpConfig, renderSendSetupDialog, sendSetupStep, type SendSetupModel } from './send-setup';
 import { reviewFile, shotsFromCapture } from './review-export';
 import { changeGroupKey, styleChangeGroupKey, collectGroupRevertIds } from './change-group';
+import { changeGroupIsStale } from './change-staleness';
 import { createInspectorOperation, InspectorOperationCancelled, runInspectorAction, type InspectorOperation } from './inspector-operation';
 import { componentGroup, groupByComponent, type ComponentContext } from '../component-group';
 import { parseFeedbackSession, type FeedbackSessionView } from './feedback-view';
@@ -162,7 +163,7 @@ interface DomChange {
   status?: ChangeStatus;
   viewportWidth?: number; breakpoint?: Breakpoint;
 }
-interface CommentEntry { id: string; elementId: string; text: string; selector: string; timestamp: number; updatedAt?: number; resolved?: boolean; pinOffset?: { x: number; y: number }; region?: { x: number; y: number; w: number; h: number } }
+interface CommentEntry { id: string; elementId: string; text: string; selector: string; timestamp: number; updatedAt?: number; resolved?: boolean; pinOffset?: { x: number; y: number }; region?: { x: number; y: number; w: number; h: number }; pageUrl?: string }
 interface DomNode {
   id: string; tagName: string; displayName: string;
   depth: number; childCount: number; isVisible: boolean; hasText: boolean;
@@ -9411,7 +9412,14 @@ function renderChangesTab(): string {
     // A group is "stale" when (a) the tracker has no elementId, OR (b)
     // its elementId no longer exists in the live DOM tree (framework
     // removed / re-rendered the host with a different selector).
-    const isStale = !group.elementId || (domTree.length > 0 && !liveElementIds.has(group.elementId));
+    const isStale = changeGroupIsStale({
+      elementId: group.elementId,
+      items: group.items.map(item => ({
+        type: item.type,
+        region: item.type === 'comment' ? item.data.region : undefined,
+        pageUrl: item.type === 'comment' && item.data.pageUrl ? panelRouteKey(item.data.pageUrl) : undefined,
+      })),
+    }, liveElementIds, domTree.length > 0, activeRouteKey);
 
     const header = componentHeader + '<div class="dm-change-group-header" data-dm-change-group="' + escapeAttr(key) + '"' + (isStale ? ' style="opacity:0.7;"' : '') + '>' +
       '<span style="color:var(--dm-text-dim);display:flex;">' + icon(chevIcon as keyof typeof icons, 10) + '</span>' +
