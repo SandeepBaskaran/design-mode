@@ -26,6 +26,7 @@ import {
   resolveNpmTimeoutMs,
   resultLinesForJob,
   selectReleaseRun,
+  releaseTagInLog,
   sha1File,
   storeRowsFromRun,
   versionTokenRegex,
@@ -310,6 +311,17 @@ test('release run selection and public listing parsers', () => {
     { headBranch: 'v3.2.1', event: 'workflow_dispatch', createdAt: '2026-11-14T08:00:00Z', databaseId: 4 },
   ], '3.2.1');
   assert.equal(chosen.databaseId, 2);
+  const manual = selectReleaseRun([
+    { headBranch: 'main', event: 'workflow_dispatch', createdAt: '2026-11-15T16:00:00Z', databaseId: 9, releaseTag: 'v3.2.2' },
+    { headBranch: 'main', event: 'push', createdAt: '2026-11-15T15:00:00Z', databaseId: 8 },
+  ], '3.2.2');
+  assert.equal(manual.databaseId, 9);
+  const bumped = selectReleaseRun([
+    { headBranch: 'main', event: 'push', createdAt: '2026-11-16T12:00:00Z', databaseId: 11, releaseTag: 'v3.2.3' },
+  ], '3.2.3');
+  assert.equal(bumped.databaseId, 11);
+  assert.equal(releaseTagInLog('design-mode-release v3.2.2 abc\n', '3.2.2'), true);
+  assert.equal(releaseTagInLog('design-mode-release v3.2.20 abc\n', '3.2.2'), false);
   assert.equal(
     githubRepoFromRemote('https://x-access-token:secret@github.com/SandeepBaskaran/design-mode.git'),
     'SandeepBaskaran/design-mode',

@@ -804,9 +804,14 @@ export function githubRepoFromRemote(url) {
 
 export function selectReleaseRun(runs, version) {
   const tag = `v${version}`;
-  return (runs ?? [])
-    .filter((run) => run.headBranch === tag && run.event === 'push')
-    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
+  const ranked = (runs ?? []).slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  return ranked.find((run) => run.releaseTag === tag)
+    ?? ranked.find((run) => run.headBranch === tag && run.event === 'push')
+    ?? null;
+}
+
+export function releaseTagInLog(log, version) {
+  return String(log).includes(`design-mode-release v${version} `);
 }
 
 export function chromeUpdateUrl() {
@@ -1042,20 +1047,42 @@ async function checkStoreSubmissions(results, version, io) {
       '--limit', '30',
       '--json', 'databaseId,headBranch,event,conclusion,status,url,createdAt',
     ]));
-    const run = selectReleaseRun(listed, version);
+    const ranked = listed.slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    let run = null;
+    let log = '';
+    let scanned = 0;
+    for (const candidate of ranked) {
+      if (candidate.event !== 'push' && candidate.event !== 'workflow_dispatch') continue;
+      if (candidate.status && candidate.status !== 'completed') continue;
+      if (scanned >= 10) break;
+      scanned += 1;
+      const candidateLog = runGh(execFile, [
+        'run', 'view', String(candidate.databaseId),
+        '--repo', repo,
+        '--log',
+      ]);
+      if (releaseTagInLog(candidateLog, version)) {
+        run = candidate;
+        log = candidateLog;
+        break;
+      }
+    }
+    if (!run) run = selectReleaseRun(ranked, version);
     if (!run) {
-      failStoreQueries(results, `no release.yml push run for v${version} on ${repo}`);
+      failStoreQueries(results, `no release.yml run for v${version} on ${repo}`);
     } else {
+      if (!log) {
+        log = runGh(execFile, [
+          'run', 'view', String(run.databaseId),
+          '--repo', repo,
+          '--log',
+        ]);
+      }
       const viewed = JSON.parse(runGh(execFile, [
         'run', 'view', String(run.databaseId),
         '--repo', repo,
         '--json', 'jobs,url',
       ]));
-      const log = runGh(execFile, [
-        'run', 'view', String(run.databaseId),
-        '--repo', repo,
-        '--log',
-      ]);
       const runUrl = viewed.url || run.url;
       results.push(...storeRowsFromRun({
         jobs: viewed.jobs,

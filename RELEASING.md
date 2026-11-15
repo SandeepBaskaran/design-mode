@@ -325,7 +325,9 @@ packument for up to three minutes before it fails a stale `latest`.
    those jobs have finished, run
    `npm run release:postcheck -- --tarball <verified-tarball>`. It
    retries a stale npm `latest` tag and checks that the Chrome and
-   Firefox jobs' result lines show this version was submitted. A
+   Firefox jobs' result lines show this version was submitted. It finds
+   that run from the `design-mode-release v<version>` line, so a
+   manual run and a version-bump push to `main` both count. A
    store job whose secrets are not configured logs a skip, exits 0,
    and fails postcheck until that version is actually submitted. If a
    store or npm job fails, use the manual fallback documented above
