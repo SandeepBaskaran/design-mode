@@ -15,6 +15,10 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 - The empty Layers list has a Reload button.
 - `designmode-app version` prints the installed CLI version without a network call or a token.
 
+### Fixed
+
+- Screenshot is Alt+Shift+S. Option+S on a Mac is left for accented letters (ś, ß, š) and no longer starts a capture when the key is held.
+
 ### Changed
 
 - The amber note that region annotations only reach an agent through MCP is gone.

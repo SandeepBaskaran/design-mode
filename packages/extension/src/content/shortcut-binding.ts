@@ -98,10 +98,20 @@ export function bindingFromKeyboardEvent(e: ShortcutKeyEvent): ShortcutBinding |
   return { key: e.key, modifiers };
 }
 
+function isRetiredOptionS(entry: { action?: string; key?: string; modifiers?: unknown; code?: unknown }): boolean {
+  const modifiers = entry.modifiers;
+  return entry.action === 'screenshot'
+    && entry.key === 's'
+    && Array.isArray(modifiers)
+    && modifiers.length === 1
+    && modifiers[0] === 'alt'
+    && !entry.code;
+}
+
 export function mergeSavedShortcuts(defaults: readonly KeyboardShortcut[], saved: unknown): KeyboardShortcut[] {
   const entries = Array.isArray(saved) ? saved : [];
   return defaults.map(def => {
-    const custom = entries.find(entry => entry && entry.action === def.action
+    const custom = entries.find(entry => entry && entry.action === def.action && !isRetiredOptionS(entry)
       && typeof entry.key === 'string' && entry.key.length > 0
       && Array.isArray(entry.modifiers)
       && entry.modifiers.every((mod: unknown) => ['ctrl', 'alt', 'shift', 'meta'].includes(mod as string)));

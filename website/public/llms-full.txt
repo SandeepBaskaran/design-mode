@@ -45,7 +45,7 @@ Design Mode targets desktop browsers:
 
 The core editor, Layers, Design, Changes, comments, screenshots and agent hand-off exist in both builds. Three capabilities remain Chromium-only because Firefox lacks the corresponding browser API: pop-out, Document Picture-in-Picture and the screen EyeDropper. Firefox uses the same editor in its native sidebar and falls back to local extension storage where `storage.session` is unavailable.
 
-There are 12 in-page shortcuts while the panel is open, plus two rebindable browser-level commands: Alt+D opens the configured launch surface and Alt+S takes a screenshot using the same target and destination as the camera button.
+There are 12 in-page shortcuts while the panel is open, plus two rebindable browser-level commands: Alt+D opens the configured launch surface and Alt+Shift+S takes a screenshot using the same target and destination as the camera button. Option+S stays free for accented letters.
 
 ## Model Context Protocol hand-off
 

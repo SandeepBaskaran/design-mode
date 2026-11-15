@@ -20,7 +20,7 @@ export const STEPS: Step[] = [
     title: "Get started",
     body: [
       "Design Mode is a Chrome and Firefox extension for previewing visual changes on scriptable webpages. This practice canvas requires the extension; it is not an editor by itself. Start with one card: inspect it, change its padding, review Changes, then use Copy as prompt to copy the Markdown specification. An authorised developer or agent still implements the source.",
-      "First time? Pin the extension to your toolbar, then click the Design Mode icon. Chrome opens the launch surface selected in Settings; Firefox opens its sidebar. Once it's open, every shortcut is listed in Settings. Alt+D and Alt+S are browser commands you can rebind through chrome://extensions/shortcuts on Chrome or about:addons on Firefox.",
+      "First time? Pin the extension to your toolbar, then click the Design Mode icon. Chrome opens the launch surface selected in Settings; Firefox opens its sidebar. Once it's open, every shortcut is listed in Settings. Alt+D and Alt+Shift+S are browser commands you can rebind through chrome://extensions/shortcuts on Chrome or about:addons on Firefox. Option+S is left free for accented letters.",
     ],
     tryIt:
       "Pin Design Mode in your browser toolbar, then click its icon to open the side panel (the sidebar on Firefox).",

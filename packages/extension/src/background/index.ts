@@ -256,8 +256,12 @@ browser.runtime.onConnect.addListener((port) => {
 // Toggle via keyboard command (Alt+D). Firefox's sidebarAction.open() must run
 // synchronously inside the user-gesture stack, so on Firefox we open FIRST
 // (it targets the active window, no tab lookup needed) before any await.
+let screenshotCommandAt = 0;
 browser.commands.onCommand.addListener((command, tab) => {
-  if (command === 'capture-screenshot') {
+  if (command === 'dm-capture-screenshot') {
+    const now = Date.now();
+    if (now - screenshotCommandAt < 800) return;
+    screenshotCommandAt = now;
     if (IS_SAFARI) {
       void browser.tabs.query({ active: true, lastFocusedWindow: true }).then(([active]) => {
         if (active?.id == null) return;

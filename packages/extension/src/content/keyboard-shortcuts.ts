@@ -58,6 +58,7 @@ export function disableShortcuts() {
 }
 
 function onKeyDown(e: KeyboardEvent) {
+  if (e.repeat) return;
   if (isTypingTarget(e.target) && e.key !== 'Escape') return;
 
   for (const sc of shortcuts) {

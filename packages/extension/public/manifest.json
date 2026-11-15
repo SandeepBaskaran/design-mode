@@ -77,10 +77,10 @@
       },
       "description": "Toggle Design Mode"
     },
-    "capture-screenshot": {
+    "dm-capture-screenshot": {
       "suggested_key": {
-        "default": "Alt+S",
-        "mac": "Alt+S"
+        "default": "Alt+Shift+S",
+        "mac": "Alt+Shift+S"
       },
       "description": "Capture with Design Mode"
     }

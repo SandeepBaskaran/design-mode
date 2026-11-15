@@ -192,6 +192,12 @@ describe('saved shortcut recovery', () => {
     assert.deepEqual(resolved[1], defaults[1]);
   });
 
+  it('drops the retired Option+S screenshot binding so accented letters type', () => {
+    const defaults = [{ key: 's', modifiers: ['alt', 'shift'], action: 'screenshot', label: 'Screenshot', category: 'Export' }];
+    const resolved = mergeSavedShortcuts(defaults, [{ action: 'screenshot', key: 's', modifiers: ['alt'] }]);
+    assert.deepEqual(resolved[0].modifiers, ['alt', 'shift']);
+  });
+
   it('ignores invalid modifiers and unknown actions', () => {
     assert.deepEqual(mergeSavedShortcuts(defaults, [
       { action: 'toggle-inspect', key: 'i', modifiers: ['invalid'] },

@@ -86,13 +86,13 @@ export const OUTPUT_DETAIL_LEVELS = [
 ] as const;
 
 // Phase 9: Default keyboard shortcuts
-// Hardcoded defaults. Alt+D and Alt+S are Chrome-configurable commands
+// Hardcoded defaults. Alt+D and Alt+Shift+S are Chrome-configurable commands
 // (declared in manifest `commands`, rebindable at chrome://extensions/shortcuts);
 // the rest are page/panel shortcuts handled in-extension. Keys lean on Figma
 // conventions (C = comment, R = region/rect)
 // and a single Alt modifier, deliberately avoiding combos the browser/OS
-// claim — notably Alt+F / Alt+E (Chrome menu). Alt+D and Alt+S are browser
-// commands, but Chrome may leave either unassigned when another command wins.
+// claim — notably Alt+F / Alt+E (Chrome menu). Alt+D and Alt+Shift+S are
+// browser commands. Alt+S is not used: on a Mac it types ś, ß, or š.
 export const DEFAULT_SHORTCUTS = [
   { key: 'i', modifiers: ['alt'], action: 'toggle-inspect', label: 'Toggle Inspect', category: 'General' },
   { key: 'c', modifiers: ['alt'], action: 'add-annotation', label: 'Comment', category: 'Annotations' },
@@ -103,7 +103,7 @@ export const DEFAULT_SHORTCUTS = [
   { key: 'Delete', modifiers: [], action: 'delete-element', label: 'Delete Element', category: 'Editing' },
   { key: 'z', modifiers: ['ctrl'], action: 'undo', label: 'Undo', category: 'Editing' },
   { key: 'z', modifiers: ['ctrl', 'shift'], action: 'redo', label: 'Redo', category: 'Editing' },
-  { key: 's', modifiers: ['alt'], action: 'screenshot', label: 'Screenshot', category: 'Export' },
+  { key: 's', modifiers: ['alt', 'shift'], action: 'screenshot', label: 'Screenshot', category: 'Export' },
   { key: 'x', modifiers: ['alt'], action: 'export-css', label: 'Export CSS', category: 'Export' },
   { key: '1', modifiers: ['alt'], action: 'tab-layers', label: 'Layers Tab', category: 'Navigation' },
   { key: '2', modifiers: ['alt'], action: 'tab-design', label: 'Design Tab', category: 'Navigation' },

@@ -1482,7 +1482,7 @@ function applyShadowFromFields(operation = beginInspectorOperation()) {
     return el ? el.value : fallback;
   };
   const type = get('type', 'outer');
-  const colorHex = get('colorhex', '000000').replace('#','');
+  const colorHex = get('colorhex', '000000').replaceAll('#', '');
   const opacity = parseFloat(get('opacity', '30')) || 0;
   const x = get('x', '0'); const y = get('y', '4');
   const blur = get('blur', '12'); const spread = get('spread', '0');
@@ -1609,7 +1609,7 @@ async function applyStyle(property: string, value: string, preserveEffectSlots =
   if (property === '__shadow_color' || property === '__textshadow_color') {
     const fieldKind = property === '__shadow_color' ? 'shadow' : 'textshadow';
     const hex = (() => {
-      if (value.startsWith('#')) return value.replace('#', '');
+      if (value.startsWith('#')) return value.replaceAll('#', '');
       const rgb = parseColorRgb(value);
       return rgb ? rgbToHexStr(rgb[0], rgb[1], rgb[2]).slice(1) : '000000';
     })();
@@ -9859,7 +9859,7 @@ function renderSettingsView(): string {
     (pipAvailable ? '<button data-dm-launch-surface="picture-in-picture" aria-pressed="' + (launchSurface === 'picture-in-picture') + '" style="' + (launchSurface === 'picture-in-picture' ? activeBtn : inactiveBtn) + '">Pin on top</button>' : '') +
     '</div></div>') +
     '<div style="' + sS + '"><div style="' + sT + '">Screenshot Capture</div>' +
-    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button and Alt+S do — viewport when nothing real is selected, otherwise the selected element.</div>' +
+    '<div style="font-size:10px;color:var(--dm-text-dim);margin-bottom:8px;">What the camera button and Alt+Shift+S do — viewport when nothing real is selected, otherwise the selected element.</div>' +
     '<div style="display:flex;gap:4px;">' +
     '<button data-dm-capture-mode="clipboard" style="' + (captureMode === 'clipboard' ? activeBtn : inactiveBtn) + '">Clipboard</button>' +
     '<button data-dm-capture-mode="download" style="' + (captureMode === 'download' ? activeBtn : inactiveBtn) + '">Download</button>' +
@@ -10893,7 +10893,7 @@ function setupDelegation() {
           if (!payload) break;
           // The `escapeAttr` helper produces `&quot;` / `&amp;` / `&lt;` /
           // `&gt;`. Reverse those before pasting into the clipboard.
-          const decoded = payload.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+          const decoded = payload.replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&lt;', '<').replaceAll('&gt;', '>');
           navigator.clipboard.writeText(decoded).then(() =>
             showCaptureToast('success', 'MCP config copied.')
           ).catch(() => showCaptureToast('error', 'Clipboard blocked.'));

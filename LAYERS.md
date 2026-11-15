@@ -46,7 +46,7 @@ Above all three tabs sits a row of action buttons — visible regardless of whic
 | `trash` | **Remove** | Deletes the selected layer. Adds a "delete" entry in the Changes tab (revertable). | Nothing selected. |
 | `message-square` | **Comment** | Attaches a yellow sticky-note comment to the selected layer. Opens the comment-edit card just above the tabs. | Nothing selected. |
 | `circle-pause` / `circle-play` | **Pause animations** | Pauses every CSS animation, transition, and `<video>` on the page. Click again to resume. Useful for catching motion mid-frame to inspect / screenshot. | Always available. |
-| `camera` | **Screenshot** | Captures the viewport, or the selected element when a real layer is selected. Honors Settings → Capture mode (clipboard / download / both). `Alt+S` uses the same target and destination. | Always available. |
+| `camera` | **Screenshot** | Captures the viewport, or the selected element when a real layer is selected. Honors Settings → Capture mode (clipboard / download / both). `Alt+Shift+S` uses the same target and destination. Option+S stays free for accented letters. | Always available. |
 | `bookmark` | **Presets** | Opens the Presets panel — save / load named CSS bundles applicable to any layer. | Always available. |
 | `undo` (left arrow) | **Undo** | Ctrl/Cmd-Z. Reverts the last edit. | Nothing to undo. |
 | `undo` (mirrored) | **Redo** | Ctrl/Cmd-Shift-Z. Re-applies the last undone edit. | Nothing to redo. |
