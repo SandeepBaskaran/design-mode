@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import {
   amoVersionStatus,
   changelogHasSection,
+  escapeRegExp,
   chromeVersionFromUpdateXml,
   compareSemver,
   DEFAULT_NPM_TIMEOUT_MS,
@@ -57,6 +58,15 @@ test('version token ignores superstrings and finds genuine leftovers', () => {
   const hits = findVersionHits(text, '3.1.0');
   assert.deepEqual(hits.map((hit) => hit.line), [2, 3]);
   assert.equal(versionTokenRegex('3.1.0').test('13.1.0'), false);
+});
+
+test('version patterns escape backslash and other regex metacharacters', () => {
+  const version = '1.2.3\\a.*(x)';
+  assert.equal(escapeRegExp(version), '1\\.2\\.3\\\\a\\.\\*\\(x\\)');
+  assert.equal(versionTokenRegex(version).test(`keep ${version} here`), true);
+  assert.equal(versionTokenRegex(version).test('keep 1.2.3\\aY(x) here'), false);
+  assert.equal(changelogHasSection(`## [${version}] — 2026-11-15`, version), true);
+  assert.equal(changelogHasSection('## [1.2.3\\aY(x)] — 2026-11-15', version), false);
 });
 
 test('changelog heading and website newest-entry helpers', () => {

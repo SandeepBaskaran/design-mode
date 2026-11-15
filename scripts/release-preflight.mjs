@@ -171,9 +171,12 @@ export function previousReleaseVersion(tags, targetVersion) {
   return older[older.length - 1].version;
 }
 
+export function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function versionTokenPattern(version) {
-  const escaped = version.replace(/\./g, '\\.');
-  return `(^|[^0-9])${escaped}([^0-9]|$)`;
+  return `(^|[^0-9])${escapeRegExp(version)}([^0-9]|$)`;
 }
 
 export function versionTokenRegex(version) {
@@ -192,7 +195,7 @@ export function findVersionHits(text, version) {
 
 export function changelogHasSection(markdown, version) {
   const pattern = new RegExp(
-    `^## \\[${version.replace(/\./g, '\\.')}\\] — \\d{4}-\\d{2}-\\d{2}$`,
+    `^## \\[${escapeRegExp(version)}\\] — \\d{4}-\\d{2}-\\d{2}$`,
     'm',
   );
   return pattern.test(markdown);
