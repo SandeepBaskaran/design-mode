@@ -130,7 +130,10 @@ test('the release workflow tags from main and publishes in the same run', () => 
   assert.equal((release.match(/ref: \$\{\{ needs\.prepare\.outputs\.tag \}\}/g) || []).length, 1);
   assert.equal((release.match(/ref: \$\{\{ needs\.release\.outputs\.tag \}\}/g) || []).length, 3);
   assert.equal(release.includes('tag_name: ${{ needs.prepare.outputs.tag }}'), true);
-  assert.equal(release.includes('target_commitish: ${{ needs.prepare.outputs.tag }}'), true);
+  assert.equal(release.includes('target_commitish: ${{ steps.target.outputs.sha }}'), true);
+  assert.equal(release.includes('target_commitish: ${{ needs.prepare.outputs.tag }}'), false);
+  assert.equal(release.includes('git rev-parse "${RELEASE_TAG}^{commit}"'), true);
+  assert.equal(release.includes('fail_on_unmatched_files: true'), true);
   assert.equal(ci.includes('name: extension-pr-${{ github.event.pull_request.number }}'), true);
   assert.equal(ci.includes("if: github.event_name == 'pull_request'"), true);
 });
