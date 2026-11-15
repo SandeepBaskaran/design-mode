@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { localMcpCommand, localMcpConfig, renderSendSetupDialog, sendSetupStep, type SendSetupModel } from './send-setup.ts';
+import { localMcpCommand, localMcpConfig, renderSendSetupDialog, SEND_SETUP_RETRY_HINT, sendSetupStep, type SendSetupModel } from './send-setup.ts';
 
 const deps = {
   esc: (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
@@ -90,11 +90,13 @@ describe('Send to Agent setup dialog', () => {
     const blocked = html();
     assert.match(blocked, /data-dm-action="send-setup-send" disabled aria-disabled="true"/);
     assert.match(blocked, /data-dm-send-setup-status="pending"/);
+    assert.match(blocked, new RegExp(SEND_SETUP_RETRY_HINT.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     const ready = html({ state: 'connected', hasToken: true });
     assert.doesNotMatch(ready, /data-dm-action="send-setup-send" disabled/);
     assert.match(ready, /data-dm-send-setup-status="ok"/);
     assert.match(ready, /var\(--dm-success\)/);
     assert.match(ready, /Send 2 changes now/);
+    assert.doesNotMatch(ready, /restart your agent/);
   });
 
   it('is an accessible modal dialog', () => {

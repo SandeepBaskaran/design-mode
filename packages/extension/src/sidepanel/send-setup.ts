@@ -78,6 +78,8 @@ function statusText(m: SendSetupModel, step: SendSetupStep): { dot: string; text
   return { dot: 'var(--dm-danger)', text: 'Not connected yet', ok: false };
 }
 
+export const SEND_SETUP_RETRY_HINT = 'If this already looks done, restart the connection, restart your agent, or start a new session.';
+
 const BTN = 'padding:6px 10px;border-radius:6px;font-size:11px;font-family:inherit;cursor:pointer;';
 const BTN_SECONDARY = BTN + 'background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);color:var(--dm-text);';
 const BTN_PRIMARY = BTN + 'background:var(--dm-accent-bg);border:1px solid var(--dm-accent-border);color:var(--dm-accent);font-weight:600;';
@@ -188,6 +190,7 @@ export function renderSendSetupDialog(m: SendSetupModel, deps: SendSetupDeps): s
     '</div>' +
     '<p id="dm-send-setup-desc" style="margin:0;font-size:11px;line-height:1.55;color:var(--dm-text-secondary);">' + esc(intro) + '</p>' +
     body +
+    (step === 'ready' ? '' : p(SEND_SETUP_RETRY_HINT)) +
     '<div role="status" aria-live="polite" data-dm-send-setup-status="' + (status.ok ? 'ok' : 'pending') + '" style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--dm-bg-secondary);border:1px solid var(--dm-separator);border-radius:6px;font-size:11px;color:var(--dm-text);">' +
     '<span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:' + status.dot + ';"></span><span>' + esc(status.text) + '</span></div>' +
     '<div style="display:flex;gap:6px;">' +

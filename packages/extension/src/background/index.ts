@@ -737,6 +737,12 @@ function dispatchPanelMessage(msg: any, sender: chrome.runtime.MessageSender, se
   // handler, which stages the handoff and pushes it over the MCP transport.
   // SP_GET_FEEDBACK_SESSION / SP_STOP_FEEDBACK_SESSION likewise fall through
   // to GET_FEEDBACK_SESSION / STOP_FEEDBACK_SESSION. Do not add rows here.
+  if (msg.type === 'SP_ENSURE_PAGE_SCRIPT') {
+    const tabId = currentTargetTab ?? pinnedTabId;
+    const ready = tabId ? injectContentScript(tabId).catch(() => undefined) : Promise.resolve();
+    ready.then(() => sendResponse({ ok: true }));
+    return true;
+  }
   if (msg.type === 'SP_GET_MCP_STATUS') { forwardToPinnedTab({ type: 'GET_MCP_STATUS', reping: msg.reping === true }, sendResponse); return true; }
   if (msg.type === 'SP_GET_DESIGN_TOKENS') { forwardToPinnedTab({ type: 'GET_DESIGN_TOKENS' }, sendResponse); return true; }
   if (msg.type === 'SP_GET_COMPUTED_CSS') { forwardToPinnedTab({ type: 'GET_COMPUTED_CSS', elementId: msg.elementId }, sendResponse); return true; }

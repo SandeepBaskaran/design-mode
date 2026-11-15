@@ -8,6 +8,18 @@ versions use [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Copy as Prompt includes the size and position of a drawn region note.
+- Changes Export downloads a zip of the JSON plus one PNG per drawn region. An export with no drawn region stays a JSON file.
+- The empty Layers list has a Reload button.
+- `designmode-app version` prints the installed CLI version without a network call or a token.
+
+### Changed
+
+- The amber note that region annotations only reach an agent through MCP is gone.
+- Send setup recommends restarting the connection, the agent, or the session when the agent is not connected yet.
+
 ### Internal
 
 - `npm run release:postcheck` reads `dist-tags.latest` from the npm packument with a cache-busting request and retries for up to three minutes (`--npm-timeout-ms` or `DM_RELEASE_POSTCHECK_NPM_TIMEOUT_MS`), reporting the attempt count. It also confirms the tagged `release.yml` run submitted that version to the Chrome Web Store and Firefox AMO, using each job's result lines rather than a search of the log. A missing or unauthenticated `gh` warns. Public store listings are a separate warning when they still lag review.

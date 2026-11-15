@@ -29,6 +29,7 @@ import { escapeAttr, rgbToHex } from '../content/helpers';
 import { sizeFieldView, type AuthoredDimension } from '../content/authored-sizing';
 import { AGENT_COMMAND_MARKDOWN, AGENT_TOOLS } from './agent-workflow';
 import { localMcpCommand, localMcpConfig, renderSendSetupDialog, sendSetupStep, type SendSetupModel } from './send-setup';
+import { reviewFile, shotsFromCapture } from './review-export';
 import { changeGroupKey, styleChangeGroupKey, collectGroupRevertIds } from './change-group';
 import { createInspectorOperation, InspectorOperationCancelled, runInspectorAction, type InspectorOperation } from './inspector-operation';
 import { componentGroup, groupByComponent, type ComponentContext } from '../component-group';
@@ -1155,6 +1156,52 @@ async function refreshChanges(operation = beginInspectorOperation()) {
 }
 async function refreshDomTree(operation = beginInspectorOperation()) {
   operation.assertCurrent(); const res = await operation.wait(send({ type: 'SP_GET_DOM_TREE' }, operation)); domTree = res.tree || []; pageSealed = !!res.sealed; if (!pageSealed) inspectWrapperOptedIn = false; matchingCountCache.clear(); render(); }
+async function reloadLayers(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
+  if (!IS_SAFARI) { try { await operation.wait(send({ type: 'SP_ENSURE_PAGE_SCRIPT' }, operation)); } catch { /* fetch the tree anyway */ } }
+  await refreshDomTree(operation);
+}
+function downloadBytes(bytes: Uint8Array, name: string, mime: string) {
+  const blob = new Blob([new Uint8Array(bytes)], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function exportChanges(operation = beginInspectorOperation()) {
+  operation.assertCurrent();
+  const target = myTabId, route = activeRouteKey;
+  await operation.wait(refreshChanges(operation));
+  if (target !== myTabId || route !== activeRouteKey) return;
+  const payload = siteChangesExport();
+  const seen = new Set<string>();
+  const regions: { id: string; region: NonNullable<CommentEntry['region']>; onThisPage: boolean }[] = [];
+  for (const group of currentRouteGroups()) {
+    for (const comment of group.comments) {
+      if (!comment.region || seen.has(comment.id)) continue;
+      seen.add(comment.id);
+      regions.push({ id: comment.id, region: comment.region, onThisPage: group.routeKey === activeRouteKey });
+    }
+  }
+  const here = regions.filter(item => item.onThisPage);
+  let images: { id?: string; dataUrl?: string | null }[] = [];
+  if (here.length) {
+    const captured = await operation.wait(send({ type: 'SP_CAPTURE_REGION_IMAGES', regions: here.map(item => ({ id: item.id, region: item.region })) }, operation));
+    images = Array.isArray(captured?.images) ? captured.images : [];
+  }
+  const shots = shotsFromCapture(regions.map(item => item.id), [
+    ...regions.filter(item => !item.onThisPage).map(item => ({ id: item.id, dataUrl: null })),
+    ...images,
+  ]);
+  const file = reviewFile(payload, shots);
+  downloadBytes(file.bytes, file.name, file.mime);
+  const count = siteChangeCount();
+  showCaptureToast('success', file.mime === 'application/zip'
+    ? `Exported ${count} change${count === 1 ? '' : 's'} with region screenshots.`
+    : `Exported ${count} change${count === 1 ? '' : 's'} across all routes.`);
+}
 function revealLayerInTree(id: string): boolean {
   const hidden = collapsedAncestorIds(domTree, id, collapsedNodes);
   for (const ancestor of hidden) collapsedNodes.delete(ancestor);
@@ -6946,23 +6993,11 @@ function renderCommentCard(): string {
   const tagLabel = regionCommentPending
     ? '<span style="display:inline-flex;align-items:center;gap:3px;">' + icon('squareDashed', 9) + 'region</span>'
     : (info ? '&lt;' + escapeAttr(info.tagName?.toLowerCase() || 'div') + '&gt;' : '');
-  // Region annotations reach the coding agent only over the MCP pipeline —
-  // Copy as Prompt exports them with no usable selector, so without a live
-  // MCP connection they'd go nowhere. Warn only in that exact case (region
-  // composer + no agent connected); element comments export fine, so no
-  // alert for them.
-  const annotationAlert = (regionCommentPending && mcpState !== 'connected')
-    ? '<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px;padding:7px 9px;background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.35);border-radius:6px;font-size:10px;line-height:1.45;color:var(--dm-text-secondary);">' +
-      '<span style="color:#f59e0b;display:flex;flex-shrink:0;margin-top:1px;">' + icon('alertTriangle', 12) + '</span>' +
-      '<span>Annotations <b>only reach the agent via MCP</b>, not Copy as Prompt. Use a comment instead.</span>' +
-      '</div>'
-    : '';
   return '<div style="padding:10px 12px;border-bottom:1px solid var(--dm-separator-strong);background:var(--dm-purple-bg);">' +
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">' +
     '<span style="color:var(--dm-purple);display:flex;">' + icon('messageSquare', 14) + '</span>' +
     '<span style="font-size:11px;font-weight:600;color:var(--dm-text);">' + (isEditing ? 'Edit Comment' : 'Add Comment') + '</span>' +
     '<span style="font-size:9px;color:var(--dm-text-dim);font-family:inherit;">' + tagLabel + '</span></div>' +
-    annotationAlert +
     '<textarea data-dm-comment-input style="width:100%;min-height:60px;background:var(--dm-input-bg);border:1px solid var(--dm-input-border);border-radius:6px;color:var(--dm-text);font-size:11px;padding:8px;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;">' + escapeAttr(commentText) + '</textarea>' +
     '<div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">' +
     '<button data-dm-action="cancel-comment" style="padding:5px 12px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:5px;color:var(--dm-text-secondary);cursor:pointer;font-size:10px;font-family:inherit;">Cancel</button>' +
@@ -7145,7 +7180,7 @@ function renderSealedFrameNotice(): string {
 
 function renderLayersTab(): string {
   if (pageSealed && !inspectWrapperOptedIn) return renderSealedFrameNotice();
-  if (domTree.length === 0 || (domTree.length === 1 && domTree[0].tagName === 'body' && !domTree[0].hasText)) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;"><div style="margin-bottom:12px;color:var(--dm-text-dimmer);">' + icon('layers', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">No layers yet. The page tree appears here once the page is ready.</div></div>';
+  if (domTree.length === 0 || (domTree.length === 1 && domTree[0].tagName === 'body' && !domTree[0].hasText)) return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--dm-text-dim);text-align:center;padding:40px;gap:12px;"><div style="color:var(--dm-text-dimmer);">' + icon('layers', 32) + '</div><div style="font-size:12px;font-weight:500;color:var(--dm-text-muted);">No layers yet. The page tree appears here once the page is ready.</div><button type="button" data-dm-action="reload-layers" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--dm-btn-bg);border:1px solid var(--dm-btn-border);border-radius:6px;color:var(--dm-text);cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;">' + icon('rotateCcw', 13) + ' Reload</button></div>';
 
   const selectedId = info?.id || '';
   const visible = getVisibleLayers();
@@ -10668,27 +10703,8 @@ function setupDelegation() {
           }
           break;
         }
-        case 'export-changes': {
-          const target = myTabId, route = activeRouteKey;
-          await operation.wait(refreshChanges(operation));
-          if (target !== myTabId || route !== activeRouteKey) break;
-          // Build a portable JSON payload from the in-memory state. The
-          // shape mirrors content/change-tracker's session payload plus a
-          // comments array, with a version + url + timestamp envelope so
-          // future imports can detect format changes.
-          const payload = siteChangesExport();
-          const json = JSON.stringify(payload, null, 2);
-          const blob = new Blob([json], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `design-mode-changes-${stamp}.json`;
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-          showCaptureToast('success', `Exported ${siteChangeCount()} change${siteChangeCount() === 1 ? '' : 's'} across all routes.`);
-          break;
-        }
+        case 'export-changes': runInspectorAction(exportChanges(operation)); break;
+        case 'reload-layers': runInspectorAction(reloadLayers(operation)); break;
         case 'revert-selected-changes': {
           // Drive each selected change-id through the existing per-change
           // revert path so undo state and overlay updates flow correctly.

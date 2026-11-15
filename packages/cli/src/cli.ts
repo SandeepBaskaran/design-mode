@@ -2,6 +2,13 @@ import { runAgentCli, readArguments, CliError as LocalCliError } from '../../mcp
 import { CliError, loadConfig } from './config.js';
 import { runRemote } from './remote.js';
 
+declare const __DM_VERSION__: string;
+
+function packageVersion(): string {
+  if (typeof __DM_VERSION__ !== 'string' || !__DM_VERSION__) throw new Error('Missing package version');
+  return __DM_VERSION__;
+}
+
 const HELP = `Design Mode agent CLI — Cloud (default), Local, Self-hosted
 
 Usage:
@@ -9,9 +16,10 @@ Usage:
   designmode-app [--mode cloud|local|self-hosted] schema <tool>
   designmode-app [--mode cloud|local|self-hosted] call <tool> [--stdin]
   designmode-app [--mode cloud|local|self-hosted] status
+  designmode-app version
   designmode-app --help
 
-Help is offline and does not read configuration or credentials.
+Help and version are offline and do not read configuration or credentials.
 Mode: --mode overrides DM_MODE, then DM_CONFIG mode; default is Cloud.
 Cloud: https://mcp.designmode.app/api/mcp; credential: DM_CLOUD_TOKEN.
 Self-hosted: DM_ENDPOINT (full /api/mcp URL), DM_SELF_HOSTED_TOKEN.
@@ -40,6 +48,10 @@ async function main(argv: string[]): Promise<number> {
   try {
     if (!argv.length || (argv.length === 1 && ['--help', '-h', 'help'].includes(argv[0]))) {
       process.stdout.write(HELP);
+      return 0;
+    }
+    if (argv.length === 1 && ['version', '--version', '-v'].includes(argv[0])) {
+      process.stdout.write(`${packageVersion()}\n`);
       return 0;
     }
     let mode: string | undefined;

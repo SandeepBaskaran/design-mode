@@ -76,6 +76,7 @@ requests, even with a broken config. No-argument invocation also prints help.
 Once the selected mode is configured:
 
 ```sh
+designmode-app version
 designmode-app tools
 designmode-app schema apply_changes
 designmode-app status
