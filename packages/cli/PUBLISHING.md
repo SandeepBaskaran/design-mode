@@ -17,8 +17,8 @@ Required release metadata:
 
 ## Publication
 
-Pushing the annotated tag `vMAJOR.MINOR.PATCH` is the maintainer's
-approval to publish. `.github/workflows/release.yml` runs `npm run verify`
+Merging a version bump to `main` is the maintainer's approval to
+publish. `.github/workflows/release.yml` runs `npm run verify`
 on that commit, creates the GitHub Release, and then the `publish-npm`
 job publishes this package. The job does not use an npm token.
 

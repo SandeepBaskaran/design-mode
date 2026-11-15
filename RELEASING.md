@@ -56,7 +56,7 @@ recommending the bump:
 
 ## Testing a pull-request build
 
-When a pull request is opened, the `PR extension build` workflow
+When a pull request is opened, the CI workflow's `extension-zip` job
 packages the extension the same way as `npm run package:extension`,
 uploads `design-mode-extension.zip` (Chrome), `design-mode-addon.zip`
 (Firefox) and the unpacked `dist/` as a workflow artefact named
@@ -103,7 +103,8 @@ load `packages/extension/dist`. Delete the clone when you are done.
   at once; the two names exist only so each store gets a recognisable
   file. The Safari zip is a separate `dist-safari/` build (Web Inspector
   tab, no side panel). `.github/workflows/release.yml` builds and
-  attaches **all three** automatically when the tag is pushed. Never
+  attaches **all three** when a merge to `main` bumps the version, and
+  also when a `v*` tag is pushed by hand. Never
   produce per-version filenames; replace the existing assets.
 - The release workflow first runs `npm run verify` on the tagged commit
   and checks that the tag matches the `version` in root `package.json`
@@ -117,8 +118,9 @@ load `packages/extension/dist`. Delete the clone when you are done.
   `packages/extension/design-mode-addon.zip` and
   `packages/extension/designmode-for-safari.zip` when you want to
   inspect a package before tagging. The zips are gitignored.
-- The tag push is the maintainer's explicit consent; the workflow
-  only fires after it. After the GitHub Release is created, three
+- Merging a version bump to `main` is the release. The workflow reads
+  the version from that commit, and a push that does not change it
+  publishes nothing. After the GitHub Release is created, three
   independent jobs on the `release` environment upload to the Chrome
   Web Store, submit to addons.mozilla.org, and publish
   `@designmode-app/cli`. One of those jobs failing does not cancel the
@@ -295,33 +297,32 @@ packument for up to three minutes before it fails a stale `latest`.
 
 ## Publication checklist (after preflight and `npm run verify` are green)
 
-Do not push a `v*.*.*` tag until the maintainer has confirmed the
-version and the pre-tag checklist above is complete.
-
 1. Merge the release branch into `main` with a normal (non-force) push
-   of `main` to `origin`.
-2. On GitHub, open **Actions → Release tag → Run workflow**, leave the
-   branch set to `main`, and run it. The workflow reads the version
-   from root `package.json` on `main`, runs `npm run release:preflight`,
-   and compares that version with the latest `v*` tag. If the version
-   is not newer, or `v<version>` already exists, the run ends
-   successfully and changes nothing. If it is newer, the run creates
-   the annotated tag on the current `main` commit, pushes it, and
-   calls `.github/workflows/release.yml` in the same run. A tag push
-   made with the workflow token does not start `release.yml` by
-   itself, which is why the call is in the same run. Two button runs
-   share the `design-mode-release` concurrency group, so a second run
-   waits and then sees the tag and stops. The release jobs use a
-   separate group, `design-mode-publish-<tag>`. A button run and a tag
-   you push yourself queue on that group, and the one that starts
-   second stops when the GitHub Release for that tag already exists.
-   The two groups are different on purpose: the caller holds
-   `design-mode-release` while it waits, and a called workflow that
-   asks for the same group is cancelled as a deadlock.
-3. The same workflow then runs three jobs that depend only on the
-   release job. Chrome Web Store and Firefox AMO submit the zips from
-   that job. npm publishes `@designmode-app/cli` with trusted
-   publishing. When the npm and store jobs have finished, run
+   of `main` to `origin`. That push starts Release. The workflow reads
+   root `package.json` on that commit and compares it with the previous
+   commit on `main` and with the latest `v*` tag. It publishes only when
+   this push changes the version, the new version is newer than the
+   latest tag, and `v<version>` does not already exist. It then runs
+   preflight, creates the annotated tag on that commit, and pushes the
+   tag with the workflow token. A token push does not start a second
+   Release run, so the same run builds the three zips, opens the GitHub
+   Release, and submits Chrome, Firefox, and npm. A merge that leaves
+   the version unchanged, including Dependabot and documentation, ends
+   successfully and changes nothing. Every Release run uses the
+   `design-mode-release` concurrency group. A second run waits. If the
+   GitHub Release for that tag already exists, it skips packaging and
+   the store and npm jobs. The repository ruleset named `release tags`
+   matches `v*.*.*`. It allows creation and blocks deletion, update,
+   and non-fast-forward. A personal repository cannot add GitHub
+   Actions as a bypass actor, so this workflow never needs one: it
+   only runs `git tag -a` and `git push origin refs/tags/<tag>`. It
+   does not retag, delete, or force-push. If that name already points
+   at a different commit, the run fails and leaves the tag where it
+   is. Creation has to stay allowed. When creation was blocked, the
+   push failed with `GH013`.
+2. The same run's Chrome Web Store and Firefox AMO jobs submit the zips.
+   npm publishes `@designmode-app/cli` with trusted publishing. When
+   those jobs have finished, run
    `npm run release:postcheck -- --tarball <verified-tarball>`. It
    retries a stale npm `latest` tag and checks that the Chrome and
    Firefox jobs' result lines show this version was submitted. A
@@ -333,18 +334,28 @@ version and the pre-tag checklist above is complete.
    Re-run the skipped store job after secrets exist so postcheck can
    see the submit line; a manual dashboard upload is not visible to
    `gh`.
-4. Safari: use `designmode-for-safari.zip` from the GitHub Release and
+3. Safari: use `designmode-for-safari.zip` from the GitHub Release and
    complete any Apple distribution steps separately.
 
-Pushing the annotated tag yourself still starts `release.yml`, because
-a tag push from a person is not the workflow token. Do not do both
-for the same version. The button is the path after a merge.
+Two fallbacks remain. **Actions → Release → Run workflow**, with the
+branch set to `main`, publishes the version named in root
+`package.json` when `v<version>` does not exist yet and that version
+is newer than the latest tag. The same button finishes a tag that
+already exists and has no GitHub Release: it checks out that tag,
+does not retag, and publishes the tag's commit. A push to `main` in
+that situation only writes `v<version> exists without a release; run
+Release manually to finish it`. A tag that already has a GitHub
+Release is left alone. `v3.2.2` points at `6b27e56` and has no GitHub
+Release. After this workflow is on `main`, finish it with that button
+while root `package.json` is still `3.2.2`. A `v*` tag you push
+yourself also starts Release, and only for a tag name that does not
+exist yet. Do not move or delete `v3.2.2`; the ruleset blocks it.
 
 ```sh
 git checkout main
 git pull origin main
-git tag -a v3.2.2 -m "v3.2.2"
-git push origin v3.2.2
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin refs/tags/vX.Y.Z
 ```
 
 ## Maintainer setup (once)
@@ -429,25 +440,13 @@ No npm token is stored in GitHub.
    The filename is only `release.yml`, not a path. The environment
    name must be `release` because the publish job sets
    `environment: release`. Leave it blank and the OIDC token will not
-   match. npm's trusted-publishing docs say that a `workflow_call`
-   publish is checked against the **calling** workflow's filename,
-   not the file that contains `npm publish`. The **Release tag**
-   workflow calls `release.yml`, so add a second GitHub Actions
-   publisher on the same package before the first button release:
-
-   | Field | Value |
-   | --- | --- |
-   | Organization or user | `SandeepBaskaran` |
-   | Repository | `design-mode` |
-   | Workflow filename | `release-tag.yml` |
-   | Environment name | `release` |
-
-   Allow **`npm publish`** on that row as well. Keep the `release.yml`
-   row: a tag you push yourself still publishes from that file. A
-   package can have up to 10 trusted publishers. Both caller and
-   called workflows grant `id-token: write`. The store jobs do not
-   use this publisher; their secrets stay on the `release`
-   environment and are available to the called jobs.
+   match. Publish stays in this file, so this one publisher covers a
+   merge to `main`, a manual run, and a tag you push yourself. If a
+   `release-tag.yml` publisher was added for the earlier button, delete
+   that row. The workflow file is gone, and an unused publisher is not
+   part of the release. The workflow grants `id-token: write`. The
+   store jobs do not use this publisher; their secrets stay on the
+   `release` environment.
 3. Allow **`npm publish`**. A trusted publisher created after
    3 September 2026 allows only `npm stage publish` until you also
    enable direct `npm publish`. This workflow runs `npm publish`, not
