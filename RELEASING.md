@@ -309,9 +309,15 @@ version and the pre-tag checklist above is complete.
    the annotated tag on the current `main` commit, pushes it, and
    calls `.github/workflows/release.yml` in the same run. A tag push
    made with the workflow token does not start `release.yml` by
-   itself, which is why the call is in the same run. Two runs share
-   the `design-mode-release` concurrency group, so a second run waits
-   and then sees the tag and stops.
+   itself, which is why the call is in the same run. Two button runs
+   share the `design-mode-release` concurrency group, so a second run
+   waits and then sees the tag and stops. The release jobs use a
+   separate group, `design-mode-publish-<tag>`. A button run and a tag
+   you push yourself queue on that group, and the one that starts
+   second stops when the GitHub Release for that tag already exists.
+   The two groups are different on purpose: the caller holds
+   `design-mode-release` while it waits, and a called workflow that
+   asks for the same group is cancelled as a deadlock.
 3. The same workflow then runs three jobs that depend only on the
    release job. Chrome Web Store and Firefox AMO submit the zips from
    that job. npm publishes `@designmode-app/cli` with trusted
