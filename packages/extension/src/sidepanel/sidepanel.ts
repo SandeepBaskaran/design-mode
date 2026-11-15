@@ -10893,7 +10893,9 @@ function setupDelegation() {
           if (!payload) break;
           // The `escapeAttr` helper produces `&quot;` / `&amp;` / `&lt;` /
           // `&gt;`. Reverse those before pasting into the clipboard.
-          const decoded = payload.replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&lt;', '<').replaceAll('&gt;', '>');
+          const decoded = payload.replace(/&(?:amp|quot|lt|gt);/g, (entity) => (
+            { '&amp;': '&', '&quot;': '"', '&lt;': '<', '&gt;': '>' }[entity] || entity
+          ));
           navigator.clipboard.writeText(decoded).then(() =>
             showCaptureToast('success', 'MCP config copied.')
           ).catch(() => showCaptureToast('error', 'Clipboard blocked.'));
