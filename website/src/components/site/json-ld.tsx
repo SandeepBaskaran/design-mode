@@ -125,27 +125,6 @@ export function blogPostingSchema(opts: {
   return articleSchema({ ...opts, type: "BlogPosting" });
 }
 
-export function howToSchema(opts: {
-  name: string;
-  description: string;
-  url: string;
-  steps: Array<{ name: string; text: string }>;
-}) {
-  return {
-    "@context": "https://schema.org",
-    "@type": "HowTo",
-    name: opts.name,
-    description: opts.description,
-    step: opts.steps.map((step, i) => ({
-      "@type": "HowToStep",
-      position: i + 1,
-      name: step.name,
-      text: step.text,
-      url: `${opts.url}#step-${i + 1}`,
-    })),
-  };
-}
-
 export function breadcrumbSchema(items: Array<{ name: string; url: string }>) {
   return {
     "@context": "https://schema.org",

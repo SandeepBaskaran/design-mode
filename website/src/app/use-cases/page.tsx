@@ -1,7 +1,3 @@
-import Link from "next/link";
-
-import { ArrowUpRight } from "lucide-react";
-
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
@@ -9,26 +5,16 @@ import { useCases } from "@/content/use-cases";
 
 export const metadata = {
   title: {
-    absolute: "Visual editing workflows for AI coding agents | Design Mode",
+    absolute: "Who Design Mode is for | Design Mode",
   },
   description:
-    "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
-  keywords: [
-    "design tool use cases",
-    "design workflows",
-    "vibe coding workflow",
-    "UI testing workflow",
-    "design handoff workflow",
-    "design system audit",
-    "design review",
-    "AI agent design workflow",
-  ],
+    "The same loop for designers, developers and reviewers: edit a rendered page, record the exact changes, and hand them to a person or coding agent.",
   alternates: { canonical: "https://designmode.app/use-cases" },
   openGraph: {
     type: "website",
-    title: "Visual editing workflows for AI coding agents | Design Mode",
+    title: "Who Design Mode is for | Design Mode",
     description:
-      "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
+      "The same loop for designers, developers and reviewers: edit a rendered page, record the exact changes, and hand them to a person or coding agent.",
     url: "https://designmode.app/use-cases",
     images: [
       {
@@ -41,9 +27,9 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Visual editing workflows for AI coding agents | Design Mode",
+    title: "Who Design Mode is for | Design Mode",
     description:
-      "Practical workflows for editing a rendered webpage, recording exact changes and handing a structured specification to a coding agent or developer.",
+      "The same loop for designers, developers and reviewers: edit a rendered page, record the exact changes, and hand them to a person or coding agent.",
     images: [
       {
         url: "/og-image.png",
@@ -60,13 +46,13 @@ export default function UseCasesIndex() {
     <>
       <JsonLd
         data={collectionPageSchema({
-          name: "Visual editing workflows for AI coding agents",
+          name: "Who Design Mode is for",
           description:
-            "Practical workflows for rendered-page editing and structured coding-agent hand-off.",
+            "Jobs that start by editing a rendered page and handing a structured specification to a person or coding agent.",
           url: "https://designmode.app/use-cases",
           items: useCases.map((item) => ({
             name: item.title,
-            url: `https://designmode.app/use-cases/${item.slug}`,
+            url: `https://designmode.app/use-cases#${item.slug}`,
           })),
         })}
       />
@@ -74,41 +60,47 @@ export default function UseCasesIndex() {
         <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Workflows for visual editing and agent hand-off
+              Who it’s for
             </h1>
             <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              Start with the shared loop: make the intended change on the
-              rendered interface, capture the exact specification, then ask a
-              coding agent or developer to update and verify the source. The
-              examples below apply that loop to specific jobs.
+              One loop: edit the rendered page, record the exact changes, then
+              hand them to a coding agent or a teammate who can update the
+              source.
             </p>
+            <ul className="mt-8 max-w-3xl space-y-3 text-base">
+              <li>Designers and design engineers working on a live page.</li>
+              <li>
+                Developers using Claude Code, Cursor or another compatible
+                agent.
+              </li>
+              <li>
+                QA, content and product people exporting visual feedback
+                without writing the code.
+              </li>
+            </ul>
           </div>
         </section>
       </Background>
 
       <section className="py-16 lg:py-20">
         <DashedLine className="container max-w-5xl" />
-        <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {useCases.map((u) => (
-            <Link
-              key={u.slug}
-              href={`/use-cases/${u.slug}`}
-              className="group flex flex-col rounded-2xl border p-6 transition-shadow hover:shadow-md"
+        <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-2">
+          {useCases.map((item) => (
+            <article
+              key={item.slug}
+              id={item.slug}
+              className="scroll-mt-24 rounded-2xl border p-6"
             >
-              <span className="text-muted-foreground text-base font-medium tracking-wide uppercase">
-                {u.persona}
-              </span>
+              <p className="text-muted-foreground text-base font-medium tracking-wide uppercase">
+                {item.persona}
+              </p>
               <h2 className="font-display mt-2 text-2xl leading-snug font-semibold">
-                {u.title}
+                {item.title}
               </h2>
               <p className="text-muted-foreground mt-2 text-base leading-relaxed">
-                {u.intro.split(". ")[0]}.
+                {item.summary}
               </p>
-              <span className="text-foreground/80 mt-4 inline-flex items-center gap-2 text-base font-medium underline underline-offset-8">
-                Read the workflow{" "}
-                <ArrowUpRight className="size-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-              </span>
-            </Link>
+            </article>
           ))}
         </div>
       </section>

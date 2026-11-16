@@ -3,7 +3,6 @@ import type { MetadataRoute } from "next";
 import { posts } from "@/content/blog";
 import { comparisons, isComparisonIndexable } from "@/content/comparisons";
 import { docs } from "@/content/docs";
-import { useCases } from "@/content/use-cases";
 
 const BASE = "https://designmode.app";
 
@@ -29,12 +28,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: route.priority,
   }));
 
-  const useCaseEntries: MetadataRoute.Sitemap = useCases.map((item) => ({
-    url: `${BASE}/use-cases/${item.slug}`,
-    changeFrequency: "monthly",
-    priority: 0.8,
-  }));
-
   const docsEntries: MetadataRoute.Sitemap = docs.map((item) => ({
     url: `${BASE}/docs/${item.slug}`,
     changeFrequency: "monthly",
@@ -58,7 +51,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     ...staticEntries,
-    ...useCaseEntries,
     ...docsEntries,
     ...blogEntries,
     ...comparisonEntries,

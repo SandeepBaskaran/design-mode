@@ -25,7 +25,6 @@ const routes = [
   "/compare",
   "/compare/design-mode-vs-magicpath",
   "/use-cases",
-  "/use-cases/visual-editing-with-cursor",
 ];
 const browser = await chromium.launch({
   headless: true,
