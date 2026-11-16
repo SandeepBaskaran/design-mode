@@ -1,8 +1,31 @@
 import Image from "next/image";
 
-
 import { ArrowDownUp, Copy, Plug } from "lucide-react";
 
+import {
+  CHROME_WEB_STORE_URL,
+  FIREFOX_AMO_URL,
+  SAFARI_RELEASE_URL,
+} from "@/lib/install-links";
+import { withNavRef } from "@/lib/nav-ref";
+
+const installs = [
+  {
+    name: "Chrome",
+    href: withNavRef(CHROME_WEB_STORE_URL),
+    detail: "Chrome Web Store",
+  },
+  {
+    name: "Firefox",
+    href: withNavRef(FIREFOX_AMO_URL),
+    detail: "Firefox Add-ons",
+  },
+  {
+    name: "Safari",
+    href: SAFARI_RELEASE_URL,
+    detail: "Latest GitHub release, then a manual setup",
+  },
+];
 
 export function BrowserHandoff() {
   return (
@@ -47,11 +70,24 @@ export function BrowserHandoff() {
               />
             </div>
             <h3 className="mt-6 text-2xl font-semibold">Add to your browser</h3>
-            <p className="text-muted-foreground mt-4 text-base leading-relaxed">
-              Edit pages in Chrome, Firefox or Safari.
-              <br />
-              Safari takes a quick manual setup.
-            </p>
+            <ul className="mt-4 space-y-2 text-base">
+              {installs.map((install) => (
+                <li key={install.name}>
+                  <a
+                    href={install.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-4"
+                  >
+                    {install.name}
+                  </a>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    — {install.detail}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </article>
           <article>
             <ArrowDownUp aria-hidden="true" className="size-10" />
