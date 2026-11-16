@@ -6,7 +6,7 @@ export const sectionGap = "mt-10";
 type SectionHeaderProps = {
   eyebrow: string;
   title: ReactNode;
-  description?: string;
+  description?: ReactNode;
   id?: string;
   as?: "h1" | "h2";
 };

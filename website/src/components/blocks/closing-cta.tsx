@@ -14,10 +14,22 @@ export function ClosingCta() {
           <ProductHunt />
         </div>
         <SectionHeader
-          eyebrow="From intent to implementation"
+          eyebrow="FROM INTENT TO IMPLEMENTATION"
           id="closing-cta-heading"
-          title="Less explaining."
-          description="Make the change in your browser. Give your agent the details to carry it into code."
+          title={
+            <>
+              Less explaining.
+              <br />
+              More making.
+            </>
+          }
+          description={
+            <>
+              Make the change in your browser.
+              <br />
+              Give your agent the details to carry it into code.
+            </>
+          }
         />
         <div className={`flex flex-col items-center justify-center gap-4 sm:flex-row ${sectionGap}`}>
           <AddToChromeCta
