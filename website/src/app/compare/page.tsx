@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { ArrowUpRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
@@ -108,9 +108,9 @@ export default function ComparisonsIndex() {
                     {comparison.oneLiner}
                   </p>
                 </div>
-                <ArrowUpRight
+                <ArrowRight
                   aria-hidden="true"
-                  className="text-foreground size-5 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                  className="text-foreground size-5 shrink-0 transition-transform group-hover:translate-x-0.5"
                 />
               </Link>
             );
