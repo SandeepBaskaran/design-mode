@@ -641,7 +641,7 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | 14.15 | llms.txt | Visit `/llms.txt` and `/llms-full.txt` | Both serve plain-text site / product summaries |
 | 14.16 | Web app manifest | Visit `/manifest.webmanifest` | Serves valid JSON (name, icons, theme) |
 | 14.17 | JSON-LD structured data | View source on `/`, a `/compare/<slug>`, and `/faq` | `<script type="application/ld+json">` present (e.g. SoftwareApplication / FAQPage / Article) and valid JSON |
-| 14.18 | Nav + footer links | Open any page, including the mobile menu | Navbar shows Demo, MCP, Solutions, Compare and Blog, in that order, plus the install button. Footer still reaches changelog, privacy, FAQ, about and contact |
+| 14.18 | Nav + footer links | Open any page, including the mobile menu | Navbar shows Demo, Solutions, Compare and MCP, in that order, plus the install button. Blog stays in the footer under Resources |
 
 ---
 

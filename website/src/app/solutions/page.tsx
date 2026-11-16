@@ -1,6 +1,7 @@
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
+import { RelatedLinks } from "@/components/site/related-links";
 import { useCases } from "@/content/use-cases";
 
 export const metadata = {
@@ -103,6 +104,36 @@ export default function UseCasesIndex() {
             </article>
           ))}
         </div>
+        <RelatedLinks
+          title="Guides"
+          links={[
+            {
+              href: "/blog/browser-support",
+              title: "Install and browser support",
+              description: "Chrome, Firefox and Safari, and what differs between them.",
+            },
+            {
+              href: "/blog/mcp-setup",
+              title: "Connect an agent",
+              description: "Cloud, Local and Self-hosted MCP setup.",
+            },
+            {
+              href: "/blog/changes-tab",
+              title: "Changes tab",
+              description: "Review, export and copy the recorded edits.",
+            },
+            {
+              href: "/blog/keyboard-shortcuts",
+              title: "Keyboard shortcuts",
+              description: "The in-page keys and the two browser commands.",
+            },
+            {
+              href: "/blog/troubleshooting",
+              title: "Troubleshooting",
+              description: "Panel will not open, MCP stays offline, edits do not stick.",
+            },
+          ]}
+        />
       </section>
     </>
   );
