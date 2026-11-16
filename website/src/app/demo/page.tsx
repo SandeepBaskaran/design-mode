@@ -1,9 +1,9 @@
+import { capabilityGroups } from "./capabilities";
 import styles from "./demo.module.scss";
 import { DemoLeftNav } from "./DemoLeftNav";
 import { DemoStep } from "./DemoStep";
 import { renderDemoTarget } from "./DemoTargets";
 import { ExtensionDetected } from "./ExtensionDetected";
-import { capabilityGroups } from "./capabilities";
 import { STEPS } from "./steps";
 
 import { Background } from "@/components/background";
