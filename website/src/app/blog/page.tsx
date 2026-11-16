@@ -1,10 +1,7 @@
-import Link from "next/link";
-
-import { ArrowUpRight } from "lucide-react";
-
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
+import { LinkCard } from "@/components/site/related-links";
 import { posts } from "@/content/blog";
 
 export const metadata = {
@@ -92,30 +89,15 @@ export default function BlogIndex() {
 
       <section className="py-16 lg:py-20">
         <DashedLine className="container max-w-5xl" />
-        <div className="container mt-12 max-w-5xl space-y-6">
+        <div className="container mt-12 grid max-w-5xl gap-4 md:grid-cols-2 lg:grid-cols-3">
           {sorted.map((p) => (
-            <Link
+            <LinkCard
               key={p.slug}
               href={`/blog/${p.slug}`}
-              className="group block rounded-2xl border p-6 transition-shadow hover:shadow-md"
-            >
-              <time
-                dateTime={p.datePublished}
-                className="text-muted-foreground text-base font-medium tracking-wide uppercase"
-              >
-                {dateFmt.format(new Date(p.datePublished))}
-              </time>
-              <h2 className="font-display mt-2 text-2xl leading-snug font-semibold md:text-3xl">
-                {p.title}
-              </h2>
-              <p className="text-muted-foreground mt-2 leading-relaxed">
-                {p.excerpt}
-              </p>
-              <span className="text-foreground/80 mt-4 inline-flex items-center gap-2 text-base font-medium underline underline-offset-8">
-                Read{" "}
-                <ArrowUpRight className="size-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-              </span>
-            </Link>
+              title={p.title}
+              description={p.excerpt}
+              eyebrow={dateFmt.format(new Date(p.datePublished))}
+            />
           ))}
         </div>
       </section>
