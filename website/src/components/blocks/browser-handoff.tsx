@@ -145,7 +145,15 @@ export function BrowserHandoff() {
             <Terminal aria-hidden="true" className="size-10" />
             <h3 className="mt-6 text-2xl font-semibold">Use the CLI</h3>
             <p className="text-muted-foreground mt-4 text-base leading-relaxed">
-              <span className="font-mono">designmode-app</span> runs version,
+              <a
+                href="https://www.npmjs.com/package/@designmode-app/cli"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono underline underline-offset-4"
+              >
+                designmode-app
+              </a>{" "}
+              runs version,
               tools, status, schema, and call. Cloud is the default;{" "}
               <span className="font-mono">--mode</span> selects local or
               self-hosted. It does not start the local bridge.
