@@ -4,8 +4,8 @@ import { BrowserHandoff } from "@/components/blocks/browser-handoff";
 import { ClosingCta } from "@/components/blocks/closing-cta";
 import { FAQ, homepageFaqQA } from "@/components/blocks/faq";
 import { Hero } from "@/components/blocks/hero";
-import { WhoItsFor } from "@/components/blocks/who-its-for";
 import { PanelAnatomy } from "@/components/blocks/panel-anatomy";
+import { WhoItsFor } from "@/components/blocks/who-its-for";
 import {
   JsonLd,
   faqSchema,

@@ -6,12 +6,6 @@ const changes = {
   description:
     "Understand JSON export, Markdown prompts and site-wide sharing scope.",
 };
-const prompts = {
-  href: "/blog/turn-visual-edits-into-precise-ai-prompts",
-  title: "Write a precise visual-change brief",
-  description:
-    "Illustrative prompts and checks for reviewing the implemented source.",
-};
 const changelog = {
   href: "/changelog",
   title: "Check the release history",
