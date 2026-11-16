@@ -3,6 +3,7 @@ import { DemoLeftNav } from "./DemoLeftNav";
 import { DemoStep } from "./DemoStep";
 import { renderDemoTarget } from "./DemoTargets";
 import { ExtensionDetected } from "./ExtensionDetected";
+import { capabilityGroups } from "./capabilities";
 import { STEPS } from "./steps";
 
 import { Background } from "@/components/background";
@@ -63,6 +64,23 @@ export default function DemoPage() {
             <p className="text-muted-foreground mt-4 max-w-3xl text-base">
               Install the extension, open the side panel on this page, and edit
               the targets below. On a phone, continue on a desktop browser.
+            </p>
+            <div className="mt-10 grid gap-8 md:grid-cols-2">
+              {capabilityGroups.map((group) => (
+                <section key={group.title}>
+                  <h2 className="text-xl font-semibold">{group.title}</h2>
+                  <ul className="text-muted-foreground mt-3 list-disc space-y-2 pl-5 text-base">
+                    {group.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+            <p className="text-muted-foreground mt-8 max-w-3xl text-base">
+              This list is the 3.2.2 editor: the walkthrough below, plus the
+              region export, Layers reload, screenshot shortcut and CLI version
+              command from that release.
             </p>
           </div>
         </section>
