@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Heart, MousePointer2, Palette, Ruler, Wand2 } from "lucide-react";
 
 import { HeroHeadline } from "@/components/blocks/hero-headline";
+import { ProductHunt } from "@/components/blocks/product-hunt";
 import { DashedLine } from "@/components/dashed-line";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 import { sectionPadding } from "@/components/site/section-header";
@@ -47,6 +48,9 @@ export const Hero = () => {
     <section className={sectionPadding}>
       {/* Hero — vertical stack, centred */}
       <div className="container max-w-[1200px] text-center max-sm:px-4">
+        <div className="mb-6 flex justify-center">
+          <ProductHunt />
+        </div>
         <HeroHeadline />
 
         <p className="text-muted-foreground mx-auto mt-8 max-w-[848px] text-base">

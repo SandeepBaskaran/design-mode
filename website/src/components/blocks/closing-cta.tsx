@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AgentIcons } from "@/components/blocks/hero-headline";
+import { ProductHunt } from "@/components/blocks/product-hunt";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
 import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,9 @@ export function ClosingCta() {
   return (
     <section aria-labelledby="closing-cta-heading" className={sectionPadding}>
       <div className="container text-center">
+        <div className="mb-6 flex justify-center">
+          <ProductHunt />
+        </div>
         <SectionHeader
           eyebrow="From intent to implementation"
           id="closing-cta-heading"
