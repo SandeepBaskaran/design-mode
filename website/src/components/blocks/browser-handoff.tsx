@@ -7,7 +7,7 @@ import {
   FIREFOX_AMO_URL,
   SAFARI_RELEASE_URL,
 } from "@/lib/install-links";
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import { withNavRef } from "@/lib/nav-ref";
 
 const installs = [
@@ -45,7 +45,7 @@ function McpLogo() {
 
 export function BrowserHandoff() {
   return (
-    <section className="py-16 md:py-24 lg:py-32" aria-labelledby="browser-handoff-heading">
+    <section className={sectionPadding} aria-labelledby="browser-handoff-heading">
       <div className="container max-w-5xl">
         <SectionHeader
           eyebrow="Handoff"
@@ -53,7 +53,7 @@ export function BrowserHandoff() {
           title="Start in your browser. Take the details wherever you work."
           description="Install it, keep the edits portable, then copy a prompt, send them, or connect an agent."
         />
-        <div className="mt-16 grid gap-x-24 gap-y-16 md:grid-cols-2">
+        <div className={`grid gap-x-24 gap-y-16 md:grid-cols-2 ${sectionGap}`}>
           <article>
             <div
               className="flex h-10 items-center gap-4"

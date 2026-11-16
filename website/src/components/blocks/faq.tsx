@@ -7,14 +7,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import { homepageFaqQA } from "@/content/product-facts";
 
 export { homepageFaqQA } from "@/content/product-facts";
 
 export const FAQ = () => {
   return (
-    <section id="faq" className="scroll-mt-24 py-16 md:py-24 lg:py-32">
+    <section id="faq" className={`scroll-mt-24 ${sectionPadding}`}>
       <div className="container max-w-5xl">
         <SectionHeader
           eyebrow="FAQ"
@@ -25,7 +25,7 @@ export const FAQ = () => {
         <Accordion
           type="single"
           collapsible
-          className="mx-auto mt-10 w-full max-w-4xl"
+          className={`mx-auto w-full max-w-4xl ${sectionGap}`}
         >
           {homepageFaqQA.map((item, index) => (
             <AccordionItem key={item.question} value={`faq-${index}`}>

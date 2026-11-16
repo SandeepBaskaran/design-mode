@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import { withNavRef } from "@/lib/nav-ref";
 
 const REPO_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");
@@ -8,7 +8,7 @@ const EMAIL = "hello@sandeepbaskaran.com";
 
 export function HomeAbout() {
   return (
-    <section id="about" aria-labelledby="about-heading" className="py-16 md:py-24">
+    <section id="about" aria-labelledby="about-heading" className={sectionPadding}>
       <div className="container max-w-5xl">
         <SectionHeader
           eyebrow="Project"
@@ -16,7 +16,7 @@ export function HomeAbout() {
           title="About"
           description="Sandeep Baskaran builds Design Mode in the open. The extension records a preview; the source change is reviewed separately."
         />
-        <div className="text-muted-foreground mt-6 max-w-3xl space-y-4 text-base leading-relaxed">
+        <div className={`text-muted-foreground max-w-3xl space-y-4 text-left text-base leading-relaxed ${sectionGap}`}>
           <p>
             Sandeep Baskaran is a Senior UX Designer in Bengaluru, working in
             IBM&apos;s Z Infrastructure organisation. Design Mode is his
@@ -49,7 +49,7 @@ export function HomeContact() {
     <section
       id="contact"
       aria-labelledby="contact-heading"
-      className="pb-16 md:pb-24"
+      className={sectionPadding}
     >
       <div className="container max-w-5xl">
         <SectionHeader
@@ -58,7 +58,7 @@ export function HomeContact() {
           title="Contact"
           description="Email for private notes. GitHub for bugs and ideas. Security reports stay out of public issues."
         />
-        <ul className="mt-6 max-w-3xl space-y-3 text-base">
+        <ul className={`max-w-3xl space-y-3 text-left text-base ${sectionGap}`}>
           <li>
             <a className="underline underline-offset-4" href={`mailto:${EMAIL}`}>
               {EMAIL}

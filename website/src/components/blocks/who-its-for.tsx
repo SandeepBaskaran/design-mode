@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 
 const audiences = [
   {
@@ -19,7 +19,7 @@ const audiences = [
 
 export function WhoItsFor() {
   return (
-    <section aria-labelledby="who-heading" className="py-16 md:py-24 lg:py-32">
+    <section aria-labelledby="who-heading" className={sectionPadding}>
       <div className="container max-w-5xl">
         <SectionHeader
           eyebrow="Audience"

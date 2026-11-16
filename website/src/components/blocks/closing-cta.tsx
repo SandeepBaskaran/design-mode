@@ -2,12 +2,12 @@ import Link from "next/link";
 
 import { AgentIcons } from "@/components/blocks/hero-headline";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 
 export function ClosingCta() {
   return (
-    <section aria-labelledby="closing-cta-heading" className="py-16 md:py-24 lg:py-32">
+    <section aria-labelledby="closing-cta-heading" className={sectionPadding}>
       <div className="container text-center">
         <SectionHeader
           eyebrow="From intent to implementation"
@@ -15,7 +15,7 @@ export function ClosingCta() {
           title="Less explaining. More making."
           description="Make the change in your browser. Give your agent the details to carry it into code."
         />
-        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <div className={`flex flex-col items-center justify-center gap-4 sm:flex-row ${sectionGap}`}>
           <AddToChromeCta
             size="lg"
             className="h-14 max-sm:w-full max-sm:max-w-xs"

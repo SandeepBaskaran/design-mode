@@ -7,7 +7,7 @@ import { ExtensionDetected } from "./ExtensionDetected";
 import { STEPS } from "./steps";
 
 import { Background } from "@/components/background";
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 
 export const metadata = {
   title: { absolute: "Try the browser visual editor | Design Mode" },
@@ -57,7 +57,7 @@ export default function DemoPage() {
     <>
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className={sectionPadding}>
           <div className="container max-w-5xl">
             <SectionHeader
               as="h1"
@@ -98,7 +98,7 @@ export default function DemoPage() {
       </section>
 
       {/* Middle — interactive canvas */}
-      <section className="hidden py-12 md:block lg:py-16">
+      <section className={`hidden md:block ${sectionPadding}`}>
         <div className={`${styles.extensionBannerWrap} container max-w-5xl`}>
           <ExtensionDetected />
         </div>

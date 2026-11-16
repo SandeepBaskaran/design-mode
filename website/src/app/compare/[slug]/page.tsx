@@ -7,6 +7,7 @@ import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, breadcrumbSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
+import { sectionPadding } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 import {
   comparisons,
@@ -96,7 +97,7 @@ export default async function ComparePage({
       />
 
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className={sectionPadding}>
           <div className="container max-w-4xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {c.title}
@@ -108,7 +109,7 @@ export default async function ComparePage({
         </section>
       </Background>
 
-      <section className="py-16 lg:py-20">
+      <section className={sectionPadding}>
         <DashedLine className="container max-w-4xl" />
         <article className="container mt-12 max-w-4xl space-y-12">
           <aside className="bg-muted text-muted-foreground rounded-xl border p-4 text-base leading-relaxed">

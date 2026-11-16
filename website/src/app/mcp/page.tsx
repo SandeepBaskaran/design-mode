@@ -26,7 +26,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -141,7 +141,7 @@ export default function McpPage() {
   return (
     <>
       <Background>
-        <section className="py-32" aria-labelledby="mcp-title">
+        <section className={sectionPadding} aria-labelledby="mcp-title">
           <div className="container max-w-5xl">
             <SectionHeader
               as="h1"
@@ -158,7 +158,7 @@ export default function McpPage() {
         </section>
       </Background>
 
-      <section className="py-32" aria-labelledby="what-mcp">
+      <section className={sectionPadding} aria-labelledby="what-mcp">
         <div className="container max-w-5xl">
           <SectionHeader
             eyebrow="MCP"
@@ -244,7 +244,7 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section id="connect" className="py-32" aria-labelledby="connect-title">
+      <section id="connect" className={sectionPadding} aria-labelledby="connect-title">
         <div className="container max-w-5xl">
           <SectionHeader
             eyebrow="Connection"
@@ -374,7 +374,7 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section className="py-32" aria-labelledby="apps-title">
+      <section className={sectionPadding} aria-labelledby="apps-title">
         <div className="container max-w-5xl">
           <SectionHeader
             eyebrow="Modes"
@@ -485,7 +485,7 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section className="py-32" aria-labelledby="tools-title">
+      <section className={sectionPadding} aria-labelledby="tools-title">
         <div className="container max-w-5xl">
           <SectionHeader
             eyebrow="Tools"
@@ -542,7 +542,7 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section className="py-32" aria-labelledby="reads-title">
+      <section className={sectionPadding} aria-labelledby="reads-title">
         <div className="container max-w-5xl">
           <SectionHeader
             eyebrow="Reads"
@@ -593,7 +593,7 @@ export default function McpPage() {
       </section>
 
       <Background variant="bottom">
-        <section className="py-32" aria-labelledby="skill-title">
+        <section className={sectionPadding} aria-labelledby="skill-title">
           <div className="container max-w-5xl">
             <Send aria-hidden="true" className="size-8" />
             <SectionHeader

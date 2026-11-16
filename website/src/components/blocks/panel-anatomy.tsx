@@ -42,7 +42,7 @@ import {
 
 import styles from "./panel-anatomy.module.css";
 
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 
 import {
   Accordion,
@@ -602,7 +602,7 @@ export function PanelAnatomy() {
     <section
       id="panel-anatomy"
       aria-labelledby="panel-anatomy-title"
-      className="py-16 md:py-24 lg:py-32"
+      className={sectionPadding}
     >
       <div className="container">
         <SectionHeader
@@ -612,7 +612,7 @@ export function PanelAnatomy() {
           description="Layers, design controls and the Changes tab stay together while you edit the page."
         />
       </div>
-      <div ref={track} className={`${styles.track} mt-10`}>
+      <div ref={track} className={`${styles.track} ${sectionGap}`}>
         <div ref={sticky} className={`container ${styles.sticky}`}>
           <div className={styles.mobileIntro}>
             <h3>{active}</h3>

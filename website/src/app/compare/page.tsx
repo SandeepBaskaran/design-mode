@@ -5,7 +5,7 @@ import { ArrowUpRight } from "lucide-react";
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { comparisons, isComparisonIndexable } from "@/content/comparisons";
 
 const pageTitle = "Browser visual editors and AI feedback tools";
@@ -61,7 +61,7 @@ export default function ComparisonsIndex() {
       />
 
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className={sectionPadding}>
           <div className="container max-w-5xl">
             <SectionHeader
               as="h1"
@@ -73,7 +73,7 @@ export default function ComparisonsIndex() {
         </section>
       </Background>
 
-      <section className="py-16 lg:py-20">
+      <section className={sectionPadding}>
         <DashedLine className="container max-w-5xl" />
         <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-2 lg:grid-cols-3">
           {comparisons.map((comparison) => (

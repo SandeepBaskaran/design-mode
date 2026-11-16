@@ -2,7 +2,7 @@ import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { useCases } from "@/content/use-cases";
 
 export const metadata = {
@@ -59,7 +59,7 @@ export default function UseCasesIndex() {
         })}
       />
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className={sectionPadding}>
           <div className="container max-w-5xl">
             <SectionHeader
               as="h1"
@@ -82,7 +82,7 @@ export default function UseCasesIndex() {
         </section>
       </Background>
 
-      <section className="py-16 lg:py-20">
+      <section className={sectionPadding}>
         <DashedLine className="container max-w-5xl" />
         <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-2">
           {useCases.map((item) => (

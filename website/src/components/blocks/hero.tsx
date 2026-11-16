@@ -6,6 +6,7 @@ import { Heart, MousePointer2, Palette, Ruler, Wand2 } from "lucide-react";
 import { HeroHeadline } from "@/components/blocks/hero-headline";
 import { DashedLine } from "@/components/dashed-line";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
+import { sectionPadding } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 
 const features = [
@@ -43,7 +44,7 @@ const features = [
 
 export const Hero = () => {
   return (
-    <section className="py-16 md:py-24 lg:py-32">
+    <section className={sectionPadding}>
       {/* Hero — vertical stack, centred */}
       <div className="container max-w-[1200px] text-center max-sm:px-4">
         <HeroHeadline />

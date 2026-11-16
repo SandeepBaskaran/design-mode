@@ -8,6 +8,7 @@ import {
   breadcrumbSchema,
 } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
+import { sectionPadding } from "@/components/site/section-header";
 import { getPost, posts } from "@/content/blog";
 import { blogContextualLinks } from "@/content/contextual-links";
 
@@ -130,7 +131,7 @@ export default async function BlogPostPage({
       />
 
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className={sectionPadding}>
           <div className="container max-w-4xl">
             <time
               dateTime={p.datePublished}
@@ -146,7 +147,7 @@ export default async function BlogPostPage({
         </section>
       </Background>
 
-      <section className="py-16 lg:py-20">
+      <section className={sectionPadding}>
         <DashedLine className="container max-w-4xl" />
         <article className="container mt-12 max-w-4xl space-y-10">
           {p.body.map((block, i) => (

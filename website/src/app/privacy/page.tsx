@@ -4,6 +4,7 @@ import Privacy from "./privacy.mdx";
 import Reporting from "./reporting.mdx";
 
 import { Background } from "@/components/background";
+import { sectionPadding } from "@/components/site/section-header";
 import { DashedLine } from "@/components/dashed-line";
 
 export default function PrivacyPage() {
@@ -11,7 +12,7 @@ export default function PrivacyPage() {
     <>
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className={sectionPadding}>
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
               Privacy
@@ -26,7 +27,7 @@ export default function PrivacyPage() {
       </Background>
 
       {/* Middle — main privacy content */}
-      <section className="py-16 lg:py-20">
+      <section className={sectionPadding}>
         <DashedLine className="container max-w-5xl" />
         <article className="prose container mx-auto mt-12 max-w-3xl">
           <Privacy />

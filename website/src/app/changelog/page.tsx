@@ -4,7 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
-import { SectionHeader } from "@/components/site/section-header";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { releases } from "@/content/changelog";
 
 const REPO_CHANGELOG =
@@ -64,7 +64,7 @@ export default function ChangelogPage() {
   return (
     <>
       <Background>
-        <section className="py-16 lg:py-24">
+        <section className={sectionPadding}>
           <div className="container max-w-3xl">
             <SectionHeader
               as="h1"
@@ -88,7 +88,7 @@ export default function ChangelogPage() {
         </section>
       </Background>
 
-      <section className="py-16 lg:py-20">
+      <section className={sectionPadding}>
         <DashedLine className="container max-w-3xl" />
         <div className="container mt-12 max-w-3xl">
           <ol className="flex flex-col gap-16">
