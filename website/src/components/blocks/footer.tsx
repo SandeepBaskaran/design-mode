@@ -21,7 +21,7 @@ export function Footer() {
         { name: "The editor", href: "/#panel-anatomy" },
         { name: "Try the demo", href: "/demo" },
         { name: "Connect your agent", href: "/mcp" },
-        { name: "Who it’s for", href: "/use-cases" },
+        { name: "Solutions", href: "/solutions" },
 
       ],
     },

@@ -10,7 +10,7 @@ const staticRoutes = [
   { path: "/demo", changeFrequency: "monthly", priority: 0.9 },
   { path: "/mcp", changeFrequency: "monthly", priority: 0.9 },
   { path: "/privacy", changeFrequency: "monthly", priority: 0.5 },
-  { path: "/use-cases", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/solutions", changeFrequency: "monthly", priority: 0.9 },
   { path: "/compare", changeFrequency: "monthly", priority: 0.9 },
   { path: "/changelog", changeFrequency: "weekly", priority: 0.7 },
   { path: "/blog", changeFrequency: "weekly", priority: 0.7 },

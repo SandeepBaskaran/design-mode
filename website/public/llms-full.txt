@@ -145,7 +145,7 @@ The source is published under the MIT licence. Current Chrome and Firefox listin
 - Changelog: https://designmode.app/changelog
 - Troubleshooting: https://designmode.app/blog/troubleshooting
 - Keyboard shortcuts: https://designmode.app/blog/keyboard-shortcuts
-- Use cases: https://designmode.app/use-cases
+- Solutions: https://designmode.app/solutions
 - Live demo: https://designmode.app/demo
 
 ## Practical guide: turn visual edits into precise AI prompts

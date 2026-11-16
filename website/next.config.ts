@@ -3,22 +3,6 @@ import path from "node:path";
 import createMDX from "@next/mdx";
 import type { NextConfig } from "next";
 
-const retiredUseCases = [
-  "vibe-coding-with-claude-code",
-  "visual-editing-with-cursor",
-  "redesign-any-website",
-  "design-review-in-production",
-  "tailwind-component-tuning",
-  "figma-to-code-without-figma",
-  "ui-testing-export-to-developers",
-  "bug-report-with-visual-diff",
-  "copy-edits-without-a-pr",
-  "accessibility-quick-fixes",
-  "landing-page-iteration-for-indie-hackers",
-  "client-handoff-from-agency-to-engineering",
-  "design-system-audit",
-];
-
 const nextConfig: NextConfig = {
   pageExtensions: ["js", "jsx", "mdx", "ts", "tsx"],
   redirects() {
@@ -84,11 +68,16 @@ const nextConfig: NextConfig = {
         destination: "/",
         permanent: true,
       },
-      ...retiredUseCases.map((slug) => ({
-        source: `/use-cases/${slug}`,
-        destination: `/use-cases#${slug}`,
+      {
+        source: "/use-cases",
+        destination: "/solutions",
         permanent: true,
-      })),
+      },
+      {
+        source: "/use-cases/:slug",
+        destination: "/solutions#:slug",
+        permanent: true,
+      },
     ];
   },
   turbopack: {

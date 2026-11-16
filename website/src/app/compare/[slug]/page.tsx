@@ -249,7 +249,7 @@ export default async function ComparePage({
               <Link href="/demo">Try Design Mode</Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link href="/use-cases">See use cases</Link>
+              <Link href="/solutions">See solutions</Link>
             </Button>
           </div>
         </article>

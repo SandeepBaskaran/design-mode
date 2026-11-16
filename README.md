@@ -32,7 +32,7 @@ Pin the extension, open a page, and click the toolbar icon. Chrome opens the lau
 
 ## Go deeper
 
-- [Who it’s for](https://designmode.app/use-cases)
+- [Solutions](https://designmode.app/solutions)
 - [Connect an agent](https://designmode.app/mcp)
 - [MCP setup](https://designmode.app/blog/mcp-setup)
 - [Browser support](https://designmode.app/blog/browser-support)

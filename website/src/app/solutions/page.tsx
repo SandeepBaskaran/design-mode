@@ -5,17 +5,17 @@ import { useCases } from "@/content/use-cases";
 
 export const metadata = {
   title: {
-    absolute: "Who Design Mode is for | Design Mode",
+    absolute: "Solutions | Design Mode",
   },
   description:
     "The same loop for designers, developers and reviewers: edit a rendered page, record the exact changes, and hand them to a person or coding agent.",
-  alternates: { canonical: "https://designmode.app/use-cases" },
+  alternates: { canonical: "https://designmode.app/solutions" },
   openGraph: {
     type: "website",
-    title: "Who Design Mode is for | Design Mode",
+    title: "Solutions | Design Mode",
     description:
       "The same loop for designers, developers and reviewers: edit a rendered page, record the exact changes, and hand them to a person or coding agent.",
-    url: "https://designmode.app/use-cases",
+    url: "https://designmode.app/solutions",
     images: [
       {
         url: "/og-image.png",
@@ -27,7 +27,7 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Who Design Mode is for | Design Mode",
+    title: "Solutions | Design Mode",
     description:
       "The same loop for designers, developers and reviewers: edit a rendered page, record the exact changes, and hand them to a person or coding agent.",
     images: [
@@ -46,13 +46,13 @@ export default function UseCasesIndex() {
     <>
       <JsonLd
         data={collectionPageSchema({
-          name: "Who Design Mode is for",
+          name: "Solutions",
           description:
             "Jobs that start by editing a rendered page and handing a structured specification to a person or coding agent.",
-          url: "https://designmode.app/use-cases",
+          url: "https://designmode.app/solutions",
           items: useCases.map((item) => ({
             name: item.title,
-            url: `https://designmode.app/use-cases#${item.slug}`,
+            url: `https://designmode.app/solutions#${item.slug}`,
           })),
         })}
       />
@@ -60,7 +60,7 @@ export default function UseCasesIndex() {
         <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
             <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Who it’s for
+              Solutions
             </h1>
             <p className="text-muted-foreground mt-4 max-w-3xl text-base">
               One loop: edit the rendered page, record the exact changes, then

@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 const ITEMS = [
   { label: "Demo", href: "/demo" },
   { label: "MCP", href: "/mcp" },
-  { label: "Use cases", href: "/use-cases" },
+  { label: "Solutions", href: "/solutions" },
   { label: "Compare", href: "/compare" },
   { label: "Blog", href: "/blog" },
 ];

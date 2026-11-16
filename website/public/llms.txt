@@ -63,7 +63,7 @@ When a user sends content to an external coding agent, that provider handles the
 - [Changes tab](https://designmode.app/blog/changes-tab)
 - [Keyboard shortcuts](https://designmode.app/blog/keyboard-shortcuts)
 - [Troubleshooting](https://designmode.app/blog/troubleshooting)
-- [Use cases](https://designmode.app/use-cases)
+- [Solutions](https://designmode.app/solutions)
 - [FAQ](https://designmode.app/#faq)
 - [Changelog](https://designmode.app/changelog)
 - [Privacy](https://designmode.app/privacy)

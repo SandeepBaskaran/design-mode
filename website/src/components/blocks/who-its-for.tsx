@@ -27,7 +27,7 @@ export function WhoItsFor() {
             Who it’s for
           </h2>
           <p className="mt-6 text-base">
-            <Link href="/use-cases" className="underline underline-offset-8">
+            <Link href="/solutions" className="underline underline-offset-8">
               See the jobs
             </Link>
           </p>

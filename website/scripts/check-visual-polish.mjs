@@ -19,7 +19,7 @@ const routes = [
   "/blog/turn-visual-edits-into-precise-ai-prompts",
   "/compare",
   "/compare/design-mode-vs-magicpath",
-  "/use-cases",
+  "/solutions",
 ];
 const browser = await chromium.launch({
   headless: true,

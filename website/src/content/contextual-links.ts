@@ -12,7 +12,7 @@ const changelog = {
   description: "See what the current release says you can do.",
 };
 const tailwind = {
-  href: "/use-cases#tailwind-component-tuning",
+  href: "/solutions#tailwind-component-tuning",
   title: "Tune a component visually",
   description:
     "Map preview values to existing utilities and verify the source diff.",
@@ -52,7 +52,7 @@ export const blogContextualLinks: Record<string, ContextualLink[]> = {
   "design-mode-1-5-0-changelog-deep-dive": [
     changelog,
     {
-      href: "/use-cases#accessibility-quick-fixes",
+      href: "/solutions#accessibility-quick-fixes",
       title: "Review candidate accessibility fixes",
       description:
         "Use contrast spot-checks alongside keyboard and assistive-technology testing.",
@@ -61,7 +61,7 @@ export const blogContextualLinks: Record<string, ContextualLink[]> = {
   "design-mode-1-9-0-release": [
     changelog,
     {
-      href: "/use-cases#design-system-audit",
+      href: "/solutions#design-system-audit",
       title: "Review design-system drift",
       description: "Compare rendered values with the project's documented tokens.",
     },
