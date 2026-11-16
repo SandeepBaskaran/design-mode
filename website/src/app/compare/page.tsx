@@ -2,12 +2,13 @@ import Link from "next/link";
 
 import { ArrowRight } from "lucide-react";
 
+import { iconFor } from "./icons";
+
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { comparisons, isComparisonIndexable } from "@/content/comparisons";
-import { iconFor } from "./icons";
 
 const pageTitle = "Browser visual editors and AI feedback tools";
 const pageDescription =

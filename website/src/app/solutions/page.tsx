@@ -1,5 +1,7 @@
 import { ClipboardList, Code2, Palette } from "lucide-react";
 
+import { SolutionsAccordion } from "./solutions-accordion";
+
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
@@ -105,24 +107,8 @@ export default function UseCasesIndex() {
 
       <section className={sectionPadding}>
         <DashedLine className="container max-w-5xl" />
-        <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-2">
-          {useCases.map((item) => (
-            <article
-              key={item.slug}
-              id={item.slug}
-              className="scroll-mt-24 rounded-2xl border p-6"
-            >
-              <p className="text-muted-foreground text-base font-medium tracking-wide uppercase">
-                {item.persona}
-              </p>
-              <h2 className="font-display mt-2 text-2xl leading-snug font-semibold">
-                {item.title}
-              </h2>
-              <p className="text-muted-foreground mt-2 text-base leading-relaxed">
-                {item.summary}
-              </p>
-            </article>
-          ))}
+        <div className="container max-w-5xl">
+          <SolutionsAccordion />
         </div>
         <RelatedLinks
           title="Guides"
