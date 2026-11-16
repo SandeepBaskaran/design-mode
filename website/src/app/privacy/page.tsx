@@ -4,8 +4,8 @@ import Privacy from "./privacy.mdx";
 import Reporting from "./reporting.mdx";
 
 import { Background } from "@/components/background";
-import { sectionPadding } from "@/components/site/section-header";
 import { DashedLine } from "@/components/dashed-line";
+import { sectionPadding } from "@/components/site/section-header";
 
 export default function PrivacyPage() {
   return (

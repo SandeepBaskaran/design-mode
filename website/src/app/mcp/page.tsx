@@ -20,13 +20,13 @@ import {
 import { Background } from "@/components/background";
 import { ModesComparison } from "@/components/blocks/modes-comparison";
 import { CopyPrompt } from "@/components/site/copy-prompt";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {

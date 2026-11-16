@@ -1,13 +1,13 @@
 import Link from "next/link";
 
 import { FaqAnswer } from "@/components/site/faq-answer";
+import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import { homepageFaqQA } from "@/content/product-facts";
 
 export { homepageFaqQA } from "@/content/product-facts";

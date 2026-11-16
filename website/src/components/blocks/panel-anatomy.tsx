@@ -43,7 +43,6 @@ import {
 import styles from "./panel-anatomy.module.css";
 
 import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
-
 import {
   Accordion,
   AccordionContent,

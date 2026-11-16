@@ -2,12 +2,12 @@ import Image from "next/image";
 
 import { ArrowDownUp, Copy, Send, Terminal } from "lucide-react";
 
+import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import {
   CHROME_WEB_STORE_URL,
   FIREFOX_AMO_URL,
   SAFARI_RELEASE_URL,
 } from "@/lib/install-links";
-import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import { withNavRef } from "@/lib/nav-ref";
 
 const installs = [
