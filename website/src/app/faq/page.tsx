@@ -65,10 +65,10 @@ export default function FaqPage() {
               Browser editing, agent hand-off, storage and privacy. Setup steps
               are in the{" "}
               <Link
-                href="/docs"
+                href="/blog"
                 className="text-foreground underline underline-offset-8"
               >
-                docs
+                blog
               </Link>
               .
             </p>
@@ -118,7 +118,7 @@ export default function FaqPage() {
               description: "Choose Copy as Prompt or connect an MCP client.",
             },
             {
-              href: "/docs/browser-support",
+              href: "/blog/browser-support",
               title: "Browser support",
               description:
                 "Core parity, browser-specific features and limitations.",
@@ -130,7 +130,7 @@ export default function FaqPage() {
                 "Storage, relay retention, operational logs and website analytics.",
             },
             {
-              href: "/docs/mcp-setup",
+              href: "/blog/mcp-setup",
               title: "MCP setup",
               description:
                 "Client-specific configuration and verification steps.",

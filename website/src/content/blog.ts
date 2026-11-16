@@ -1,3 +1,5 @@
+import { docs } from "@/content/docs";
+
 export type BlogPost = {
   slug: string;
   title: string;
@@ -6,11 +8,27 @@ export type BlogPost = {
   keywords: string[];
   datePublished: string;
   excerpt: string;
-  body: { heading?: string; paragraphs: string[] }[];
+  body: { heading?: string; paragraphs: string[]; code?: string }[];
   related: string[];
 };
 
-export const posts: BlogPost[] = [
+const referencePosts: BlogPost[] = docs.map((doc) => ({
+  slug: doc.slug,
+  title: doc.title,
+  metaTitle: doc.metaTitle,
+  metaDescription: doc.metaDescription,
+  keywords: doc.keywords,
+  datePublished: "2026-11-16",
+  excerpt: doc.intro,
+  body: doc.sections.map((section) => ({
+    heading: section.heading,
+    paragraphs: [section.body],
+    ...(section.code ? { code: section.code } : {}),
+  })),
+  related: doc.related,
+}));
+
+const stories: BlogPost[] = [
   {
     slug: "turn-visual-edits-into-precise-ai-prompts",
     title: "Turn visual edits into precise AI prompts",
@@ -471,6 +489,8 @@ export const posts: BlogPost[] = [
     ],
   },
 ];
+
+export const posts: BlogPost[] = [...referencePosts, ...stories];
 
 export function getPost(slug: string): BlogPost | undefined {
   return posts.find((p) => p.slug === slug);

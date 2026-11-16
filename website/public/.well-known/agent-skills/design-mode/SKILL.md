@@ -14,7 +14,7 @@ metadata:
 
 Connect a compatible AI app to the user's Design Mode browser extension and turn explicitly scoped visual feedback into verified source changes. MCP reads the browser session; it does not grant repository access, deploy code or authorize every recorded request.
 
-Canonical setup: https://designmode.app/docs/mcp-setup
+Canonical setup: https://designmode.app/blog/mcp-setup
 Human guide and copyable setup prompt: https://designmode.app/mcp
 Skill: https://designmode.app/.well-known/agent-skills/design-mode/SKILL.md
 Discovery index: https://designmode.app/.well-known/agent-skills/index.json
@@ -41,7 +41,7 @@ Completion: the transport, exact endpoint/command, configuration scope and suppo
 
 Guide the user to enter the bearer token locally via a masked client prompt, secret store or securely supplied environment variable. Never ask for or accept it in chat, echo it, screenshot it, write it in committed files or put a literal token in shell history. If the client cannot safely receive the credential, stop and explain the limitation. A project config with an environment reference contains no token, but its process must actually inherit that variable.
 
-Client examples are maintained together at https://designmode.app/mcp and https://designmode.app/docs/mcp-setup:
+Client examples are maintained together at https://designmode.app/mcp and https://designmode.app/blog/mcp-setup:
 
 - Claude Code project `.mcp.json`: `mcpServers`, `type: "http"`, `url`, and `headers.Authorization: "Bearer ${DESIGN_MODE_TOKEN}"`.
 - Cursor project `.cursor/mcp.json` or user `~/.cursor/mcp.json`: `mcpServers`, `url`, and `headers.Authorization: "Bearer ${env:DESIGN_MODE_TOKEN}"`.

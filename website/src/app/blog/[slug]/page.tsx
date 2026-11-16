@@ -87,6 +87,13 @@ export async function generateMetadata({
   };
 }
 
+function headingId(heading: string) {
+  return heading
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 const dateFmt = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   month: "long",
@@ -145,7 +152,10 @@ export default async function BlogPostPage({
           {p.body.map((block, i) => (
             <div key={i}>
               {block.heading && (
-                <h2 className="text-2xl tracking-tight md:text-3xl">
+                <h2
+                  id={headingId(block.heading)}
+                  className="scroll-mt-24 text-2xl tracking-tight md:text-3xl"
+                >
                   {block.heading}
                 </h2>
               )}
@@ -153,6 +163,11 @@ export default async function BlogPostPage({
                 {block.paragraphs.map((para, j) => (
                   <p key={j}>{para}</p>
                 ))}
+                {block.code && (
+                  <pre className="bg-muted text-foreground overflow-x-auto rounded-lg border p-4 text-base leading-relaxed">
+                    <code>{block.code}</code>
+                  </pre>
+                )}
               </div>
             </div>
           ))}
@@ -170,12 +185,16 @@ export default async function BlogPostPage({
                 title: r.title,
                 description: r.excerpt,
               })),
-            {
-              href: "/docs/mcp-setup",
-              title: "Use the current MCP setup guide",
-              description:
-                "Version-stamped Claude Code and Cursor configuration and verification.",
-            },
+            ...(p.slug === "mcp-setup"
+              ? []
+              : [
+                  {
+                    href: "/blog/mcp-setup",
+                    title: "Use the current MCP setup guide",
+                    description:
+                      "Version-stamped Claude Code and Cursor configuration and verification.",
+                  },
+                ]),
             {
               href: "/#panel-anatomy",
               title: "See the editor",

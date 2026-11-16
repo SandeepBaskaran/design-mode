@@ -52,8 +52,8 @@ export const faqGroups: FaqGroup[] = [
         answer:
           "Design Mode works in Chrome, Firefox and Safari. Features differ a little between them; the browser support and install guides have the details. Chrome and Firefox work right away: install it from the Chrome Web Store or Firefox Add-ons. Safari needs a quick manual setup that takes under 30 seconds.",
         links: [
-          { label: "Browser support", href: "/docs/browser-support" },
-          { label: "Install guides", href: "/docs" },
+          { label: "Browser support", href: "/blog/browser-support" },
+          { label: "Install guides", href: "/blog/browser-support" },
         ],
       },
       {

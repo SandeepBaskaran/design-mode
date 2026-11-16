@@ -24,10 +24,26 @@ const nextConfig: NextConfig = {
   redirects() {
     return [
       {
-        source: "/docs/install",
-        destination: "/docs/browser-support",
+        source: "/docs",
+        destination: "/blog",
         permanent: true,
       },
+      {
+        source: "/docs/install",
+        destination: "/blog/browser-support",
+        permanent: true,
+      },
+      ...[
+        "browser-support",
+        "keyboard-shortcuts",
+        "mcp-setup",
+        "changes-tab",
+        "troubleshooting",
+      ].map((slug) => ({
+        source: `/docs/${slug}`,
+        destination: `/blog/${slug}`,
+        permanent: true,
+      })),
       {
         source: "/features",
         destination: "/#panel-anatomy",

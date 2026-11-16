@@ -177,7 +177,7 @@ export default function McpPage() {
             and update their status. It still needs its own access to your
             repository. Review the{" "}
             <Link
-              href="/docs/changes-tab"
+              href="/blog/changes-tab"
               className="underline underline-offset-4"
             >
               Changes tab
@@ -455,7 +455,7 @@ export default function McpPage() {
                 </p>
                 <p className="mt-4">
                   <Link
-                    href="/docs/mcp-setup"
+                    href="/blog/mcp-setup"
                     className="underline underline-offset-4"
                   >
                     Detailed setup guide →
@@ -469,14 +469,14 @@ export default function McpPage() {
             2026. Client versions and organisation policies can change
             availability. Use the{" "}
             <Link
-              href="/docs/mcp-setup"
+              href="/blog/mcp-setup"
               className="underline underline-offset-4"
             >
               client setup reference
             </Link>{" "}
             for configuration details and{" "}
             <Link
-              href="/docs/troubleshooting"
+              href="/blog/troubleshooting"
               className="underline underline-offset-4"
             >
               troubleshooting

@@ -28,7 +28,6 @@ export function Footer() {
     {
       title: "Resources",
       links: [
-        { name: "Documentation", href: "/docs" },
         { name: "Changelog", href: "/changelog" },
         { name: "Compare", href: "/compare" },
         { name: "Blog", href: "/blog" },

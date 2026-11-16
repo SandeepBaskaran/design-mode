@@ -102,7 +102,7 @@ Prompt-first guide: https://designmode.app/mcp
 
 Setup and client examples were reviewed on 29 September 2026. Cloud and Self-hosted require Streamable HTTP with a custom Authorization bearer header. Pair using an anonymous credential from the extension's MCP page, not OAuth, an account login or subscription verification. Enter secrets locally through a protected input or securely supplied environment variable, never into AI chat or shell history. OAuth-only connectors and clients without header support cannot use the token directly; choose Local stdio if available, otherwise Copy as Prompt. The separate agent CLI package is private; do not assume a published installation command.
 
-Claude Code expands ${DESIGN_MODE_TOKEN} in project .mcp.json headers. Cursor uses ${env:DESIGN_MODE_TOKEN}. VS Code's local extension-host .vscode/mcp.json uses a servers wrapper and can use password-masked promptString inputs. Those interactive inputs are not forwarded to Agent Host sessions. Merge existing configuration; preserve other servers. Follow https://code.visualstudio.com/docs/agents/reference/mcp-configuration and the examples at https://designmode.app/docs/mcp-setup.
+Claude Code expands ${DESIGN_MODE_TOKEN} in project .mcp.json headers. Cursor uses ${env:DESIGN_MODE_TOKEN}. VS Code's local extension-host .vscode/mcp.json uses a servers wrapper and can use password-masked promptString inputs. Those interactive inputs are not forwarded to Agent Host sessions. Merge existing configuration; preserve other servers. Follow https://code.visualstudio.com/docs/agents/reference/mcp-configuration and the examples at https://designmode.app/blog/mcp-setup.
 
 Start with live schema discovery and get_session_summary({}). With permission to read the page, call get_changes({}); empty edits are valid. Do not apply, resolve or clear during setup. No account check is needed. Reading a skill is not a connection or a permission grant.
 
@@ -140,11 +140,11 @@ The source is published under the MIT licence. Current Chrome and Firefox listin
 - Safari latest release: https://github.com/SandeepBaskaran/design-mode/releases/latest
 - Author: https://sandeepbaskaran.com
 - Privacy: https://designmode.app/privacy
-- MCP guide: https://designmode.app/docs/mcp-setup
-- Browser support: https://designmode.app/docs/browser-support
+- MCP guide: https://designmode.app/blog/mcp-setup
+- Browser support: https://designmode.app/blog/browser-support
 - Changelog: https://designmode.app/changelog
-- Troubleshooting: https://designmode.app/docs/troubleshooting
-- Keyboard shortcuts: https://designmode.app/docs/keyboard-shortcuts
+- Troubleshooting: https://designmode.app/blog/troubleshooting
+- Keyboard shortcuts: https://designmode.app/blog/keyboard-shortcuts
 - Use cases: https://designmode.app/use-cases
 - Live demo: https://designmode.app/demo
 

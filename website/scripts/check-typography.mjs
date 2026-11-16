@@ -18,8 +18,7 @@ const routes = [
   "/changelog",
   "/privacy",
   "/demo",
-  "/docs",
-  "/docs/mcp-setup",
+  "/blog/mcp-setup",
   "/blog",
   "/blog/turn-visual-edits-into-precise-ai-prompts",
   "/compare",
@@ -121,7 +120,7 @@ try {
       results.push({ route, width, ...result });
       if (
         [320, 1440].includes(width) &&
-        ["/", "/mcp", "/privacy", "/docs/mcp-setup", "/demo"].includes(route)
+        ["/", "/mcp", "/privacy", "/blog/mcp-setup", "/demo"].includes(route)
       )
         await page.screenshot({
           path: `${output}/${route.replaceAll("/", "_") || "home"}-${width}.png`,

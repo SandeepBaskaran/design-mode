@@ -2,7 +2,6 @@ import type { MetadataRoute } from "next";
 
 import { posts } from "@/content/blog";
 import { comparisons, isComparisonIndexable } from "@/content/comparisons";
-import { docs } from "@/content/docs";
 
 const BASE = "https://designmode.app";
 
@@ -16,7 +15,6 @@ const staticRoutes = [
   { path: "/faq", changeFrequency: "monthly", priority: 0.9 },
   { path: "/use-cases", changeFrequency: "monthly", priority: 0.9 },
   { path: "/compare", changeFrequency: "monthly", priority: 0.9 },
-  { path: "/docs", changeFrequency: "monthly", priority: 0.8 },
   { path: "/changelog", changeFrequency: "weekly", priority: 0.7 },
   { path: "/blog", changeFrequency: "weekly", priority: 0.7 },
 ] as const;
@@ -26,12 +24,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     url: `${BASE}${route.path}`,
     changeFrequency: route.changeFrequency,
     priority: route.priority,
-  }));
-
-  const docsEntries: MetadataRoute.Sitemap = docs.map((item) => ({
-    url: `${BASE}/docs/${item.slug}`,
-    changeFrequency: "monthly",
-    priority: 0.7,
   }));
 
   const blogEntries: MetadataRoute.Sitemap = posts.map((post) => ({
@@ -51,7 +43,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     ...staticEntries,
-    ...docsEntries,
     ...blogEntries,
     ...comparisonEntries,
   ];

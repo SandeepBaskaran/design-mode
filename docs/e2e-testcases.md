@@ -634,14 +634,14 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | 14.8 | Responsive centered columns | Inspect article and footer at representative desktop and narrow viewport widths | Article and footer use the current responsive centered columns, not a fixed 720px requirement |
 | 14.9 | Inter font | Inspect any text | font-family resolves to Inter first |
 | 14.10 | Static OG image | View `/`'s `<head>` (or unfurl the URL in Slack/iMessage) | `og:image` and `twitter:image` resolve to the static `/og-design-mode-inter-v3.png`, not a dynamic `opengraph-image` route |
-| 14.11 | New content routes | Visit `/about`, `/faq`, `/contact`, `/use-cases`, `/compare`, `/docs`, `/blog` | All seven routes return 200 with rendered heroes and no scoped console errors; related-links/persona blocks are template-specific |
-| 14.12 | Dynamic detail routes | Open one `/compare/<slug>`, `/docs/<slug>`, `/blog/<slug>` (slugs listed in `sitemap.ts`). Open `/use-cases#visual-editing-with-cursor` | Compare, docs and blog render the entry from `content/*.ts`; an unknown slug 404s. Former use-case essays redirect to anchors on `/use-cases` |
-| 14.13 | sitemap.xml | Visit `/sitemap.xml` | Lists 12 root routes and indexable comparison routes plus other indexable content slugs under https://designmode.app. `/features` redirects to `/#panel-anatomy`. |
+| 14.11 | New content routes | Visit `/about`, `/faq`, `/contact`, `/use-cases`, `/compare`, `/blog` | Those routes return 200 with rendered heroes. `/docs` redirects to `/blog` |
+| 14.12 | Dynamic detail routes | Open one `/compare/<slug>` and `/blog/<slug>` (slugs listed in `sitemap.ts`). Open `/docs/mcp-setup` and `/use-cases#visual-editing-with-cursor` | Compare and blog render the entry from `content/*.ts`; an unknown slug 404s. `/docs/<slug>` redirects to the matching blog post. Former use-case essays redirect to anchors on `/use-cases` |
+| 14.13 | sitemap.xml | Visit `/sitemap.xml` | Lists 11 root routes and indexable comparison routes plus blog and comparison slugs under https://designmode.app. `/features` redirects to `/#panel-anatomy`. `/docs` redirects to `/blog`. |
 | 14.14 | robots.txt | Visit `/robots.txt` | `Allow: /` for `*`; LLM crawlers explicitly allowed (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, …); `Sitemap:` points to `/sitemap.xml` |
 | 14.15 | llms.txt | Visit `/llms.txt` and `/llms-full.txt` | Both serve plain-text site / product summaries |
 | 14.16 | Web app manifest | Visit `/manifest.webmanifest` | Serves valid JSON (name, icons, theme) |
 | 14.17 | JSON-LD structured data | View source on `/`, a `/compare/<slug>`, and `/faq` | `<script type="application/ld+json">` present (e.g. SoftwareApplication / FAQPage / Article) and valid JSON |
-| 14.18 | Nav + footer links | Open any page | Navbar shows Demo, Connect, Who it’s for and Docs. Footer still reaches FAQ, Compare, Blog, changelog, privacy and the editor anchor |
+| 14.18 | Nav + footer links | Open any page | Navbar shows Demo, Connect, Who it’s for and Blog. Footer still reaches FAQ, Compare, changelog, privacy and the editor anchor |
 
 ---
 

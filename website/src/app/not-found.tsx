@@ -14,15 +14,14 @@ export default function NotFound() {
           This route is not part of Design Mode.
         </h1>
         <p className="text-muted-foreground mt-4 max-w-2xl text-base leading-relaxed">
-          The link may be outdated. Start with the product workflow,
-          installation guide or documentation index.
+          The link may be outdated. Start from the homepage or the blog.
         </p>
         <div className="mt-8 flex flex-wrap gap-4">
           <Button asChild>
             <Link href="/">Go to the homepage</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href="/docs">Browse documentation</Link>
+            <Link href="/blog">Browse the blog</Link>
           </Button>
         </div>
       </section>

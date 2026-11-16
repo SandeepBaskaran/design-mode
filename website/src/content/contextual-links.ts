@@ -1,7 +1,7 @@
 type ContextualLink = { href: string; title: string; description: string };
 
 const changes = {
-  href: "/docs/changes-tab",
+  href: "/blog/changes-tab",
   title: "Review, copy and export recorded changes",
   description:
     "Understand JSON export, Markdown prompts and site-wide sharing scope.",
@@ -23,7 +23,7 @@ const demo = {
   description: "Inspect a page, record a change and review the hand-off boundary.",
 };
 const browsers = {
-  href: "/docs/browser-support",
+  href: "/blog/browser-support",
   title: "Check browser support and installation",
   description:
     "Chrome and Firefox store installs, plus the Safari Web Inspector zip.",

@@ -23,7 +23,7 @@ const ITEMS = [
   { label: "Demo", href: "/demo" },
   { label: "Connect", href: "/mcp" },
   { label: "Who it’s for", href: "/use-cases" },
-  { label: "Docs", href: "/docs" },
+  { label: "Blog", href: "/blog" },
 ];
 
 const REPO_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");

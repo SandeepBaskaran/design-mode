@@ -257,9 +257,10 @@ tool), these rules are read automatically at session start.
   inside `website/` once), delete it before committing — Next.js's
   build warns about ambiguous workspace root.
 - **Content-driven pages + LLM-SEO infra**: the `/blog`, `/compare`,
-  `/docs`, and `/use-cases` index + `[slug]` routes are generated from
-  `website/src/content/{blog,comparisons,docs,use-cases}.ts` — add an
-  entry there rather than a new page file. The SEO surface is the Next
+  and `/use-cases` index + `[slug]` routes are generated from
+  `website/src/content/{blog,comparisons,use-cases}.ts`. Former `/docs`
+  guides are blog posts in `content/docs.ts`, published through `blog.ts`.
+  Add an entry there rather than a new page file. The SEO surface is the Next
   metadata routes `app/{robots,sitemap,manifest}.ts`, static
   `public/llms.txt` + `public/llms-full.txt`, and per-page structured
   data via `components/site/json-ld.tsx`. When you add a content route,

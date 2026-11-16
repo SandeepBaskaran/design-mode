@@ -58,7 +58,7 @@ export const STEPS: Step[] = [
     targetId: "inspector",
     nextLink: {
       label: "Check supported browsers and page limits →",
-      href: "/docs/browser-support",
+      href: "/blog/browser-support",
     },
   },
   {
@@ -277,7 +277,7 @@ export const STEPS: Step[] = [
       "Switch to the Changes tab after making edits in the previous sections. Click 'View Original' to flip back. Try Batch apply (zap) on a style change, then Export to download the diff as JSON.",
     nextLink: {
       label: "Review Changes and handoff formats →",
-      href: "/docs/changes-tab",
+      href: "/blog/changes-tab",
     },
   },
   {
