@@ -13,18 +13,12 @@ export { homepageFaqQA } from "@/content/product-facts";
 
 export const FAQ = () => {
   return (
-    <section className="py-16 md:py-24 lg:py-32">
+    <section id="faq" className="scroll-mt-24 py-16 md:py-24 lg:py-32">
       <div className="container max-w-5xl">
         <div className="mb-12 space-y-4 text-center lg:mb-16">
           <h2 className="text-2xl tracking-tight md:text-4xl lg:text-5xl">
             Questions before you install
           </h2>
-          <p className="text-muted-foreground mx-auto max-w-2xl leading-relaxed">
-            <Link href="/faq" className="underline underline-offset-8">
-              Read the full FAQ
-            </Link>{" "}
-            for MCP, storage and privacy.
-          </p>
         </div>
 
         <Accordion

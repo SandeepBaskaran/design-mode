@@ -142,15 +142,25 @@ export const faqGroups: FaqGroup[] = [
   },
 ];
 
-const homepageQuestions = new Set([
+const homepageQuestionOrder = [
   "What is Design Mode?",
+  "What can I edit?",
+  "Does it work on localhost and sites I'm logged into?",
   "Does Design Mode change my production source code?",
   "Which browsers are supported?",
   "How do I communicate visual changes to Claude Code or another coding agent?",
+  "What is the difference between Cloud, Local and Self-hosted?",
+  "Do I have to use MCP?",
   "What data leaves my machine by default?",
   "Is Design Mode free and open source?",
-]);
+];
 
-export const homepageFaqQA = faqGroups
-  .flatMap((group) => group.items)
-  .filter((item) => homepageQuestions.has(item.question));
+const faqByQuestion = new Map(
+  faqGroups.flatMap((group) => group.items).map((item) => [item.question, item]),
+);
+
+export const homepageFaqQA = homepageQuestionOrder.map((question) => {
+  const item = faqByQuestion.get(question);
+  if (!item) throw new Error(`Missing FAQ: ${question}`);
+  return item;
+});

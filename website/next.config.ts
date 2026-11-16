@@ -59,6 +59,11 @@ const nextConfig: NextConfig = {
         destination: "/#contact",
         permanent: true,
       },
+      {
+        source: "/faq",
+        destination: "/#faq",
+        permanent: true,
+      },
       ...retiredUseCases.map((slug) => ({
         source: `/use-cases/${slug}`,
         destination: `/use-cases#${slug}`,
