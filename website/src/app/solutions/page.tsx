@@ -2,6 +2,7 @@ import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
+import { SectionHeader } from "@/components/site/section-header";
 import { useCases } from "@/content/use-cases";
 
 export const metadata = {
@@ -60,14 +61,12 @@ export default function UseCasesIndex() {
       <Background>
         <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Solutions
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              One loop: edit the rendered page, record the exact changes, then
-              hand them to a coding agent or a teammate who can update the
-              source.
-            </p>
+            <SectionHeader
+              as="h1"
+              eyebrow="Solutions"
+              title="Solutions"
+              description="One loop: edit the rendered page, record the exact changes, then hand them to a coding agent or a teammate."
+            />
             <ul className="mt-8 max-w-3xl space-y-3 text-base">
               <li>Designers and design engineers working on a live page.</li>
               <li>

@@ -7,6 +7,7 @@ import {
   FIREFOX_AMO_URL,
   SAFARI_RELEASE_URL,
 } from "@/lib/install-links";
+import { SectionHeader } from "@/components/site/section-header";
 import { withNavRef } from "@/lib/nav-ref";
 
 const installs = [
@@ -46,16 +47,12 @@ export function BrowserHandoff() {
   return (
     <section className="py-16 md:py-24 lg:py-32" aria-labelledby="browser-handoff-heading">
       <div className="container max-w-5xl">
-        <h2
+        <SectionHeader
+          eyebrow="Handoff"
           id="browser-handoff-heading"
-          className="w-full max-w-[975px] text-2xl leading-tight tracking-tight md:text-4xl lg:text-5xl"
-        >
-          Start in your browser.
-          <br />
-          <span className="text-muted-foreground">
-            Take the details wherever you work.
-          </span>
-        </h2>
+          title="Start in your browser. Take the details wherever you work."
+          description="Install it, keep the edits portable, then copy a prompt, send them, or connect an agent."
+        />
         <div className="mt-16 grid gap-x-24 gap-y-16 md:grid-cols-2">
           <article>
             <div

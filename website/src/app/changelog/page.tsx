@@ -4,6 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
+import { SectionHeader } from "@/components/site/section-header";
 import { releases } from "@/content/changelog";
 
 const REPO_CHANGELOG =
@@ -65,13 +66,12 @@ export default function ChangelogPage() {
       <Background>
         <section className="py-16 lg:py-24">
           <div className="container max-w-3xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Changelog
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-2xl text-base">
-              Release highlights in plain language, with the date each version
-              shipped — not a complete inventory of every change.
-            </p>
+            <SectionHeader
+              as="h1"
+              eyebrow="Releases"
+              title="Changelog"
+              description="Release highlights in plain language, with the date each version shipped. Not every internal change."
+            />
             <p className="text-muted-foreground mt-3 text-base">
               Want the technical detail?{" "}
               <a

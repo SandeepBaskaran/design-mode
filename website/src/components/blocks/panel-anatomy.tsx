@@ -42,6 +42,8 @@ import {
 
 import styles from "./panel-anatomy.module.css";
 
+import { SectionHeader } from "@/components/site/section-header";
+
 import {
   Accordion,
   AccordionContent,
@@ -602,14 +604,16 @@ export function PanelAnatomy() {
       aria-labelledby="panel-anatomy-title"
       className="py-16 md:py-24 lg:py-32"
     >
-      <div ref={track} className={styles.track}>
+      <div className="container">
+        <SectionHeader
+          eyebrow="Editor"
+          id="panel-anatomy-title"
+          title="Every design control, in one side panel"
+          description="Layers, design controls and the Changes tab stay together while you edit the page."
+        />
+      </div>
+      <div ref={track} className={`${styles.track} mt-10`}>
         <div ref={sticky} className={`container ${styles.sticky}`}>
-          <h2
-            id="panel-anatomy-title"
-            className="text-center text-3xl tracking-tight text-balance sm:text-4xl md:text-5xl lg:text-6xl"
-          >
-            Every design control, in one side panel
-          </h2>
           <div className={styles.mobileIntro}>
             <h3>{active}</h3>
             <p>

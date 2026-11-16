@@ -7,6 +7,7 @@ import { ExtensionDetected } from "./ExtensionDetected";
 import { STEPS } from "./steps";
 
 import { Background } from "@/components/background";
+import { SectionHeader } from "@/components/site/section-header";
 
 export const metadata = {
   title: { absolute: "Try the browser visual editor | Design Mode" },
@@ -58,13 +59,12 @@ export default function DemoPage() {
       <Background>
         <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Live demo
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              Install the extension, open the side panel on this page, and edit
-              the targets below. On a phone, continue on a desktop browser.
-            </p>
+            <SectionHeader
+              as="h1"
+              eyebrow="Demo"
+              title="Live demo"
+              description="Install the extension, open the side panel on this page, and edit the targets below. On a phone, continue on a desktop browser."
+            />
             <div className="mt-10 grid gap-8 md:grid-cols-2">
               {capabilityGroups.map((group) => (
                 <section key={group.title}>

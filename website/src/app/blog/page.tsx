@@ -2,6 +2,7 @@ import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { LinkCard } from "@/components/site/related-links";
+import { SectionHeader } from "@/components/site/section-header";
 import { posts } from "@/content/blog";
 
 export const metadata = {
@@ -75,14 +76,12 @@ export default function BlogIndex() {
       <Background>
         <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Blog
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              Build notes from Design Mode and walkthroughs of real workflows —
-              MCP architecture, vibe coding, Tailwind redesigns, changelog
-              deep-dives.
-            </p>
+            <SectionHeader
+              as="h1"
+              eyebrow="Blog"
+              title="Blog"
+              description="Build notes, setup guides, and release write-ups. The install and MCP guides live here."
+            />
           </div>
         </section>
       </Background>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SectionHeader } from "@/components/site/section-header";
 import { withNavRef } from "@/lib/nav-ref";
 
 const REPO_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");
@@ -9,12 +10,12 @@ export function HomeAbout() {
   return (
     <section id="about" aria-labelledby="about-heading" className="py-16 md:py-24">
       <div className="container max-w-5xl">
-        <h2
+        <SectionHeader
+          eyebrow="Project"
           id="about-heading"
-          className="text-2xl tracking-tight md:text-4xl lg:text-5xl"
-        >
-          About
-        </h2>
+          title="About"
+          description="Sandeep Baskaran builds Design Mode in the open. The extension records a preview; the source change is reviewed separately."
+        />
         <div className="text-muted-foreground mt-6 max-w-3xl space-y-4 text-base leading-relaxed">
           <p>
             Sandeep Baskaran is a Senior UX Designer in Bengaluru, working in
@@ -51,12 +52,12 @@ export function HomeContact() {
       className="pb-16 md:pb-24"
     >
       <div className="container max-w-5xl">
-        <h2
+        <SectionHeader
+          eyebrow="Support"
           id="contact-heading"
-          className="text-2xl tracking-tight md:text-4xl lg:text-5xl"
-        >
-          Contact
-        </h2>
+          title="Contact"
+          description="Email for private notes. GitHub for bugs and ideas. Security reports stay out of public issues."
+        />
         <ul className="mt-6 max-w-3xl space-y-3 text-base">
           <li>
             <a className="underline underline-offset-4" href={`mailto:${EMAIL}`}>

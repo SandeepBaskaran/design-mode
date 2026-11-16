@@ -2,28 +2,19 @@ import Link from "next/link";
 
 import { AgentIcons } from "@/components/blocks/hero-headline";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
+import { SectionHeader } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 
 export function ClosingCta() {
   return (
     <section aria-labelledby="closing-cta-heading" className="py-16 md:py-24 lg:py-32">
       <div className="container text-center">
-        <p className="text-muted-foreground text-base font-medium tracking-widest">
-          FROM INTENT TO IMPLEMENTATION
-        </p>
-        <h2
+        <SectionHeader
+          eyebrow="From intent to implementation"
           id="closing-cta-heading"
-          className="mx-auto mt-8 max-w-4xl text-5xl leading-[1.05] tracking-tight sm:text-6xl lg:text-[72px]"
-        >
-          Less explaining.
-          <br />
-          More making.
-        </h2>
-        <p className="text-muted-foreground mx-auto mt-8 max-w-xl text-base leading-relaxed">
-          Make the change in your browser.
-          <br />
-          Give your agent the details to carry it into code.
-        </p>
+          title="Less explaining. More making."
+          description="Make the change in your browser. Give your agent the details to carry it into code."
+        />
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <AddToChromeCta
             size="lg"

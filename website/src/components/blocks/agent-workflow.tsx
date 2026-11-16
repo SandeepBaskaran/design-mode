@@ -6,6 +6,8 @@ import { ArrowRight, Code2, MousePointer2, Terminal } from "lucide-react";
 
 import styles from "./agent-workflow.module.css";
 
+import { SectionHeader } from "@/components/site/section-header";
+
 function WorkflowWindow({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="border-border bg-background w-full rounded-2xl border md:w-auto md:flex-1">
@@ -24,19 +26,12 @@ export function AgentWorkflow() {
   return (
     <section aria-labelledby="agent-workflow-heading" className="py-16 md:py-24 lg:py-32">
       <div className="container flex flex-col items-center justify-start">
-        <div className="mx-0 w-full max-w-[980px] text-center">
-          <p className="text-muted-foreground text-base font-medium tracking-widest uppercase">
-            A shared picture. A precise handoff.
-          </p>
-          <h2 id="agent-workflow-heading" className="mt-6 w-full text-2xl tracking-tight md:text-4xl lg:text-5xl">
-            Show your agent what needs to change.
-          </h2>
-          <p className="text-muted-foreground mx-auto mt-6 max-w-[640px] text-base leading-relaxed">
-            Make visual edits on the live page. Design Mode captures the details
-            so your coding agent can work from the changes, not a description of
-            them.
-          </p>
-        </div>
+        <SectionHeader
+          eyebrow="How it works"
+          id="agent-workflow-heading"
+          title="Show your agent what needs to change."
+          description="Make the edit on the live page. Design Mode records the values so the agent works from the change, not a description of it."
+        />
 
         <div className="mx-auto mt-16 flex w-full max-w-5xl flex-col items-center md:mt-24 md:flex-row md:items-stretch">
           <WorkflowWindow title="Your browser">

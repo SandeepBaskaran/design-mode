@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { SectionHeader } from "@/components/site/section-header";
+
 const audiences = [
   {
     title: "Designers and design engineers",
@@ -19,19 +21,17 @@ export function WhoItsFor() {
   return (
     <section aria-labelledby="who-heading" className="py-16 md:py-24 lg:py-32">
       <div className="container max-w-5xl">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2
-            id="who-heading"
-            className="text-2xl tracking-tight md:text-4xl lg:text-5xl"
-          >
-            Who it’s for
-          </h2>
-          <p className="mt-6 text-base">
-            <Link href="/solutions" className="underline underline-offset-8">
-              See the jobs
-            </Link>
-          </p>
-        </div>
+        <SectionHeader
+          eyebrow="Audience"
+          id="who-heading"
+          title="Who it’s for"
+          description="Designers, developers with a coding agent, and people who need to hand off a visual change."
+        />
+        <p className="mt-6 text-center text-base">
+          <Link href="/solutions" className="underline underline-offset-8">
+            See the jobs
+          </Link>
+        </p>
         <ul className="mt-10 grid gap-8 text-left md:grid-cols-3">
           {audiences.map((audience) => (
             <li key={audience.title}>

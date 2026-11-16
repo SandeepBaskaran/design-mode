@@ -5,6 +5,7 @@ import { ArrowUpRight } from "lucide-react";
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
+import { SectionHeader } from "@/components/site/section-header";
 import { comparisons, isComparisonIndexable } from "@/content/comparisons";
 
 const pageTitle = "Browser visual editors and AI feedback tools";
@@ -62,16 +63,12 @@ export default function ComparisonsIndex() {
       <Background>
         <section className="py-12 lg:py-16">
           <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Which browser visual editor fits your workflow?
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed">
-              Design Mode edits a rendered page and hands the recorded changes
-              to an independent coding agent. It is not a source editor, a
-              deploy tool, or a blank-canvas design file. Source-backed
-              comparisons below include dated references. Unverified drafts stay
-              out of search.
-            </p>
+            <SectionHeader
+              as="h1"
+              eyebrow="Compare"
+              title="Which browser visual editor fits your workflow?"
+              description="Design Mode edits a rendered page and hands the recorded changes to a coding agent. It is not a source editor or a blank canvas."
+            />
           </div>
         </section>
       </Background>

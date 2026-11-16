@@ -26,6 +26,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { SectionHeader } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -142,23 +143,13 @@ export default function McpPage() {
       <Background>
         <section className="py-32" aria-labelledby="mcp-title">
           <div className="container max-w-5xl">
-            <p className="text-muted-foreground text-base font-medium tracking-widest">
-              DESIGN MODE + YOUR AI APP
-            </p>
-            <h1
+            <SectionHeader
+              as="h1"
+              eyebrow="Design Mode + your AI app"
               id="mcp-title"
-              className="mt-6 text-4xl tracking-tight sm:text-5xl md:text-6xl"
-            >
-              Your browser changes.
-              <br />
-              In your agent’s hands.
-            </h1>
-            <p className="text-muted-foreground mt-6 max-w-2xl text-base leading-relaxed">
-              Use Copy as prompt without a server, or connect a compatible
-              client through Cloud, Local or Self-hosted MCP. The extension
-              records browser changes; it does not grant repository access. This
-              setup prompt can help your agent guide you through the connection.
-            </p>
+              title="Your browser changes. In your agent’s hands."
+              description="Copy a prompt, or connect Cloud, Local or Self-hosted MCP. The extension does not grant repository access."
+            />
             <div className="bg-background/90 mt-10 rounded-xl border p-6 sm:p-8">
               <h2 className="text-xl font-semibold">Set up with your agent</h2>
               <CopyPrompt text={MCP_SETUP_PROMPT} />
@@ -169,9 +160,12 @@ export default function McpPage() {
 
       <section className="py-32" aria-labelledby="what-mcp">
         <div className="container max-w-5xl">
-          <h2 id="what-mcp" className="text-3xl tracking-tight md:text-4xl">
-            What MCP makes possible
-          </h2>
+          <SectionHeader
+            eyebrow="MCP"
+            id="what-mcp"
+            title="What MCP makes possible"
+            description="A connected agent can read the recorded edits, inspect screenshots and update their status."
+          />
           <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
             A connected agent can read the recorded edits, inspect screenshots
             and update their status. It still needs its own access to your
@@ -252,12 +246,12 @@ export default function McpPage() {
 
       <section id="connect" className="py-32" aria-labelledby="connect-title">
         <div className="container max-w-5xl">
-          <h2
+          <SectionHeader
+            eyebrow="Connection"
             id="connect-title"
-            className="text-3xl tracking-tight md:text-4xl"
-          >
-            Choose how to connect
-          </h2>
+            title="Choose how to connect"
+            description="Cloud is the default. Local stays on your machine. Self-hosted runs the relay yourself."
+          />
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             <Card>
               <CardContent className="space-y-4 p-6">
@@ -382,9 +376,11 @@ export default function McpPage() {
 
       <section className="py-32" aria-labelledby="apps-title">
         <div className="container max-w-5xl">
-          <h2 className="text-2xl tracking-tight md:text-3xl">
-            Mode comparison
-          </h2>
+          <SectionHeader
+            eyebrow="Modes"
+            title="Mode comparison"
+            description="Setup, transport and cost for Cloud, Local and Self-hosted. Local MCP stays on localhost."
+          />
           <p className="text-muted-foreground mt-2 max-w-2xl">
             Setup, MCP transport, client requirements and cost across the three
             modes. Local keeps this MCP transport on localhost; it is not a
@@ -398,9 +394,12 @@ export default function McpPage() {
         </div>
         <ModesComparison />
         <div className="container max-w-5xl">
-          <h2 id="apps-title" className="text-3xl tracking-tight md:text-4xl">
-            Configure your AI app
-          </h2>
+          <SectionHeader
+            eyebrow="Clients"
+            id="apps-title"
+            title="Configure your AI app"
+            description="Merge the Cloud example into the client’s own config. Enter the token locally, not in chat."
+          />
           <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
             These Cloud examples use the client’s own configuration format.
             Merge the entry—do not replace other servers. Enter your token
@@ -488,9 +487,12 @@ export default function McpPage() {
 
       <section className="py-32" aria-labelledby="tools-title">
         <div className="container max-w-5xl">
-          <h2 id="tools-title" className="text-3xl tracking-tight md:text-4xl">
-            Tools your agent can use
-          </h2>
+          <SectionHeader
+            eyebrow="Tools"
+            id="tools-title"
+            title="Tools your agent can use"
+            description="Cloud, Local and Self-hosted expose these eight session tools. Read the schema before a new kind of call."
+          />
           <p className="text-muted-foreground mt-6 max-w-3xl text-base">
             Cloud, Local and Self-hosted expose these eight session tools. Read
             the discovered schema before each new kind of call.
@@ -542,9 +544,12 @@ export default function McpPage() {
 
       <section className="py-32" aria-labelledby="reads-title">
         <div className="container max-w-5xl">
-          <h2 id="reads-title" className="text-3xl tracking-tight md:text-4xl">
-            Read progressively, act on a bounded scope
-          </h2>
+          <SectionHeader
+            eyebrow="Reads"
+            id="reads-title"
+            title="Read progressively, act on a bounded scope"
+            description="Start with the session summary, then fetch changes once and update only the ids you mean to change."
+          />
           <ol className="text-muted-foreground mt-8 max-w-3xl list-decimal space-y-6 pl-5 text-base leading-relaxed">
             <li>
               <strong className="text-foreground">Start small.</strong> Get the
@@ -591,12 +596,12 @@ export default function McpPage() {
         <section className="py-32" aria-labelledby="skill-title">
           <div className="container max-w-5xl">
             <Send aria-hidden="true" className="size-8" />
-            <h2
+            <SectionHeader
+              eyebrow="Skill"
               id="skill-title"
-              className="mt-6 text-3xl tracking-tight md:text-4xl"
-            >
-              Give your agent the workflow
-            </h2>
+              title="Give your agent the workflow"
+              description="The agent skill covers setup and a scoped design-to-code workflow. Reading it does not connect MCP."
+            />
             <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
               The Design Mode agent skill covers setup, safe connection checks
               and a scoped design-to-code workflow. Download the Markdown and
