@@ -21,11 +21,9 @@ import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { label: "Demo", href: "/demo" },
-  { label: "MCP", href: "/mcp" },
-  { label: "Use cases", href: "/use-cases" },
-  { label: "Compare", href: "/compare" },
+  { label: "Connect", href: "/mcp" },
+  { label: "Who it’s for", href: "/use-cases" },
   { label: "Docs", href: "/docs" },
-  { label: "Blog", href: "/blog" },
 ];
 
 const REPO_URL = withNavRef("https://github.com/SandeepBaskaran/design-mode");
