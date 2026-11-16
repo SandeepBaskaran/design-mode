@@ -61,15 +61,8 @@ export default function DemoPage() {
               Live demo
             </h1>
             <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              <span className="md:hidden">
-                Try this guided walkthrough in a desktop browser with the Design
-                Mode extension installed.
-              </span>
-              <span className="max-md:hidden">
-                Open the side panel on this page and try every feature with the
-                demo targets below — no recordings, the canvas is the real
-                thing.
-              </span>
+              Install the extension, open the side panel on this page, and edit
+              the targets below. On a phone, continue on a desktop browser.
             </p>
           </div>
         </section>
