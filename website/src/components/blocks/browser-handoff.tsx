@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { ArrowDownUp, Copy } from "lucide-react";
+import { ArrowDownUp, Copy, Send, Terminal } from "lucide-react";
 
 import {
   CHROME_WEB_STORE_URL,
@@ -127,12 +127,31 @@ export function BrowserHandoff() {
             </p>
           </article>
           <article>
+            <Send aria-hidden="true" className="size-10" />
+            <h3 className="mt-6 text-2xl font-semibold">Send to agent</h3>
+            <p className="text-muted-foreground mt-4 text-base leading-relaxed">
+              Marks this session ready for a connected agent.
+              <br />
+              The agent still edits the repo, and you review the diff.
+            </p>
+          </article>
+          <article id="connect">
             <McpLogo />
             <h3 className="mt-6 text-2xl font-semibold">Connect through MCP</h3>
             <p className="text-muted-foreground mt-4 text-base leading-relaxed">
               Let your agent fetch edits.
               <br />
               Cloud, Local or Self-hosted.
+            </p>
+          </article>
+          <article>
+            <Terminal aria-hidden="true" className="size-10" />
+            <h3 className="mt-6 text-2xl font-semibold">Use the CLI</h3>
+            <p className="text-muted-foreground mt-4 text-base leading-relaxed">
+              <span className="font-mono">designmode-app</span> runs version,
+              tools, status, schema, and call. Cloud is the default;{" "}
+              <span className="font-mono">--mode</span> selects local or
+              self-hosted. It does not start the local bridge.
             </p>
           </article>
         </div>
