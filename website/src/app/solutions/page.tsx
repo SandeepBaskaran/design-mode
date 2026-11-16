@@ -1,3 +1,5 @@
+import { ClipboardList, Code2, Palette } from "lucide-react";
+
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
@@ -67,16 +69,35 @@ export default function UseCasesIndex() {
               title="Solutions"
               description="One loop: edit the rendered page, record the exact changes, then hand them to a coding agent or a teammate."
             />
-            <ul className="mt-8 max-w-3xl space-y-3 text-base">
-              <li>Designers and design engineers working on a live page.</li>
-              <li>
-                Developers using Claude Code, Cursor or another compatible
-                agent.
-              </li>
-              <li>
-                QA, content and product people exporting visual feedback
-                without writing the code.
-              </li>
+            <ul className="mt-10 grid gap-8 text-left md:grid-cols-3">
+              {[
+                {
+                  title: "Designers and design engineers",
+                  text: "Working on a live page.",
+                  icon: Palette,
+                },
+                {
+                  title: "Developers",
+                  text: "Using Claude Code, Cursor or another compatible agent.",
+                  icon: Code2,
+                },
+                {
+                  title: "QA, content and product",
+                  text: "Exporting visual feedback without writing the code.",
+                  icon: ClipboardList,
+                },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.title}>
+                    <Icon aria-hidden="true" className="size-6 stroke-[1.5]" />
+                    <h2 className="mt-4 text-xl font-semibold">{item.title}</h2>
+                    <p className="text-muted-foreground mt-2 text-base leading-relaxed">
+                      {item.text}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </section>
