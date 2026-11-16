@@ -44,7 +44,7 @@ export const blogContextualLinks: Record<string, ContextualLink[]> = {
     },
     changelog,
     {
-      href: "/about",
+      href: "/#about",
       title: "About the creator",
       description: "Design Mode is an independent project by Sandeep Baskaran.",
     },

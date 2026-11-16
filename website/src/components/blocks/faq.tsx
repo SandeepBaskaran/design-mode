@@ -46,7 +46,7 @@ export const FAQ = () => {
 
         <p className="text-muted-foreground mt-10 text-center text-base">
           Still unsure?{" "}
-          <Link href="/contact" className="underline underline-offset-8">
+          <Link href="/#contact" className="underline underline-offset-8">
             Ask a specific question
           </Link>
           .

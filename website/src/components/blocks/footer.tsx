@@ -37,8 +37,8 @@ export function Footer() {
     {
       title: "Project",
       links: [
-        { name: "About", href: "/about" },
-        { name: "Contact", href: "/contact" },
+        { name: "About", href: "/#about" },
+        { name: "Contact", href: "/#contact" },
         { name: "Privacy", href: "/privacy" },
         { name: "FAQ", href: "/faq" },
 

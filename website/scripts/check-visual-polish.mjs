@@ -11,9 +11,7 @@ const base = process.env.BASE_URL || "http://127.0.0.1:3134";
 const routes = [
   "/",
   "/mcp",
-  "/about",
   "/faq",
-  "/contact",
   "/changelog",
   "/privacy",
   "/demo",
