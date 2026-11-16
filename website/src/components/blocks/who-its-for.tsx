@@ -19,13 +19,20 @@ export function WhoItsFor() {
   return (
     <section aria-labelledby="who-heading" className="py-16 md:py-24 lg:py-32">
       <div className="container max-w-5xl">
-        <h2
-          id="who-heading"
-          className="text-2xl tracking-tight md:text-4xl lg:text-5xl"
-        >
-          Who it’s for
-        </h2>
-        <ul className="mt-10 grid gap-8 md:grid-cols-3">
+        <div className="mx-auto max-w-3xl text-center">
+          <h2
+            id="who-heading"
+            className="text-2xl tracking-tight md:text-4xl lg:text-5xl"
+          >
+            Who it’s for
+          </h2>
+          <p className="mt-6 text-base">
+            <Link href="/use-cases" className="underline underline-offset-8">
+              See the jobs
+            </Link>
+          </p>
+        </div>
+        <ul className="mt-10 grid gap-8 text-left md:grid-cols-3">
           {audiences.map((audience) => (
             <li key={audience.title}>
               <h3 className="text-2xl font-semibold">{audience.title}</h3>
@@ -35,11 +42,6 @@ export function WhoItsFor() {
             </li>
           ))}
         </ul>
-        <p className="mt-10 text-base">
-          <Link href="/use-cases" className="underline underline-offset-8">
-            See the jobs
-          </Link>
-        </p>
       </div>
     </section>
   );
