@@ -636,7 +636,7 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | 14.10 | Static OG image | View `/`'s `<head>` (or unfurl the URL in Slack/iMessage) | `og:image` and `twitter:image` resolve to the static `/og-design-mode-inter-v3.png`, not a dynamic `opengraph-image` route |
 | 14.11 | New content routes | Visit `/about`, `/faq`, `/contact`, `/use-cases`, `/compare`, `/docs`, `/blog` | All seven routes return 200 with rendered heroes and no scoped console errors; related-links/persona blocks are template-specific |
 | 14.12 | Dynamic detail routes | Open one `/use-cases/<slug>`, `/compare/<slug>`, `/docs/<slug>`, `/blog/<slug>` (slugs listed in `sitemap.ts`) | Renders the entry sourced from `content/*.ts`; an unknown slug 404s |
-| 14.13 | sitemap.xml | Visit `/sitemap.xml` | Lists 13 root routes and indexable comparison routes plus other indexable content slugs under https://designmode.app |
+| 14.13 | sitemap.xml | Visit `/sitemap.xml` | Lists 12 root routes and indexable comparison routes plus other indexable content slugs under https://designmode.app. `/features` redirects to `/#panel-anatomy`. |
 | 14.14 | robots.txt | Visit `/robots.txt` | `Allow: /` for `*`; LLM crawlers explicitly allowed (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, …); `Sitemap:` points to `/sitemap.xml` |
 | 14.15 | llms.txt | Visit `/llms.txt` and `/llms-full.txt` | Both serve plain-text site / product summaries |
 | 14.16 | Web app manifest | Visit `/manifest.webmanifest` | Serves valid JSON (name, icons, theme) |

@@ -177,8 +177,8 @@ export default async function BlogPostPage({
                 "Version-stamped Claude Code and Cursor configuration and verification.",
             },
             {
-              href: "/features",
-              title: "Review the current feature surface",
+              href: "/#panel-anatomy",
+              title: "See the editor",
               description:
                 "Layers, visual controls, Changes and the two hand-off methods.",
             },

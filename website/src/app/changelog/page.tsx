@@ -136,10 +136,10 @@ export default function ChangelogPage() {
             </Link>{" "}
             or{" "}
             <Link
-              href="/features"
+              href="/#panel-anatomy"
               className="text-foreground/80 font-medium underline underline-offset-4"
             >
-              browse the full feature set
+              see the editor
             </Link>
             .
           </p>

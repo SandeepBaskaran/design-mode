@@ -20,7 +20,6 @@ import { withNavRef } from "@/lib/nav-ref";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
-  { label: "Features", href: "/features" },
   { label: "Demo", href: "/demo" },
   { label: "MCP", href: "/mcp" },
   { label: "Use cases", href: "/use-cases" },

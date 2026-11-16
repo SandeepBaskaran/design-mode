@@ -55,7 +55,7 @@ When a user sends content to an external coding agent, that provider handles the
 
 - [Homepage](https://designmode.app/)
 - [Live demo](https://designmode.app/demo)
-- [Features](https://designmode.app/features)
+- [The editor](https://designmode.app/#panel-anatomy)
 - [How Copy as Prompt and MCP hand-off work](https://designmode.app/mcp)
 - [MCP setup for Claude Code and Cursor](https://designmode.app/docs/mcp-setup)
 - [Browser support](https://designmode.app/docs/browser-support)

@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
         destination: "/docs/browser-support",
         permanent: true,
       },
+      {
+        source: "/features",
+        destination: "/#panel-anatomy",
+        permanent: true,
+      },
     ];
   },
   turbopack: {

@@ -12,7 +12,6 @@ const output = process.env.TYPOGRAPHY_OUTPUT || "typography-evidence";
 const routes = [
   "/",
   "/mcp",
-  "/features",
   "/about",
   "/faq",
   "/contact",

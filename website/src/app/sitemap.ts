@@ -9,7 +9,6 @@ const BASE = "https://designmode.app";
 
 const staticRoutes = [
   { path: "/", changeFrequency: "weekly", priority: 1 },
-  { path: "/features", changeFrequency: "monthly", priority: 0.9 },
   { path: "/demo", changeFrequency: "monthly", priority: 0.9 },
   { path: "/mcp", changeFrequency: "monthly", priority: 0.9 },
   { path: "/about", changeFrequency: "monthly", priority: 0.6 },
