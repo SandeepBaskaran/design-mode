@@ -16,7 +16,7 @@ export function HomeAbout() {
           title="About"
           description="Sandeep Baskaran builds Design Mode in the open. The extension records a preview; the source change is reviewed separately."
         />
-        <div className={`text-muted-foreground max-w-3xl space-y-4 text-left text-base leading-relaxed ${sectionGap}`}>
+        <div className={`text-muted-foreground mx-auto max-w-3xl space-y-4 text-center text-base leading-relaxed ${sectionGap}`}>
           <p>Design Mode is an independent, MIT-licensed browser extension.</p>
           <p>
             Screenshots lose selectors and computed values. Design Mode records
@@ -25,7 +25,7 @@ export function HomeAbout() {
             the diff.
           </p>
         </div>
-        <p className="mt-6 text-base">
+        <p className="mt-6 text-center text-base">
           <a
             href={REPO_URL}
             target="_blank"
