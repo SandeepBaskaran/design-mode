@@ -44,14 +44,6 @@ export const metadata = {
   },
 };
 
-const criteria = [
-  "Can it directly edit the rendered page, or only annotate and inspect?",
-  "What changes does it capture: styles, text, DOM, comments or screenshots?",
-  "How does it hand work to a person or coding agent?",
-  "Which browsers, editors and source frameworks constrain the workflow?",
-  "Is the product open source, paid, hosted or tied to another platform?",
-];
-
 export default function ComparisonsIndex() {
   return (
     <>
@@ -74,45 +66,18 @@ export default function ComparisonsIndex() {
               Which browser visual editor fits your workflow?
             </h1>
             <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed">
-              There is no single best tool for every job. Choose a direct
-              live-page editor when you need to make the intended visual change,
-              an annotation tool when feedback is enough, browser automation for
-              agent verification, or Figma-to-code software when the design file
-              is the source of truth.
+              Design Mode edits a rendered page and hands the recorded changes
+              to an independent coding agent. It is not a source editor, a
+              deploy tool, or a blank-canvas design file. Source-backed
+              comparisons below include dated references. Unverified drafts stay
+              out of search.
             </p>
           </div>
         </section>
       </Background>
 
       <section className="py-16 lg:py-20">
-        <div className="container max-w-5xl">
-          <h2 className="text-2xl tracking-tight md:text-3xl">
-            How to evaluate the options
-          </h2>
-          <p className="text-muted-foreground mt-4 max-w-3xl leading-relaxed">
-            Design Mode is strongest when you want to edit a rendered webpage,
-            record structured changes, and hand them to an independent coding
-            agent. It is not a source-code editor, deployment system or
-            substitute for a design file when you need greenfield exploration.
-          </p>
-          <ul className="text-muted-foreground mt-6 grid gap-4 md:grid-cols-2">
-            {criteria.map((criterion) => (
-              <li
-                key={criterion}
-                className="rounded-lg border p-4 leading-relaxed"
-              >
-                {criterion}
-              </li>
-            ))}
-          </ul>
-          <p className="bg-muted text-muted-foreground mt-6 rounded-lg border p-4 text-base leading-relaxed">
-            Source-backed comparisons include dated references and explain what
-            was documented or tested. Older unverified drafts remain excluded
-            from search indexing until their claims have been reviewed.
-          </p>
-        </div>
-
-        <DashedLine className="container mt-16 max-w-5xl" />
+        <DashedLine className="container max-w-5xl" />
         <div className="container mt-12 grid max-w-5xl gap-6 md:grid-cols-2 lg:grid-cols-3">
           {comparisons.map((comparison) => (
             <Link
