@@ -25,7 +25,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Does it work on localhost and sites I'm logged into?",
         answer:
-          "Yes on a normal webpage your browser can script — including localhost, staging, and pages where you are already logged in — because the editor runs in that tab. It cannot run on browser-internal pages (chrome://, about:), extension stores, or other blocked surfaces such as some enterprise policies. file:// pages need the browser's local-file permission and are not guaranteed. Cookie-authenticated apps work only while that tab is already signed in; Design Mode does not bypass login, SSO or publisher access controls. Edits are a local preview; they do not change the publisher's source.",
+          "Yes on a normal webpage the browser can script, including localhost, staging and a tab you are already signed into. It cannot run on browser-internal pages (chrome://, about:), extension stores, or other blocked surfaces such as some enterprise policies. file:// pages need the browser’s local-file permission and are not guaranteed. Design Mode does not bypass login, SSO or publisher access controls. The edit is a local preview.",
       },
       {
         question: "Does Design Mode change my production source code?",
@@ -85,7 +85,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Which agents are supported?",
         answer:
-          "Design Mode uses Model Context Protocol, so it can work with clients that support a compatible local or Streamable HTTP MCP server. Configuration files, transport support and authentication syntax differ by client and version. Use the tested, version-stamped instructions in the MCP setup documentation instead of assuming one JSON block works everywhere.",
+          "Any client that supports a compatible local or Streamable HTTP MCP server. Setup differs by client and version, so use the tested steps in the MCP documentation.",
       },
       {
         question:
