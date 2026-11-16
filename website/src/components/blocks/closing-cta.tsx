@@ -16,7 +16,7 @@ export function ClosingCta() {
         <SectionHeader
           eyebrow="From intent to implementation"
           id="closing-cta-heading"
-          title="Less explaining. More making."
+          title="Less explaining."
           description="Make the change in your browser. Give your agent the details to carry it into code."
         />
         <div className={`flex flex-col items-center justify-center gap-4 sm:flex-row ${sectionGap}`}>

@@ -50,7 +50,7 @@ export function BrowserHandoff() {
         <SectionHeader
           eyebrow="Handoff"
           id="browser-handoff-heading"
-          title="Start in your browser. Take the details wherever you work."
+          title="Take the details with you"
           description="Install it, keep the edits portable, then copy a prompt, send them, or connect an agent."
         />
         <div className={`grid gap-x-24 gap-y-16 md:grid-cols-2 ${sectionGap}`}>

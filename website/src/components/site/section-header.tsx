@@ -26,7 +26,7 @@ export function SectionHeader({
       </p>
       <Title
         id={id}
-        className="mt-3 text-2xl tracking-tight text-balance md:text-4xl lg:text-5xl"
+        className="mt-3 text-2xl tracking-tight md:text-4xl lg:text-5xl"
       >
         {title}
       </Title>

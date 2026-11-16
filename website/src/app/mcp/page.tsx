@@ -147,7 +147,7 @@ export default function McpPage() {
               as="h1"
               eyebrow="Design Mode + your AI app"
               id="mcp-title"
-              title="Your browser changes. In your agent’s hands."
+              title="In your agent’s hands"
               description="Copy a prompt, or connect Cloud, Local or Self-hosted MCP. The extension does not grant repository access."
             />
             <div className="bg-background/90 mt-10 rounded-xl border p-6 sm:p-8">
@@ -163,7 +163,7 @@ export default function McpPage() {
           <SectionHeader
             eyebrow="MCP"
             id="what-mcp"
-            title="What MCP makes possible"
+            title="What MCP can do"
             description="A connected agent can read the recorded edits, inspect screenshots and update their status."
           />
           <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
@@ -249,7 +249,7 @@ export default function McpPage() {
           <SectionHeader
             eyebrow="Connection"
             id="connect-title"
-            title="Choose how to connect"
+            title="How to connect"
             description="Cloud is the default. Local stays on your machine. Self-hosted runs the relay yourself."
           />
           <div className="mt-10 grid gap-6 md:grid-cols-3">
@@ -397,7 +397,7 @@ export default function McpPage() {
           <SectionHeader
             eyebrow="Clients"
             id="apps-title"
-            title="Configure your AI app"
+            title="Set up your app"
             description="Merge the Cloud example into the client’s own config. Enter the token locally, not in chat."
           />
           <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
@@ -490,7 +490,7 @@ export default function McpPage() {
           <SectionHeader
             eyebrow="Tools"
             id="tools-title"
-            title="Tools your agent can use"
+            title="Agent tools"
             description="Cloud, Local and Self-hosted expose these eight session tools. Read the schema before a new kind of call."
           />
           <p className="text-muted-foreground mt-6 max-w-3xl text-base">
@@ -547,7 +547,7 @@ export default function McpPage() {
           <SectionHeader
             eyebrow="Reads"
             id="reads-title"
-            title="Read progressively, act on a bounded scope"
+            title="Read, then act"
             description="Start with the session summary, then fetch changes once and update only the ids you mean to change."
           />
           <ol className="text-muted-foreground mt-8 max-w-3xl list-decimal space-y-6 pl-5 text-base leading-relaxed">
@@ -599,7 +599,7 @@ export default function McpPage() {
             <SectionHeader
               eyebrow="Skill"
               id="skill-title"
-              title="Give your agent the workflow"
+              title="The workflow"
               description="The agent skill covers setup and a scoped design-to-code workflow. Reading it does not connect MCP."
             />
             <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">

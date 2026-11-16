@@ -18,7 +18,7 @@ export const FAQ = () => {
       <div className="container max-w-5xl">
         <SectionHeader
           eyebrow="FAQ"
-          title="Questions before you install"
+          title="Before you install"
           description="What it edits, which pages it can reach, and how a change gets to your agent."
         />
 

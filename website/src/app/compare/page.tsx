@@ -66,7 +66,7 @@ export default function ComparisonsIndex() {
             <SectionHeader
               as="h1"
               eyebrow="Compare"
-              title="Which browser visual editor fits your workflow?"
+              title="Find the right editor"
               description="Design Mode edits a rendered page and hands the recorded changes to a coding agent. It is not a source editor or a blank canvas."
             />
           </div>

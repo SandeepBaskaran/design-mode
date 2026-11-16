@@ -29,7 +29,7 @@ export function AgentWorkflow() {
         <SectionHeader
           eyebrow="How it works"
           id="agent-workflow-heading"
-          title="Show your agent what needs to change."
+          title="Show the change"
           description="Make the edit on the live page. Design Mode records the values so the agent works from the change, not a description of it."
         />
 

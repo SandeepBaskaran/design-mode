@@ -607,7 +607,7 @@ export function PanelAnatomy() {
         <SectionHeader
           eyebrow="Editor"
           id="panel-anatomy-title"
-          title="Every design control, in one side panel"
+          title="One side panel"
           description="Layers, design controls and the Changes tab stay together while you edit the page."
         />
       </div>
