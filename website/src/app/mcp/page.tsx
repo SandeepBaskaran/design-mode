@@ -173,25 +173,16 @@ export default function McpPage() {
             What MCP makes possible
           </h2>
           <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
-            Model Context Protocol connects AI apps to external tools. Design
-            Mode gives a connected agent tools to read your recorded browser
-            edits, inspect screenshots and update their status. The agent still
-            needs separate access to your repository to change source code.
-            Review the{" "}
+            A connected agent can read the recorded edits, inspect screenshots
+            and update their status. It still needs its own access to your
+            repository. Review the{" "}
             <Link
               href="/docs/changes-tab"
               className="underline underline-offset-4"
             >
-              recorded changes and copy formats
-            </Link>
-            , then use the{" "}
-            <Link
-              href="/blog/turn-visual-edits-into-precise-ai-prompts"
-              className="underline underline-offset-4"
-            >
-              precise-prompts guide
+              Changes tab
             </Link>{" "}
-            to add scope and acceptance checks.
+            before you send anything.
           </p>
           <div className="mt-12 grid gap-8 rounded-xl border p-6 md:grid-cols-2 md:p-8">
             <div>
