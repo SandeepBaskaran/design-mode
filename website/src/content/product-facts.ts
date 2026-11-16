@@ -147,7 +147,6 @@ const homepageQuestions = new Set([
   "Does Design Mode change my production source code?",
   "Which browsers are supported?",
   "How do I communicate visual changes to Claude Code or another coding agent?",
-  "What is the difference between Cloud, Local and Self-hosted?",
   "What data leaves my machine by default?",
   "Is Design Mode free and open source?",
 ]);
