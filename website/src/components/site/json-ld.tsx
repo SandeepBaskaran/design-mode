@@ -35,7 +35,7 @@ export const personSchema = {
   jobTitle: "Design Engineer",
   sameAs: [X_URL, REPO_URL, AUTHOR_URL],
   description:
-    "Design engineer based in Bengaluru and creator of Design Mode, an open-source browser visual editor for AI coding agents.",
+    "Creator of Design Mode, an open-source browser visual editor for AI coding agents.",
 };
 
 export const websiteSchema = {

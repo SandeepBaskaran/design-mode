@@ -17,11 +17,7 @@ export function HomeAbout() {
           description="Sandeep Baskaran builds Design Mode in the open. The extension records a preview; the source change is reviewed separately."
         />
         <div className={`text-muted-foreground max-w-3xl space-y-4 text-left text-base leading-relaxed ${sectionGap}`}>
-          <p>
-            Sandeep Baskaran is a Senior UX Designer in Bengaluru, working in
-            IBM&apos;s Z Infrastructure organisation. Design Mode is his
-            independent, MIT-licensed browser extension.
-          </p>
+          <p>Design Mode is an independent, MIT-licensed browser extension.</p>
           <p>
             Screenshots lose selectors and computed values. Design Mode records
             the change on the rendered page and hands it over as Markdown or
