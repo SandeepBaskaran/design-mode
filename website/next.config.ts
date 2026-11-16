@@ -8,8 +8,89 @@ const nextConfig: NextConfig = {
   redirects() {
     return [
       {
+        source: "/docs",
+        destination: "/blog",
+        permanent: true,
+      },
+      {
         source: "/docs/install",
-        destination: "/docs/browser-support",
+        destination: "/blog/browser-support",
+        permanent: true,
+      },
+      ...[
+        "browser-support",
+        "keyboard-shortcuts",
+        "mcp-setup",
+        "changes-tab",
+        "troubleshooting",
+      ].map((slug) => ({
+        source: `/docs/${slug}`,
+        destination: `/blog/${slug}`,
+        permanent: true,
+      })),
+      {
+        source: "/features",
+        destination: "/#panel-anatomy",
+        permanent: true,
+      },
+      {
+        source: "/about",
+        destination: "/#about",
+        permanent: true,
+      },
+      {
+        source: "/contact",
+        destination: "/#contact",
+        permanent: true,
+      },
+      {
+        source: "/faq",
+        destination: "/#faq",
+        permanent: true,
+      },
+      {
+        source: "/about-us",
+        destination: "/#about",
+        permanent: true,
+      },
+      {
+        source: "/info",
+        destination: "/#about",
+        permanent: true,
+      },
+      {
+        source: "/mcp-setup",
+        destination: "/blog/mcp-setup",
+        permanent: true,
+      },
+      {
+        source: "/pricing",
+        destination: "/",
+        permanent: true,
+      },
+      {
+        source: "/use-cases",
+        destination: "/solutions",
+        permanent: true,
+      },
+      {
+        source: "/use-cases/:slug",
+        destination: "/solutions#:slug",
+        permanent: true,
+      },
+      {
+        source: "/favicon.ico",
+        destination: "/icon.png",
+        permanent: true,
+      },
+      {
+        source: "/apple-touch-icon.png",
+        destination: "/apple-icon.png",
+        permanent: true,
+      },
+      {
+        source: "/apple-touch-icon-precomposed.png",
+        destination: "/apple-icon.png",
         permanent: true,
       },
     ];

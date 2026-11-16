@@ -22,70 +22,70 @@ const personas = [
     title: "Designers",
     blurb:
       "Design directly on the live product — not in a mockup file that drifts from the code.",
-    href: "/use-cases/redesign-any-website",
+    href: "/solutions#redesign-any-website",
   },
   {
     icon: Ruler,
     title: "Design engineers",
     blurb:
       "Own the loop from sketch to PR without context-switching between tools.",
-    href: "/use-cases/tailwind-component-tuning",
+    href: "/solutions#tailwind-component-tuning",
   },
   {
     icon: Code2,
     title: "Frontend developers",
     blurb:
       "Iterate on UI visually, then have your AI agent commit the change.",
-    href: "/use-cases/visual-editing-with-cursor",
+    href: "/solutions#visual-editing-with-cursor",
   },
   {
     icon: Wand2,
     title: "Vibe coders & AI-coding-agent users",
     blurb:
       "Describe a change in English, see it on the real page, refine visually — Claude Code, Cursor, Windsurf, Cline, all over MCP.",
-    href: "/use-cases/vibe-coding-with-claude-code",
+    href: "/solutions#vibe-coding-with-claude-code",
   },
   {
     icon: Sparkles,
     title: "QA & UI testers",
     blurb:
       "Annotate broken layout, contrast bugs, copy errors on a staging URL — export the structured diff to developers with full context.",
-    href: "/use-cases/ui-testing-export-to-developers",
+    href: "/solutions#ui-testing-export-to-developers",
   },
   {
     icon: Megaphone,
     title: "Product managers",
     blurb:
       "File visual bug reports that point at the exact pixel, not \"the button is wrong.\"",
-    href: "/use-cases/bug-report-with-visual-diff",
+    href: "/solutions#bug-report-with-visual-diff",
   },
   {
     icon: FileEdit,
     title: "Content & marketing teams",
     blurb:
       "Fix microcopy live on the page, export the diff, no Figma round-trip.",
-    href: "/use-cases/copy-edits-without-a-pr",
+    href: "/solutions#copy-edits-without-a-pr",
   },
   {
     icon: Lightbulb,
     title: "Indie hackers & solo founders",
     blurb:
       "Iterate on your own landing page with an AI agent in the loop.",
-    href: "/use-cases/landing-page-iteration-for-indie-hackers",
+    href: "/solutions#landing-page-iteration-for-indie-hackers",
   },
   {
     icon: Briefcase,
     title: "Agencies",
     blurb:
       "Make tweaks on the client's staging URL during review; hand engineering a precise spec.",
-    href: "/use-cases/client-handoff-from-agency-to-engineering",
+    href: "/solutions#client-handoff-from-agency-to-engineering",
   },
   {
     icon: Building2,
     title: "Design-system maintainers",
     blurb:
       "Walk a deployed app, log every token drift, ship the audit report.",
-    href: "/use-cases/design-system-audit",
+    href: "/solutions#design-system-audit",
   },
 ];
 
@@ -134,7 +134,7 @@ export function PersonaBlock() {
         <div className="mt-10 flex items-center gap-2">
           <Users className="text-muted-foreground size-4" />
           <Link
-            href="/use-cases"
+            href="/solutions"
             className="text-foreground/80 text-base underline underline-offset-8 hover:text-foreground"
           >
             See every use case →

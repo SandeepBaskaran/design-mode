@@ -20,7 +20,7 @@ export const STEPS: Step[] = [
     title: "Get started",
     body: [
       "Design Mode is a Chrome and Firefox extension for previewing visual changes on scriptable webpages. This practice canvas requires the extension; it is not an editor by itself. Start with one card: inspect it, change its padding, review Changes, then use Copy as prompt to copy the Markdown specification. An authorised developer or agent still implements the source.",
-      "First time? Pin the extension to your toolbar, then click the Design Mode icon. Chrome opens the launch surface selected in Settings; Firefox opens its sidebar. Once it's open, every shortcut is listed in Settings. Alt+D and Alt+Shift+S are browser commands you can rebind through chrome://extensions/shortcuts on Chrome or about:addons on Firefox. Option+S is left free for accented letters.",
+      "First time? Pin the extension, then click its icon. Chrome opens the launch surface selected in Settings. Firefox 140 or later opens its sidebar. Safari on Mac uses the temporary extension from the latest GitHub release. Shortcuts are listed in Settings. Alt+D opens the panel. Alt+Shift+S takes a screenshot. Option+S stays free for accented letters.",
     ],
     tryIt:
       "Pin Design Mode in your browser toolbar, then click its icon to open the side panel (the sidebar on Firefox).",
@@ -58,7 +58,7 @@ export const STEPS: Step[] = [
     targetId: "inspector",
     nextLink: {
       label: "Check supported browsers and page limits →",
-      href: "/docs/browser-support",
+      href: "/blog/browser-support",
     },
   },
   {
@@ -90,7 +90,7 @@ export const STEPS: Step[] = [
     title: "Comments & regions",
     body: [
       "Design Mode overlays two annotation tools on the live page. Comment pins (the comment icon in the action row, or Alt+C) drop a numbered marker on any element — resolve, reopen, or edit them, and they collect in the Changes tab under the Comments filter so they ship alongside your edits.",
-      "Region comment (Alt+R) works the same way but lets you drag a rectangle over an area first, for feedback that isn't tied to a single element. Both are overlay-only — they annotate without ever touching the page's own styles.",
+      "Region comment (Alt+R) lets you drag a rectangle over an area. Copy as Prompt includes that box’s size and position. Export stays a JSON file unless a region note exists, then it downloads a zip with one PNG per region. A new region note is not marked stale while its anchor element or the current page is still present. Both tools annotate without rewriting the page’s own styles.",
     ],
     tryIt:
       "Press Alt+C (or click the comment icon) and drop a pin on the note below. Then press Alt+R and drag a box around it. Open the Changes tab → Comments filter to see both tracked.",
@@ -101,7 +101,7 @@ export const STEPS: Step[] = [
     title: "Layers panel",
     body: [
       "The Layers tab shows the page's DOM as a tree. Search by tag, class, id, or smart name. Drag layers to reorder them. Toggle visibility with the eye icon. Multi-select to apply edits to several layers at once.",
-      "Each row shows: indentation guide, drag handle, expand/collapse chevron, tag icon, smart name, and a hover-revealed eye toggle. Long layer names wrap instead of forcing the row to scroll sideways.",
+      "Each row shows an indentation guide, drag handle, expand/collapse chevron, tag icon, smart name, and a hover-revealed eye toggle. Long names wrap. If the list is empty, Reload asks the page for the tree again.",
     ],
     tryIt:
       "Switch to the Layers tab. Try the search input — type 'card' or 'demo'. Drag-reorder one of the list items below.",
@@ -277,7 +277,7 @@ export const STEPS: Step[] = [
       "Switch to the Changes tab after making edits in the previous sections. Click 'View Original' to flip back. Try Batch apply (zap) on a style change, then Export to download the diff as JSON.",
     nextLink: {
       label: "Review Changes and handoff formats →",
-      href: "/docs/changes-tab",
+      href: "/blog/changes-tab",
     },
   },
   {
@@ -340,7 +340,7 @@ export const STEPS: Step[] = [
     id: "send-to-agent",
     title: "Send to Agent",
     body: [
-      "Send to Agent is available when there are recorded changes and Preview original is off, unless a send is in progress or a Local feedback round is being implemented. Without a connection or attached agent, clicking it opens setup instructions. With a connected client, review the session and mark it ready over MCP.",
+      "Send to Agent is available when there are recorded changes and Preview original is off, unless a send is in progress or a Local feedback round is being implemented. Without a connection or attached agent, clicking it opens setup instructions and does not discard the edits. If the agent is not connected yet, the setup suggests restarting the connection, the agent, or the session. With a connected client, review the session and mark it ready over MCP.",
       "Once you send, get_changes and get_session_summary expose a real handoff field, so the agent's next read knows this batch of edits is the one you just approved — an explicit 'these are ready' signal instead of the agent guessing.",
       "The connected client still needs separate repository access, and you must ask it to implement the changes and review its source diff.",
       "Haven't set up an agent yet? The MCP guide covers Local, Cloud and Self-hosted modes, with version-stamped instructions for Claude Code and Cursor and a warning to verify other clients separately.",

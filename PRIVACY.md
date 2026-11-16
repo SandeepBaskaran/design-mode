@@ -16,7 +16,7 @@ This is not a promise of permanent free hosting.
 
 Safari on Mac installs from the latest GitHub release as a temporary Web
 Inspector extension, not from an extension store. See the
-[browser-support guide](https://designmode.app/docs/browser-support).
+[browser-support guide](https://designmode.app/blog/browser-support).
 
 ## What the extension stores, and where
 

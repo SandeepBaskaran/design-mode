@@ -1,30 +1,37 @@
 import Link from "next/link";
 
 import { AgentIcons } from "@/components/blocks/hero-headline";
+import { ProductHunt } from "@/components/blocks/product-hunt";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
+import { SectionHeader, sectionGap, sectionPadding } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 
 export function ClosingCta() {
   return (
-    <section aria-labelledby="closing-cta-heading" className="py-16 md:py-24 lg:py-32">
+    <section aria-labelledby="closing-cta-heading" className={sectionPadding}>
       <div className="container text-center">
-        <p className="text-muted-foreground text-base font-medium tracking-widest">
-          FROM INTENT TO IMPLEMENTATION
-        </p>
-        <h2
+        <div className="mb-6 flex justify-center">
+          <ProductHunt />
+        </div>
+        <SectionHeader
+          eyebrow="FROM INTENT TO IMPLEMENTATION"
           id="closing-cta-heading"
-          className="mx-auto mt-8 max-w-4xl text-5xl leading-[1.05] tracking-tight sm:text-6xl lg:text-[72px]"
-        >
-          Less explaining.
-          <br />
-          More making.
-        </h2>
-        <p className="text-muted-foreground mx-auto mt-8 max-w-xl text-base leading-relaxed">
-          Make the change in your browser.
-          <br />
-          Give your agent the details to carry it into code.
-        </p>
-        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          title={
+            <>
+              Less explaining.
+              <br />
+              More making.
+            </>
+          }
+          description={
+            <>
+              Make the change in your browser.
+              <br />
+              Give your agent the details to carry it into code.
+            </>
+          }
+        />
+        <div className={`flex flex-col items-center justify-center gap-4 sm:flex-row ${sectionGap}`}>
           <AddToChromeCta
             size="lg"
             className="h-14 max-sm:w-full max-sm:max-w-xs"

@@ -1,10 +1,8 @@
-import Link from "next/link";
-
-import { ArrowUpRight } from "lucide-react";
-
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
+import { LinkCard } from "@/components/site/related-links";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { posts } from "@/content/blog";
 
 export const metadata = {
@@ -76,46 +74,29 @@ export default function BlogIndex() {
         })}
       />
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className={sectionPadding}>
           <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Blog
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              Build notes from Design Mode and walkthroughs of real workflows —
-              MCP architecture, vibe coding, Tailwind redesigns, changelog
-              deep-dives.
-            </p>
+            <SectionHeader
+              as="h1"
+              eyebrow="Blog"
+              title="Blog"
+              description="Build notes, setup guides, and release write-ups. The install and MCP guides live here."
+            />
           </div>
         </section>
       </Background>
 
-      <section className="py-16 lg:py-20">
+      <section className={sectionPadding}>
         <DashedLine className="container max-w-5xl" />
-        <div className="container mt-12 max-w-5xl space-y-6">
+        <div className="container mt-12 grid max-w-5xl gap-4 md:grid-cols-2 lg:grid-cols-3">
           {sorted.map((p) => (
-            <Link
+            <LinkCard
               key={p.slug}
               href={`/blog/${p.slug}`}
-              className="group block rounded-2xl border p-6 transition-shadow hover:shadow-md"
-            >
-              <time
-                dateTime={p.datePublished}
-                className="text-muted-foreground text-base font-medium tracking-wide uppercase"
-              >
-                {dateFmt.format(new Date(p.datePublished))}
-              </time>
-              <h2 className="font-display mt-2 text-2xl leading-snug font-semibold md:text-3xl">
-                {p.title}
-              </h2>
-              <p className="text-muted-foreground mt-2 leading-relaxed">
-                {p.excerpt}
-              </p>
-              <span className="text-foreground/80 mt-4 inline-flex items-center gap-2 text-base font-medium underline underline-offset-8">
-                Read{" "}
-                <ArrowUpRight className="size-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-              </span>
-            </Link>
+              title={p.title}
+              description={p.excerpt}
+              eyebrow={dateFmt.format(new Date(p.datePublished))}
+            />
           ))}
         </div>
       </section>

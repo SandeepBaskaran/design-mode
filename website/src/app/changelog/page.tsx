@@ -4,6 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { Background } from "@/components/background";
 import { DashedLine } from "@/components/dashed-line";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { releases } from "@/content/changelog";
 
 const REPO_CHANGELOG =
@@ -63,15 +64,14 @@ export default function ChangelogPage() {
   return (
     <>
       <Background>
-        <section className="py-16 lg:py-24">
+        <section className={sectionPadding}>
           <div className="container max-w-3xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Changelog
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-2xl text-base">
-              Release highlights in plain language, with the date each version
-              shipped — not a complete inventory of every change.
-            </p>
+            <SectionHeader
+              as="h1"
+              eyebrow="Releases"
+              title="Changelog"
+              description="Release highlights in plain language, with the date each version shipped. Not every internal change."
+            />
             <p className="text-muted-foreground mt-3 text-base">
               Want the technical detail?{" "}
               <a
@@ -88,7 +88,7 @@ export default function ChangelogPage() {
         </section>
       </Background>
 
-      <section className="py-16 lg:py-20">
+      <section className={sectionPadding}>
         <DashedLine className="container max-w-3xl" />
         <div className="container mt-12 max-w-3xl">
           <ol className="flex flex-col gap-16">
@@ -136,10 +136,10 @@ export default function ChangelogPage() {
             </Link>{" "}
             or{" "}
             <Link
-              href="/features"
+              href="/#panel-anatomy"
               className="text-foreground/80 font-medium underline underline-offset-4"
             >
-              browse the full feature set
+              see the editor
             </Link>
             .
           </p>

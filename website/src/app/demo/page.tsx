@@ -6,6 +6,7 @@ import { ExtensionDetected } from "./ExtensionDetected";
 import { STEPS } from "./steps";
 
 import { Background } from "@/components/background";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 
 export const metadata = {
   title: { absolute: "Try the browser visual editor | Design Mode" },
@@ -55,22 +56,14 @@ export default function DemoPage() {
     <>
       {/* Hero — yellow background slab */}
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className={sectionPadding}>
           <div className="container max-w-5xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              Live demo
-            </h1>
-            <p className="text-muted-foreground mt-4 max-w-3xl text-base">
-              <span className="md:hidden">
-                Try this guided walkthrough in a desktop browser with the Design
-                Mode extension installed.
-              </span>
-              <span className="max-md:hidden">
-                Open the side panel on this page and try every feature with the
-                demo targets below — no recordings, the canvas is the real
-                thing.
-              </span>
-            </p>
+            <SectionHeader
+              as="h1"
+              eyebrow="Demo"
+              title="Live demo"
+              description="Install the extension, open the side panel on this page, and edit the targets below. On a phone, continue on a desktop browser."
+            />
           </div>
         </section>
       </Background>
@@ -87,7 +80,7 @@ export default function DemoPage() {
       </section>
 
       {/* Middle — interactive canvas */}
-      <section className="hidden py-12 md:block lg:py-16">
+      <section className={`hidden md:block ${sectionPadding}`}>
         <div className={`${styles.extensionBannerWrap} container max-w-5xl`}>
           <ExtensionDetected />
         </div>

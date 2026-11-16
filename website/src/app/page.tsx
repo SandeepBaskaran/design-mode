@@ -4,10 +4,13 @@ import { BrowserHandoff } from "@/components/blocks/browser-handoff";
 import { ClosingCta } from "@/components/blocks/closing-cta";
 import { FAQ, homepageFaqQA } from "@/components/blocks/faq";
 import { Hero } from "@/components/blocks/hero";
+import { HomeAbout, HomeContact } from "@/components/blocks/home-about";
 import { PanelAnatomy } from "@/components/blocks/panel-anatomy";
+import { WhoItsFor } from "@/components/blocks/who-its-for";
 import {
   JsonLd,
   faqSchema,
+  personSchema,
   softwareApplicationSchema,
 } from "@/components/site/json-ld";
 
@@ -52,14 +55,18 @@ export default function Home() {
   return (
     <>
       <JsonLd data={softwareApplicationSchema} />
+      <JsonLd data={personSchema} />
       <JsonLd data={faqSchema(homepageFaqQA)} />
       <Background>
         <Hero />
       </Background>
       <AgentWorkflow />
+      <WhoItsFor />
       <PanelAnatomy />
       <FAQ />
       <BrowserHandoff />
+      <HomeAbout />
+      <HomeContact />
       <Background variant="bottom">
         <ClosingCta />
       </Background>

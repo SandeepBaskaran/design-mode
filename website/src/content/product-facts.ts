@@ -25,7 +25,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Does it work on localhost and sites I'm logged into?",
         answer:
-          "Yes on a normal webpage your browser can script — including localhost, staging, and pages where you are already logged in — because the editor runs in that tab. It cannot run on browser-internal pages (chrome://, about:), extension stores, or other blocked surfaces such as some enterprise policies. file:// pages need the browser's local-file permission and are not guaranteed. Cookie-authenticated apps work only while that tab is already signed in; Design Mode does not bypass login, SSO or publisher access controls. Edits are a local preview; they do not change the publisher's source.",
+          "Yes on a normal webpage the browser can script, including localhost, staging and a tab you are already signed into. It cannot run on browser-internal pages (chrome://, about:), extension stores, or other blocked surfaces such as some enterprise policies. file:// pages need the browser’s local-file permission and are not guaranteed. Design Mode does not bypass login, SSO or publisher access controls. The edit is a local preview.",
       },
       {
         question: "Does Design Mode change my production source code?",
@@ -52,8 +52,8 @@ export const faqGroups: FaqGroup[] = [
         answer:
           "Design Mode works in Chrome, Firefox and Safari. Features differ a little between them; the browser support and install guides have the details. Chrome and Firefox work right away: install it from the Chrome Web Store or Firefox Add-ons. Safari needs a quick manual setup that takes under 30 seconds.",
         links: [
-          { label: "Browser support", href: "/docs/browser-support" },
-          { label: "Install guides", href: "/docs" },
+          { label: "Browser support", href: "/blog/browser-support" },
+          { label: "Install guides", href: "/blog/browser-support" },
         ],
       },
       {
@@ -85,7 +85,7 @@ export const faqGroups: FaqGroup[] = [
       {
         question: "Which agents are supported?",
         answer:
-          "Design Mode uses Model Context Protocol, so it can work with clients that support a compatible local or Streamable HTTP MCP server. Configuration files, transport support and authentication syntax differ by client and version. Use the tested, version-stamped instructions in the MCP setup documentation instead of assuming one JSON block works everywhere.",
+          "Any client that supports a compatible local or Streamable HTTP MCP server. Setup differs by client and version, so use the tested steps in the MCP documentation.",
       },
       {
         question:
@@ -142,16 +142,25 @@ export const faqGroups: FaqGroup[] = [
   },
 ];
 
-const homepageQuestions = new Set([
+const homepageQuestionOrder = [
   "What is Design Mode?",
+  "What can I edit?",
+  "Does it work on localhost and sites I'm logged into?",
   "Does Design Mode change my production source code?",
   "Which browsers are supported?",
   "How do I communicate visual changes to Claude Code or another coding agent?",
   "What is the difference between Cloud, Local and Self-hosted?",
+  "Do I have to use MCP?",
   "What data leaves my machine by default?",
   "Is Design Mode free and open source?",
-]);
+];
 
-export const homepageFaqQA = faqGroups
-  .flatMap((group) => group.items)
-  .filter((item) => homepageQuestions.has(item.question));
+const faqByQuestion = new Map(
+  faqGroups.flatMap((group) => group.items).map((item) => [item.question, item]),
+);
+
+export const homepageFaqQA = homepageQuestionOrder.map((question) => {
+  const item = faqByQuestion.get(question);
+  if (!item) throw new Error(`Missing FAQ: ${question}`);
+  return item;
+});

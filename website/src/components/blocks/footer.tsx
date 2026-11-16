@@ -18,17 +18,14 @@ export function Footer() {
     {
       title: "Product",
       links: [
-        { name: "Features", href: "/features" },
-        { name: "Try the demo", href: "/demo" },
-        { name: "Connect your agent", href: "/mcp" },
-        { name: "Use cases", href: "/use-cases" },
-
+        { name: "Demo", href: "/demo" },
+        { name: "Connect your agent", href: "/#connect" },
+        { name: "Solutions", href: "/solutions" },
       ],
     },
     {
       title: "Resources",
       links: [
-        { name: "Documentation", href: "/docs" },
         { name: "Changelog", href: "/changelog" },
         { name: "Compare", href: "/compare" },
         { name: "Blog", href: "/blog" },
@@ -38,10 +35,9 @@ export function Footer() {
     {
       title: "Project",
       links: [
-        { name: "About", href: "/about" },
-        { name: "Contact", href: "/contact" },
+        { name: "About", href: "/#about" },
+        { name: "Contact", href: "/#contact" },
         { name: "Privacy", href: "/privacy" },
-        { name: "FAQ", href: "/faq" },
 
       ],
     },

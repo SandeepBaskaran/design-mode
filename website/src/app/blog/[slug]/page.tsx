@@ -8,6 +8,7 @@ import {
   breadcrumbSchema,
 } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
+import { sectionPadding } from "@/components/site/section-header";
 import { getPost, posts } from "@/content/blog";
 import { blogContextualLinks } from "@/content/contextual-links";
 
@@ -87,6 +88,13 @@ export async function generateMetadata({
   };
 }
 
+function headingId(heading: string) {
+  return heading
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 const dateFmt = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   month: "long",
@@ -123,7 +131,7 @@ export default async function BlogPostPage({
       />
 
       <Background>
-        <section className="py-12 lg:py-16">
+        <section className={sectionPadding}>
           <div className="container max-w-4xl">
             <time
               dateTime={p.datePublished}
@@ -139,13 +147,16 @@ export default async function BlogPostPage({
         </section>
       </Background>
 
-      <section className="py-16 lg:py-20">
+      <section className={sectionPadding}>
         <DashedLine className="container max-w-4xl" />
         <article className="container mt-12 max-w-4xl space-y-10">
           {p.body.map((block, i) => (
             <div key={i}>
               {block.heading && (
-                <h2 className="text-2xl tracking-tight md:text-3xl">
+                <h2
+                  id={headingId(block.heading)}
+                  className="scroll-mt-24 text-2xl tracking-tight md:text-3xl"
+                >
                   {block.heading}
                 </h2>
               )}
@@ -153,6 +164,11 @@ export default async function BlogPostPage({
                 {block.paragraphs.map((para, j) => (
                   <p key={j}>{para}</p>
                 ))}
+                {block.code && (
+                  <pre className="bg-muted text-foreground overflow-x-auto rounded-lg border p-4 text-base leading-relaxed">
+                    <code>{block.code}</code>
+                  </pre>
+                )}
               </div>
             </div>
           ))}
@@ -170,15 +186,19 @@ export default async function BlogPostPage({
                 title: r.title,
                 description: r.excerpt,
               })),
+            ...(p.slug === "mcp-setup"
+              ? []
+              : [
+                  {
+                    href: "/blog/mcp-setup",
+                    title: "Use the current MCP setup guide",
+                    description:
+                      "Version-stamped Claude Code and Cursor configuration and verification.",
+                  },
+                ]),
             {
-              href: "/docs/mcp-setup",
-              title: "Use the current MCP setup guide",
-              description:
-                "Version-stamped Claude Code and Cursor configuration and verification.",
-            },
-            {
-              href: "/features",
-              title: "Review the current feature surface",
+              href: "/#panel-anatomy",
+              title: "See the editor",
               description:
                 "Layers, visual controls, Changes and the two hand-off methods.",
             },

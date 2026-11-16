@@ -4,8 +4,10 @@ import Link from "next/link";
 import { Heart, MousePointer2, Palette, Ruler, Wand2 } from "lucide-react";
 
 import { HeroHeadline } from "@/components/blocks/hero-headline";
+import { ProductHunt } from "@/components/blocks/product-hunt";
 import { DashedLine } from "@/components/dashed-line";
 import { AddToChromeCta } from "@/components/site/add-to-chrome-cta";
+import { sectionPadding } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 
 const features = [
@@ -43,19 +45,17 @@ const features = [
 
 export const Hero = () => {
   return (
-    <section className="py-16 md:py-24 lg:py-32">
+    <section className={sectionPadding}>
       {/* Hero — vertical stack, centred */}
       <div className="container max-w-[1200px] text-center max-sm:px-4">
+        <div className="mb-6 flex justify-center">
+          <ProductHunt />
+        </div>
         <HeroHeadline />
 
         <p className="text-muted-foreground mx-auto mt-8 max-w-[848px] text-base">
-          <span className="sm:hidden">Edit</span>
-          <span className="max-sm:hidden">
-            Design Mode is a free, open-source extension for Chrome, Firefox and Safari
-            that lets you edit
-          </span>{" "}
-          a rendered webpage visually, record the exact changes, and hand them
-          to a coding agent.
+          A free, open-source extension for Chrome, Firefox and Safari. Edit
+          the page, record the changes, and hand them to your coding agent.
         </p>
 
         {/* Secondary on the LEFT (Try it yourself → /demo), primary on the RIGHT (Add to Chrome) */}

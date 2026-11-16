@@ -556,7 +556,7 @@ bleeding to duplicates and back.
 | #    | Test | Steps | Expected |
 |------|------|-------|----------|
 | 13.1 | Hover doesn't override Selected | Select element X, hover element Y | Indicator stays "Selected" with X's data |
-| 13.2 | Persistence on URL revisit | Edit `/about`, navigate `/pricing`, navigate back | Edits on `/about` are still visible |
+| 13.2 | Persistence on URL revisit | Edit `/privacy`, navigate `/changelog`, navigate back | Edits on `/privacy` are still visible |
 | 13.3 | Reload extension mid-session | `chrome://extensions` → reload Design Mode | Extension reloads cleanly; saved session changes still replay |
 | 13.4 | CSP-strict site | Open a site with strict CSP (e.g. github.com) | Side panel still works; hover / select / inline edits succeed |
 | 13.5 | Color picker preserves cursor | Type partial hex in the inline picker | Cursor stays in the input; morphdom doesn't blur it on render |
@@ -634,14 +634,14 @@ Precondition: "Allow access to file URLs" toggle OFF for Design Mode in `chrome:
 | 14.8 | Responsive centered columns | Inspect article and footer at representative desktop and narrow viewport widths | Article and footer use the current responsive centered columns, not a fixed 720px requirement |
 | 14.9 | Inter font | Inspect any text | font-family resolves to Inter first |
 | 14.10 | Static OG image | View `/`'s `<head>` (or unfurl the URL in Slack/iMessage) | `og:image` and `twitter:image` resolve to the static `/og-design-mode-inter-v3.png`, not a dynamic `opengraph-image` route |
-| 14.11 | New content routes | Visit `/about`, `/faq`, `/contact`, `/use-cases`, `/compare`, `/docs`, `/blog` | All seven routes return 200 with rendered heroes and no scoped console errors; related-links/persona blocks are template-specific |
-| 14.12 | Dynamic detail routes | Open one `/use-cases/<slug>`, `/compare/<slug>`, `/docs/<slug>`, `/blog/<slug>` (slugs listed in `sitemap.ts`) | Renders the entry sourced from `content/*.ts`; an unknown slug 404s |
-| 14.13 | sitemap.xml | Visit `/sitemap.xml` | Lists 13 root routes and indexable comparison routes plus other indexable content slugs under https://designmode.app |
+| 14.11 | Content routes | Visit `/solutions`, `/compare`, `/blog`. Open `/about`, `/contact`, `/faq` and `/use-cases` | The three pages return 200. `/about` redirects to `/#about`, `/contact` to `/#contact`, `/faq` to `/#faq`, and `/use-cases` to `/solutions` |
+| 14.12 | Dynamic detail routes | Open one `/compare/<slug>` and `/blog/<slug>` (slugs listed in `sitemap.ts`). Open `/docs/mcp-setup` and `/use-cases/visual-editing-with-cursor` | Compare and blog render the entry from `content/*.ts`; an unknown slug 404s. `/docs/<slug>` redirects to the matching blog post. `/use-cases/<slug>` redirects to `/solutions#<slug>` |
+| 14.13 | sitemap.xml | Visit `/sitemap.xml` | Lists 8 root routes and indexable comparison routes plus blog and comparison slugs under https://designmode.app. `/features` redirects to `/#panel-anatomy`. `/docs` redirects to `/blog`. `/about`, `/contact` and `/faq` redirect to homepage anchors. |
 | 14.14 | robots.txt | Visit `/robots.txt` | `Allow: /` for `*`; LLM crawlers explicitly allowed (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, …); `Sitemap:` points to `/sitemap.xml` |
 | 14.15 | llms.txt | Visit `/llms.txt` and `/llms-full.txt` | Both serve plain-text site / product summaries |
 | 14.16 | Web app manifest | Visit `/manifest.webmanifest` | Serves valid JSON (name, icons, theme) |
 | 14.17 | JSON-LD structured data | View source on `/`, a `/compare/<slug>`, and `/faq` | `<script type="application/ld+json">` present (e.g. SoftwareApplication / FAQPage / Article) and valid JSON |
-| 14.18 | New nav + footer links | Open any page | Navbar / footer expose the new sections (FAQ, Use cases, Compare, Docs, Blog) and navigate correctly |
+| 14.18 | Nav + footer links | Open any page, including the mobile menu | Navbar shows Demo, Solutions, Compare and MCP, in that order, plus the install button. Footer columns are Product (Demo, Connect your agent, Solutions), Resources (Changelog, Compare, Blog) and Project (About, Contact, Privacy) |
 
 ---
 

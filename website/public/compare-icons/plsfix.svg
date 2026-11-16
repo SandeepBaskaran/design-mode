@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="plsfix favicon">
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#ffffff" />
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="none" stroke="#000000" stroke-width="14" />
+
+  <path
+    d="M128 56 L64 168 H192 Z"
+    fill="#ffffff"
+    stroke="#000000"
+    stroke-width="10"
+    stroke-linejoin="round"
+  />
+  <rect x="121" y="94" width="14" height="44" rx="7" fill="#000000" />
+  <circle cx="128" cy="152" r="8" fill="#000000" />
+
+  <circle cx="184" cy="186" r="36" fill="#000000" />
+  <circle cx="184" cy="186" r="36" fill="none" stroke="#ffffff" stroke-width="6" />
+  <path
+    d="M167 186 L179 198 L204 173"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="12"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
