@@ -12,9 +12,8 @@ export function WhyThisExists() {
       <TextSection
         title="Why this exists"
         paragraphs={[
-          "Screenshots and prose are useful for broad direction, but they often lose selectors, computed values and the relationship between the intended change and the rendered page.",
-          "Design Mode lets you make the intended change on the rendered page, records a structured specification, and hands it to a coding agent as Markdown or through MCP. The agent still has to find the source, implement the change and return a diff for review.",
-          "Built in the open under MIT. Read the source, file an issue, or open a PR.",
+          "Screenshots lose selectors and computed values. Design Mode records the change on the rendered page and hands it over as Markdown or through MCP.",
+          "The agent still finds the source, implements the change and returns a diff for review. The project is MIT-licensed.",
         ]}
         ctaButton={{
           href: REPO_URL,
