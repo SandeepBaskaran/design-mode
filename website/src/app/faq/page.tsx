@@ -62,13 +62,13 @@ export default function FaqPage() {
               Frequently asked questions
             </h1>
             <p className="text-muted-foreground mt-4 max-w-3xl text-base leading-relaxed">
-              Direct answers about browser editing, source-code hand-off, MCP,
-              storage and privacy. For setup steps, use the{" "}
+              Browser editing, agent hand-off, storage and privacy. Setup steps
+              are in the{" "}
               <Link
                 href="/docs"
                 className="text-foreground underline underline-offset-8"
               >
-                documentation
+                docs
               </Link>
               .
             </p>
