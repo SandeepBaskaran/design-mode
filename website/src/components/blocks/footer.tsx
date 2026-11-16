@@ -18,11 +18,9 @@ export function Footer() {
     {
       title: "Product",
       links: [
-        { name: "The editor", href: "/#panel-anatomy" },
-        { name: "Try the demo", href: "/demo" },
-        { name: "Connect your agent", href: "/mcp" },
+        { name: "Demo", href: "/demo" },
+        { name: "Connect your agent", href: "/#connect" },
         { name: "Solutions", href: "/solutions" },
-
       ],
     },
     {
@@ -40,7 +38,6 @@ export function Footer() {
         { name: "About", href: "/#about" },
         { name: "Contact", href: "/#contact" },
         { name: "Privacy", href: "/privacy" },
-        { name: "FAQ", href: "/#faq" },
 
       ],
     },
