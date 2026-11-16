@@ -21,8 +21,9 @@ import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { label: "Demo", href: "/demo" },
-  { label: "Connect", href: "/mcp" },
-  { label: "Who it’s for", href: "/use-cases" },
+  { label: "MCP", href: "/mcp" },
+  { label: "Use cases", href: "/use-cases" },
+  { label: "Compare", href: "/compare" },
   { label: "Blog", href: "/blog" },
 ];
 

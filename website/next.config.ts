@@ -64,6 +64,26 @@ const nextConfig: NextConfig = {
         destination: "/#faq",
         permanent: true,
       },
+      {
+        source: "/about-us",
+        destination: "/#about",
+        permanent: true,
+      },
+      {
+        source: "/info",
+        destination: "/#about",
+        permanent: true,
+      },
+      {
+        source: "/mcp-setup",
+        destination: "/blog/mcp-setup",
+        permanent: true,
+      },
+      {
+        source: "/pricing",
+        destination: "/",
+        permanent: true,
+      },
       ...retiredUseCases.map((slug) => ({
         source: `/use-cases/${slug}`,
         destination: `/use-cases#${slug}`,
