@@ -43,7 +43,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "sass": "^1.108.1",
+    "sass": "^1.108.2",
     "zod": "3.25.76"
   },
   "devDependencies": {
