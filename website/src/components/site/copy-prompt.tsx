@@ -5,8 +5,15 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-export function CopyPrompt({ text }: { text: string }) {
+export function CopyPrompt({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
   const [pending, setPending] = useState(false);
 
@@ -23,7 +30,7 @@ export function CopyPrompt({ text }: { text: string }) {
   }
 
   return (
-    <div className="mt-6 flex flex-wrap items-center gap-4">
+    <div className={cn("mt-6 flex flex-wrap items-center gap-4", className)}>
       <Button
         onClick={copy}
         disabled={pending}

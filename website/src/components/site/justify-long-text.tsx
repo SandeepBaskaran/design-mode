@@ -57,6 +57,7 @@ export function JustifyLongText() {
     };
 
     schedule();
+    document.fonts?.ready?.then(schedule);
     window.addEventListener("resize", schedule);
 
     const observer = new MutationObserver(schedule);

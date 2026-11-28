@@ -1,5 +1,4 @@
 import {
-  ArrowLeftRight,
   ArrowRight,
   ExternalLink,
   PanelRight,
@@ -9,19 +8,19 @@ import {
 export function PanelModesDiagram() {
   const states = [
     {
-      title: "1. Docked",
+      title: "Docked",
       subtitle: "Default Chrome side panel",
       note: "Lives beside the tab",
       icon: PanelRight,
     },
     {
-      title: "2. Floating",
+      title: "Floating",
       subtitle: "Pop-out icon in header",
       note: "Detached window bound to tab",
       icon: ExternalLink,
     },
     {
-      title: "3. Pin on top",
+      title: "Pin on top",
       subtitle: "PiP icon (Chrome 116+)",
       note: "Stays above all windows",
       icon: PictureInPicture2,
@@ -33,7 +32,7 @@ export function PanelModesDiagram() {
       className="my-4 grid gap-3 sm:grid-cols-3"
       aria-label="Chromium panel mode transitions"
     >
-      {states.map((state, index) => {
+      {states.map((state) => {
         const Icon = state.icon;
         return (
           <div
@@ -45,12 +44,6 @@ export function PanelModesDiagram() {
                 <Icon aria-hidden="true" className="text-primary size-4 shrink-0" />
                 {state.title}
               </span>
-              {index < states.length - 1 && (
-                <ArrowLeftRight
-                  aria-hidden="true"
-                  className="text-muted-foreground hidden size-4 shrink-0 sm:block"
-                />
-              )}
             </div>
             <span className="text-foreground mt-2 font-medium">{state.subtitle}</span>
             <span className="text-muted-foreground mt-1 text-base">{state.note}</span>
