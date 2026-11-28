@@ -194,7 +194,7 @@ export default function McpPage() {
 
       <section className={sectionPadding} aria-labelledby="setup-prompt-title">
         <div className="container max-w-5xl">
-          <div className="bg-card flex flex-col gap-6 rounded-xl border p-6 sm:p-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="bg-card flex flex-col gap-6 rounded-xl border p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex items-start gap-4">
               <div className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
                 <Terminal aria-hidden="true" className="size-5" />
@@ -204,11 +204,15 @@ export default function McpPage() {
                   Set up with your agent
                 </h2>
                 <p className="text-muted-foreground mt-1 max-w-xl text-base leading-relaxed">
-                  Paste this prompt into Claude Code, Cursor, or VS Code to walk through Cloud, Local, or Self-hosted setup.
+                  Paste this prompt into Claude Code, Cursor, or VS Code to walk through Cloud, Local, or Self-hosted setup. No token or personal data in this prompt.
                 </p>
               </div>
             </div>
-            <CopyPrompt text={MCP_SETUP_PROMPT} className="mt-0 shrink-0" />
+            <CopyPrompt
+              text={MCP_SETUP_PROMPT}
+              className="mt-0 shrink-0 lg:self-end"
+              hideIdleNote
+            />
           </div>
         </div>
       </section>
