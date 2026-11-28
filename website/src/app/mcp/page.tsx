@@ -11,7 +11,6 @@ import {
   ListTree,
   Monitor,
   Server,
-  Send,
   Wand2,
   MessageSquare,
   Clock,
@@ -20,7 +19,11 @@ import {
 import { Background } from "@/components/background";
 import { ModesComparison } from "@/components/blocks/modes-comparison";
 import { CopyPrompt } from "@/components/site/copy-prompt";
-import { SectionHeader, sectionPadding } from "@/components/site/section-header";
+import {
+  SectionHeader,
+  sectionGap,
+  sectionPadding,
+} from "@/components/site/section-header";
 import {
   Accordion,
   AccordionContent,
@@ -374,14 +377,15 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section className={sectionPadding} aria-labelledby="apps-title">
+      <section className={sectionPadding} aria-labelledby="modes-title">
         <div className="container max-w-5xl">
           <SectionHeader
             eyebrow="Modes"
+            id="modes-title"
             title="Mode comparison"
             description="Setup, transport and cost for Cloud, Local and Self-hosted. Local MCP stays on localhost."
           />
-          <p className="text-muted-foreground mt-2 max-w-2xl">
+          <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
             Setup, MCP transport, client requirements and cost across the three
             modes. Local keeps this MCP transport on localhost; it is not a
             no-egress guarantee for the coding client or other enabled features.
@@ -392,7 +396,12 @@ export default function McpPage() {
             for the separate data flows.
           </p>
         </div>
-        <ModesComparison />
+        <div className={sectionGap}>
+          <ModesComparison />
+        </div>
+      </section>
+
+      <section className={sectionPadding} aria-labelledby="apps-title">
         <div className="container max-w-5xl">
           <SectionHeader
             eyebrow="Clients"
@@ -595,7 +604,6 @@ export default function McpPage() {
       <Background variant="bottom">
         <section className={sectionPadding} aria-labelledby="skill-title">
           <div className="container max-w-5xl">
-            <Send aria-hidden="true" className="size-8" />
             <SectionHeader
               eyebrow="Skill"
               id="skill-title"
