@@ -7,17 +7,17 @@ import { SectionHeader, sectionPadding } from "@/components/site/section-header"
 const audiences = [
   {
     title: "Designers and design engineers",
-    text: "Make the intended change on the rendered page.",
+    text: "Working on a live page.",
     icon: Palette,
   },
   {
-    title: "Developers with a coding agent",
-    text: "Hand the recorded changes to Claude Code, Cursor or another compatible client, then review the source diff.",
+    title: "Developers",
+    text: "Using Claude Code, Cursor or another compatible agent.",
     icon: Code2,
   },
   {
     title: "QA, content and product",
-    text: "Export precise visual feedback. The extension does not write the code.",
+    text: "Exporting visual feedback without writing the code.",
     icon: ClipboardList,
   },
 ];

@@ -1,9 +1,6 @@
-import { ClipboardList, Code2, Palette } from "lucide-react";
-
 import { SolutionsAccordion } from "./solutions-accordion";
 
 import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
 import { SectionHeader, sectionPadding } from "@/components/site/section-header";
@@ -68,79 +65,49 @@ export default function UseCasesIndex() {
             <SectionHeader
               as="h1"
               eyebrow="Solutions"
-              title="Solutions"
+              title="From live page to code"
               description="One loop: edit the rendered page, record the exact changes, then hand them to a coding agent or a teammate."
             />
-            <ul className="mt-10 grid gap-8 text-left md:grid-cols-3">
-              {[
-                {
-                  title: "Designers and design engineers",
-                  text: "Working on a live page.",
-                  icon: Palette,
-                },
-                {
-                  title: "Developers",
-                  text: "Using Claude Code, Cursor or another compatible agent.",
-                  icon: Code2,
-                },
-                {
-                  title: "QA, content and product",
-                  text: "Exporting visual feedback without writing the code.",
-                  icon: ClipboardList,
-                },
-              ].map((item) => {
-                const Icon = item.icon;
-                return (
-                  <li key={item.title}>
-                    <Icon aria-hidden="true" className="size-6 stroke-[1.5]" />
-                    <h2 className="mt-4 text-xl font-semibold">{item.title}</h2>
-                    <p className="text-muted-foreground mt-2 text-base leading-relaxed">
-                      {item.text}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
           </div>
         </section>
       </Background>
 
       <section className={sectionPadding}>
-        <DashedLine className="container max-w-5xl" />
         <div className="container max-w-5xl">
           <SolutionsAccordion />
         </div>
-        <RelatedLinks
-          title="Guides"
-          links={[
-            {
-              href: "/blog/browser-support",
-              title: "Install and browser support",
-              description: "Chrome, Firefox and Safari, and what differs between them.",
-            },
-            {
-              href: "/blog/mcp-setup",
-              title: "Connect an agent",
-              description: "Cloud, Local and Self-hosted MCP setup.",
-            },
-            {
-              href: "/blog/changes-tab",
-              title: "Changes tab",
-              description: "Review, export and copy the recorded edits.",
-            },
-            {
-              href: "/blog/keyboard-shortcuts",
-              title: "Keyboard shortcuts",
-              description: "The in-page keys and the two browser commands.",
-            },
-            {
-              href: "/blog/troubleshooting",
-              title: "Troubleshooting",
-              description: "Panel will not open, MCP stays offline, edits do not stick.",
-            },
-          ]}
-        />
       </section>
+
+      <RelatedLinks
+        title="Guides"
+        links={[
+          {
+            href: "/blog/browser-support",
+            title: "Install and browser support",
+            description: "Chrome, Firefox and Safari, and what differs between them.",
+          },
+          {
+            href: "/blog/mcp-setup",
+            title: "Connect an agent",
+            description: "Cloud, Local and Self-hosted MCP setup.",
+          },
+          {
+            href: "/blog/changes-tab",
+            title: "Changes tab",
+            description: "Review, export and copy the recorded edits.",
+          },
+          {
+            href: "/blog/keyboard-shortcuts",
+            title: "Keyboard shortcuts",
+            description: "The in-page keys and the two browser commands.",
+          },
+          {
+            href: "/blog/troubleshooting",
+            title: "Troubleshooting",
+            description: "Panel will not open, MCP stays offline, edits do not stick.",
+          },
+        ]}
+      />
     </>
   );
 }

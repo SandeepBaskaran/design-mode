@@ -38,7 +38,7 @@ export function SolutionsAccordion() {
       collapsible
       value={open ?? ""}
       onValueChange={(value) => setOpen(value || undefined)}
-      className="mt-12 w-full"
+      className="w-full"
     >
       {useCases.map((item) => (
         <AccordionItem

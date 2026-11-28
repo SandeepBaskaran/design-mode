@@ -68,7 +68,7 @@ export default function DemoPage() {
         </section>
       </Background>
 
-      <section className="px-4 py-12 md:hidden">
+      <section className={`${sectionPadding} md:hidden`}>
         <div className="border-border bg-card container max-w-xl rounded-2xl border p-6 text-center shadow-sm">
           <h2 className="text-xl font-semibold">Continue on desktop</h2>
           <p className="text-muted-foreground mt-3 text-base leading-7">

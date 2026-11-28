@@ -14,6 +14,7 @@ import {
   Wand2,
 } from "lucide-react";
 
+import { McpAppSetup } from "./mcp-app-setup";
 import { McpConnectionModes } from "./mcp-connection-modes";
 
 import { Background } from "@/components/background";
@@ -32,11 +33,7 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  DESIGN_MODE_SKILL,
-  MCP_SETUP_PROMPT,
-  mcpClients,
-} from "@/lib/mcp-guide";
+import { DESIGN_MODE_SKILL, MCP_SETUP_PROMPT } from "@/lib/mcp-guide";
 
 const title = "Connect your AI app with MCP | Design Mode";
 const description =
@@ -177,14 +174,6 @@ const readSteps = [
   },
 ];
 
-function Snippet({ children }: { children: string }) {
-  return (
-    <pre className="bg-ink text-ink-foreground mt-6 max-w-full overflow-x-auto rounded-xl p-4 font-mono text-base leading-relaxed">
-      <code>{children}</code>
-    </pre>
-  );
-}
-
 export default function McpPage() {
   return (
     <>
@@ -198,13 +187,20 @@ export default function McpPage() {
               title="In your agent’s hands"
               description="Copy a prompt, or connect Cloud, Local or Self-hosted MCP. The extension does not grant repository access."
             />
-            <div className="bg-background/90 mt-10 rounded-xl border p-6 sm:p-8">
-              <h2 className="text-xl font-semibold">Set up with your agent</h2>
-              <CopyPrompt text={MCP_SETUP_PROMPT} />
-            </div>
           </div>
         </section>
       </Background>
+
+      <section className={sectionPadding} aria-labelledby="setup-prompt-title">
+        <div className="container max-w-5xl">
+          <div className="bg-card rounded-xl border p-6 sm:p-8">
+            <h2 id="setup-prompt-title" className="text-xl font-semibold">
+              Set up with your agent
+            </h2>
+            <CopyPrompt text={MCP_SETUP_PROMPT} />
+          </div>
+        </div>
+      </section>
 
       <section className={sectionPadding} aria-labelledby="what-mcp">
         <div className="container max-w-5xl">
@@ -338,63 +334,7 @@ export default function McpPage() {
             title="Set up your app"
             description="Merge the Cloud entry into your client’s config without replacing existing servers. Enter the token locally, not in chat."
           />
-          <Accordion
-            type="single"
-            collapsible
-            defaultValue="Claude Code"
-            className={sectionGap}
-          >
-            {mcpClients.map((client) => (
-              <AccordionItem key={client.name} value={client.name}>
-                <AccordionTrigger className="text-base">
-                  {client.name}
-                </AccordionTrigger>
-                <AccordionContent className="text-base leading-relaxed">
-                  <p className="font-medium">{client.location}</p>
-                  <p className="text-muted-foreground mt-4">
-                    {client.description}
-                  </p>
-                  <Snippet>{client.code}</Snippet>
-                  <a
-                    href={client.source}
-                    className="mt-6 inline-block underline underline-offset-4"
-                  >
-                    Official {client.name} MCP documentation →
-                  </a>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-            <AccordionItem value="other">
-              <AccordionTrigger className="text-base">
-                Claude Desktop, Windsurf, Cline and other apps
-              </AccordionTrigger>
-              <AccordionContent className="text-base leading-relaxed">
-                <p>
-                  MCP support alone is not enough: Cloud and Self-hosted require
-                  Streamable HTTP and a custom Authorization bearer header. A
-                  connector that only supports OAuth or has no custom-header
-                  input cannot connect directly with this token. Do not try an
-                  OAuth login as a substitute. Check your installed client’s
-                  current documentation; choose Local if it supports stdio, or
-                  use Copy as Prompt.
-                </p>
-                <p className="mt-4">
-                  For Claude Desktop, use its documented local-server
-                  configuration for Local mode rather than assuming the remote
-                  Connectors UI accepts bearer headers. Configuration files and
-                  reload steps differ by app.
-                </p>
-                <p className="mt-4">
-                  <Link
-                    href="/blog/mcp-setup"
-                    className="underline underline-offset-4"
-                  >
-                    Detailed setup guide →
-                  </Link>
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+          <McpAppSetup />
           <p className="text-muted-foreground mt-6 text-base">
             Examples checked against first-party documentation on 29 September
             2026. Client versions and organisation policies can change

@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
-export const sectionPadding = "py-16 md:py-24";
+export const sectionPadding = "py-12 md:py-16";
 export const sectionGap = "mt-10";
 
 type SectionHeaderProps = {
-  eyebrow: string;
+  eyebrow: ReactNode;
   title: ReactNode;
   description?: ReactNode;
   id?: string;

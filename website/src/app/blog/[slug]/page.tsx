@@ -1,14 +1,13 @@
 import { notFound } from "next/navigation";
 
 import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
 import {
   JsonLd,
   blogPostingSchema,
   breadcrumbSchema,
 } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
-import { sectionPadding } from "@/components/site/section-header";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { getPost, posts } from "@/content/blog";
 import { blogContextualLinks } from "@/content/contextual-links";
 
@@ -132,26 +131,23 @@ export default async function BlogPostPage({
 
       <Background>
         <section className={sectionPadding}>
-          <div className="container max-w-4xl">
-            <time
-              dateTime={p.datePublished}
-              className="text-muted-foreground text-base font-medium tracking-wide uppercase"
-            >
-              {dateFmt.format(new Date(p.datePublished))}
-            </time>
-            <h1 className="mt-4 text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              {p.title}
-            </h1>
-            <p className="text-muted-foreground mt-4 text-base break-words">
-              {p.excerpt}
-            </p>
+          <div className="container max-w-5xl">
+            <SectionHeader
+              as="h1"
+              eyebrow={
+                <time dateTime={p.datePublished}>
+                  {dateFmt.format(new Date(p.datePublished))}
+                </time>
+              }
+              title={p.title}
+              description={<span className="break-words">{p.excerpt}</span>}
+            />
           </div>
         </section>
       </Background>
 
       <section className={sectionPadding}>
-        <DashedLine className="container max-w-4xl" />
-        <article className="container mt-12 max-w-4xl space-y-10">
+        <article className="container max-w-4xl space-y-10">
           {p.body.map((block, i) => (
             <div key={i}>
               {block.heading && (
@@ -177,38 +173,38 @@ export default async function BlogPostPage({
             </div>
           ))}
         </article>
-
-        <RelatedLinks
-          title="Keep reading"
-          links={[
-            ...(blogContextualLinks[p.slug] ?? []),
-            ...p.related
-              .map((slug) => getPost(slug))
-              .filter((r): r is NonNullable<typeof r> => Boolean(r))
-              .map((r) => ({
-                href: `/blog/${r.slug}`,
-                title: r.title,
-                description: r.excerpt,
-              })),
-            ...(p.slug === "mcp-setup"
-              ? []
-              : [
-                  {
-                    href: "/blog/mcp-setup",
-                    title: "Use the current MCP setup guide",
-                    description:
-                      "Version-stamped Claude Code and Cursor configuration and verification.",
-                  },
-                ]),
-            {
-              href: "/#panel-anatomy",
-              title: "See the editor",
-              description:
-                "Layers, visual controls, Changes and the two hand-off methods.",
-            },
-          ]}
-        />
       </section>
+
+      <RelatedLinks
+        title="Keep reading"
+        links={[
+          ...(blogContextualLinks[p.slug] ?? []),
+          ...p.related
+            .map((slug) => getPost(slug))
+            .filter((r): r is NonNullable<typeof r> => Boolean(r))
+            .map((r) => ({
+              href: `/blog/${r.slug}`,
+              title: r.title,
+              description: r.excerpt,
+            })),
+          ...(p.slug === "mcp-setup"
+            ? []
+            : [
+                {
+                  href: "/blog/mcp-setup",
+                  title: "Use the current MCP setup guide",
+                  description:
+                    "Version-stamped Claude Code and Cursor configuration and verification.",
+                },
+              ]),
+          {
+            href: "/#panel-anatomy",
+            title: "See the editor",
+            description:
+              "Layers, visual controls, Changes and the two hand-off methods.",
+          },
+        ]}
+      />
     </>
   );
 }
