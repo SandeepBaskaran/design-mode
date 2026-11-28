@@ -142,7 +142,9 @@ export default async function BlogPostPage({
             <h1 className="mt-4 text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {p.title}
             </h1>
-            <p className="text-muted-foreground mt-4 text-base">{p.excerpt}</p>
+            <p className="text-muted-foreground mt-4 text-base break-words">
+              {p.excerpt}
+            </p>
           </div>
         </section>
       </Background>
@@ -162,10 +164,12 @@ export default async function BlogPostPage({
               )}
               <div className="text-muted-foreground mt-4 space-y-4 leading-relaxed">
                 {block.paragraphs.map((para, j) => (
-                  <p key={j}>{para}</p>
+                  <p key={j} className="break-words">
+                    {para}
+                  </p>
                 ))}
                 {block.code && (
-                  <pre className="bg-muted text-foreground overflow-x-auto rounded-lg border p-4 text-base leading-relaxed">
+                  <pre className="bg-muted text-foreground max-w-full overflow-x-auto rounded-lg border p-4 text-base leading-relaxed">
                     <code>{block.code}</code>
                   </pre>
                 )}
