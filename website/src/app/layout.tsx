@@ -8,6 +8,7 @@ import { Analytics } from "@/components/site/analytics";
 import { BackToTop } from "@/components/site/back-to-top";
 import { BrowserBanner } from "@/components/site/browser-banner";
 import { JsonLd, personSchema, websiteSchema } from "@/components/site/json-ld";
+import { JustifyLongText } from "@/components/site/justify-long-text";
 import { LinkTracker } from "@/components/site/link-tracker";
 import "@/styles/globals.css";
 
@@ -136,6 +137,7 @@ export default function RootLayout({
         <BackToTop />
         <Analytics />
         <LinkTracker />
+        <JustifyLongText />
       </body>
     </html>
   );

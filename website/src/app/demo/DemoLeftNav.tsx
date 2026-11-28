@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import styles from "./demo.module.scss";
-import { STEPS, type Step } from "./steps";
+import { getStepsForBrowser, type Step } from "./steps";
+
+import { useInstallTarget } from "@/hooks/use-install-target";
 
 // Sticky left nav. Lists every step (with Design sub-anchors nested under
 // their parent). Tracks the most-visible section via IntersectionObserver
 // and highlights the matching link.
 export function DemoLeftNav() {
-  const [activeId, setActiveId] = useState<string>(STEPS[0]?.id ?? "");
+  const target = useInstallTarget();
+  const steps = useMemo(() => getStepsForBrowser(target), [target]);
+  const [activeId, setActiveId] = useState<string>(steps[0]?.id ?? "");
 
   useEffect(() => {
     // Observe each section and pick the one closest to the top of the
     // viewport with the most intersection ratio.
-    const sections = STEPS.map((s) =>
+    const sections = steps.map((s) =>
       document.getElementById(s.id)
     ).filter((el): el is HTMLElement => !!el);
 
@@ -48,7 +52,7 @@ export function DemoLeftNav() {
 
     sections.forEach((s) => observer.observe(s));
     return () => observer.disconnect();
-  }, []);
+  }, [steps]);
 
   function handleClick(e: React.MouseEvent<HTMLAnchorElement>, id: string) {
     e.preventDefault();
@@ -64,13 +68,13 @@ export function DemoLeftNav() {
   }
 
   // Build a flat list of nav entries, but indent children under their parent.
-  const topLevel = STEPS.filter((s) => !s.parentId);
+  const topLevel = steps.filter((s) => !s.parentId);
 
   return (
     <nav className={styles.sideNav} aria-label="Demo sections">
       <ol className={styles.sideNavList}>
         {topLevel.map((step, idx) => {
-          const children = STEPS.filter((s) => s.parentId === step.id);
+          const children = steps.filter((s) => s.parentId === step.id);
           return (
             <li key={step.id} className={styles.sideNavItem}>
               <a

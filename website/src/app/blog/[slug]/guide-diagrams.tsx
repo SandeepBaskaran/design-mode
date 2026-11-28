@@ -94,7 +94,7 @@ export function BrowserParityDiagram() {
   };
 
   return (
-    <div className="my-6 max-w-full overflow-x-auto rounded-xl border">
+    <div className="max-w-full overflow-x-auto rounded-xl border">
       <table className="w-full border-collapse text-left text-base">
         <caption className="sr-only">
           Design Mode browser feature parity across Chromium, Firefox, and Safari
@@ -220,7 +220,7 @@ export function KeyboardShortcutsDiagram() {
   ];
 
   return (
-    <div className="my-6 grid gap-4 md:grid-cols-2" aria-label="Keyboard shortcuts cheat sheet">
+    <div className="grid gap-4 md:grid-cols-2" aria-label="Keyboard shortcuts cheat sheet">
       {groups.map((group) => (
         <div key={group.title} className="bg-card rounded-xl border p-5">
           <h3 className="text-foreground text-xl font-semibold">{group.title}</h3>

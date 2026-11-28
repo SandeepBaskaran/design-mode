@@ -1,3 +1,5 @@
+import type { InstallTarget } from "@/hooks/use-install-target";
+
 // Step data for the /demo page. Each entry produces one section card in the
 // main content + one entry in the left navbar. `parentId` lets a step nest
 // under another in the nav (used for the Design panel sub-anchors).
@@ -12,6 +14,10 @@ export type Step = {
   // Optional follow-on link rendered at the bottom of the step card —
   // used to bridge the demo into the /mcp setup tour.
   nextLink?: { label: string; href: string };
+  browsers?: InstallTarget[]; // limit step to specific browsers when omitted, shown everywhere
+  byBrowser?: Partial<
+    Record<InstallTarget, { body?: string[]; tryIt?: string }>
+  >;
 };
 
 export const STEPS: Step[] = [
@@ -19,24 +25,44 @@ export const STEPS: Step[] = [
     id: "get-started",
     title: "Get started",
     body: [
-      "Design Mode is a Chrome, Firefox, and Safari extension for previewing visual changes on scriptable pages. This practice canvas requires the extension: inspect a card, tweak its padding, review Changes, and use Copy as prompt to hand the spec to a developer or agent.",
-      "Pin the extension and click its icon to open. Chrome opens your chosen launch surface, Firefox 140+ opens its sidebar, and Safari uses Web Inspector (Option–Command–I). Alt+D toggles the panel on Chrome and Firefox; Alt+Shift+S takes a screenshot.",
+      "Design Mode is a Chrome extension for previewing visual changes on scriptable pages. This practice canvas requires the extension: inspect a card, tweak its padding, review Changes, and use Copy as prompt to hand the spec to a developer or agent.",
+      "Pin the extension and click its icon (or press Alt+D) to open your chosen launch surface. Alt+Shift+S takes a screenshot.",
     ],
     tryIt:
-      "Pin Design Mode in your browser toolbar, then click its icon to open the side panel (the sidebar on Firefox).",
+      "Pin Design Mode in your Chrome toolbar, then click its icon or press Alt+D to open the side panel.",
+    byBrowser: {
+      firefox: {
+        body: [
+          "Design Mode is a Firefox add-on (140+) for previewing visual changes on scriptable pages. This practice canvas requires the add-on: inspect a card, tweak its padding, review Changes, and use Copy as prompt to hand the spec to a developer or agent.",
+          "Pin the add-on and click its icon (or press Alt+D) to open the native docked sidebar. Alt+Shift+S takes a screenshot.",
+        ],
+        tryIt:
+          "Pin Design Mode in your Firefox toolbar, then click its icon or press Alt+D to open the sidebar.",
+      },
+      safari: {
+        body: [
+          "Design Mode is a Safari extension for Mac installed from the latest GitHub release. This practice canvas requires the extension: inspect a card, tweak its padding, review Changes, and use Copy as prompt to hand the spec to a developer or agent.",
+          "Enable Design Mode in Safari Settings → Extensions, then open Web Inspector (Option–Command–I) and switch to the Design Mode tab.",
+        ],
+        tryIt:
+          "Open Web Inspector (Option–Command–I) in Safari and select the Design Mode tab.",
+      },
+    },
   },
   {
     id: "panel-modes",
     title: "Three panel modes",
+    browsers: ["chrome"],
     body: [
-      "Chromium supports three one-click panel states (Firefox uses its docked sidebar): Docked in the side panel, Floating in a pop-out window, or Pinned on top via Picture-in-Picture.",
+      "Chromium supports three one-click panel states: Docked in the side panel, Floating in a pop-out window, or Pinned on top via Picture-in-Picture.",
     ],
     tryIt:
-      "On Chromium, click the pop-out icon in the header, then click the PiP icon to pin it on top. Click the PiP icon to unpin, or the side-panel icon to dock back.",
+      "Click the pop-out icon in the header, then click the PiP icon to pin it on top. Click the PiP icon to unpin, or the side-panel icon to dock back.",
   },
   {
     id: "local-files",
     title: "Local HTML files",
+    browsers: ["chrome"],
     body: [
       "Chrome blocks extensions on file:// pages by default. Enable 'Allow access to file URLs' for Design Mode in chrome://extensions before inspecting local HTML files—the panel walks you through it if off.",
     ],
@@ -271,6 +297,18 @@ export const STEPS: Step[] = [
     ],
     tryIt:
       "Open Settings and switch Color format from HEX to RGBA to see Design-tab values update live.",
+    byBrowser: {
+      firefox: {
+        body: [
+          "Click the gear icon to configure Color format (HEX/RGB), Input unit (PX/REM), Nudge amount (Shift+Arrow step), Screenshot capture mode, Page cursor, or Reset settings.",
+        ],
+      },
+      safari: {
+        body: [
+          "Click the gear icon to configure Color format (HEX/RGB), Input unit (PX/REM), Nudge amount (Shift+Arrow step), Screenshot capture mode, Page cursor, or Reset settings.",
+        ],
+      },
+    },
   },
   {
     id: "theme",
@@ -315,3 +353,17 @@ export const STEPS: Step[] = [
     nextLink: { label: "Set up your agent →", href: "/mcp" },
   },
 ];
+
+export function getStepsForBrowser(target: InstallTarget): Step[] {
+  return STEPS.filter(
+    (step) => !step.browsers || step.browsers.includes(target),
+  ).map((step) => {
+    const override = step.byBrowser?.[target];
+    if (!override) return step;
+    return {
+      ...step,
+      body: override.body ?? step.body,
+      tryIt: override.tryIt ?? step.tryIt,
+    };
+  });
+}

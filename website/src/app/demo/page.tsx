@@ -1,9 +1,7 @@
 import styles from "./demo.module.scss";
 import { DemoLeftNav } from "./DemoLeftNav";
-import { DemoStep } from "./DemoStep";
-import { renderDemoTarget } from "./DemoTargets";
+import { DemoStepsList } from "./DemoStepsList";
 import { ExtensionDetected } from "./ExtensionDetected";
-import { STEPS } from "./steps";
 
 import { Background } from "@/components/background";
 import { SectionHeader, sectionPadding } from "@/components/site/section-header";
@@ -88,13 +86,7 @@ export default function DemoPage() {
         <div className={`${styles.demoLayout} container mt-10 max-w-5xl`}>
           <DemoLeftNav />
 
-          <div className={styles.content} aria-label="Demo steps">
-            {STEPS.map((step) => (
-              <DemoStep key={step.id} step={step}>
-                {renderDemoTarget(step.targetId)}
-              </DemoStep>
-            ))}
-          </div>
+          <DemoStepsList />
         </div>
       </section>
     </>

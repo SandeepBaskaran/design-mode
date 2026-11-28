@@ -114,7 +114,7 @@ export default function UseCasesIndex() {
       <section className={sectionPadding}>
         <div className="container max-w-5xl">
           <div
-            className="grid grid-cols-1 overflow-hidden rounded-xl border md:grid-cols-3"
+            className="grid grid-cols-1 overflow-hidden rounded-xl border md:grid-cols-3 md:grid-rows-[auto_1fr]"
             aria-label="Design Mode solutions by role"
           >
             {buckets.map((bucket, bucketIndex) => {
@@ -122,15 +122,20 @@ export default function UseCasesIndex() {
               const items = bucket.slugs
                 .map((slug) => useCaseBySlug.get(slug))
                 .filter((item): item is NonNullable<typeof item> => Boolean(item));
+              const colStart =
+                bucketIndex === 0
+                  ? "md:col-start-1"
+                  : bucketIndex === 1
+                    ? "md:col-start-2"
+                    : "md:col-start-3";
 
               return (
-                <div
-                  key={bucket.title}
-                  className={`flex flex-col ${
-                    bucketIndex < buckets.length - 1 ? "border-b md:border-r md:border-b-0" : ""
-                  }`}
-                >
-                  <div className="bg-muted/40 border-b p-5">
+                <div key={bucket.title} className="md:contents">
+                  <div
+                    className={`bg-muted/40 border-b p-5 md:row-start-1 ${colStart} ${
+                      bucketIndex < buckets.length - 1 ? "md:border-r" : ""
+                    }`}
+                  >
                     <Icon aria-hidden="true" className="text-primary size-6 stroke-[1.5]" />
                     <h2 className="text-foreground mt-3 text-xl font-semibold">
                       {bucket.title}
@@ -139,12 +144,18 @@ export default function UseCasesIndex() {
                       {bucket.example}
                     </p>
                   </div>
-                  <div className="divide-y">
+                  <div
+                    className={`flex flex-col gap-5 p-5 md:row-start-2 ${colStart} ${
+                      bucketIndex < buckets.length - 1
+                        ? "border-b md:border-r md:border-b-0"
+                        : ""
+                    }`}
+                  >
                     {items.map((item) => (
                       <div
                         key={item.slug}
                         id={item.slug}
-                        className="scroll-mt-24 p-5"
+                        className="scroll-mt-24"
                       >
                         <h3 className="text-foreground text-base font-semibold">
                           {item.title}
