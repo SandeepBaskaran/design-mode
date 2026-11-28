@@ -3,7 +3,6 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
 import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
 import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { releases } from "@/content/changelog";
 
@@ -65,32 +64,33 @@ export default function ChangelogPage() {
     <>
       <Background>
         <section className={sectionPadding}>
-          <div className="container max-w-3xl">
+          <div className="container max-w-5xl">
             <SectionHeader
               as="h1"
               eyebrow="Releases"
               title="Changelog"
-              description="Release highlights in plain language, with the date each version shipped. Not every internal change."
+              description={
+                <>
+                  Release highlights in plain language, with the date each
+                  version shipped.{" "}
+                  <a
+                    href={REPO_CHANGELOG}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-foreground/80 inline-flex items-center gap-1 font-medium underline underline-offset-4"
+                  >
+                    Full CHANGELOG on GitHub
+                    <ArrowUpRight className="size-3.5" />
+                  </a>
+                </>
+              }
             />
-            <p className="text-muted-foreground mt-3 text-base">
-              Want the technical detail?{" "}
-              <a
-                href={REPO_CHANGELOG}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-foreground/80 inline-flex items-center gap-1 font-medium underline underline-offset-4"
-              >
-                Full CHANGELOG on GitHub
-                <ArrowUpRight className="size-3.5" />
-              </a>
-            </p>
           </div>
         </section>
       </Background>
 
       <section className={sectionPadding}>
-        <DashedLine className="container max-w-3xl" />
-        <div className="container mt-12 max-w-3xl">
+        <div className="container max-w-3xl">
           <ol className="flex flex-col gap-16">
             {releases.map((r) => (
               <li key={r.version} id={`v${r.version}`} className="scroll-mt-24">

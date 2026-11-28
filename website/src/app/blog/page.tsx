@@ -1,5 +1,4 @@
 import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { LinkCard } from "@/components/site/related-links";
 import { SectionHeader, sectionPadding } from "@/components/site/section-header";
@@ -79,7 +78,7 @@ export default function BlogIndex() {
             <SectionHeader
               as="h1"
               eyebrow="Blog"
-              title="Blog"
+              title="Notes and setup guides"
               description="Build notes, setup guides, and release write-ups. The install and MCP guides live here."
             />
           </div>
@@ -87,8 +86,7 @@ export default function BlogIndex() {
       </Background>
 
       <section className={sectionPadding}>
-        <DashedLine className="container max-w-5xl" />
-        <div className="container mt-12 grid max-w-5xl gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="container grid max-w-5xl gap-4 md:grid-cols-2 lg:grid-cols-3">
           {sorted.map((p) => (
             <LinkCard
               key={p.slug}

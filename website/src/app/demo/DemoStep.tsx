@@ -1,5 +1,10 @@
 import Link from "next/link";
 
+import {
+  InspectorFlowDiagram,
+  McpModesPreviewDiagram,
+  PanelModesDiagram,
+} from "./demo-diagrams";
 import styles from "./demo.module.scss";
 import type { Step } from "./steps";
 
@@ -24,6 +29,9 @@ export function DemoStep({ step, children }: Props) {
           <p key={i}>{p}</p>
         ))}
       </div>
+      {step.id === "panel-modes" && <PanelModesDiagram />}
+      {step.id === "inspector" && <InspectorFlowDiagram />}
+      {step.id === "mcp" && <McpModesPreviewDiagram />}
       {step.tryIt && (
         <div className={styles.tryIt} role="note">
           <span className={styles.tryItLabel}>Try it</span>

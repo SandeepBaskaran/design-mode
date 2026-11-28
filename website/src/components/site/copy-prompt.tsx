@@ -5,8 +5,17 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-export function CopyPrompt({ text }: { text: string }) {
+export function CopyPrompt({
+  text,
+  className,
+  hideIdleNote = false,
+}: {
+  text: string;
+  className?: string;
+  hideIdleNote?: boolean;
+}) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
   const [pending, setPending] = useState(false);
 
@@ -23,7 +32,7 @@ export function CopyPrompt({ text }: { text: string }) {
   }
 
   return (
-    <div className="mt-6 flex flex-wrap items-center gap-4">
+    <div className={cn("mt-6 flex flex-wrap items-center gap-4", className)}>
       <Button
         onClick={copy}
         disabled={pending}
@@ -43,7 +52,10 @@ export function CopyPrompt({ text }: { text: string }) {
       <p
         id="copy-prompt-status"
         role="status"
-        className="text-muted-foreground text-base"
+        className={cn(
+          "text-muted-foreground text-base",
+          hideIdleNote && status !== "error" && "sr-only",
+        )}
       >
         {status === "error"
           ? "Could not copy. Select the prompt above and copy it manually."

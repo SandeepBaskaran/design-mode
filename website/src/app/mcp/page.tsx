@@ -1,26 +1,31 @@
 import Link from "next/link";
 
 import {
+  ArrowRight,
   Camera,
   CheckCircle2,
-  Cloud,
+  Clock,
   Eraser,
   FileDown,
   GitCompareArrows,
   ListChecks,
   ListTree,
-  Monitor,
-  Server,
-  Send,
-  Wand2,
   MessageSquare,
-  Clock,
+  Terminal,
+  Wand2,
 } from "lucide-react";
+
+import { McpAppSetup } from "./mcp-app-setup";
+import { McpConnectionModes } from "./mcp-connection-modes";
 
 import { Background } from "@/components/background";
 import { ModesComparison } from "@/components/blocks/modes-comparison";
 import { CopyPrompt } from "@/components/site/copy-prompt";
-import { SectionHeader, sectionPadding } from "@/components/site/section-header";
+import {
+  SectionHeader,
+  sectionGap,
+  sectionPadding,
+} from "@/components/site/section-header";
 import {
   Accordion,
   AccordionContent,
@@ -29,11 +34,7 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  DESIGN_MODE_SKILL,
-  MCP_SETUP_PROMPT,
-  mcpClients,
-} from "@/lib/mcp-guide";
+import { DESIGN_MODE_SKILL, MCP_SETUP_PROMPT } from "@/lib/mcp-guide";
 
 const title = "Connect your AI app with MCP | Design Mode";
 const description =
@@ -127,15 +128,52 @@ const tools = [
     description:
       "Clear the tracked session and revert its live-page edits. Ask before using it.",
   },
+] as const;
+
+const toolGroups = [
+  {
+    id: "read",
+    title: "Read · 4 tools",
+    summary: "Inspect session counts, recorded edits, screenshots, and code exports.",
+    items: tools.filter((tool) => tool.access === "Read"),
+  },
+  {
+    id: "write",
+    title: "Write & Destructive · 4 tools",
+    summary:
+      "Preview browser CSS, update item/comment status, or clear the tracked session.",
+    items: tools.filter(
+      (tool) => tool.access === "Write" || tool.access === "Destructive",
+    ),
+  },
 ];
 
-function Snippet({ children }: { children: string }) {
-  return (
-    <pre className="bg-ink text-ink-foreground mt-6 max-w-full overflow-x-auto rounded-xl p-4 font-mono text-base leading-relaxed">
-      <code>{children}</code>
-    </pre>
-  );
-}
+const readSteps = [
+  {
+    step: "1. Start small",
+    call: "get_session_summary({})",
+    detail:
+      "Check active sessions, item counts, and the hand-off marker before pulling a full report.",
+  },
+  {
+    step: "2. Fetch once, filter locally",
+    call: "get_changes({})",
+    detail:
+      "Call with no arguments and filter unresolved items locally. No server-side pagination, status, or max_chars flags exist.",
+  },
+  {
+    step: "3. Zoom in only when needed",
+    call: 'get_screenshot({ "commentId": "<id>" })',
+    detail:
+      "Crop to one selector, elementId, or commentId, or call export_changes({ \"format\": \"css\" }) if a code snippet helps.",
+  },
+  {
+    step: "4. Keep writes explicit",
+    call: 'set_change_status({ "ids": ["<id>"] })',
+    detail:
+      "Update only selected IDs after verifying source edits. Omitting ids targets every tracked item.",
+  },
+];
 
 export default function McpPage() {
   return (
@@ -150,13 +188,34 @@ export default function McpPage() {
               title="In your agent’s hands"
               description="Copy a prompt, or connect Cloud, Local or Self-hosted MCP. The extension does not grant repository access."
             />
-            <div className="bg-background/90 mt-10 rounded-xl border p-6 sm:p-8">
-              <h2 className="text-xl font-semibold">Set up with your agent</h2>
-              <CopyPrompt text={MCP_SETUP_PROMPT} />
-            </div>
           </div>
         </section>
       </Background>
+
+      <section className={sectionPadding} aria-labelledby="setup-prompt-title">
+        <div className="container max-w-5xl">
+          <div className="bg-card flex flex-col gap-6 rounded-xl border p-6 sm:p-8 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
+                <Terminal aria-hidden="true" className="size-5" />
+              </div>
+              <div>
+                <h2 id="setup-prompt-title" className="text-xl font-semibold">
+                  Set up with your agent
+                </h2>
+                <p className="text-muted-foreground mt-1 max-w-xl text-base leading-relaxed">
+                  Paste this prompt into Claude Code, Cursor, or VS Code to walk through Cloud, Local, or Self-hosted setup. No token or personal data in this prompt.
+                </p>
+              </div>
+            </div>
+            <CopyPrompt
+              text={MCP_SETUP_PROMPT}
+              className="mt-0 shrink-0 lg:self-end"
+              hideIdleNote
+            />
+          </div>
+        </div>
+      </section>
 
       <section className={sectionPadding} aria-labelledby="what-mcp">
         <div className="container max-w-5xl">
@@ -164,21 +223,9 @@ export default function McpPage() {
             eyebrow="MCP"
             id="what-mcp"
             title="What MCP can do"
-            description="A connected agent can read the recorded edits, inspect screenshots and update their status."
+            description="A connected agent reads recorded edits, inspects screenshots, and updates item status—while repository access stays in your app."
           />
-          <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
-            A connected agent can read the recorded edits, inspect screenshots
-            and update their status. It still needs its own access to your
-            repository. Review the{" "}
-            <Link
-              href="/blog/changes-tab"
-              className="underline underline-offset-4"
-            >
-              Changes tab
-            </Link>{" "}
-            before you send anything.
-          </p>
-          <div className="mt-12 grid gap-8 rounded-xl border p-6 md:grid-cols-2 md:p-8">
+          <div className={`grid gap-8 rounded-xl border p-6 md:grid-cols-2 md:p-8 ${sectionGap}`}>
             <div>
               <MessageSquare
                 aria-hidden="true"
@@ -187,12 +234,23 @@ export default function McpPage() {
               <h3 className="mt-6 text-2xl font-semibold">
                 Ask your agent what’s left
               </h3>
-              <p className="text-muted-foreground mt-4 leading-relaxed">
-                When connected, your agent can fetch the latest changes when you
-                ask. It reads updates when it makes a request or an explicitly
-                enabled polling call—not through always-on background
-                monitoring. Reading the list does not automatically edit your
-                source.
+              <p className="text-muted-foreground mt-4 text-base leading-relaxed">
+                Your agent fetches the latest changes when you ask or via an
+                explicitly enabled polling call—never through always-on
+                background monitoring. Reading the list does not edit your
+                source files automatically.
+              </p>
+              <p className="text-muted-foreground mt-4 text-base leading-relaxed">
+                Review the{" "}
+                <Link
+                  href="/blog/changes-tab"
+                  className="underline underline-offset-4"
+                >
+                  Changes tab
+                </Link>{" "}
+                before sending anything. No MCP support? Use{" "}
+                <strong className="text-foreground">Copy as Prompt</strong> for
+                a one-time Markdown snapshot.
               </p>
             </div>
             <div
@@ -235,16 +293,14 @@ export default function McpPage() {
               </div>
             </div>
           </div>
-          <p className="text-muted-foreground mt-8">
-            No MCP support? Use{" "}
-            <strong className="text-foreground">Copy as Prompt</strong> in the
-            Changes tab and paste the Markdown into your app. It is a snapshot,
-            not a live connection.
-          </p>
         </div>
       </section>
 
-      <section id="connect" className={sectionPadding} aria-labelledby="connect-title">
+      <section
+        id="connect"
+        className={sectionPadding}
+        aria-labelledby="connect-title"
+      >
         <div className="container max-w-5xl">
           <SectionHeader
             eyebrow="Connection"
@@ -252,122 +308,33 @@ export default function McpPage() {
             title="How to connect"
             description="Cloud is the default. Local stays on your machine. Self-hosted runs the relay yourself."
           />
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            <Card>
-              <CardContent className="space-y-4 p-6">
-                <Cloud aria-hidden="true" className="size-6" />
-                <h3 className="text-2xl font-semibold">
-                  Cloud{" "}
-                  <span className="text-muted-foreground text-base font-normal">
-                    Default
-                  </span>
-                </h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  No companion process to run. Open the extension’s MCP page
-                  from its header chip, keep Cloud selected and create an
-                  anonymous credential.
-                </p>
-                <p className="text-muted-foreground leading-relaxed">
-                  Pair the agent using the same bearer token. No Design Mode
-                  account or subscription verification; this is not an OAuth
-                  sign-in flow.
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="space-y-4 p-6">
-                <Monitor aria-hidden="true" className="size-6" />
-                <h3 className="text-2xl font-semibold">Local</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Your MCP client starts the companion over stdio. It talks to
-                  the extension on localhost, with no Design Mode relay traffic.
-                </p>
-                <p className="text-muted-foreground leading-relaxed">
-                  Requires a local repository checkout and Node.js. Select Local
-                  in the extension; the default bridge port is 9960.
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="space-y-4 p-6">
-                <Server aria-hidden="true" className="size-6" />
-                <h3 className="text-2xl font-semibold">Self-hosted</h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Run the Node.js + Redis relay on infrastructure you operate.
-                  Configure its base URL in the extension and use that
-                  deployment’s /mcp endpoint in your agent.
-                </p>
-                <p className="text-muted-foreground leading-relaxed">
-                  Use a credential registered with that relay—not a hosted Cloud
-                  token.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-          <p className="mt-8 font-medium">Cloud endpoint · Streamable HTTP</p>
-          <Snippet>{"https://mcp.designmode.app/mcp"}</Snippet>
-          <p className="text-muted-foreground mt-4">
-            Use the apex host and the /mcp path. The extension’s event-stream
-            URL is not the agent endpoint. Keep bearer tokens out of chat,
-            screenshots, shell history and committed configuration.
+          <McpConnectionModes />
+        </div>
+      </section>
+
+      <section className={sectionPadding} aria-labelledby="modes-title">
+        <div className="container max-w-5xl">
+          <SectionHeader
+            eyebrow="Modes"
+            id="modes-title"
+            title="Mode comparison"
+            description="Setup, transport and cost for Cloud, Local and Self-hosted. Local MCP stays on localhost."
+          />
+          <p className="text-muted-foreground mx-auto mt-6 max-w-3xl text-center text-base leading-relaxed">
+            Local keeps this MCP transport on localhost; it is not a no-egress
+            guarantee for the coding client or other enabled features. See the{" "}
+            <Link href="/privacy" className="underline underline-offset-4">
+              privacy disclosure
+            </Link>{" "}
+            for separate data flows.
           </p>
-          <Accordion type="single" collapsible className="mt-8">
-            <AccordionItem value="local">
+          <Accordion type="single" collapsible className={sectionGap}>
+            <AccordionItem value="matrix">
               <AccordionTrigger className="text-base">
-                Local setup from source
+                Compare Cloud, Local, and Self-hosted specs (11 details)
               </AccordionTrigger>
-              <AccordionContent className="text-base leading-relaxed">
-                <p>
-                  Review and clone the{" "}
-                  <a
-                    href="https://github.com/SandeepBaskaran/design-mode"
-                    className="underline underline-offset-4"
-                  >
-                    source repository
-                  </a>
-                  , then run npm ci at its root to install locked dependencies.
-                  Configure your client to launch the following command, using
-                  your absolute checkout path:
-                </p>
-                <Snippet>
-                  {
-                    "npm start --prefix /absolute/path/to/design-mode/packages/mcp-local"
-                  }
-                </Snippet>
-                <p className="mt-4">
-                  For a stdio JSON entry, use command <code>npm</code> and args{" "}
-                  <code>
-                    [&quot;start&quot;, &quot;--prefix&quot;,
-                    &quot;/absolute/path/to/design-mode/packages/mcp-local&quot;]
-                  </code>
-                  . The client owns this process. The published agent CLI is{" "}
-                  <code>@designmode-app/cli</code> (<code>designmode-app</code>
-                  ). It does not start this bridge and it does not send
-                  analytics. If another app owns port 9960, set DM_PORT in the
-                  companion’s environment and match the extension’s Local port;
-                  never kill a foreign process.
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="self">
-              <AccordionTrigger className="text-base">
-                Self-hosted setup
-              </AccordionTrigger>
-              <AccordionContent className="text-base leading-relaxed">
-                <p>
-                  Deploy packages/mcp-cloud with Redis using its{" "}
-                  <a
-                    href="https://github.com/SandeepBaskaran/design-mode/tree/main/packages/mcp-cloud"
-                    className="underline underline-offset-4"
-                  >
-                    deployment guide
-                  </a>
-                  . Keep TLS and bearer authentication enabled. Set the
-                  extension’s relay base URL, register an anonymous credential
-                  there, then replace only the URL in your client example with{" "}
-                  <code>https://your-relay.example/mcp</code> and provide that
-                  relay’s token locally.
-                </p>
+              <AccordionContent className="pt-4">
+                <ModesComparison />
               </AccordionContent>
             </AccordionItem>
           </Accordion>
@@ -377,92 +344,12 @@ export default function McpPage() {
       <section className={sectionPadding} aria-labelledby="apps-title">
         <div className="container max-w-5xl">
           <SectionHeader
-            eyebrow="Modes"
-            title="Mode comparison"
-            description="Setup, transport and cost for Cloud, Local and Self-hosted. Local MCP stays on localhost."
-          />
-          <p className="text-muted-foreground mt-2 max-w-2xl">
-            Setup, MCP transport, client requirements and cost across the three
-            modes. Local keeps this MCP transport on localhost; it is not a
-            no-egress guarantee for the coding client or other enabled features.
-            See the{" "}
-            <Link href="/privacy" className="underline underline-offset-4">
-              privacy disclosure
-            </Link>{" "}
-            for the separate data flows.
-          </p>
-        </div>
-        <ModesComparison />
-        <div className="container max-w-5xl">
-          <SectionHeader
             eyebrow="Clients"
             id="apps-title"
             title="Set up your app"
-            description="Merge the Cloud example into the client’s own config. Enter the token locally, not in chat."
+            description="Merge the Cloud entry into your client’s config without replacing existing servers. Enter the token locally, not in chat."
           />
-          <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
-            These Cloud examples use the client’s own configuration format.
-            Merge the entry—do not replace other servers. Enter your token
-            locally using a protected input or a securely supplied environment
-            variable.
-          </p>
-          <Accordion
-            type="single"
-            collapsible
-            defaultValue="Claude Code"
-            className="mt-8"
-          >
-            {mcpClients.map((client) => (
-              <AccordionItem key={client.name} value={client.name}>
-                <AccordionTrigger className="text-base">
-                  {client.name}
-                </AccordionTrigger>
-                <AccordionContent className="text-base leading-relaxed">
-                  <p className="font-medium">{client.location}</p>
-                  <p className="text-muted-foreground mt-4">
-                    {client.description}
-                  </p>
-                  <Snippet>{client.code}</Snippet>
-                  <a
-                    href={client.source}
-                    className="mt-6 inline-block underline underline-offset-4"
-                  >
-                    Official {client.name} MCP documentation →
-                  </a>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-            <AccordionItem value="other">
-              <AccordionTrigger className="text-base">
-                Claude Desktop, Windsurf, Cline and other apps
-              </AccordionTrigger>
-              <AccordionContent className="text-base leading-relaxed">
-                <p>
-                  MCP support alone is not enough: Cloud and Self-hosted require
-                  Streamable HTTP and a custom Authorization bearer header. A
-                  connector that only supports OAuth or has no custom-header
-                  input cannot connect directly with this token. Do not try an
-                  OAuth login as a substitute. Check your installed client’s
-                  current documentation; choose Local if it supports stdio, or
-                  use Copy as Prompt.
-                </p>
-                <p className="mt-4">
-                  For Claude Desktop, use its documented local-server
-                  configuration for Local mode rather than assuming the remote
-                  Connectors UI accepts bearer headers. Configuration files and
-                  reload steps differ by app.
-                </p>
-                <p className="mt-4">
-                  <Link
-                    href="/blog/mcp-setup"
-                    className="underline underline-offset-4"
-                  >
-                    Detailed setup guide →
-                  </Link>
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+          <McpAppSetup />
           <p className="text-muted-foreground mt-6 text-base">
             Examples checked against first-party documentation on 29 September
             2026. Client versions and organisation policies can change
@@ -485,56 +372,121 @@ export default function McpPage() {
         </div>
       </section>
 
+      <section className={sectionPadding} aria-labelledby="reads-title">
+        <div className="container max-w-5xl">
+          <SectionHeader
+            eyebrow="Reads"
+            id="reads-title"
+            title="Read, then act"
+            description="Start with the session summary, fetch changes once, and update only the IDs you mean to change."
+          />
+          <ol className={`grid gap-4 md:grid-cols-2 ${sectionGap}`}>
+            {readSteps.map((item, index) => (
+              <li
+                key={item.step}
+                className="bg-card flex min-w-0 flex-col justify-between rounded-xl border p-6"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xl font-semibold">{item.step}</h3>
+                    {index < readSteps.length - 1 && (
+                      <ArrowRight
+                        aria-hidden="true"
+                        className="text-muted-foreground hidden size-4 shrink-0 md:block"
+                      />
+                    )}
+                  </div>
+                  <p className="text-muted-foreground mt-3 text-base leading-relaxed">
+                    {item.detail}
+                  </p>
+                </div>
+                <pre className="bg-ink text-ink-foreground mt-4 max-w-full overflow-x-auto rounded-lg px-3 py-2.5 font-mono text-base">
+                  <code>{item.call}</code>
+                </pre>
+              </li>
+            ))}
+          </ol>
+          <p className="text-muted-foreground mt-6 text-base leading-relaxed">
+            For opt-in Local live rounds, start <code>wait_for_handoff</code>{" "}
+            with the exact <code>pageUrl</code> and{" "}
+            <code>timeoutMs ≤ 20000</code>. Continue only with the returned{" "}
+            <code>sessionId</code> and <code>after</code> cursor—never fabricate
+            a session ID or treat later edits as part of an earlier snapshot.
+          </p>
+        </div>
+      </section>
+
       <section className={sectionPadding} aria-labelledby="tools-title">
         <div className="container max-w-5xl">
           <SectionHeader
             eyebrow="Tools"
             id="tools-title"
             title="Agent tools"
-            description="Cloud, Local and Self-hosted expose these eight session tools. Read the schema before a new kind of call."
+            description="Cloud, Local and Self-hosted share these eight session tools. Read the discovered schema before each new kind of call."
           />
-          <p className="text-muted-foreground mt-6 max-w-3xl text-base">
-            Cloud, Local and Self-hosted expose these eight session tools. Read
-            the discovered schema before each new kind of call.
-          </p>
-          <div className="mt-10 grid gap-4 md:grid-cols-2">
-            {tools.map((tool) => {
-              const Icon = tool.icon;
-              return (
-                <Card key={tool.name}>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3">
-                      <Icon aria-hidden="true" className="size-5 shrink-0" />
-                      <h3 className="min-w-0 font-mono text-base font-semibold break-words">
-                        {tool.name}
-                      </h3>
-                    </div>
-                    <p className="text-muted-foreground mt-3 text-base">
-                      {tool.access} · All modes
-                    </p>
-                    <p className="text-muted-foreground mt-3 leading-relaxed">
-                      {tool.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-          <Card className="mt-4">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <Clock aria-hidden="true" className="size-5" />
-                <h3 className="font-mono text-base font-semibold">
-                  wait_for_handoff
-                </h3>
+          <div className={`space-y-8 ${sectionGap}`}>
+            {toolGroups.map((group) => (
+              <div key={group.id}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-3">
+                  <h3 className="text-xl font-semibold">{group.title}</h3>
+                  <p className="text-muted-foreground text-base">
+                    {group.summary}
+                  </p>
+                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  {group.items.map((tool) => {
+                    const Icon = tool.icon;
+                    return (
+                      <Card key={tool.name}>
+                        <CardContent className="p-6">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <Icon
+                                aria-hidden="true"
+                                className="size-5 shrink-0"
+                              />
+                              <h4 className="min-w-0 font-mono text-base font-semibold break-words">
+                                {tool.name}
+                              </h4>
+                            </div>
+                            <span
+                              className={
+                                tool.access === "Destructive"
+                                  ? "text-destructive rounded-md border px-2 py-0.5 text-base font-medium"
+                                  : "text-muted-foreground rounded-md border px-2 py-0.5 text-base"
+                              }
+                            >
+                              {tool.access}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground mt-3 text-base leading-relaxed">
+                            {tool.description}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
-              <p className="text-muted-foreground mt-3 text-base">
-                Opt-in session control · Local only
-              </p>
-              <p className="text-muted-foreground mt-3 leading-relaxed">
+            ))}
+          </div>
+          <Card className="mt-6">
+            <CardContent className="p-6">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Clock aria-hidden="true" className="size-5 shrink-0" />
+                  <h3 className="font-mono text-base font-semibold">
+                    wait_for_handoff
+                  </h3>
+                </div>
+                <span className="text-muted-foreground rounded-md border px-2 py-0.5 text-base">
+                  Local only · Opt-in
+                </span>
+              </div>
+              <p className="text-muted-foreground mt-3 text-base leading-relaxed">
                 Wait up to 20 seconds for an explicit Send to Agent. Each
                 feedback response contains an immutable snapshot. Only repeat
-                calls after the user chooses live rounds; stop on stopped, busy
+                calls after the user chooses live rounds; stop on stopped, busy,
                 or an error. Cloud and Self-hosted use one-shot reads.
               </p>
             </CardContent>
@@ -542,74 +494,16 @@ export default function McpPage() {
         </div>
       </section>
 
-      <section className={sectionPadding} aria-labelledby="reads-title">
-        <div className="container max-w-5xl">
-          <SectionHeader
-            eyebrow="Reads"
-            id="reads-title"
-            title="Read, then act"
-            description="Start with the session summary, then fetch changes once and update only the ids you mean to change."
-          />
-          <ol className="text-muted-foreground mt-8 max-w-3xl list-decimal space-y-6 pl-5 text-base leading-relaxed">
-            <li>
-              <strong className="text-foreground">Start small.</strong> Get the
-              session summary before fetching a full change report.
-            </li>
-            <li>
-              <strong className="text-foreground">
-                Fetch once, select locally.
-              </strong>{" "}
-              Call get_changes with no arguments and work from its unresolved
-              items. It has no server-side pagination, status filter or
-              max_chars parameter—do not invent them.
-            </li>
-            <li>
-              <strong className="text-foreground">
-                Zoom in only when needed.
-              </strong>{" "}
-              Request a screenshot with one returned selector or elementId, or a
-              commentId for a pinned region. Export one supported format if
-              useful.
-            </li>
-            <li>
-              <strong className="text-foreground">Keep writes explicit.</strong>{" "}
-              Update only selected item IDs after implementing and verifying
-              source changes. Omitting ids from set_change_status targets
-              everything.
-            </li>
-          </ol>
-          <Snippet>
-            {
-              'get_session_summary({})\nget_changes({})\nget_screenshot({ "commentId": "<id from get_changes>" })\nexport_changes({ "format": "css" })'
-            }
-          </Snippet>
-          <p className="text-muted-foreground mt-6">
-            For opt-in Local live rounds, start wait_for_handoff with the exact
-            pageUrl and timeoutMs ≤ 20000. Continue only with the returned
-            sessionId and after cursor. Never fabricate a session ID or treat
-            later edits as part of an earlier snapshot.
-          </p>
-        </div>
-      </section>
-
       <Background variant="bottom">
         <section className={sectionPadding} aria-labelledby="skill-title">
           <div className="container max-w-5xl">
-            <Send aria-hidden="true" className="size-8" />
             <SectionHeader
               eyebrow="Skill"
               id="skill-title"
               title="The workflow"
-              description="The agent skill covers setup and a scoped design-to-code workflow. Reading it does not connect MCP."
+              description="The agent skill covers setup, safe connection checks, and a scoped design-to-code workflow. Reading it does not connect MCP or grant tool permissions."
             />
-            <p className="text-muted-foreground mt-6 max-w-3xl text-base leading-relaxed">
-              The Design Mode agent skill covers setup, safe connection checks
-              and a scoped design-to-code workflow. Download the Markdown and
-              follow your app’s skill-install instructions, or ask a capable
-              agent to read it. Reading a skill does not install an MCP
-              connection or grant tool permissions.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-4">
+            <div className="mt-10 flex flex-wrap justify-center gap-4">
               <Button asChild>
                 <a href={DESIGN_MODE_SKILL} download="SKILL.md">
                   <FileDown aria-hidden="true" className="size-4" />
@@ -620,7 +514,7 @@ export default function McpPage() {
                 <a href={DESIGN_MODE_SKILL}>Read SKILL.md</a>
               </Button>
             </div>
-            <p className="text-muted-foreground mt-6">
+            <p className="text-muted-foreground mt-6 text-center text-base">
               Discoverable through the{" "}
               <a
                 href="/.well-known/agent-skills/index.json"
@@ -641,7 +535,7 @@ export default function McpPage() {
               </a>{" "}
               remains available separately.
             </p>
-            <p className="text-muted-foreground mt-8 text-base">
+            <p className="text-muted-foreground mt-6 text-center text-base">
               Local keeps Design Mode MCP traffic on your machine. Cloud and
               Self-hosted relay page data; queue expiry is best-effort.{" "}
               <Link href="/privacy" className="underline underline-offset-4">

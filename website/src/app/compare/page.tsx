@@ -5,7 +5,6 @@ import { ArrowRight } from "lucide-react";
 import { iconFor } from "./icons";
 
 import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { comparisons, isComparisonIndexable } from "@/content/comparisons";
@@ -76,8 +75,7 @@ export default function ComparisonsIndex() {
       </Background>
 
       <section className={sectionPadding}>
-        <DashedLine className="container max-w-5xl" />
-        <div className="container mt-12 flex max-w-5xl flex-col gap-3">
+        <div className="container flex max-w-5xl flex-col gap-3">
           {comparisons.map((comparison) => {
             const icon = iconFor(comparison.slug);
             return (

@@ -1,14 +1,18 @@
 import { notFound } from "next/navigation";
 
+import {
+  BrowserParityDiagram,
+  KeyboardShortcutsDiagram,
+} from "./guide-diagrams";
+
 import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
 import {
   JsonLd,
   blogPostingSchema,
   breadcrumbSchema,
 } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
-import { sectionPadding } from "@/components/site/section-header";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { getPost, posts } from "@/content/blog";
 import { blogContextualLinks } from "@/content/contextual-links";
 
@@ -132,24 +136,25 @@ export default async function BlogPostPage({
 
       <Background>
         <section className={sectionPadding}>
-          <div className="container max-w-4xl">
-            <time
-              dateTime={p.datePublished}
-              className="text-muted-foreground text-base font-medium tracking-wide uppercase"
-            >
-              {dateFmt.format(new Date(p.datePublished))}
-            </time>
-            <h1 className="mt-4 text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              {p.title}
-            </h1>
-            <p className="text-muted-foreground mt-4 text-base">{p.excerpt}</p>
+          <div className="container max-w-5xl">
+            <SectionHeader
+              as="h1"
+              eyebrow={
+                <time dateTime={p.datePublished}>
+                  {dateFmt.format(new Date(p.datePublished))}
+                </time>
+              }
+              title={p.title}
+              description={<span className="break-words">{p.excerpt}</span>}
+            />
           </div>
         </section>
       </Background>
 
       <section className={sectionPadding}>
-        <DashedLine className="container max-w-4xl" />
-        <article className="container mt-12 max-w-4xl space-y-10">
+        <article className="container max-w-4xl space-y-10">
+          {p.slug === "browser-support" && <BrowserParityDiagram />}
+          {p.slug === "keyboard-shortcuts" && <KeyboardShortcutsDiagram />}
           {p.body.map((block, i) => (
             <div key={i}>
               {block.heading && (
@@ -162,10 +167,12 @@ export default async function BlogPostPage({
               )}
               <div className="text-muted-foreground mt-4 space-y-4 leading-relaxed">
                 {block.paragraphs.map((para, j) => (
-                  <p key={j}>{para}</p>
+                  <p key={j} className="break-words">
+                    {para}
+                  </p>
                 ))}
                 {block.code && (
-                  <pre className="bg-muted text-foreground overflow-x-auto rounded-lg border p-4 text-base leading-relaxed">
+                  <pre className="bg-muted text-foreground max-w-full overflow-x-auto rounded-lg border p-4 text-base leading-relaxed">
                     <code>{block.code}</code>
                   </pre>
                 )}
@@ -173,38 +180,38 @@ export default async function BlogPostPage({
             </div>
           ))}
         </article>
-
-        <RelatedLinks
-          title="Keep reading"
-          links={[
-            ...(blogContextualLinks[p.slug] ?? []),
-            ...p.related
-              .map((slug) => getPost(slug))
-              .filter((r): r is NonNullable<typeof r> => Boolean(r))
-              .map((r) => ({
-                href: `/blog/${r.slug}`,
-                title: r.title,
-                description: r.excerpt,
-              })),
-            ...(p.slug === "mcp-setup"
-              ? []
-              : [
-                  {
-                    href: "/blog/mcp-setup",
-                    title: "Use the current MCP setup guide",
-                    description:
-                      "Version-stamped Claude Code and Cursor configuration and verification.",
-                  },
-                ]),
-            {
-              href: "/#panel-anatomy",
-              title: "See the editor",
-              description:
-                "Layers, visual controls, Changes and the two hand-off methods.",
-            },
-          ]}
-        />
       </section>
+
+      <RelatedLinks
+        title="Keep reading"
+        links={[
+          ...(blogContextualLinks[p.slug] ?? []),
+          ...p.related
+            .map((slug) => getPost(slug))
+            .filter((r): r is NonNullable<typeof r> => Boolean(r))
+            .map((r) => ({
+              href: `/blog/${r.slug}`,
+              title: r.title,
+              description: r.excerpt,
+            })),
+          ...(p.slug === "mcp-setup"
+            ? []
+            : [
+                {
+                  href: "/blog/mcp-setup",
+                  title: "Use the current MCP setup guide",
+                  description:
+                    "Version-stamped Claude Code and Cursor configuration and verification.",
+                },
+              ]),
+          {
+            href: "/#panel-anatomy",
+            title: "See the editor",
+            description:
+              "Layers, visual controls, Changes and the two hand-off methods.",
+          },
+        ]}
+      />
     </>
   );
 }

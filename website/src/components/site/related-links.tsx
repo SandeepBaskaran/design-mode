@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { ArrowUpRight } from "lucide-react";
 
-import { DashedLine } from "@/components/dashed-line";
+import { sectionGap, sectionPadding } from "@/components/site/section-header";
 
 export type RelatedLink = {
   href: string;
@@ -55,15 +55,16 @@ export function RelatedLinks({
 }) {
   if (!links.length) return null;
   return (
-    <section className="container mt-20 max-w-5xl">
-      <DashedLine />
-      <h2 className="mt-12 text-2xl font-semibold tracking-tight md:text-3xl">
-        {title}
-      </h2>
-      <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {links.map((link) => (
-          <LinkCard key={link.href} {...link} />
-        ))}
+    <section className={sectionPadding}>
+      <div className="container max-w-5xl">
+        <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
+          {title}
+        </h2>
+        <div className={`grid gap-4 md:grid-cols-2 lg:grid-cols-3 ${sectionGap}`}>
+          {links.map((link) => (
+            <LinkCard key={link.href} {...link} />
+          ))}
+        </div>
       </div>
     </section>
   );

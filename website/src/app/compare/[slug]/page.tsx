@@ -3,11 +3,12 @@ import { notFound } from "next/navigation";
 
 import { Check } from "lucide-react";
 
+import { WorkflowSpectrumDiagram } from "./workflow-spectrum";
+
 import { Background } from "@/components/background";
-import { DashedLine } from "@/components/dashed-line";
 import { JsonLd, breadcrumbSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
-import { sectionPadding } from "@/components/site/section-header";
+import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { Button } from "@/components/ui/button";
 import {
   comparisons,
@@ -98,26 +99,26 @@ export default async function ComparePage({
 
       <Background>
         <section className={sectionPadding}>
-          <div className="container max-w-4xl">
-            <h1 className="text-3xl tracking-tight sm:text-4xl md:text-5xl">
-              {c.title}
-            </h1>
-            <p className="text-muted-foreground mt-4 text-base">
-              {c.oneLiner}
-            </p>
+          <div className="container max-w-5xl">
+            <SectionHeader
+              as="h1"
+              eyebrow="Compare"
+              title={c.title}
+              description={c.oneLiner}
+            />
           </div>
         </section>
       </Background>
 
       <section className={sectionPadding}>
-        <DashedLine className="container max-w-4xl" />
-        <article className="container mt-12 max-w-4xl space-y-12">
+        <article className="container max-w-4xl space-y-12">
           <aside className="bg-muted text-muted-foreground rounded-xl border p-4 text-base leading-relaxed">
             <strong className="text-foreground">Research status:</strong>{" "}
             {isComparisonIndexable(c)
               ? "Source-backed comparison. Review the dated sources and methodology below for what was documented, inspected or tested. Pricing and capabilities can change."
               : "Unverified research draft, excluded from search indexing. Competitor claims need first-party sources and a dated methodology before publication."}
           </aside>
+          <WorkflowSpectrumDiagram slug={c.slug} competitor={c.competitor} />
           <div>
             <h2 className="text-2xl tracking-tight md:text-3xl">
               How they compare
@@ -254,19 +255,19 @@ export default async function ComparePage({
             </Button>
           </div>
         </article>
-
-        <RelatedLinks
-          title="More comparisons"
-          links={c.related
-            .map((slug) => getComparison(slug))
-            .filter((r): r is NonNullable<typeof r> => Boolean(r))
-            .map((r) => ({
-              href: `/compare/${r.slug}`,
-              title: r.title,
-              description: r.oneLiner,
-            }))}
-        />
       </section>
+
+      <RelatedLinks
+        title="More comparisons"
+        links={c.related
+          .map((slug) => getComparison(slug))
+          .filter((r): r is NonNullable<typeof r> => Boolean(r))
+          .map((r) => ({
+            href: `/compare/${r.slug}`,
+            title: r.title,
+            description: r.oneLiner,
+          }))}
+      />
     </>
   );
 }

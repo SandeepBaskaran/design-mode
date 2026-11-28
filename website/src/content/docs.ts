@@ -86,7 +86,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "Browser-level commands",
-        body: "Alt+D opens Design Mode on both Chrome and Firefox; Alt+Shift+S takes a screenshot using the same target and destination as the camera button. Option+S is left free so a Mac can type accented letters. They are browser commands rather than page handlers, so both can be rebound at chrome://extensions/shortcuts on Chrome or about:addons › Manage Extension Shortcuts on Firefox. Browsers treat the supplied keys as suggestions and may leave either command unassigned after an update or conflict. The 12 in-page shortcuts above cannot be remapped from Settings — that list is read-only.",
+        body: "Alt+D opens Design Mode on Chrome and Firefox (on Safari, open Web Inspector with Option–Command–I); Alt+Shift+S takes a screenshot using the same target and destination as the camera button. Option+S is left free so a Mac can type accented letters. They are browser commands rather than page handlers, so both can be rebound at chrome://extensions/shortcuts on Chrome or about:addons › Manage Extension Shortcuts on Firefox. Browsers treat the supplied keys as suggestions and may leave either command unassigned after an update or conflict. The 12 in-page shortcuts above cannot be remapped from Settings — that list is read-only.",
       },
     ],
     related: ["changes-tab", "mcp-setup"],
@@ -113,7 +113,7 @@ export const docs: DocPage[] = [
       },
       {
         heading: "2. Local — run from source",
-        body: 'Review and clone https://github.com/SandeepBaskaran/design-mode and run npm ci at the repository root. Configure your MCP client to launch the stdio command below with the absolute checkout path; then select Local in the extension. In JSON use command npm and args ["start", "--prefix", "/absolute/path/to/design-mode/packages/mcp-local"]. The agent CLI package is private; no published CLI installation is assumed. Clients share a bridge owner on localhost:9960. If another app owns that port, use DM_PORT and match the extension\'s Local port. Never kill a foreign process.',
+        body: 'Review and clone https://github.com/SandeepBaskaran/design-mode and run npm ci at the repository root. Configure your MCP client to launch the stdio command below with the absolute checkout path; then select Local in the extension. In JSON use command npm and args ["start", "--prefix", "/absolute/path/to/design-mode/packages/mcp-local"]. The standalone CLI is also published as @designmode-app/cli. Clients share a bridge owner on localhost:9960. If another app owns that port, use DM_PORT and match the extension\'s Local port. Never kill a foreign process.',
         code: "npm start --prefix /absolute/path/to/design-mode/packages/mcp-local",
       },
       {
