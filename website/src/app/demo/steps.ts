@@ -29,8 +29,7 @@ export const STEPS: Step[] = [
     id: "panel-modes",
     title: "Three panel modes",
     body: [
-      "These three panel modes are Chromium-only; Firefox uses its docked sidebar. Docked (the default) lives in Chrome's native side panel. Pop out (the external-link icon in the header) detaches it into a free-floating window you can move anywhere — it stays bound to the tab it came from, even while you browse other tabs.",
-      "From the floating window, the picture-in-picture icon pins the panel on top of everything — a true always-on-top window (Chrome 116+), floating above the page and every other app, so you never Cmd-` between windows while editing. While pinned, the same icon renders in the accent style: click it to drop back to the floating window, or hit the side-panel icon to dock straight home. All three states are one click apart.",
+      "Chromium browsers support three one-click panel states (Firefox uses its docked sidebar). Click the pop-out icon to float, click the PiP icon to pin on top of all windows, or click the side-panel icon to dock back.",
     ],
     tryIt:
       "On Chromium, open the side panel, click the pop-out icon in its header, then click the picture-in-picture icon in the floating window. Drag the pinned panel over this page — it stays on top. Click the accent picture-in-picture icon to unpin, then the side-panel icon to dock back.",

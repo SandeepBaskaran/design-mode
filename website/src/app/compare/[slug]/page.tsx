@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 
 import { Check } from "lucide-react";
 
+import { WorkflowSpectrumDiagram } from "./workflow-spectrum";
+
 import { Background } from "@/components/background";
 import { JsonLd, breadcrumbSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
@@ -116,6 +118,7 @@ export default async function ComparePage({
               ? "Source-backed comparison. Review the dated sources and methodology below for what was documented, inspected or tested. Pricing and capabilities can change."
               : "Unverified research draft, excluded from search indexing. Competitor claims need first-party sources and a dated methodology before publication."}
           </aside>
+          <WorkflowSpectrumDiagram slug={c.slug} competitor={c.competitor} />
           <div>
             <h2 className="text-2xl tracking-tight md:text-3xl">
               How they compare

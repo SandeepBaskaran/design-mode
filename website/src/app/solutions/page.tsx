@@ -1,3 +1,5 @@
+import { ArrowRight } from "lucide-react";
+
 import { SolutionsAccordion } from "./solutions-accordion";
 
 import { Background } from "@/components/background";
@@ -74,6 +76,42 @@ export default function UseCasesIndex() {
 
       <section className={sectionPadding}>
         <div className="container max-w-5xl">
+          <div
+            className="mb-10 flex flex-col gap-3 md:flex-row md:items-stretch"
+            aria-label="Design Mode workflow loop"
+          >
+            {[
+              {
+                step: "1. Edit live",
+                detail: "Adjust styles, copy, layout, or pin comments on any scriptable page.",
+              },
+              {
+                step: "2. Hand off",
+                detail: "Copy as Markdown prompt, export JSON, or send over MCP.",
+              },
+              {
+                step: "3. Review diff",
+                detail: "An engineer or coding agent updates source code for you to review.",
+              },
+            ].map((item, index) => (
+              <div key={item.step} className="flex flex-1 items-center gap-2">
+                <div className="bg-card h-full w-full rounded-xl border p-4">
+                  <p className="text-foreground text-base font-semibold">
+                    {item.step}
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-base leading-relaxed">
+                    {item.detail}
+                  </p>
+                </div>
+                {index < 2 && (
+                  <ArrowRight
+                    aria-hidden="true"
+                    className="text-muted-foreground hidden size-4 shrink-0 md:block"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
           <SolutionsAccordion />
         </div>
       </section>

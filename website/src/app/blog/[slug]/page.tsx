@@ -1,5 +1,10 @@
 import { notFound } from "next/navigation";
 
+import {
+  BrowserParityDiagram,
+  KeyboardShortcutsDiagram,
+} from "./guide-diagrams";
+
 import { Background } from "@/components/background";
 import {
   JsonLd,
@@ -148,6 +153,8 @@ export default async function BlogPostPage({
 
       <section className={sectionPadding}>
         <article className="container max-w-4xl space-y-10">
+          {p.slug === "browser-support" && <BrowserParityDiagram />}
+          {p.slug === "keyboard-shortcuts" && <KeyboardShortcutsDiagram />}
           {p.body.map((block, i) => (
             <div key={i}>
               {block.heading && (

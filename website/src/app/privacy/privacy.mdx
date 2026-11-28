@@ -1,3 +1,8 @@
+import {
+  AnalyticsPayloadDiagram,
+  NetworkBoundariesDiagram,
+} from "./privacy-diagrams";
+
 ## The short version
 
 Design Mode edits the page rendered in your browser and records a local change
@@ -97,61 +102,13 @@ panel memory.
 
 ## When network traffic starts
 
-### No MCP connection
+<NetworkBoundariesDiagram />
 
-On a fresh install, Cloud is the selected mode but no Cloud credential exists.
-Design Mode leaves all MCP transports closed until you connect one. Copy as
-Prompt continues to work without MCP.
+Normal webpage and browser actions still make their own requests (loading the opened page or fetching media referenced in it). Those are browser requests to the referenced site, not uploads to Design Mode.
 
-Normal webpage and browser actions can still make requests—for example, loading
-the page you opened or downloading media from a URL already present in that
-page. Those are browser requests to the referenced site, not uploads to Design
-Mode.
+For Local mode, the optional guided setup previews project configuration before writing only the files you confirm; backups stay beside those files and may hold credentials belonging to other tools, so keep them uncommitted. Local feedback-round snapshots stay in process memory.
 
-### Local mode
-
-Local mode connects the extension to the companion server on your machine over
-the token-authenticated `ws://127.0.0.1:9960` connection by default. Design Mode does not route that transport
-through its hosted relay.
-
-The optional guided Local setup previews project configuration before writing
-only the files you confirm. Backups stay beside those files and may contain
-credentials belonging to other tools, so they should not be committed. The
-`doctor` command probes only the configured localhost bridge. Local feedback
-round snapshots and session state stay in process memory.
-
-### Cloud mode
-
-Choosing **Connect to Cloud** registers an anonymous device credential and opens
-an authenticated connection to `https://mcp.designmode.app`. The extension keeps
-the plaintext credential in `storage.local`. The service stores only its
-SHA-256 hash, an anonymous tenant identifier, and created/last-seen timestamps
-until the credential is revoked.
-
-Agent-to-extension requests and extension responses are temporarily queued in
-Redis. The implementation requests a 60-second expiry and normally deletes
-responses as soon as they are consumed. Queue insertion and expiry are separate
-operations, and expiry failure is suppressed, so 60 seconds is a best-effort
-target rather than a guaranteed maximum. The relay also keeps operational quota
-and presence state needed to operate the service.
-
-Structured service logs may include:
-
-- anonymous tenant identifier;
-- message or event type;
-- payload byte count;
-- latency and HTTP status;
-- bounded error codes or messages.
-
-The logging API does not accept selectors, screenshots or message payload
-bodies. Design Mode does not use relay traffic to train a model.
-
-### Self-hosted mode
-
-Self-hosted mode points the extension at a deployment you operate. Its retention,
-logging and access controls are your responsibility. The repository implementation
-uses the same short-lived queue design as the hosted relay, but your deployed
-configuration is authoritative.
+For Cloud mode, structured service logs may include an anonymous tenant identifier, message/event type, payload byte count, latency, HTTP status, and bounded error codes—never selectors, screenshots, or message payload bodies. Design Mode does not use relay traffic to train a model.
 
 ## Screenshots and agent hand-off
 
@@ -167,32 +124,11 @@ that access.
 
 ## Usage analytics
 
-Design Mode is free and MIT-licensed, with no paid version of the extension. It
-is a self-sustained project focused on features people regularly use. Release
-builds send usage analytics to PostHog without an in-extension Settings
-off-switch. Chrome and Safari have no separate in-extension opt-in. Firefox 140+ requires its optional technical-and-interaction permission;
-denial or revocation does not disable editing or clipboard export. A missing or
-unavailable native permission list sends nothing. Firefox 139 and earlier cannot
-install or run this release. An unconfigured source build sends nothing. Analytics does not
-change what the editor can do. Coding-agent subscriptions, API usage and
-self-hosting costs are separate.
+Design Mode is free and MIT-licensed, with no paid version of the extension. Release builds send bounded usage analytics to PostHog without an in-extension Settings off-switch. Chrome and Safari have no separate in-extension opt-in. Firefox 140+ requires its optional technical-and-interaction permission; denial or revocation does not disable editing or clipboard export, and Firefox 139 and earlier cannot install or run this release. An unconfigured source build sends nothing.
 
-To measure active installations (DAU/WAU/MAU), retention and feature adoption,
-the extension generates a persistent random UUID stored in `storage.local`
-(`dm-analytics-distinct-id`) and enables PostHog person profiles
-(`$process_person_profile: true`) and IP-based GeoIP enrichment
-(`$geoip_disable: false`). The event payload includes the browser package
-(`chrome`, `firefox` or `safari`), extension version, distribution hint,
-validated language, timezone and `navigator.userAgent` (`$raw_user_agent`), while
-omitting page URLs, selectors, edits, comments, text, tokens and screenshots.
-When a failure cannot be classified into a known error code, the event may carry
-only the fixed diagnostic description `Unexpected operation failure`; known-code
-failures carry no message. Runtime error text, including arbitrary prose, paths,
-selectors, endpoints and stacks, is never copied into the diagnostic. Original
-error details remain local; analytics adds no error log or error-text storage.
-These events use schema version 6. This source does not verify the receiver's retention, deletion or billing
-settings. The marketing site is a separate project and is not included in these
-extension events.
+<AnalyticsPayloadDiagram />
+
+Events use PostHog person profiles (`$process_person_profile: true`), IP-based GeoIP enrichment (`$geoip_disable: false`), and schema version 6. Unclassified failures emit only `Unexpected operation failure` with no runtime error text, stacks, or selectors. This source does not verify the receiver's retention, deletion or billing settings. The marketing site is a separate project and is not included in these extension events.
 
 ## What designmode.app collects
 
