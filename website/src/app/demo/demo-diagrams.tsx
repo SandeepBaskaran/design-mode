@@ -1,4 +1,10 @@
-import { ArrowLeftRight, ArrowRight } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ArrowRight,
+  ExternalLink,
+  PanelRight,
+  PictureInPicture2,
+} from "lucide-react";
 
 export function PanelModesDiagram() {
   const states = [
@@ -6,16 +12,19 @@ export function PanelModesDiagram() {
       title: "1. Docked",
       subtitle: "Default Chrome side panel",
       note: "Lives beside the tab",
+      icon: PanelRight,
     },
     {
       title: "2. Floating",
       subtitle: "Pop-out icon in header",
       note: "Detached window bound to tab",
+      icon: ExternalLink,
     },
     {
       title: "3. Pin on top",
       subtitle: "PiP icon (Chrome 116+)",
       note: "Stays above all windows",
+      icon: PictureInPicture2,
     },
   ];
 
@@ -24,24 +33,30 @@ export function PanelModesDiagram() {
       className="my-4 grid gap-3 sm:grid-cols-3"
       aria-label="Chromium panel mode transitions"
     >
-      {states.map((state, index) => (
-        <div
-          key={state.title}
-          className="bg-card relative flex flex-col justify-between rounded-xl border p-4 text-base"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-foreground font-semibold">{state.title}</span>
-            {index < states.length - 1 && (
-              <ArrowLeftRight
-                aria-hidden="true"
-                className="text-muted-foreground hidden size-4 shrink-0 sm:block"
-              />
-            )}
+      {states.map((state, index) => {
+        const Icon = state.icon;
+        return (
+          <div
+            key={state.title}
+            className="bg-card relative flex flex-col justify-between rounded-xl border p-4 text-base"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-foreground inline-flex items-center gap-2 font-semibold">
+                <Icon aria-hidden="true" className="text-primary size-4 shrink-0" />
+                {state.title}
+              </span>
+              {index < states.length - 1 && (
+                <ArrowLeftRight
+                  aria-hidden="true"
+                  className="text-muted-foreground hidden size-4 shrink-0 sm:block"
+                />
+              )}
+            </div>
+            <span className="text-foreground mt-2 font-medium">{state.subtitle}</span>
+            <span className="text-muted-foreground mt-1 text-base">{state.note}</span>
           </div>
-          <span className="text-foreground mt-2 font-medium">{state.subtitle}</span>
-          <span className="text-muted-foreground mt-1 text-base">{state.note}</span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

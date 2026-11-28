@@ -40,7 +40,7 @@ export function NetworkBoundariesDiagram() {
           className="bg-card rounded-xl border p-4 text-base"
         >
           <p className="text-foreground font-semibold">{lane.mode}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center justify-start gap-2">
             {lane.path.map((node, index) => (
               <div key={node} className="flex items-center gap-2">
                 {index > 0 && (
@@ -49,8 +49,16 @@ export function NetworkBoundariesDiagram() {
                     className="text-muted-foreground size-4 shrink-0"
                   />
                 )}
-                <span className="bg-muted text-foreground rounded-lg border px-3 py-1 text-base break-words">
-                  {node}
+                <span className="bg-muted text-foreground rounded-lg border px-3 py-1 text-center text-base break-words">
+                  {node === "mcp.designmode.app (SHA-256 hash + ~60s Redis queue)" ? (
+                    <>
+                      mcp.designmode.app
+                      <br />
+                      (SHA-256 hash + ~60s Redis queue)
+                    </>
+                  ) : (
+                    node
+                  )}
                 </span>
               </div>
             ))}
@@ -106,7 +114,7 @@ export function AnalyticsPayloadDiagram() {
       <div className="bg-card rounded-xl border p-5">
         <p className="text-foreground flex items-center gap-2 font-semibold">
           <ShieldOff aria-hidden="true" className="text-primary size-4 shrink-0" />
-          Never included in extension analytics
+          Never included in the analytics
         </p>
         <ul className="mt-3 space-y-2 text-base">
           {neverSent.map((item) => (

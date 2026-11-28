@@ -1,12 +1,27 @@
+import Image from "next/image";
+
 import { Check, X } from "lucide-react";
 
+import {
+  CHROME_WEB_STORE_URL,
+  FIREFOX_AMO_URL,
+  SAFARI_RELEASE_URL,
+} from "@/lib/install-links";
+
+type CellValue = string | boolean | { label: string; href: string };
+
 export function BrowserParityDiagram() {
-  const rows = [
+  const rows: {
+    feature: string;
+    chromium: CellValue;
+    firefox: CellValue;
+    safari: CellValue;
+  }[] = [
     {
       feature: "Install source",
-      chromium: "Chrome Web Store",
-      firefox: "Firefox Add-ons (AMO)",
-      safari: "GitHub Release zip (manual)",
+      chromium: { label: "Chrome Web Store", href: CHROME_WEB_STORE_URL },
+      firefox: { label: "Firefox Add-ons (AMO)", href: FIREFOX_AMO_URL },
+      safari: { label: "GitHub Release zip (manual)", href: SAFARI_RELEASE_URL },
     },
     {
       feature: "Editor surface",
@@ -46,7 +61,7 @@ export function BrowserParityDiagram() {
     },
   ];
 
-  const renderCell = (value: string | boolean) => {
+  const renderCell = (value: CellValue) => {
     if (value === true) {
       return (
         <span className="inline-flex items-center gap-1.5">
@@ -63,11 +78,23 @@ export function BrowserParityDiagram() {
         </span>
       );
     }
+    if (typeof value === "object") {
+      return (
+        <a
+          href={value.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-primary underline underline-offset-4"
+        >
+          {value.label}
+        </a>
+      );
+    }
     return <span>{value}</span>;
   };
 
   return (
-    <div className="my-6 overflow-x-auto rounded-xl border">
+    <div className="my-6 max-w-full overflow-x-auto rounded-xl border">
       <table className="w-full border-collapse text-left text-base">
         <caption className="sr-only">
           Design Mode browser feature parity across Chromium, Firefox, and Safari
@@ -77,14 +104,35 @@ export function BrowserParityDiagram() {
             <th scope="col" className="p-4 font-semibold">
               Capability
             </th>
-            <th scope="col" className="p-4 font-semibold">
-              Chrome / Edge / Brave / Arc
+            <th scope="col" aria-label="Chrome / Edge / Brave / Arc" className="p-4 font-semibold">
+              <Image
+                src="/chrome.svg"
+                alt="Chrome, Edge, Brave, and Arc"
+                title="Chrome / Edge / Brave / Arc"
+                width={24}
+                height={24}
+                className="size-6"
+              />
             </th>
-            <th scope="col" className="p-4 font-semibold">
-              Firefox 140+
+            <th scope="col" aria-label="Firefox 140+" className="p-4 font-semibold">
+              <Image
+                src="/firefox.svg"
+                alt="Firefox 140+"
+                title="Firefox 140+"
+                width={24}
+                height={24}
+                className="size-6"
+              />
             </th>
-            <th scope="col" className="p-4 font-semibold">
-              Safari (Mac)
+            <th scope="col" aria-label="Safari (Mac)" className="p-4 font-semibold">
+              <Image
+                src="/safari.svg"
+                alt="Safari (Mac)"
+                title="Safari (Mac)"
+                width={24}
+                height={24}
+                className="size-6"
+              />
             </th>
           </tr>
         </thead>

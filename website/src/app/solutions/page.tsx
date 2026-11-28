@@ -1,12 +1,49 @@
-import { ArrowRight } from "lucide-react";
-
-import { SolutionsAccordion } from "./solutions-accordion";
+import { ClipboardList, Code2, Palette } from "lucide-react";
 
 import { Background } from "@/components/background";
 import { JsonLd, collectionPageSchema } from "@/components/site/json-ld";
 import { RelatedLinks } from "@/components/site/related-links";
 import { SectionHeader, sectionPadding } from "@/components/site/section-header";
 import { useCases } from "@/content/use-cases";
+
+const useCaseBySlug = new Map(useCases.map((item) => [item.slug, item]));
+
+const buckets = [
+  {
+    title: "Designers & design engineers",
+    example: "Example: A designer tweaks spacing on a live staging page and exports the diff.",
+    icon: Palette,
+    slugs: [
+      "redesign-any-website",
+      "design-review-in-production",
+      "figma-to-code-without-figma",
+      "accessibility-quick-fixes",
+      "landing-page-iteration-for-indie-hackers",
+      "design-system-audit",
+    ],
+  },
+  {
+    title: "Developers",
+    example: "Example: A developer adjusts a component in the browser and sends it to Claude Code or Cursor.",
+    icon: Code2,
+    slugs: [
+      "vibe-coding-with-claude-code",
+      "visual-editing-with-cursor",
+      "tailwind-component-tuning",
+    ],
+  },
+  {
+    title: "QA, content & product",
+    example: "Example: A PM or QA tester pins a comment and files a visual bug diff for engineering.",
+    icon: ClipboardList,
+    slugs: [
+      "ui-testing-export-to-developers",
+      "bug-report-with-visual-diff",
+      "copy-edits-without-a-pr",
+      "client-handoff-from-agency-to-engineering",
+    ],
+  },
+];
 
 export const metadata = {
   title: {
@@ -77,42 +114,51 @@ export default function UseCasesIndex() {
       <section className={sectionPadding}>
         <div className="container max-w-5xl">
           <div
-            className="mb-10 flex flex-col gap-3 md:flex-row md:items-stretch"
-            aria-label="Design Mode workflow loop"
+            className="grid grid-cols-1 overflow-hidden rounded-xl border md:grid-cols-3"
+            aria-label="Design Mode solutions by role"
           >
-            {[
-              {
-                step: "1. Edit live",
-                detail: "Adjust styles, copy, layout, or pin comments on any scriptable page.",
-              },
-              {
-                step: "2. Hand off",
-                detail: "Copy as Markdown prompt, export JSON, or send over MCP.",
-              },
-              {
-                step: "3. Review diff",
-                detail: "An engineer or coding agent updates source code for you to review.",
-              },
-            ].map((item, index) => (
-              <div key={item.step} className="flex flex-1 items-center gap-2">
-                <div className="bg-card h-full w-full rounded-xl border p-4">
-                  <p className="text-foreground text-base font-semibold">
-                    {item.step}
-                  </p>
-                  <p className="text-muted-foreground mt-1 text-base leading-relaxed">
-                    {item.detail}
-                  </p>
+            {buckets.map((bucket, bucketIndex) => {
+              const Icon = bucket.icon;
+              const items = bucket.slugs
+                .map((slug) => useCaseBySlug.get(slug))
+                .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+              return (
+                <div
+                  key={bucket.title}
+                  className={`flex flex-col ${
+                    bucketIndex < buckets.length - 1 ? "border-b md:border-r md:border-b-0" : ""
+                  }`}
+                >
+                  <div className="bg-muted/40 border-b p-5">
+                    <Icon aria-hidden="true" className="text-primary size-6 stroke-[1.5]" />
+                    <h2 className="text-foreground mt-3 text-xl font-semibold">
+                      {bucket.title}
+                    </h2>
+                    <p className="text-muted-foreground mt-1.5 text-base leading-relaxed">
+                      {bucket.example}
+                    </p>
+                  </div>
+                  <div className="divide-y">
+                    {items.map((item) => (
+                      <div
+                        key={item.slug}
+                        id={item.slug}
+                        className="scroll-mt-24 p-5"
+                      >
+                        <h3 className="text-foreground text-base font-semibold">
+                          {item.title}
+                        </h3>
+                        <p className="text-muted-foreground mt-1.5 text-base leading-relaxed">
+                          {item.summary}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                {index < 2 && (
-                  <ArrowRight
-                    aria-hidden="true"
-                    className="text-muted-foreground hidden size-4 shrink-0 md:block"
-                  />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
-          <SolutionsAccordion />
         </div>
       </section>
 
